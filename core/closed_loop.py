@@ -1,0 +1,2 @@
+class ClosedDevelopmentLoop:
+    pass

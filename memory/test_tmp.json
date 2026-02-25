@@ -1,0 +1,61 @@
+[
+    {
+        "id": "parent-1",
+        "title": "Parent Task",
+        "status": "pending",
+        "description": "",
+        "subtasks": [
+            {
+                "id": "sub-1",
+                "title": "Subtask 1",
+                "status": "pending",
+                "description": "",
+                "subtasks": [],
+                "result": null
+            }
+        ],
+        "result": null
+    },
+    {
+        "id": "parent-1",
+        "title": "Parent Task",
+        "status": "pending",
+        "description": "",
+        "subtasks": [
+            {
+                "id": "sub-1",
+                "title": "Subtask 1",
+                "status": "pending",
+                "description": "",
+                "subtasks": [],
+                "result": null
+            }
+        ],
+        "result": null
+    },
+    {
+        "id": "t1",
+        "title": "T1",
+        "status": "completed",
+        "description": "",
+        "subtasks": [],
+        "result": null
+    },
+    {
+        "id": "t2",
+        "title": "T2",
+        "status": "pending",
+        "description": "",
+        "subtasks": [
+            {
+                "id": "t3",
+                "title": "T3",
+                "status": "pending",
+                "description": "",
+                "subtasks": [],
+                "result": null
+            }
+        ],
+        "result": null
+    }
+]

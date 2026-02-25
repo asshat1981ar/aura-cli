@@ -1,0 +1,26 @@
+[
+    {
+        "id": "goal_1772003248",
+        "title": "Test multi-change failure",
+        "status": "pending",
+        "description": "",
+        "subtasks": [],
+        "result": null
+    },
+    {
+        "id": "goal_1772003318",
+        "title": "Test multi-change failure",
+        "status": "pending",
+        "description": "",
+        "subtasks": [],
+        "result": null
+    },
+    {
+        "id": "goal_1772003421",
+        "title": "Test multi-change failure",
+        "status": "pending",
+        "description": "",
+        "subtasks": [],
+        "result": null
+    }
+]

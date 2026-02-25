@@ -1,0 +1,10 @@
+
+# Local backups / scratch
+*.bak_*
+*.backup*
+
+# Environment and secrets
+.env
+*.key
+*.pat
+.aura_history

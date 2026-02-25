@@ -1,1 +1,0 @@
-# Supporting module 1 implementation

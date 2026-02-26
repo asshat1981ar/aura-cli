@@ -44,11 +44,20 @@ async def execute_tool(tool_name: str, request: ToolRequest):
 
     # Map tool names to GitHubTools methods
     github_tool_map = {
+        # Original tools
         "get_repo": github_tools.get_repo,
         "create_issue": github_tools.create_issue,
         "get_issue_details": github_tools.get_issue_details,
         "update_file": github_tools.update_file,
         "get_pull_request_details": github_tools.get_pull_request_details,
+        # Extended tools
+        "list_issues": github_tools.list_issues,
+        "list_prs": github_tools.list_prs,
+        "create_pr": github_tools.create_pr,
+        "add_pr_review_comment": github_tools.add_pr_review_comment,
+        "list_repo_files": github_tools.list_repo_files,
+        "get_file_contents": github_tools.get_file_contents,
+        "search_code": github_tools.search_code,
     }
 
     tool_function = github_tool_map.get(tool_name)

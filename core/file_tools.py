@@ -146,12 +146,17 @@ def _safe_apply_change(project_root: Path, file_path: str, old_code: str, new_co
         overwrite_file = True
 
     # If old_code is provided but not found, and new_code is present, assume full overwrite intention.
+    # Log a warning so the caller can audit unexpected overwrites.
     if old_code and old_code not in current:
         if new_code:
+            log_json("WARN", "file_tools_old_code_mismatch_overwrite", details={
+                "file": str(path_obj),
+                "old_code_preview": old_code[:120],
+            })
             overwrite_file = True
-            old_code = "" # Set old_code to empty to trigger full overwrite behavior in replace_code
+            old_code = ""  # trigger full-overwrite path in replace_code
         else:
-            # If old_code not found and no new_code, this is an invalid replacement.
+            # No new_code and no match → truly invalid
             raise OldCodeNotFoundError(f"'{old_code}' not found in '{path_obj}' and no new_code for overwrite.")
 
     replace_code(str(path_obj), old_code, new_code, overwrite_file=overwrite_file)

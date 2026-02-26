@@ -149,8 +149,7 @@ class RouterAgent:
                 # Continue to next candidate
 
         raise RuntimeError(
-            f"RouterAgent: all candidates exhausted. Last error: {last_error}
-"
+            f"RouterAgent: all candidates exhausted. Last error: {last_error}\n"
             f"Stats: {self.report()}"
         )
 
@@ -161,8 +160,7 @@ class RouterAgent:
             self.stats.items(), key=lambda x: x[1].ema_score, reverse=True
         ):
             lines.append(f"  {stat}")
-        return "
-".join(lines)
+        return "\n".join(lines)
 
     def force_cooldown(self, model_name: str, seconds: float = 300.0):
         """Manually bench a model (e.g., after detecting quota exhaustion)."""

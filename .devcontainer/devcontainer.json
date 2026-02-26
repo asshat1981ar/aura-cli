@@ -1,0 +1,43 @@
+{
+  "name": "AURA CLI Dev",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "postCreateCommand": "pip install -r requirements.txt && pip install pytest flake8 pylint",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "github.copilot",
+        "github.copilot-chat",
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "charliermarsh.ruff"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "editor.formatOnSave": true,
+        "python.testing.pytestEnabled": true,
+        "python.testing.pytestArgs": ["-q", "--tb=short"],
+        "terminal.integrated.env.linux": {
+          "AURA_SKIP_CHDIR": "1",
+          "AURA_DRY_RUN": "1"
+        }
+      }
+    },
+    "codespaces": {
+      "openFiles": ["README.md", "main.py"]
+    }
+  },
+  "forwardPorts": [8001, 8002],
+  "portsAttributes": {
+    "8001": {
+      "label": "AURA HTTP API",
+      "onAutoForward": "notify"
+    },
+    "8002": {
+      "label": "AURA MCP Skills Server",
+      "onAutoForward": "notify"
+    }
+  },
+  "remoteEnv": {
+    "AURA_SKIP_CHDIR": "1"
+  }
+}

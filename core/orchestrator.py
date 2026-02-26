@@ -317,6 +317,26 @@ class LoopOrchestrator:
                         return {"cycle_id": cycle_id, "phase_outputs": phase_outputs, "stop_reason": "INVALID_OUTPUT"}
                 phase_outputs["change_set"] = act
 
+                # ── 6a. SANDBOX (pre-apply code execution check) ─────────────
+                # Run the generated snippet in isolation before touching the fs.
+                # Failures here trigger the same retry logic as verify failures.
+                sandbox_result = self._run_phase("sandbox", {
+                    "act": act,
+                    "dry_run": dry_run,
+                    "project_root": str(self.project_root),
+                })
+                phase_outputs["sandbox"] = sandbox_result or {}
+                sandbox_passed = (sandbox_result or {}).get("passed", True)
+                if not sandbox_passed and not dry_run:
+                    log_json("WARN", "sandbox_pre_apply_failed",
+                             details={"summary": (sandbox_result or {}).get("summary", "")})
+                    # Treat as recoverable code error — same as verify fail
+                    task_bundle["fix_hints"] = [
+                        (sandbox_result or {}).get("summary", "sandbox_failed")
+                    ]
+                    act_attempt += 1
+                    continue
+
                 # Apply changes — partial failures are tolerated
                 apply_result = self._apply_change_set(act, dry_run=dry_run)
                 phase_outputs["apply_result"] = apply_result

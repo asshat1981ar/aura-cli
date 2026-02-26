@@ -39,10 +39,8 @@ class SandboxResult:
 
     def __str__(self):
         return (
-            f"SandboxResult(passed={self.passed}, exit={self.exit_code})
-"
-            f"  stdout: {self.stdout[:300]!r}
-"
+            f"SandboxResult(passed={self.passed}, exit={self.exit_code})\n"
+            f"  stdout: {self.stdout[:300]!r}\n"
             f"  stderr: {self.stderr[:300]!r}"
         )
 
@@ -115,9 +113,7 @@ class SandboxAgent:
 
             # Inject source import at top of test file if not present
             if "from source import" not in tests and "import source" not in tests:
-                header = "import sys, os
-sys.path.insert(0, os.path.dirname(__file__))
-"
+                header = "import sys, os\nsys.path.insert(0, os.path.dirname(__file__))\n"
                 tests = header + tests
             tst.write_text(tests, encoding="utf-8")
 
@@ -139,7 +135,7 @@ sys.path.insert(0, os.path.dirname(__file__))
                 stderr=subprocess.PIPE,
                 cwd=cwd,
                 text=True,
-                env={**os.environ, **self.PYTHONDONTWRITEBYTECODE_ENV},
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
             )
             try:
                 stdout, stderr = proc.communicate(timeout=self.timeout)

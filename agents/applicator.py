@@ -50,8 +50,7 @@ class ApplicatorAgent:
     """
 
     DIRECTIVE_RE = re.compile(r"#\s*AURA_TARGET:\s*(.+)")
-    CODE_BLOCK_RE = re.compile(r"```(?:python)?
-(.*?)```", re.DOTALL)
+    CODE_BLOCK_RE = re.compile(r"```(?:python)?\n(.*?)```", re.DOTALL)
 
     def __init__(self, brain, backup_dir: str = ".aura/backups"):
         self.brain = brain
@@ -133,9 +132,8 @@ class ApplicatorAgent:
             backup_path=backup_path,
             code=code,
             metadata={
-                "lines": code.count("
-") + 1,
-                "timestamp": datetime.utcnow().isoformat(),
+                "lines": code.count("\n") + 1,
+                "timestamp": datetime.now(tz=__import__("datetime").timezone.utc).isoformat(),
             },
         )
 
@@ -175,7 +173,7 @@ class ApplicatorAgent:
         """Copy existing file to backup_dir. Returns backup path string or None."""
         if not path.exists():
             return None
-        timestamp = datetime.utcnow().strftime("%Y%m%dT%H%M%S")
+        timestamp = datetime.now(tz=__import__("datetime").timezone.utc).strftime("%Y%m%dT%H%M%S")
         safe_name = str(path).replace("/", "__")
         backup_path = self.backup_dir / f"{safe_name}.{timestamp}.bak"
         shutil.copy2(path, backup_path)

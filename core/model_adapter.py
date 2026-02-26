@@ -1,8 +1,8 @@
+import hashlib
 import os
 import subprocess
 import requests
 import json
-import socket
 import time
 from pathlib import Path
 import numpy as np
@@ -32,6 +32,9 @@ class ModelAdapter:
         # API keys will be fetched dynamically within their respective call methods
         self.gemini_cli_path = os.getenv("GEMINI_CLI_PATH", "/data/data/com.termux/files/usr/bin/gemini") # Configurable path to gemini CLI
         self.mcp_server_url = os.getenv("MCP_SERVER_URL", "http://localhost:8000") # Configurable MCP server URL
+        self.router = None
+        self.cache_db = None
+        self.cache_ttl = 3600
 
         # Validate gemini CLI path
         if not Path(self.gemini_cli_path).is_file():
@@ -48,6 +51,95 @@ class ModelAdapter:
             "get_repo", "create_issue", "get_issue_details", "update_file", "get_pull_request_details"
         }
 
+    def enable_cache(self, db_conn, ttl_seconds: int = 3600, momento=None):
+        """Enables prompt-response caching.
+
+        Args:
+            db_conn:      SQLite connection (L2 persistent cache).
+            ttl_seconds:  Cache TTL in seconds (default 1 hour).
+            momento:      Optional :class:`MomentoAdapter` for L1 hot cache.
+        """
+        self.cache_db = db_conn
+        self.cache_ttl = ttl_seconds
+        self._momento = momento  # L1 cache adapter (may be None or unavailable)
+        try:
+            self.cache_db.execute("""
+                CREATE TABLE IF NOT EXISTS prompt_cache (
+                    prompt_hash TEXT PRIMARY KEY,
+                    response TEXT,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            self.cache_db.commit()
+            log_json("INFO", "model_cache_enabled", details={
+                "ttl": ttl_seconds,
+                "l1_momento": bool(momento and momento.is_available()),
+            })
+        except Exception as e:
+            log_json("ERROR", "model_cache_init_failed", details={"error": str(e)})
+
+    def set_router(self, router):
+        """Attaches an adaptive router to the adapter."""
+        self.router = router
+        log_json("INFO", "model_router_attached")
+
+    def _get_cached_response(self, prompt: str) -> str | None:
+        prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
+
+        # L1: Momento (sub-ms) — check before touching SQLite
+        momento = getattr(self, "_momento", None)
+        if momento and momento.is_available():
+            try:
+                from memory.momento_adapter import WORKING_MEMORY_CACHE
+                key = f"response:{prompt_hash[:16]}"
+                val = momento.cache_get(WORKING_MEMORY_CACHE, key)
+                if val is not None:
+                    log_json("INFO", "model_cache_l1_hit", details={"key": key})
+                    return val
+            except Exception as exc:
+                log_json("WARN", "model_cache_l1_query_failed", details={"error": str(exc)})
+
+        # L2: SQLite
+        if not self.cache_db:
+            return None
+        try:
+            cursor = self.cache_db.execute(
+                "SELECT response FROM prompt_cache WHERE prompt_hash = ? AND timestamp > datetime('now', ?)",
+                (prompt_hash, f"-{self.cache_ttl} seconds")
+            )
+            row = cursor.fetchone()
+            if row:
+                log_json("INFO", "model_cache_hit", details={"prompt_hash": prompt_hash})
+                return row[0]
+        except Exception as e:
+            log_json("WARN", "model_cache_query_failed", details={"error": str(e)})
+        return None
+
+    def _save_to_cache(self, prompt: str, response: str):
+        prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
+
+        # L1: Momento write-through
+        momento = getattr(self, "_momento", None)
+        if momento and momento.is_available():
+            try:
+                from memory.momento_adapter import WORKING_MEMORY_CACHE
+                key = f"response:{prompt_hash[:16]}"
+                momento.cache_set(WORKING_MEMORY_CACHE, key, response,
+                                  ttl_seconds=self.cache_ttl)
+            except Exception as exc:
+                log_json("WARN", "model_cache_l1_save_failed", details={"error": str(exc)})
+
+        # L2: SQLite
+        if not self.cache_db:
+            return
+        try:
+            self.cache_db.execute(
+                "INSERT OR REPLACE INTO prompt_cache (prompt_hash, response, timestamp) VALUES (?, ?, CURRENT_TIMESTAMP)",
+                (prompt_hash, response)
+            )
+            self.cache_db.commit()
+        except Exception as e:
+            log_json("WARN", "model_cache_save_failed", details={"error": str(e)})
 
     def _execute_tool(self, tool_name: str, args: dict) -> str:
         """
@@ -201,6 +293,35 @@ class ModelAdapter:
         data = response.json()
         return data["choices"][0]["message"]["content"]
 
+    # -------- GEMINI CLI --------
+    def call_gemini(self, prompt: str) -> str:
+        """
+        Calls the Gemini CLI to get a chat completion.
+
+        Args:
+            prompt (str): The prompt message for the LLM.
+
+        Returns:
+            str: The content of the LLM's response.
+        """
+        if not self.gemini_cli_path:
+            raise ValueError("Gemini CLI path not configured or not executable.")
+        
+        try:
+            # We use --non-interactive and pipe the prompt to stdin
+            result = subprocess.run(
+                [self.gemini_cli_path, "--non-interactive", prompt],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=120
+            )
+            return result.stdout.strip()
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Gemini CLI call failed: {e.stderr}") from e
+        except Exception as e:
+            raise RuntimeError(f"Unexpected error calling Gemini CLI: {e}") from e
+
     # -------- OPENAI API --------
     def call_openai(self, prompt: str) -> str:
         """
@@ -214,7 +335,7 @@ class ModelAdapter:
         """
         openai_api_key = os.getenv("OPENAI_API_KEY")
         if not openai_api_key:
-            return None # Return None to allow fallback
+            raise ValueError("OPENAI_API_KEY not set for OpenAI call.")
         url = "https://api.openai.com/v1/chat/completions"
 
         headers = {
@@ -282,23 +403,37 @@ class ModelAdapter:
             str: The LLM's response content, which might be a raw text response,
                  a structured JSON response, or the output of a tool call.
         """
+        # 1. Check Cache
+        cached = self._get_cached_response(prompt)
+        if cached:
+            return cached
+
         model_response = None
         
-        # Try OpenAI first
-        try:
-            model_response = self.call_openai(prompt)
-        except Exception as e:
-            log_json("WARN", "openai_call_failed", details={"error": str(e), "fallback": "OpenRouter"})
-            # Fallback to OpenRouter (still problematic, but included for completeness)
+        # 2. Try Router if set
+        if self.router:
             try:
-                model_response = self.call_openrouter(prompt)
+                model_response = self.router.route(prompt)
             except Exception as e:
-                log_json("WARN", "openrouter_call_failed", details={"error": str(e), "fallback": "Local Model"})
-                # Final fallback
-                model_response = self.call_local(prompt)
+                log_json("WARN", "router_call_failed", details={"error": str(e), "fallback": "Direct fallbacks"})
+
+        # 3. Direct Fallback Chain (if router not set or failed)
+        if not model_response:
+            try:
+                model_response = self.call_openai(prompt)
+            except Exception as e:
+                log_json("WARN", "openai_call_failed", details={"error": str(e), "fallback": "OpenRouter"})
+                try:
+                    model_response = self.call_openrouter(prompt)
+                except Exception as e:
+                    log_json("WARN", "openrouter_call_failed", details={"error": str(e), "fallback": "Local Model"})
+                    model_response = self.call_local(prompt)
 
         if model_response is None:
             return "Error: No model successfully responded."
+        
+        # 4. Save to Cache
+        self._save_to_cache(prompt, model_response)
         
         try:
             parsed_response = _aura_safe_loads(model_response, "model_response")
@@ -325,7 +460,7 @@ class ModelAdapter:
 
         return model_response
 
-    def get_embedding(self, text: str) -> list[float]:
+    def get_embedding(self, text: str) -> "np.ndarray":
         """
         Generates a vector embedding for the given text using the OpenAI API.
 
@@ -333,7 +468,7 @@ class ModelAdapter:
             text (str): The input text to generate an embedding for.
 
         Returns:
-            list[float]: A list of floats representing the vector embedding.
+            np.ndarray: Float32 array representing the vector embedding.
 
         Raises:
             ValueError: If OPENAI_API_KEY environment variable is not set.

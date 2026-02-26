@@ -47,10 +47,15 @@ class SkillWeightAdapter:
             "skill_name": {"ema": 0.72, "runs": 14, "suspended": false}
           }
         }
+
+    Args:
+        memory_root: Directory for the weights JSON file (default ``"memory"``).
+        momento:     Optional :class:`MomentoAdapter` for L1 hot cache reads.
     """
 
-    def __init__(self, memory_root: str = "memory"):
+    def __init__(self, memory_root: str = "memory", momento=None):
         self._path = Path(memory_root) / "skill_weights.json"
+        self._momento = momento
         self._weights: Dict[str, Dict[str, Dict]] = self._load()
 
     # ── Public API ───────────────────────────────────────────────────────────
@@ -167,6 +172,17 @@ class SkillWeightAdapter:
         return round(base_score, 3)
 
     def _load(self) -> Dict:
+        # L1: Momento — check hot cache first
+        if self._momento and self._momento.is_available():
+            try:
+                from memory.momento_adapter import WORKING_MEMORY_CACHE
+                raw = self._momento.cache_get(WORKING_MEMORY_CACHE, "skill_weights:all")
+                if raw:
+                    log_json("INFO", "skill_weights_l1_hit")
+                    return json.loads(raw)
+            except Exception:
+                pass
+        # L2: JSON file
         if self._path.exists():
             try:
                 return json.loads(self._path.read_text(encoding="utf-8"))
@@ -175,10 +191,20 @@ class SkillWeightAdapter:
         return {}
 
     def _save(self) -> None:
+        serialized = json.dumps(self._weights, indent=2)
+        # L1: Momento write-through (no TTL — weights are persistent)
+        if self._momento and self._momento.is_available():
+            try:
+                from memory.momento_adapter import WORKING_MEMORY_CACHE
+                self._momento.cache_set(
+                    WORKING_MEMORY_CACHE, "skill_weights:all",
+                    serialized, ttl_seconds=0,
+                )
+            except Exception as exc:
+                log_json("WARN", "skill_weights_l1_save_failed", details={"error": str(exc)})
+        # L2: JSON file
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._path.write_text(
-                json.dumps(self._weights, indent=2), encoding="utf-8"
-            )
+            self._path.write_text(serialized, encoding="utf-8")
         except Exception as exc:
             log_json("WARN", "skill_weight_save_failed", details={"error": str(exc)})

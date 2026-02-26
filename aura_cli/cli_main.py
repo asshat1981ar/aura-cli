@@ -175,10 +175,27 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     goal_queue = GoalQueue()
     goal_archive = GoalArchive()
 
+    # ── Momento: initialise first so it can be passed to Brain + ModelAdapter ─
+    try:
+        from memory.momento_adapter import MomentoAdapter
+        from memory.momento_brain import MomentoBrain
+        from memory.momento_memory_store import MomentoMemoryStore
+        _momento = MomentoAdapter()
+        if _momento.is_available():
+            brain_instance = MomentoBrain(_momento)
+            log_json("INFO", "runtime_momento_brain_active")
+        else:
+            brain_instance = Brain()
+            log_json("INFO", "runtime_momento_unavailable_using_local_brain")
+    except Exception as _exc:
+        log_json("WARN", "momento_brain_init_failed", details={"error": str(_exc)})
+        _momento = None
+        brain_instance = Brain()
+
     model_adapter = ModelAdapter()
-    brain_instance = Brain()
-    # Enable prompt-response cache (1hr TTL) using Brain's SQLite connection
-    model_adapter.enable_cache(brain_instance.db, ttl_seconds=3600)
+    # Enable prompt-response cache (1hr TTL) — pass Momento for L1
+    model_adapter.enable_cache(brain_instance.db, ttl_seconds=3600,
+                               momento=_momento)
     # Attach VectorStore for semantic memory recall
     vector_store = VectorStore(model_adapter, brain_instance)
     brain_instance.set_vector_store(vector_store)
@@ -187,7 +204,20 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     model_adapter.set_router(router)
     debugger_instance = DebuggerAgent(brain_instance, model_adapter)
     planner_instance = PlannerAgent(brain_instance, model_adapter)
-    memory_store = MemoryStore(Path(config.get("memory_store_path", "memory/store")))
+
+    # MemoryStore: use Momento-backed version when available
+    _mem_root = Path(config.get("memory_store_path", "memory/store"))
+    if _momento and _momento.is_available():
+        try:
+            from memory.momento_memory_store import MomentoMemoryStore
+            memory_store = MomentoMemoryStore(_mem_root, _momento)
+            log_json("INFO", "runtime_momento_memory_store_active")
+        except Exception as _exc:
+            log_json("WARN", "momento_memstore_init_failed", details={"error": str(_exc)})
+            memory_store = MemoryStore(_mem_root)
+    else:
+        memory_store = MemoryStore(_mem_root)
+
     policy_config = config.effective_config.copy()
     policy = Policy.from_config(policy_config)
     orchestrator = LoopOrchestrator(
@@ -212,7 +242,10 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         _reflection   = DeepReflectionLoop(memory_store, brain_instance)
         _health       = HealthMonitor(orchestrator.skills, goal_queue, memory_store, project_root)
         _remediator   = _WeaknessRemediatorLoop(WeaknessRemediator(), brain_instance, goal_queue)
-        _skill_adapt  = SkillWeightAdapter(memory_root=str(Path(config.get("memory_store_path", "memory/store")).parent))
+        _skill_adapt  = SkillWeightAdapter(
+            memory_root=str(Path(config.get("memory_store_path", "memory/store")).parent),
+            momento=_momento,
+        )
         _conv_escape  = _ConvergenceEscapeLoop(ConvergenceEscapeLoop(memory_store, goal_queue))
         _compaction   = MemoryCompactionLoop(memory_store)
 

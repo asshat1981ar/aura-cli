@@ -1,8 +1,10 @@
 # AURA CLI — Product Requirements Document
 
-**Version:** 1.0  
+**Version:** 2.0  
 **Status:** Living Document  
-**Repository:** [asshat1981ar/aura-cli](https://github.com/asshat1981ar/aura-cli)
+**Last Updated:** 2025  
+**Repository:** [asshat1981ar/aura-cli](https://github.com/asshat1981ar/aura-cli)  
+**Previous Version:** 1.0 (bb32efb) → **This Version covers bb32efb → 5c9f90f (+7 commits, +15 features)**
 
 ---
 
@@ -14,169 +16,214 @@
 4. [User Personas](#4-user-personas)
 5. [Core Concepts & Terminology](#5-core-concepts--terminology)
 6. [System Architecture](#6-system-architecture)
+   - 6.1 [High-Level Architecture Diagram](#61-high-level-architecture-diagram)
+   - 6.2 [Entry Points & CLI Systems](#62-entry-points--cli-systems)
+   - 6.3 [Dependency Hubs](#63-dependency-hubs)
+   - 6.4 [Leaf / Foundation Modules](#64-leaf--foundation-modules)
 7. [Feature Specifications](#7-feature-specifications)
    - 7.1 [CLI Interface](#71-cli-interface)
    - 7.2 [HTTP API Server](#72-http-api-server)
-   - 7.3 [Autonomous Loop Pipeline](#73-autonomous-loop-pipeline)
-   - 7.4 [Agent System](#74-agent-system)
-   - 7.5 [Skills System (23 Skills)](#75-skills-system-23-skills)
-   - 7.6 [Memory & Persistence](#76-memory--persistence)
-   - 7.7 [Configuration System](#77-configuration-system)
-   - 7.8 [GitHub Automation Workflows](#78-github-automation-workflows)
-   - 7.9 [MCP Skills Server](#79-mcp-skills-server)
-   - 7.10 [Self-Improvement Loops](#710-self-improvement-loops)
-8. [Non-Functional Requirements](#8-non-functional-requirements)
-9. [Data Models](#9-data-models)
-10. [API Reference](#10-api-reference)
-11. [Security Requirements](#11-security-requirements)
-12. [Error Handling & Failure Modes](#12-error-handling--failure-modes)
-13. [Testing Requirements](#13-testing-requirements)
-14. [Deployment & Operations](#14-deployment--operations)
-15. [Roadmap & Queued Goals](#15-roadmap--queued-goals)
-16. [Glossary](#16-glossary)
+   - 7.3 [Autonomous Loop Pipeline (10 Phases)](#73-autonomous-loop-pipeline-10-phases)
+   - 7.4 [Agent System (16 Agents)](#74-agent-system-16-agents)
+   - 7.5 [Skills System (28 Skills)](#75-skills-system-28-skills)
+   - 7.6 [Memory Architecture (5 Layers)](#76-memory-architecture-5-layers)
+   - 7.7 [Advanced Orchestration Modules](#77-advanced-orchestration-modules)
+   - 7.8 [MCP Server Ecosystem (5 Servers)](#78-mcp-server-ecosystem-5-servers)
+   - 7.9 [Configuration System](#79-configuration-system)
+   - 7.10 [GitHub Automation Workflows](#710-github-automation-workflows)
+   - 7.11 [Stopping Policies](#711-stopping-policies)
+   - 7.12 [Self-Improvement Loops](#712-self-improvement-loops)
+8. [New Features Since v1.0 PRD (15 Implemented)](#8-new-features-since-v10-prd-15-implemented)
+9. [Non-Functional Requirements](#9-non-functional-requirements)
+10. [Performance Benchmarks](#10-performance-benchmarks)
+11. [Data Models](#11-data-models)
+12. [API Reference](#12-api-reference)
+13. [Security Requirements](#13-security-requirements)
+14. [Error Handling & Failure Modes](#14-error-handling--failure-modes)
+15. [Testing Requirements & Coverage Gaps](#15-testing-requirements--coverage-gaps)
+16. [Known Technical Debt](#16-known-technical-debt)
+17. [Deployment & Operations](#17-deployment--operations)
+18. [Roadmap & Future Goals](#18-roadmap--future-goals)
+19. [Glossary](#19-glossary)
 
 ---
 
 ## 1. Executive Summary
 
-**AURA** (Autonomous Unified Reasoning Agent) is an open-source, self-improving autonomous software development system that runs entirely on a developer's local machine or in CI/CD environments. AURA accepts natural language goals, decomposes them into executable steps, generates code, validates it in an isolated sandbox, applies it to the filesystem, runs tests, and self-reflects — all without manual intervention.
+**AURA** (Autonomous Unified Reasoning Agent) is an open-source, self-improving autonomous software development system that runs entirely on a developer's local machine or in CI/CD environments. AURA accepts natural language goals, decomposes them into executable steps, generates code, validates it in an isolated sandbox, applies it atomically to the filesystem, runs tests, and self-reflects — all without manual intervention.
 
 AURA is designed to:
-- **Automate repetitive development tasks** (refactoring, bug fixes, feature additions)
-- **Operate continuously** from a goal queue, processing tasks in autonomous cycles
-- **Improve over time** through self-reflection, weakness tracking, and adaptive skill weighting
-- **Integrate with GitHub** via Actions workflows, Copilot automation, and Codespaces
+- **Automate repetitive development tasks** (refactoring, bug fixes, feature additions, documentation)
+- **Operate continuously** from a priority goal queue, processing tasks in fully autonomous cycles
+- **Improve over time** through deep self-reflection, weakness tracking, oscillation detection, and adaptive skill weighting
+- **Integrate with GitHub** via Actions workflows, Copilot automation, Gemini PR review, and Codespaces
+- **Expose capabilities as MCP tools** to external agents and LLM clients via 5 distinct MCP servers
 
-**Current State:** 332 passing tests, 23 pluggable skills, 10-phase pipeline, live with OpenRouter free-tier models.
+**Current State (v2.0):**
+- **377 passing tests** (up from 332), 0 failures
+- **28 pluggable skills** (up from 23)
+- **10-phase pipeline** with atomic apply, 3x sandbox retry, and human gate
+- **5 MCP servers** (up from 1 documented)
+- **5-layer memory architecture** (L0 in-memory → L4 goal queue JSON)
+- **15 roadmap goals from v1.0 PRD: ALL IMPLEMENTED**
+- Live with OpenRouter API key on Android/Termux
 
 ---
 
 ## 2. Problem Statement
 
-### Pain Points Addressed
+Modern software developers face mounting cognitive load: managing backlogs, writing repetitive boilerplate, fixing recurring error patterns, maintaining test coverage, enforcing standards, and documenting changes. Existing AI code assistants (GitHub Copilot, ChatGPT, Cursor) are **reactive** — they require continuous human prompting and cannot autonomously drive a project forward.
 
-| Pain Point | Current Reality | AURA's Solution |
-|---|---|---|
-| Repetitive coding tasks | Developer manually refactors/fixes | AURA processes goal queue autonomously |
-| Context switching overhead | Developer must recall project state | Brain memory + VectorStore persist context |
-| Inconsistent code quality | Depends on developer fatigue/time | Critic + Verifier phases enforce quality every cycle |
-| Slow feedback loops | Tests run manually, errors discovered late | Sandbox pre-validates code before any file is written |
-| Knowledge loss across sessions | Notes/TODOs scattered | MemoryStore persists cycle summaries, weaknesses, decisions |
-| CI/CD disconnected from intent | PRs created manually | GitHub Actions loop processes issues as goals automatically |
+**Key gaps AURA fills:**
+
+| Gap | AURA Solution |
+|-----|--------------|
+| AI needs hand-holding for each step | Autonomous 10-phase pipeline with LLM + sandbox + verify |
+| No memory of past decisions | 5-layer memory with SQLite brain, vector store, context graph |
+| AI can't run and validate its own code | Isolated subprocess sandbox with 3x retry and stderr fix_hints |
+| Unsafe multi-file edits | AtomicChangeSet — all-or-nothing filesystem writes |
+| No skill specialization | 28 pluggable skills dispatched in parallel per goal type |
+| No self-improvement | ReflectorAgent + DeepReflectionLoop + WeaknessRemediator |
+| Can't block dangerous changes | HumanGate intercepts security/coverage regressions |
+| Fragile on flaky LLMs | EMA-weighted RouterAgent + response cache preloading |
 
 ---
 
 ## 3. Product Vision
 
-> *"AURA is the first always-on autonomous development partner that improves your codebase while you sleep — safely, verifiably, and with full Git history."*
+> **"A tireless software engineer that improves itself while improving your codebase — goal by goal, cycle by cycle."**
 
-### Guiding Principles
+AURA's north star is **fully autonomous, safe, continuously improving software development** at the project scale. The system should be able to:
 
-1. **Safety first** — code is sandbox-tested before touching the filesystem; all changes are git-stashed and rollback-able
-2. **Transparency** — structured JSON logs every decision; memory is queryable; nothing is a black box
-3. **Progressive autonomy** — dry-run mode for observation, full mode for action; human-in-loop gate for high-risk changes
-4. **Zero lock-in** — pluggable model backends (OpenRouter, OpenAI, Gemini, local); no proprietary cloud dependency
-5. **Self-improving** — every failure becomes a weakness; every weakness feeds the next cycle's plan
+1. Accept a backlog of natural language goals
+2. Prioritize, plan, code, test, and apply changes autonomously
+3. Learn from failures and weaknesses, generating remediation sub-goals
+4. Expose all capabilities as composable MCP tools to the broader AI ecosystem
+5. Detect convergence failure (oscillation) and escape loops proactively
+6. Eventually self-host: AURA improves its own codebase via the agentic loop workflow
 
 ---
 
 ## 4. User Personas
 
-### Persona A: The Solo Developer (Primary)
-- Builds personal projects and OSS tools
-- Uses Termux on Android or a local Linux machine
-- Wants to offload grunt-work (test writing, refactoring, doc generation)
-- Comfortable with CLI; not interested in GUI
-- **Key need:** Reliable, low-cost autonomous coding that doesn't break their project
+### 4.1 Solo Developer (Primary)
+- Runs AURA locally on laptop or Android/Termux
+- Queues goals via CLI, checks back on completed work
+- Needs: reliable goal execution, clear logs, safe apply
 
-### Persona B: The DevOps/Platform Engineer
-- Manages CI/CD pipelines and GitHub automation
-- Wants AURA running as a scheduled GitHub Action
-- Needs confidence that autonomous changes are safe and reviewable
-- **Key need:** PR-based workflow with human review gate for risky changes
+### 4.2 Open Source Maintainer
+- Uses GitHub Actions workflows to run AURA on PRs and issues
+- Labels issues `aura-goal` to trigger automatic queuing
+- Needs: CI integration, Copilot + Gemini review, safe PR automation
 
-### Persona C: The AI/ML Researcher
-- Experimenting with agentic frameworks and self-improving systems
-- Wants to swap in different LLMs, add custom skills, modify the pipeline
-- Reads the source code; contributes new agents/skills
-- **Key need:** Clean extension points (SkillBase, agent adapters, policy plugins)
+### 4.3 DevOps / Platform Engineer
+- Deploys AURA as a service with HTTP API
+- Integrates with MCP-compatible tools (Claude Desktop, VS Code, etc.)
+- Needs: MCP servers, structured logging, health monitoring, Docker support
+
+### 4.4 AI/LLM Researcher
+- Studies AURA's self-improvement loop and agentic workflow patterns
+- Interested in skills system, context graph, propagation engine
+- Needs: clean abstractions, documented APIs, test coverage
 
 ---
 
 ## 5. Core Concepts & Terminology
 
 | Term | Definition |
-|---|---|
-| **Goal** | A natural language description of a desired code change or task (e.g., "Add retry logic to the HTTP client") |
-| **Goal Queue** | FIFO list of goals waiting to be processed (`memory/goal_queue.json`) |
-| **Cycle** | One complete execution of the 10-phase autonomous loop for a single goal |
-| **Phase** | A discrete step in the loop pipeline (ingest, plan, critique, synthesize, act, sandbox, apply, verify, reflect) |
-| **Agent** | A specialized component that handles one phase of the pipeline |
-| **Skill** | A pluggable analysis module (complexity scorer, security scanner, etc.) invoked during skill dispatch |
-| **Brain** | The SQLite-backed long-term memory storing recalled context, weaknesses, and vector embeddings |
-| **Task Bundle** | The structured artifact passed between phases containing the goal, steps, file targets, and fix hints |
-| **AURA_TARGET** | A directive comment (`# AURA_TARGET: path/to/file.py`) the LLM includes in generated code to specify the target file |
-| **Sandbox** | An isolated subprocess that executes generated code before it is written to disk |
-| **Dry Run** | A mode where the loop runs fully but skips all filesystem writes and memory persistence |
-| **Weakness** | A recorded failure pattern (e.g., "tends to hallucinate import paths") used to guide future plans |
-| **Skill Weight** | A learned score (EMA) for each skill indicating its reliability for a given goal type |
+|------|-----------|
+| **Goal** | A natural language task string queued for autonomous execution |
+| **Cycle** | One complete pass through the 10-phase pipeline for a single goal |
+| **Skill** | A focused analysis module (e.g., `security_scanner`, `linter_enforcer`) implementing `SkillBase` ABC |
+| **Agent** | An LLM-backed or rule-based worker implementing `AgentBase` ABC |
+| **Brain** | SQLite-backed persistent memory with vector search and weakness tracking (L2) |
+| **ContextGraph** | SQLite property graph linking files, goals, skills, and weaknesses (L2) |
+| **AtomicChangeSet** | Filesystem transaction: all-or-nothing write of N files with rollback |
+| **HumanGate** | Pre-apply blocking gate that intercepts security/coverage regressions |
+| **OscillationDetector** | Detects when the loop is cycling on the same failure pattern |
+| **Sandbox** | Isolated subprocess that executes generated code with timeout + 3x retry |
+| **AURA_TARGET** | Directive comment in LLM-generated code marking the apply insertion point |
+| **MCP Server** | Model Context Protocol HTTP server exposing AURA tools to LLM clients |
+| **WeaknessRemediator** | Generates fix-goals from Brain-recorded weakness patterns |
+| **DeepReflectionLoop** | Reflection triggered every 5 cycles for deeper pattern analysis |
+| **SkillChainer** | Chains security scan → auto-remediation goal creation |
+| **RouterAgent** | EMA-weighted model selector routing goals to optimal LLM providers |
+| **GoalQueue** | Persisted priority queue of pending natural language goals |
+| **TaskHierarchy** | Hierarchical sub-task decomposition tree for complex goals |
 
 ---
 
 ## 6. System Architecture
 
+### 6.1 High-Level Architecture Diagram
+
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    User Entry Points                     │
-│   CLI (main.py)    HTTP API (:8001)    GitHub Actions    │
-└──────────┬─────────────────┬────────────────┬───────────┘
-           │                 │                │
-           ▼                 ▼                ▼
-┌─────────────────────────────────────────────────────────┐
-│              AURA Runtime (cli_main.create_runtime)      │
-│  GoalQueue  ConfigManager  Brain  ModelAdapter  GitTools │
-└──────────────────────────┬──────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────┐
-│           LoopOrchestrator (core/orchestrator.py)        │
-│                                                          │
-│  [1] Ingest → [2] Skill Dispatch → [3] Plan             │
-│  [4] Critique → [5] Synthesize → [6] Act                │
-│  [6a] Sandbox → [7] Apply → [8] Verify → [9] Reflect    │
-└──────────────────────────┬──────────────────────────────┘
-                           │
-           ┌───────────────┼───────────────┐
-           ▼               ▼               ▼
-┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-│   Agents     │  │   Skills     │  │   Memory     │
-│ PlannerAgent │  │ 23 pluggable │  │ Brain (SQL)  │
-│ CoderAgent   │  │ skills via   │  │ MemoryStore  │
-│ CriticAgent  │  │ SkillBase    │  │ (JSON tiers) │
-│ SandboxAgent │  │              │  │ GoalQueue    │
-│ VerifierAgent│  │              │  │ LocalCache   │
-└──────────────┘  └──────────────┘  └──────────────┘
-           │
-           ▼
-┌─────────────────────────────────────────────────────────┐
-│              Model Adapter (core/model_adapter.py)       │
-│   OpenRouter → OpenAI → Gemini CLI → Local Model        │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                        ENTRY POINTS (3)                             │
+│  main.py → cli/cli_main.py    aura_cli/cli_main.py    HTTP Server  │
+└────────────────────┬────────────────────────────────────────────────┘
+                     │ create_runtime()
+                     ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    RUNTIME WIRING                                   │
+│  GoalQueue → ConfigManager → Brain → ModelAdapter                  │
+│  → VectorStore → RouterAgent → DebuggerAgent → PlannerAgent        │
+│  → default_agents() → LoopOrchestrator → GitTools → MemoryStore    │
+└────────────────────┬────────────────────────────────────────────────┘
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│             LOOP ORCHESTRATOR (core/orchestrator.py, 744L)         │
+│  Phase 1: Ingest → 2: Skills → 3: Plan → 4: Critique → 5: Synth   │
+│  Phase 6: Act  → 7: Sandbox → 8: Apply → 9: Verify → 10: Reflect  │
+└────────────────────────────────────────────────────────────────────┘
+         │            │              │              │
+         ▼            ▼              ▼              ▼
+    AGENTS (16)   SKILLS (28)   MCP SERVERS (5)  MEMORY (5 layers)
 ```
 
-### Technology Stack
+### 6.2 Entry Points & CLI Systems
 
-| Layer | Technology |
-|---|---|
-| Language | Python 3.10+ |
-| LLM Gateway | OpenRouter (primary), OpenAI, Gemini CLI |
-| Default Model | `google/gemini-2.0-flash-exp:free` (free tier) |
-| Persistence | SQLite (Brain), JSON files (queue/archive/store), in-memory TTL dict (cache) |
-| HTTP Server | FastAPI (uvicorn) |
-| Testing | pytest (332 passing) |
-| CI/CD | GitHub Actions |
-| Containerization | Docker (Dockerfile included) |
-| VCS Integration | GitPython / subprocess git |
+> ⚠️ **Architectural Issue:** Three parallel CLI systems exist with overlapping functionality (see §16).
+
+| File | Lines | Role |
+|------|-------|------|
+| `main.py` | 11 | Thin wrapper → delegates to `cli/cli_main.py` |
+| `aura_cli/cli_main.py` | 465 | **Primary runtime** — full arg parsing, `create_runtime()` |
+| `cli/cli_main.py` | 129 | Older/partial duplicate, called by main.py |
+| `aura-cli/main.py` | 2 | Abandoned stub |
+
+**Canonical entry point:** `aura_cli/cli_main.py` is the primary runtime with full argument parsing and `create_runtime()` wiring. All new features should target this module.
+
+### 6.3 Dependency Hubs
+
+Most-imported internal modules (import frequency):
+
+| Module | Imports | Role |
+|--------|---------|------|
+| `core.logging_utils` | 85 | Universal structured JSON logging |
+| `agents.skills.base` | 29 | `SkillBase` ABC for all 28 skills |
+| `core.file_tools` | 17 | `safe_apply`, `AtomicChangeSet` |
+| `memory.store` | 10 | `MemoryStore` JSON tier persistence |
+| `core.git_tools` | 9 | Git operations wrapper |
+| `core.model_adapter` | 9 | LLM provider abstraction |
+| `memory.brain` | 8 | SQLite brain + vector store |
+| `core.orchestrator` | 6 | `LoopOrchestrator` main loop |
+| `core.hybrid_loop` | 6 | Legacy loop (migration pending) |
+
+### 6.4 Leaf / Foundation Modules
+
+Zero local imports — pure foundation layer:
+
+- `agents/applicator.py` — patch application leaf
+- `agents/base.py` — `AgentBase` ABC
+- `core/logging_utils.py` — JSON structured logging
+- `core/schema.py` — shared Pydantic/dataclass schemas
+- `core/exceptions.py` — canonical exception hierarchy
+- `core/prompts.py` — LLM prompt templates
+- `core/types.py` — shared type aliases
+- `memory/store.py` — JSON file persistence
+- `tools/mcp_server.py` — dev tools MCP server
 
 ---
 
@@ -184,681 +231,1235 @@ AURA is designed to:
 
 ### 7.1 CLI Interface
 
-**Entry Point:** `python3 main.py [flags]`
+**Module:** `aura_cli/cli_main.py` (465L), `aura_cli/commands.py`
 
-#### 7.1.1 Command-Line Flags
-
-| Flag | Type | Default | Description |
-|---|---|---|---|
-| `--dry-run` | bool | false | Run loop without writing files or persisting memory |
-| `--add-goal <text>` | str | — | Add a goal to the queue; can combine with `--run-goals` |
-| `--run-goals` | bool | false | Execute all queued goals and exit (non-interactive) |
-| `--decompose` | bool | false | Decompose complex goals into hierarchical sub-tasks before queueing |
-
-**Usage Examples:**
-```bash
-# Add a goal and run immediately (non-interactive)
-python3 main.py --add-goal "Add retry logic to HTTP client" --run-goals
-
-# Queue a goal without running
-python3 main.py --add-goal "Refactor goal_queue.py to use SQLite"
-
-# Dry run (observe without writing)
-python3 main.py --run-goals --dry-run
-
-# Decompose a complex goal
-python3 main.py --add-goal "Build user authentication system" --decompose --run-goals
-```
-
-#### 7.1.2 Interactive CLI Commands
-
-After startup, AURA enters an interactive `Command >` prompt:
+#### Commands
 
 | Command | Description |
-|---|---|
-| `add <goal text>` | Append a goal to the queue |
-| `run` | Execute all queued goals |
-| `status` | Display queue contents, archived goals, task hierarchy, loop state |
-| `doctor` | Run health checks (Python version, env vars, SQLite, git, pytest) |
-| `clear` | Clear terminal screen |
-| `help` | List available commands with descriptions |
-| `exit` | Gracefully exit AURA |
+|---------|-------------|
+| `aura run <goal>` | Queue and immediately execute a single goal |
+| `aura queue add <goal>` | Add goal to persistent GoalQueue |
+| `aura queue list` | Display all pending goals with priorities |
+| `aura queue clear` | Remove all pending goals |
+| `aura loop` | Start autonomous loop — process queue continuously |
+| `aura status` | Show current loop state, last cycle summary |
+| `aura skills list` | List all 28 registered skills |
+| `aura skills run <name> <goal>` | Execute a single skill directly |
+| `aura memory show` | Dump recent Brain memories |
+| `aura memory clear` | Reset Brain state |
+| `aura reflect` | Trigger manual deep reflection cycle |
+| `aura config show` | Display effective configuration |
+| `aura doctor` | Run `aura_doctor.py` diagnostics |
+| `aura server start` | Launch HTTP API server |
+| `aura mcp start` | Launch all MCP servers |
 
-#### 7.1.3 CLI Runtime Behavior
+#### Flags
 
-- Readline history persisted to `memory/.aura_history` (max 1000 entries)
-- Structured JSON log lines emitted to stdout (`core/logging_utils.log_json`)
-- `AURA_SKIP_CHDIR=1` prevents `os.chdir()` (required for test environments)
-- Ctrl+C handled gracefully; in-progress cycles are stashed before exit
-
----
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--max-cycles N` | 5 | SlidingWindowPolicy limit |
+| `--timeout N` | 3600 | TimeBoundPolicy seconds |
+| `--model <name>` | config | Override model for this run |
+| `--dry-run` | false | Plan only, skip Apply/Verify |
+| `--no-sandbox` | false | Skip sandbox phase (unsafe) |
+| `--human-gate` | true | Enable HumanGate blocking |
+| `--log-level` | INFO | Logging verbosity |
+| `--output json\|text` | text | Output format |
 
 ### 7.2 HTTP API Server
 
-**File:** `aura_cli/server.py`  
-**Framework:** FastAPI  
-**Default Port:** 8001 (override via `PORT` env var)  
-**Default Host:** 127.0.0.1 (override via `AGENT_API_HOST`)
+**Module:** `aura_cli/server.py`
 
-**Start:** `uvicorn aura_cli.server:app --port 8001`
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Liveness check |
+| `/goals` | GET | List goal queue |
+| `/goals` | POST | Add goal `{"goal": "..."}` |
+| `/goals/{id}` | DELETE | Remove goal |
+| `/loop/start` | POST | Start autonomous loop |
+| `/loop/stop` | POST | Stop loop gracefully |
+| `/loop/status` | GET | Current loop state + last cycle |
+| `/skills` | GET | List all registered skills |
+| `/skills/{name}/run` | POST | Execute skill `{"goal": "..."}` |
+| `/metrics` | GET | Per-skill SkillMetrics JSON |
+| `/memory/brain` | GET | Recent brain memories |
+| `/memory/graph` | GET | Context graph summary |
+| `/reflect` | POST | Trigger manual reflection |
+| `/config` | GET | Current effective config |
 
-#### 7.2.1 Authentication
+### 7.3 Autonomous Loop Pipeline (10 Phases)
 
-All endpoints require `Authorization: Bearer <token>` when `AGENT_API_TOKEN` is set. If unset, auth is disabled (development mode).
+**Module:** `core/orchestrator.py` (744L, `LoopOrchestrator`)
 
-#### 7.2.2 Endpoints
+The pipeline executes sequentially for each goal cycle. Each phase has defined inputs, outputs, and failure behaviors.
 
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/health` | Yes | Server health, model provider status, feature flags |
-| GET | `/tools` | Yes | List available tools with descriptions |
-| POST | `/call` | Yes | Invoke a tool by name |
-| GET | `/metrics` | Yes | Runtime metrics (cycle count, skill stats, queue depth) |
-| POST | `/run` | Yes | Trigger a full goal cycle (requires `AGENT_API_ENABLE_RUN=1`) |
+#### Phase 1: Ingest
+- **Agent:** `IngestAgent` (`agents/ingest.py`)
+- **Input:** Goal string + project file tree
+- **Output:** Project snapshot dict + memory hints from Brain recall
+- **Action:** Walks project files, filters by `.gitignore`, recalls relevant memories via `Brain.recall_with_budget()`
 
-#### 7.2.3 Tool Invocations (POST /call)
+#### Phase 2: Skill Dispatch
+- **Module:** `core/skill_dispatcher.py`
+- **Input:** Goal string + project snapshot
+- **Output:** Skill analysis results dict (parallel execution)
+- **Action:**
+  - Classifies goal type via `classify_goal_llm()` (cached, 1 LLM call per unique goal type)
+  - Selects relevant subset of 28 skills via `AdaptiveStrategySelector`
+  - Dispatches selected skills in parallel threads
+  - Records per-skill `SkillMetrics` (duration, success, token cost)
+  - `SkillChainer` triggers remediation goals for security findings
 
-**Request schema:**
+#### Phase 3: Plan
+- **Agent:** `PlannerAdapter` → `PlannerAgent` (`agents/planner.py`)
+- **Input:** Goal + snapshot + skill results + weakness context from Brain
+- **Output:** Ordered list of plan steps
+- **Action:** LLM prompt with weakness context; retries up to 3 times on parse failure
+
+#### Phase 4: Critique
+- **Agent:** `CriticAdapter` → `CriticAgent` (`agents/critic.py`)
+- **Input:** Plan steps + goal + snapshot
+- **Output:** Adversarial review dict with identified weaknesses
+- **Action:** LLM adversarial review; feeds weaknesses back to Brain for future cycles
+
+#### Phase 5: Synthesize
+- **Agent:** `SynthesizerAgent` (`agents/synthesizer.py`)
+- **Input:** Plan steps + critique results
+- **Output:** `task_bundle` — unified action specification
+- **Action:** Merges plan and critique into coherent task bundle; resolves conflicts
+
+#### Phase 6: Act
+- **Agent:** `ActAdapter` → `CoderAgent` (`agents/coder.py`)
+- **Input:** `task_bundle` + project snapshot
+- **Output:** Generated code string with `# AURA_TARGET:` directives
+- **Action:** LLM code generation; `MAX_ITERATIONS` loop for quality; embeds target location markers
+
+#### Phase 7: Sandbox
+- **Agent:** `SandboxAdapter` → `SandboxAgent` (`agents/sandbox.py`)
+- **Input:** Generated code
+- **Output:** Execution result (stdout, stderr, exit_code) or fix_hints
+- **Action:**
+  - Executes code in isolated subprocess with timeout
+  - **3x retry loop**: on failure, extracts `fix_hints` from stderr, re-sends to CoderAgent
+  - Passes if exit_code == 0 or no critical errors
+
+#### Phase 8: Apply
+- **Module:** `core/file_tools.py` → `_safe_apply_change` / `AtomicChangeSet`
+- **Input:** Validated code + target file paths
+- **Output:** Applied filesystem state or rollback
+- **Action:**
+  - **HumanGate check**: blocks apply if security or coverage regression detected
+  - `AtomicChangeSet`: stages all file writes, commits all-or-nothing
+  - `OldCodeNotFoundError` triggers fuzzy git history search via `find_historical_match()`
+  - On any write failure: full rollback, error logged to Brain
+
+#### Phase 9: Verify
+- **Agent:** `VerifierAgent` (`agents/verifier.py`)
+- **Input:** Applied filesystem state
+- **Output:** Verification score (0.0–1.0) + test results
+- **Action:** Runs `pytest` + linting; parses results; computes quality score; stores in Brain
+
+#### Phase 10: Reflect
+- **Agent:** `ReflectorAgent` (`agents/reflector.py`)
+- **Input:** Full cycle results (plan, code, verify score, errors)
+- **Output:** Cycle summary → Brain memory entry
+- **Action:**
+  - Summarizes cycle in natural language
+  - Records to `Brain` + `MemoryStore.cycle_summaries`
+  - Appends to `decision_log.jsonl`
+  - Every 5th cycle: triggers `DeepReflectionLoop`
+  - `WeaknessRemediator` converts recorded weaknesses to new goals
+
+### 7.4 Agent System (16 Agents)
+
+**Base:** `agents/base.py` — `AgentBase` ABC with error-swallowing `run()` (exceptions logged, never propagated)
+
+| Agent | Module | Lines | Role |
+|-------|--------|-------|------|
+| `IngestAgent` | `agents/ingest.py` | — | Project file walker + memory recall |
+| `PlannerAgent` | `agents/planner.py` | — | LLM step generation with weakness ctx |
+| `CriticAgent` | `agents/critic.py` | — | Adversarial plan review |
+| `SynthesizerAgent` | `agents/synthesizer.py` | — | Merges plan + critique → task_bundle |
+| `CoderAgent` | `agents/coder.py` | — | LLM code gen with AURA_TARGET directive |
+| `SandboxAgent` | `agents/sandbox.py` | — | Isolated subprocess + 3x retry |
+| `VerifierAgent` | `agents/verifier.py` | — | pytest + lint runner + score |
+| `ReflectorAgent` | `agents/reflector.py` | — | Cycle summary → Brain memory |
+| `DebuggerAgent` | `agents/debugger.py` | — | LLM error diagnosis |
+| `RouterAgent` | `agents/router.py` | 238L, 2 cls | EMA-weighted model routing |
+| `MutatorAgent` | `agents/mutator.py` | — | Code mutation/patching |
+| `ScaffolderAgent` | `agents/scaffolder.py` | — | New file scaffolding |
+| `TesterAgent` | `agents/tester.py` | — | Automated test generation |
+| `ContextManagerAgent` | `agents/context_manager.py` | — | Context window management |
+| `Applicator` | `agents/applicator.py` | — | Leaf: applies diffs/patches |
+| *(Adapters)* | `agents/registry.py` | 463L | `PlannerAdapter`, `CriticAdapter`, `ActAdapter`, `SandboxAdapter`, `default_agents()` |
+
+#### RouterAgent Detail
+`agents/router.py` (238L, 2 classes):
+- Maintains per-model EMA (Exponential Moving Average) success scores
+- Routes goals to OpenRouter / OpenAI / Gemini / Local based on current scores
+- Demotes failing models automatically; promotes recovering models
+- Exposes routing statistics via `/metrics` endpoint
+
+### 7.5 Skills System (28 Skills)
+
+**Base:** `agents/skills/base.py` — `SkillBase` ABC (29 imports = most-used after logging)  
+**Dispatcher:** `core/skill_dispatcher.py`  
+**Registry:** All 28 skills self-register on import
+
+#### Original 23 Skills (v1.0)
+
+| Skill | Key Analysis |
+|-------|-------------|
+| `dependency_analyzer` | Import graph, unused deps, version conflicts |
+| `architecture_validator` | Layer violations, **circular import detection** (new) |
+| `complexity_scorer` | Cyclomatic + cognitive complexity per function |
+| `test_coverage_analyzer` | Coverage % + **incremental from git diff** (new) |
+| `doc_generator` | Missing docstrings, stale docs |
+| `performance_profiler` | Hot paths, O(n²) patterns, memory leaks |
+| `refactoring_advisor` | Extract method, rename, SOLID violations |
+| `schema_validator` | JSON/Pydantic schema conformance |
+| `security_scanner` | Hardcoded secrets, injection risks, CVEs |
+| `type_checker` | mypy-equivalent type error detection |
+| `linter_enforcer` | PEP8, flake8, black conformance |
+| `incremental_differ` | Git diff → minimal change surface |
+| `tech_debt_quantifier` | TODO/FIXME counts, dead code, debt score |
+| `api_contract_validator` | REST contract conformance, breaking changes |
+| `generation_quality_checker` | LLM output quality scoring |
+| `git_history_analyzer` | Commit patterns, hot files, churn |
+| `skill_composer` | Combines multiple skill outputs |
+| `error_pattern_matcher` | Recurring error pattern detection |
+| `code_clone_detector` | Duplicate code blocks (CPD-equivalent) |
+| `adaptive_strategy_selector` | Selects skill subset per goal classification |
+| `web_fetcher` | Fetches URLs for context (docs, issues) |
+| `symbol_indexer` | AST-level symbol table builder |
+| `multi_file_editor` | Coordinates edits across N files |
+
+#### 5 New Skills (v2.0 additions)
+
+| Skill | Module | Analysis |
+|-------|--------|---------|
+| `dockerfile_analyzer` | `agents/skills/dockerfile_analyzer.py` | Image security, layer optimization, best practices |
+| `observability_checker` | `agents/skills/observability_checker.py` | Missing logging, metrics, tracing instrumentation |
+| `changelog_generator` | `agents/skills/changelog_generator.py` | Auto-generates CHANGELOG from git history |
+| `database_query_analyzer` | `agents/skills/database_query_analyzer.py` | SQL query analysis, N+1 detection, index suggestions |
+| `skill_failure_analyzer` | `agents/skills/skill_failure_analyzer.py` | Meta-skill: analyzes failed skill runs for patterns |
+
+#### Skill Dispatch Pipeline
+
+```
+goal_string
+    │
+    ▼
+classify_goal_llm() ──cache──► goal_type (cached per unique goal type)
+    │
+    ▼
+AdaptiveStrategySelector.select(goal_type, history)
+    │
+    ▼
+parallel_dispatch(selected_skills, goal, snapshot)
+    │
+    ├── SkillMetrics.record(skill_name, duration, tokens, success)
+    │
+    └── SkillChainer.check(results) ──security_findings──► new remediation goals
+```
+
+#### Per-Skill Metrics (`/metrics` endpoint)
+
+Each skill records:
+- `total_runs`, `success_count`, `failure_count`
+- `avg_duration_ms`, `p95_duration_ms`
+- `total_tokens_used`
+- `last_error` string
+
+### 7.6 Memory Architecture (5 Layers)
+
+AURA implements a five-layer memory hierarchy from hot in-process cache to cold JSON files on disk.
+
+```
+L0  ┌──────────────────────────────────────────────────────┐
+    │  In-Memory Dict Cache                                │
+    │  model_adapter._mem_cache (preloaded from DB)        │
+    │  Scope: process lifetime | TTL: session              │
+L1  ├──────────────────────────────────────────────────────┤
+    │  LocalCacheAdapter (memory/local_cache.db)           │
+    │  SQLite, TTL-based, pub/sub events                   │
+    │  OR MomentoAdapter (cloud) if MOMENTO_API_KEY set    │
+    │  Scope: persistent across restarts | TTL: config     │
+L2  ├──────────────────────────────────────────────────────┤
+    │  Brain (memory/brain_v2.db SQLite)                   │
+    │  Tables: memories, weaknesses, vectors, response_cache│
+    │  + VectorStore (brain's vector_store_data table)     │
+    │  + ContextGraph (memory/context_graph.db SQLite)     │
+    │    Property graph: files ↔ goals ↔ skills ↔ weaknesses│
+    │  Scope: persistent | Search: vector + keyword        │
+L3  ├──────────────────────────────────────────────────────┤
+    │  MemoryStore (memory/store/ JSON files)              │
+    │  Files: cycle_summaries/, decision_log.jsonl         │
+    │         strategy_stats.json                          │
+    │  Scope: persistent append-only log                   │
+L4  └──────────────────────────────────────────────────────┘
+    │  GoalQueue (memory/goal_queue.json)                  │
+    │  GoalArchive (memory/goal_archive.json)              │
+    │  TaskHierarchy (memory/task_hierarchy_v2.json)       │
+    │  StrategyStats (memory/strategy_stats.json)          │
+    │  Scope: persistent operational state                 │
+```
+
+#### Brain (`memory/brain.py`, `brain_v2.db`)
+
+| Table | Purpose |
+|-------|---------|
+| `memories` | Cycle summaries, decisions, insights |
+| `weaknesses` | Identified code/agent weaknesses with frequency |
+| `vectors` | Embedding vectors for semantic recall |
+| `response_cache` | Cached LLM responses (deduplication) |
+| `vector_store_data` | VectorStore backing (used by Brain.recall()) |
+
+Key operations:
+- `Brain.recall_with_budget(goal, max_tokens)` — token-budget-aware semantic recall (compression: 10k entries → 179 kept in 0.32ms)
+- `Brain.record_weakness(pattern, context)` — persists weakness for WeaknessRemediator
+- `Brain.preload_cache()` — warms L0 in-memory cache on startup
+
+#### ContextGraph (`core/context_graph.py`, 285L, `context_graph.db`)
+
+SQLite-backed property knowledge graph:
+- **Nodes:** files, goals, skills, weaknesses, agents
+- **Edges:** typed relationships (applies_to, depends_on, causes, fixes)
+- **Queries:** `graph.get_related(node, relation)`, `graph.find_path(src, dst)`
+- Used by: IngestAgent, ReflectorAgent, AutonomousDiscovery
+
+#### Memory Compaction (`core/memory_compaction.py`)
+
+- Triggered when Brain exceeds configured memory threshold
+- Summarizes old memory entries via LLM → replaces N entries with 1 summary
+- Preserves weakness records indefinitely
+
+### 7.7 Advanced Orchestration Modules
+
+These modules extend the core pipeline with higher-order capabilities.
+
+#### WorkflowEngine (`core/workflow_engine.py`, 879L, 8 classes, 33 functions)
+Reusable agentic workflow execution framework:
+- Defines `Workflow`, `WorkflowStep`, `WorkflowContext`, `WorkflowResult` types
+- Supports branching, parallel steps, conditional execution
+- Used by: `agentic_loop_mcp.py` MCP server
+
+#### AdaptivePipeline (`core/adaptive_pipeline.py`, 228L)
+Context-aware phase selection:
+- Analyzes goal complexity + historical success rates
+- Selects subset of pipeline phases to skip for simple goals
+- Tracks phase-level metrics per goal type
+
+#### AutonomousDiscovery (`core/autonomous_discovery.py`, 246L)
+Self-propagating work discovery:
+- Scans codebase for signals: TODO comments, failing tests, complexity hotspots
+- Generates new goals autonomously without human input
+- Feeds discovered goals to GoalQueue
+
+#### PropagationEngine (`core/propagation_engine.py`, 315L)
+Forward-chaining event→rule→action system:
+- Rules: `IF event MATCHES pattern THEN trigger action`
+- Events: skill findings, verify failures, weakness detections
+- Actions: queue new goals, trigger specific agents, send notifications
+
+#### ConvergenceEscapeLoop (`core/convergence_escape.py`)
+- `OscillationDetector`: detects when loop repeats same failure pattern
+  - Benchmarked: 1000 events in 0.65ms
+- `ConvergenceEscapeLoop`: on oscillation detection, injects goal diversification strategy
+
+#### HealthMonitor (`core/health_monitor.py`, 194L)
+Periodic quality drift detection:
+- Runs on configurable interval (default: every 10 cycles)
+- Checks: test pass rate trend, skill success rate, code complexity growth
+- Alerts via logging + generates remediation goals on drift
+
+#### EvolutionLoop (`core/evolution_loop.py`, 144L)
+Iterative improvement loop:
+- Wraps the main orchestrator with evolutionary selection
+- Maintains N candidate code variants, selects best by verify score
+
+#### GoalDecomposer (`core/goal_decomposer.py`)
+Hierarchical sub-task decomposition:
+- Breaks complex goals into ordered sub-goals
+- Stores decomposition tree in `TaskHierarchy` (L4 memory)
+- Sub-goals are independently queued and executed
+
+#### WeaknessRemediator (`core/weakness_remediator.py`)
+- Reads recorded weaknesses from Brain
+- Generates specific fix-goals per weakness pattern
+- Priority-queues remediation goals ahead of new user goals
+
+#### DeepReflectionLoop (`core/reflection_loop.py`)
+- Triggered every 5 main cycles by ReflectorAgent
+- Performs cross-cycle pattern analysis
+- Updates StrategyStats and model routing weights
+
+### 7.8 MCP Server Ecosystem (5 Servers)
+
+AURA exposes capabilities as Model Context Protocol HTTP servers.
+
+> ⚠️ **Known Issue:** Port assignments lack a central registry (§16.8).
+
+#### Server 1: Dev Tools MCP (`tools/mcp_server.py`)
+- **Port:** 8001 (compatible)
+- **Tools:** 28 developer tools
+- **Categories:** File I/O, shell execution, git operations, linting
+- **Leaf module:** zero local imports (foundation layer)
+
+| Tool Group | Tools |
+|-----------|-------|
+| File I/O | `read_file`, `write_file`, `list_dir`, `find_files`, `delete_file` |
+| Shell | `run_command`, `run_script`, `get_env` |
+| Git | `git_status`, `git_diff`, `git_commit`, `git_log`, `git_branch` |
+| Lint | `run_pytest`, `run_flake8`, `run_mypy`, `run_black` |
+
+#### Server 2: Skills MCP (`tools/aura_mcp_skills_server.py`, 377L)
+- **Port:** 8002
+- **Tools:** All 28 skills exposed as HTTP tools
+- **Interface:** `POST /skills/{name}` with `{"goal": "...", "context": {...}}`
+- **Response:** Skill analysis result JSON
+- **Duplicate:** Contains `CallRequest` class (also in `mcp_server.py` — §16.4)
+
+#### Server 3: Control Plane MCP (`tools/aura_control_mcp.py`, 470L)
+- **Port:** TBD (not yet registered)
+- **Tools:** AURA control plane operations
+- **Operations:** Start/stop loop, manage goal queue, trigger reflect, read brain state
+- **Audience:** External orchestrators, Claude Desktop, VS Code extensions
+
+#### Server 4: Agentic Loop MCP (`tools/agentic_loop_mcp.py`, 609L)
+- **Port:** 8006
+- **Tools:** WorkflowEngine + LoopOrchestrator as MCP tools
+- **Operations:** Submit goals, run workflows, stream cycle events
+- **Backed by:** `core/workflow_engine.py`
+
+#### Server 5: GitHub Copilot MCP (`tools/github_copilot_mcp.py`, 791L)
+- **Port:** TBD
+- **Tools:** GitHub Copilot integration operations
+- **Operations:** PR review, issue → goal conversion, code suggestion application
+- **Integrations:** Copilot API, GitHub REST API
+
+#### Bonus: Sequential Thinking MCP (`tools/sequential_thinking_mcp.py`)
+- Sequential reasoning chain tool for multi-step problem solving
+- Integrates with the PlannerAgent reasoning process
+
+### 7.9 Configuration System
+
+**Module:** `core/config_manager.py`  
+**File:** `aura.config.json`
+
 ```json
-{"tool": "ask|run|env|goal", "args": [...]}
+{
+  "model": {
+    "primary": "openrouter/auto",
+    "fallback": "openai/gpt-4o-mini",
+    "local": "ollama/codellama",
+    "router": "ema_weighted"
+  },
+  "loop": {
+    "max_cycles": 5,
+    "timeout_seconds": 3600,
+    "sandbox_retries": 3,
+    "reflection_interval": 5
+  },
+  "memory": {
+    "brain_db": "memory/brain_v2.db",
+    "context_graph_db": "memory/context_graph.db",
+    "cache_db": "memory/local_cache.db",
+    "memory_compaction_threshold": 10000,
+    "goal_queue": "memory/goal_queue.json"
+  },
+  "skills": {
+    "parallel_dispatch": true,
+    "max_parallel": 8,
+    "timeout_per_skill_seconds": 30
+  },
+  "human_gate": {
+    "enabled": true,
+    "block_on_security": true,
+    "block_on_coverage_regression": true
+  },
+  "api_keys": {
+    "openrouter": "${OPENROUTER_API_KEY}",
+    "openai": "${OPENAI_API_KEY}",
+    "gemini": "${GEMINI_API_KEY}",
+    "momento": "${MOMENTO_API_KEY}"
+  }
+}
 ```
 
-| Tool | Args | Response | Notes |
-|---|---|---|---|
-| `ask` | `[question]` | `{"result": "..."}` | LLM question answering |
-| `run` | `[shell_cmd]` | SSE stream | Requires `AGENT_API_ENABLE_RUN=1`; commands sanitized |
-| `env` | `[]` | `{"TERMUX_*": "..."}` | Environment snapshot |
-| `goal` | `[goal_text]` | SSE stream | Full cycle with live events: start→health→cycle→complete |
+**ConfigManager features:**
+- Environment variable substitution (`${VAR}` syntax)
+- Layered overrides: defaults → file → env vars → CLI flags
+- Hot-reload on SIGHUP
 
----
+### 7.10 GitHub Automation Workflows
 
-### 7.3 Autonomous Loop Pipeline
+**Location:** `.github/workflows/`
 
-**Orchestrator:** `core/orchestrator.py::LoopOrchestrator`
+| Workflow | File | Trigger | Jobs |
+|----------|------|---------|------|
+| CI | `ci.yml` | push, PR | Python 3.10/3.11 matrix test |
+| Agentic Loop | `aura-agentic-loop.yml` | daily 02:00 UTC + manual | loop, reflect, skill-improve (3 jobs) |
+| Copilot Autofix | `copilot-autofix.yml` | PR | Copilot lint+test PR review |
+| Copilot Workspace | `copilot-workspace.yml` | issue label `aura-goal` | queue goal → aura loop |
+| Gemini Code Assist | `gemini-code-assist.yml` | PR | Gemini PR review with AURA skills |
+| Coder Automation | `coder-automation.yml` | manual | Codespaces devenv validation |
 
-Each `run_cycle()` executes these phases in order:
+#### Agentic Loop Workflow (`aura-agentic-loop.yml`) — Detail
 
-#### Phase Details
+```
+Job 1: loop
+  - checkout, setup Python
+  - pip install -r requirements.txt
+  - aura loop --max-cycles 10
+  - upload artifacts (cycle_summaries, logs)
 
-| # | Phase | Agent | Input | Output | On Failure |
-|---|---|---|---|---|---|
-| 1 | **Ingest** | `IngestAgent` | project_root, goal | context snapshot | Skip (non-fatal) |
-| 2 | **Skill Dispatch** | `SkillDispatcher` | goal, context | skill results dict | Skip (non-fatal) |
-| 3 | **Plan** | `PlannerAgent` | goal, memory, weaknesses, skill results | `{"steps": [...], "risks": [...]}` | Retry up to 3× |
-| 4 | **Critique** | `CriticAgent` | task, plan | `{"issues": [...], "fixes": [...]}` | Skip (non-fatal) |
-| 5 | **Synthesize** | `SynthesizerAgent` | plan + critique | task_bundle with file targets | Abort cycle |
-| 6 | **Act** | `CoderAgent` | task_bundle | `{"changes": [...]}` | Retry up to 3× |
-| 6a | **Sandbox** | `SandboxAgent` | generated code snippet | `{"status": "pass/fail/skip"}` | Inject fix_hints → retry Act |
-| 7 | **Apply** | `FileTools` | change set | applied file paths | Route to re-plan or skip |
-| 8 | **Verify** | `VerifierAgent` | applied changes | test results + score | Route to retry Act |
-| 9 | **Reflect** | `ReflectorAgent` | cycle history | cycle summary | Non-fatal |
+Job 2: reflect (depends: loop)
+  - aura reflect --deep
+  - push memory updates
 
-#### Stopping Policies
-
-| Policy | Trigger | Config Key |
-|---|---|---|
-| `SlidingWindowPolicy` | After N cycles (default: 5) | `policy_max_cycles` |
-| `TimeBoundPolicy` | After N seconds | `policy_max_seconds` |
-| `ResourceBoundPolicy` | After N tokens consumed | (custom) |
-
-#### Failure Routing (`_route_failure`)
-
-Returns one of three actions:
-- `"retry_act"` — code generation failed; retry with fix hints
-- `"replan"` — fundamental strategy failure; return to plan phase
-- `"skip"` — environmental/external issue; abandon this cycle
-
----
-
-### 7.4 Agent System
-
-#### Base Class: `agents/base.py::AgentBase`
-All agents inherit `AgentBase` which provides:
-- `run(input_data: dict) -> dict` — public entry point
-- `_run(input_data: dict) -> dict` — override in subclasses
-- Error swallowing: exceptions are caught and returned as `{"error": "..."}`
-
-#### Pipeline Agents
-
-| Agent | File | Responsibility |
-|---|---|---|
-| `IngestAgent` | `agents/ingest.py` | Gather project files, git status, recent changes |
-| `PlannerAgent` | `agents/planner.py` | LLM-based step-by-step planning |
-| `CriticAgent` | `agents/critic.py` | Adversarial plan review |
-| `SynthesizerAgent` | `agents/synthesizer.py` | Merge plan + critique into task bundle |
-| `CoderAgent` | `agents/coder.py` | LLM code generation (supports `# AURA_TARGET:` directive) |
-| `SandboxAgent` | `agents/sandbox.py` | Isolated subprocess code execution |
-| `VerifierAgent` | `agents/verifier.py` | Run tests + linters; compute quality score |
-| `ReflectorAgent` | `agents/reflector.py` | Cycle summary; update brain memory |
-| `DebuggerAgent` | `agents/debugger.py` | LLM-based error diagnosis on failure |
-| `RouterAgent` | `agents/router.py` | EMA-weighted model routing by task type |
-
-#### Adapter Pattern
-Each agent is wrapped in an **Adapter** class (`agents/registry.py`) that:
-1. Normalizes input/output format for the orchestrator
-2. Handles schema validation
-3. Provides a consistent `run(phase_input) -> phase_output` interface
-
-`ActAdapter` additionally:
-- Parses `# AURA_TARGET: path/to/file.py` from generated code
-- Falls back to heuristic keyword-based file path scoring
-- Generates a new file in `core/` when no target is found
-
----
-
-### 7.5 Skills System (23 Skills)
-
-**Registry:** `agents/skills/registry.py::all_skills(brain, model) -> Dict[str, SkillBase]`
-
-All skills extend `agents/skills/base.py::SkillBase`:
-- `run(input_data: dict) -> dict` — public entry, **never raises**
-- `_run(input_data: dict) -> dict` — implement in subclass
-- Errors returned as `{"error": "description"}`
-
-#### Complete Skills Catalog
-
-| # | Skill Name | Primary Input | Key Output Fields |
-|---|---|---|---|
-| 1 | `dependency_analyzer` | `project_root` | `packages`, `conflicts`, `vulnerabilities` |
-| 2 | `architecture_validator` | `project_root` | `circular_deps`, `coupling_score` |
-| 3 | `complexity_scorer` | `code` / `project_root` | `functions`, `high_risk_count` |
-| 4 | `test_coverage_analyzer` | `project_root` | `coverage_pct`, `meets_target` |
-| 5 | `doc_generator` | `code` / `project_root` | `generated_docstrings`, `undocumented_count` |
-| 6 | `performance_profiler` | `code` | `hotspots`, `antipatterns` |
-| 7 | `refactoring_advisor` | `code` / `project_root` | `suggestions`, `smell_count` |
-| 8 | `schema_validator` | `schema`, `instance`, `code` | `valid`, `errors`, `pydantic_models` |
-| 9 | `security_scanner` | `code` / `project_root` | `findings`, `critical_count` |
-| 10 | `type_checker` | `project_root` / `file_path` | `type_errors`, `annotation_coverage_pct` |
-| 11 | `linter_enforcer` | `project_root` / `file_path` | `violations`, `naming_violations` |
-| 12 | `incremental_differ` | `old_code`, `new_code` | `diff_summary`, `added_symbols`, `removed_symbols` |
-| 13 | `tech_debt_quantifier` | `project_root` | `debt_score`, `debt_items` |
-| 14 | `api_contract_validator` | `code` / `project_root` | `endpoints`, `breaking_changes` |
-| 15 | `generation_quality_checker` | `task`, `generated_code` | `quality_score`, `issues`, `intent_match_score` |
-| 16 | `git_history_analyzer` | `project_root` | `hotspot_files`, `patterns` |
-| 17 | `skill_composer` | `goal` | `workflow`, `goal_category` |
-| 18 | `error_pattern_matcher` | `current_error`, `error_history?` | `matched_pattern`, `suggested_fix`, `fix_steps` |
-| 19 | `code_clone_detector` | `project_root` | `exact_clones`, `near_duplicates` |
-| 20 | `adaptive_strategy_selector` | `goal`, `record_result?` | `recommended_strategy`, `confidence` |
-| 21 | `web_fetcher` | `url` or `query` | `text`, `title`, `source`, `truncated` |
-| 22 | `symbol_indexer` | `project_root` | `symbols`, `symbol_count`, `name_index`, `import_graph` |
-| 23 | `multi_file_editor` | `goal`, `project_root?`, `symbol_map?` | `change_plan`, `affected_count`, `warnings` |
-
-**Adding a New Skill:**
-1. Create `agents/skills/your_skill.py` extending `SkillBase`
-2. Set `name = "your_skill"` class attribute
-3. Implement `_run(self, input_data: dict) -> dict`
-4. Register in `agents/skills/registry.py::all_skills()`
-
----
-
-### 7.6 Memory & Persistence
-
-#### L1 Cache: LocalCacheAdapter / MomentoAdapter
-
-**File:** `memory/local_cache_adapter.py` / `memory/momento_adapter.py`  
-**Selection:** `memory/cache_adapter_factory.py::create_cache_adapter()`
-
-- Returns `MomentoAdapter` if `MOMENTO_API_KEY` is set (cloud cache with sub-ms latency)
-- Returns `LocalCacheAdapter` otherwise (always available, in-process, zero dependencies)
-
-| Operation | LocalCacheAdapter | MomentoAdapter |
-|---|---|---|
-| `get(cache, key)` | dict with TTL | HTTP to Momento cloud |
-| `set(cache, key, value, ttl)` | dict + expiry tuple | HTTP to Momento cloud |
-| `list_push(cache, key, value)` | dict of lists | Momento list type |
-| `list_fetch(cache, key)` | return list | Momento list fetch |
-| `publish(topic, data)` | SQLite event log | Momento Topics |
-| `subscribe(topic, handler)` | SQLite poll | Momento WebSocket |
-
-#### L2 Brain: SQLite Memory
-
-**File:** `memory/brain.py::Brain`  
-**Database:** `memory/brain_v2.db`
-
-```sql
--- Tables:
-memory(id INTEGER PRIMARY KEY, content TEXT)
-weaknesses(id INTEGER PRIMARY KEY, description TEXT, timestamp DATETIME)
-vector_store_data(id INTEGER PRIMARY KEY, content TEXT, embedding BLOB)
-response_cache(prompt_hash TEXT PRIMARY KEY, response TEXT, created_at DATETIME)
+Job 3: skill-improve (depends: reflect)
+  - aura skills run skill_failure_analyzer "improve failing skills"
+  - commit any skill updates
 ```
 
-**Key Methods:**
+### 7.11 Stopping Policies
 
-| Method | Description |
-|---|---|
-| `remember(data)` | Persist arbitrary data to memory table |
-| `recall_all() -> List[str]` | Retrieve all memory entries |
-| `add_weakness(description)` | Record a failure pattern |
-| `recall_weaknesses() -> List[str]` | Get all recorded weaknesses |
-| `reflect() -> str` | Generate textual summary of memory state |
-| `relate(a, b)` | Add edge to NetworkX concept graph |
+**Module:** `core/policies/`
 
-#### L3 MemoryStore: Tier-Based JSON
+| Policy | Class | Parameter | Behavior |
+|--------|-------|-----------|---------|
+| Sliding Window | `SlidingWindowPolicy` | `max_cycles=5` | Stop after N complete cycles |
+| Time Bound | `TimeBoundPolicy` | `max_seconds=3600` | Stop after N wall-clock seconds |
+| Resource Bound | `ResourceBoundPolicy` | `max_tokens=100000` | Stop after N total tokens used |
 
-**File:** `memory/store.py::MemoryStore`  
-**Root:** `memory/store/`
+Policies are composable — loop stops when **any** policy triggers. Each policy emits a structured log entry explaining the stop reason.
 
-Each tier is a JSON array file: `memory/store/{tier}.json`
+### 7.12 Self-Improvement Loops
+
+AURA contains multiple nested self-improvement mechanisms:
+
+```
+Main Loop (LoopOrchestrator)
+  │
+  ├── Every cycle: ReflectorAgent → Brain.record()
+  │
+  ├── Every 5 cycles: DeepReflectionLoop
+  │     └── Cross-cycle pattern analysis
+  │         └── Update StrategyStats + RouterAgent weights
+  │
+  ├── Every cycle: WeaknessRemediator
+  │     └── Read Brain weaknesses → queue fix-goals
+  │
+  ├── Continuous: OscillationDetector
+  │     └── On oscillation: ConvergenceEscapeLoop → diversify
+  │
+  ├── Periodic: HealthMonitor
+  │     └── On drift: generate health remediation goals
+  │
+  └── Continuous: AutonomousDiscovery
+        └── Scan codebase → queue discovered goals
+```
+
+---
+
+## 8. New Features Since v1.0 PRD (15 Implemented)
+
+All 15 roadmap items from PRD v1.0 are **fully implemented** as of commit `5c9f90f`.
+
+| # | Feature | Module | Status |
+|---|---------|--------|--------|
+| 1 | **AtomicChangeSet** + `apply_atomic()` | `core/file_tools.py` | ✅ Done |
+| 2 | **Sandbox retry loop 3x** with stderr `fix_hints` | `core/orchestrator.py` | ✅ Done |
+| 3 | **Token budget compression** | `memory/brain.py::recall_with_budget()` | ✅ Done |
+| 4 | **Circular import detection** | `agents/skills/architecture_validator.py` | ✅ Done |
+| 5 | **Per-skill metrics** (`SkillMetrics` + `/metrics` endpoint) | `core/skill_dispatcher.py` | ✅ Done |
+| 6 | **Incremental test coverage** from git diff | `agents/skills/test_coverage_analyzer.py` | ✅ Done |
+| 7 | **LLM goal type classifier** (`classify_goal_llm` + cache) | `core/skill_dispatcher.py` | ✅ Done |
+| 8 | **`OldCodeNotFoundError` git fuzzy recovery** | `core/file_tools.py::find_historical_match()` | ✅ Done |
+| 9 | **E2E integration tests** | `tests/integration/test_orchestrator_e2e.py` (5 tests) | ✅ Done |
+| 10 | **HumanGate** (security/coverage blocking) | `core/human_gate.py` | ✅ Done |
+| 11 | **SkillChainer** (security→remediation goals) | `core/skill_dispatcher.py` | ✅ Done |
+| 12 | **Response cache preloading** | `core/model_adapter.py::preload_cache()` | ✅ Done |
+| 13 | **`skill_failure_analyzer` skill** | `agents/skills/skill_failure_analyzer.py` | ✅ Done |
+| 14 | **OscillationDetector** | `core/convergence_escape.py` | ✅ Done |
+| 15 | **Adaptive context window sizing** | `core/model_adapter.py::estimate_context_budget()` | ✅ Done |
+
+---
+
+## 9. Non-Functional Requirements
+
+### 9.1 Performance
+
+| Requirement | Target | Measured |
+|-------------|--------|---------|
+| Single orchestrator cycle (mock LLM) | < 1s | ~640ms ✅ |
+| Cache miss (10k entries) | < 100ms | 36ms ✅ |
+| Cache hit (1k entries) | < 50ms | 15ms ✅ |
+| Token compression (10k → 179) | < 5ms | 0.32ms ✅ |
+| AtomicChangeSet (10 files) | < 200ms | 51ms ✅ |
+| AtomicChangeSet (50 files) | < 500ms | 248ms ✅ |
+| OscillationDetector (1000 events) | < 5ms | 0.65ms ✅ |
+| SkillMetrics (10k records) | < 500ms | 131ms ✅ |
+| HumanGate decision (10k calls) | < 100ms | 35ms ✅ |
+| Keyword classifier (1000 calls) | < 200ms | 44ms ✅ |
+| LLM classifier cache (50 calls) | 1 LLM call | 1 call ✅ |
+
+### 9.2 Reliability
+- All orchestrator phases: exceptions caught, logged, never propagate to crash loop
+- `AgentBase.run()` error-swallowing pattern across all 16 agents
+- Sandbox 3x retry before marking goal as failed
+- AtomicChangeSet full rollback on partial write failure
+- HumanGate prevents unsafe changes from reaching filesystem
+
+### 9.3 Portability
+- Target platform: Python 3.10+ on Linux (primary), macOS, Android/Termux
+- No GUI dependencies; all CLI/HTTP
+- Docker support via `Dockerfile`
+- SQLite for all persistence (no external database required by default)
+
+### 9.4 Observability
+- Structured JSON logging via `core/logging_utils.py` (85 imports = universal)
+- Per-skill `SkillMetrics` via `/metrics` HTTP endpoint
+- Cycle summaries in `memory/store/cycle_summaries/`
+- `decision_log.jsonl` for decision audit trail
+- `HealthMonitor` periodic quality drift reports
+
+### 9.5 Security
+- `HumanGate` blocks security regressions from applying
+- `security_scanner` skill runs on every cycle
+- `SkillChainer` auto-queues remediation for findings
+- No secrets in source code (env var substitution in config)
+- Sandbox execution isolated from main process
+
+---
+
+## 10. Performance Benchmarks
+
+*Source: `tests/test_performance_simulations.py` (48 tests, all passing), measured on Android/Termux*
+
+### Memory & Caching
+
+| Operation | N | Time |
+|-----------|---|------|
+| Cache miss lookups | 10,000 | 36ms total |
+| Cache hit lookups | 1,000 | 15ms total |
+| Cache writes | 5,000 | 104ms total |
+| Token compression | 10,000 → 179 | 0.32ms |
+| Response cache preload | baseline | < 1ms |
+
+### File Operations
+
+| Operation | N Files | Time |
+|-----------|---------|------|
+| AtomicChangeSet apply | 1 | 4ms |
+| AtomicChangeSet apply | 10 | 51ms |
+| AtomicChangeSet apply | 50 | 248ms |
+
+### Agent & Skill Operations
+
+| Operation | N | Time |
+|-----------|---|------|
+| OscillationDetector events | 1,000 | 0.65ms |
+| SkillMetrics records (thread-safe) | 10,000 | 131ms (0.013ms each) |
+| Keyword classifier calls | 1,000 | 44ms |
+| LLM classifier unique types | 50 calls | 1 LLM call (cached) |
+| HumanGate decisions | 10,000 | 35ms (0.004ms each) |
+
+### End-to-End
+
+| Scenario | Time |
+|----------|------|
+| Single orchestrator cycle (mock LLM) | ~640ms |
+| Full 5-cycle loop (mock LLM) | ~3.2s |
+
+---
+
+## 11. Data Models
+
+### Goal
 
 ```python
-store.put("cycle_summaries", {"goal": "...", "score": 0.9, "ts": "..."})
-store.query("cycle_summaries", limit=100) -> List[Dict]
-store.append_log({"event": "...", "detail": "..."})
+@dataclass
+class Goal:
+    id: str                    # UUID
+    text: str                  # Natural language goal string
+    priority: int              # 1 (highest) – 10 (lowest)
+    status: str                # pending | in_progress | done | failed
+    created_at: datetime
+    parent_id: Optional[str]   # For sub-goals from GoalDecomposer
+    metadata: Dict[str, Any]   # Arbitrary context
 ```
 
-#### Goal Queue & Archive
+### TaskBundle (Phase 5 → Phase 6 output)
 
-| File | Format | Purpose |
-|---|---|---|
-| `memory/goal_queue.json` | `["goal1", "goal2"]` | FIFO queue of pending goals |
-| `memory/goal_archive.json` | `[["goal", score], ...]` | Completed goals with quality scores |
-| `memory/task_hierarchy_v2.json` | Nested tree | Decomposed sub-task hierarchies |
-| `memory/strategy_stats.json` | `{strategy: {wins, losses}}` | Adaptive strategy selector weights |
-
----
-
-### 7.7 Configuration System
-
-**File:** `core/config_manager.py::ConfigManager`  
-**Resolution order:** Runtime overrides → `AURA_*` env vars → `aura.config.json` → defaults
-
-#### aura.config.json Schema
-
-```json
-{
-  "model_name": "google/gemini-2.0-flash-exp:free",
-  "api_key": "your-openrouter-api-key",
-  "max_retries": 3,
-  "dry_run": false,
-  "decompose": false,
-  "max_iterations": 10,
-  "max_cycles": 5,
-  "strict_schema": false,
-  "policy_name": "sliding_window",
-  "policy_max_cycles": 5,
-  "policy_max_seconds": 120,
-  "model_routing": {
-    "code_generation": "google/gemini-2.0-flash-exp:free",
-    "planning":        "google/gemini-2.0-flash-exp:free",
-    "analysis":        "google/gemini-2.0-flash-exp:free",
-    "critique":        "google/gemini-2.0-flash-exp:free",
-    "embedding":       "openai/text-embedding-3-small",
-    "fast":            "google/gemini-2.0-flash-exp:free",
-    "quality":         "google/gemini-2.5-pro"
-  }
-}
+```python
+@dataclass
+class TaskBundle:
+    goal: str
+    plan_steps: List[str]
+    critique_points: List[str]
+    target_files: List[str]
+    context_snapshot: Dict
+    skill_results: Dict[str, Any]
+    weakness_hints: List[str]
 ```
 
-#### Environment Variables Reference
+### CycleSummary (Phase 10 output)
 
-| Variable | Type | Default | Description |
-|---|---|---|---|
-| `AURA_API_KEY` | str | — | OpenRouter API key (alias) |
-| `OPENROUTER_API_KEY` | str | — | OpenRouter API key (primary) |
-| `OPENAI_API_KEY` | str | — | OpenAI API key (fallback) |
-| `GEMINI_CLI_PATH` | str | `/usr/bin/gemini` | Path to Gemini CLI binary |
-| `AURA_DRY_RUN` | bool | 0 | Set 1 to disable all writes |
-| `AURA_SKIP_CHDIR` | bool | 0 | Set 1 to skip os.chdir() (tests) |
-| `AURA_MAX_CYCLES` | int | 5 | Max loop cycles per goal |
-| `AURA_STRICT_SCHEMA` | bool | 0 | Abort cycle on schema validation failure |
-| `AURA_MODEL_ROUTING_<KEY>` | str | see config | Override individual model routing slots |
-| `AGENT_API_TOKEN` | str | — | Bearer token for HTTP API |
-| `AGENT_API_ENABLE_RUN` | bool | 0 | Enable /call run tool |
-| `MCP_API_TOKEN` | str | — | Bearer token for MCP Skills Server |
-| `MOMENTO_API_KEY` | str | — | Enables Momento cloud cache (L1) |
+```python
+@dataclass
+class CycleSummary:
+    cycle_id: str
+    goal: str
+    phases_completed: List[str]
+    verify_score: float         # 0.0 – 1.0
+    files_changed: List[str]
+    tests_passed: int
+    tests_failed: int
+    weaknesses_found: List[str]
+    duration_seconds: float
+    model_used: str
+    tokens_used: int
+    timestamp: datetime
+```
 
----
+### SkillResult
 
-### 7.8 GitHub Automation Workflows
+```python
+@dataclass
+class SkillResult:
+    skill_name: str
+    success: bool
+    findings: List[Dict]        # Structured findings
+    score: Optional[float]      # 0.0 – 1.0 where applicable
+    duration_ms: float
+    tokens_used: int
+    error: Optional[str]
+```
 
-#### aura-agentic-loop.yml
-Runs the AURA loop in CI — daily and on manual trigger.
+### Memory Entry (Brain)
 
-**Triggers:**
-- `schedule`: Daily 02:00 UTC
-- `workflow_dispatch`: Manual with `goal`, `dry_run`, `max_cycles` inputs
+```python
+@dataclass
+class MemoryEntry:
+    id: str
+    content: str               # Natural language summary
+    embedding: Optional[List[float]]
+    source: str                # cycle_id | skill_name | user
+    importance: float          # 0.0 – 1.0
+    created_at: datetime
+    accessed_count: int
+```
 
-**3-job pipeline:**
+### Weakness Record (Brain)
 
-| Job | Purpose | Output |
-|---|---|---|
-| `aura-loop` | Run goal queue or one-off goal | Commits changes, creates error issues, uploads artifacts |
-| `aura-reflect` | Skills analysis + test suite | Step summary with tech debt, coverage, security scores |
-| `aura-skill-improve` | Skill composer analysis | Recommended workflows for 3 improvement categories |
-
-#### copilot-autofix.yml
-Posts lint + test summary as PR comment using GitHub Copilot branding.
-
-#### copilot-workspace.yml
-Converts GitHub issues labeled `aura-goal` into AURA queue entries.  
-Auto-labels issue `aura-queued` and posts acknowledgement comment.
-
-#### gemini-code-assist.yml
-Runs pylint + AURA skills scan (complexity + security) on changed files in PRs.  
-Posts structured review comment.
-
-#### coder-automation.yml
-Validates devcontainer config and Python environment on `requirements.txt` changes.  
-Auto-creates `.devcontainer/devcontainer.json` if missing.
-
-#### ci.yml
-Matrix CI across Python 3.10 and 3.11 on every push/PR to main.
-
----
-
-### 7.9 MCP Skills Server
-
-**File:** `tools/aura_mcp_skills_server.py`  
-**Port:** 8002  
-**Start:** `uvicorn tools.aura_mcp_skills_server:app --port 8002`
-
-Exposes all 23 skills as MCP-compatible HTTP endpoints.
-
-| Method | Path | Description |
-|---|---|---|
-| GET | `/tools` | List all skill tools with input schemas |
-| POST | `/call` | `{"tool": "skill_name", "args": {...}}` |
-| GET | `/skill/{name}` | Describe a single skill |
-| GET | `/health` | Health check |
-
-**MCP Config** (`.vscode/mcp.json` or `~/.config/github-copilot/mcp.json`):
-```json
-{
-  "mcpServers": {
-    "aura-skills": {
-      "type": "http",
-      "url": "http://localhost:8002"
-    }
-  }
-}
+```python
+@dataclass
+class WeaknessRecord:
+    id: str
+    pattern: str               # Weakness description
+    context: str               # When/where it occurs
+    frequency: int             # Times observed
+    last_seen: datetime
+    remediation_goal: Optional[str]  # Generated fix goal
 ```
 
 ---
 
-### 7.10 Self-Improvement Loops
+## 12. API Reference
 
-AURA includes 7 autonomous improvement loops that fire after each cycle:
+### REST API (aura_cli/server.py)
 
-| Loop | File | Trigger | Action |
-|---|---|---|---|
-| `ReflectionLoop` | `core/reflection_loop.py` | Every cycle | Summarize outcomes; update Brain |
-| `WeaknessRemediatorLoop` | `core/weakness_remediator.py` | When weaknesses recorded | Generate fix goals; queue them |
-| `ConvergenceEscapeLoop` | `core/convergence_escape.py` | Oscillating scores | Switch strategy; vary prompt |
-| `HealthMonitor` | `core/health_monitor.py` | Periodic | Check system health; queue alerts |
-| `MemoryCompaction` | `core/memory_compaction.py` | Memory threshold | Summarize and compress old memories |
-| `PropagationEngine` | `core/propagation_engine.py` | Context changes | Propagate context updates across goals |
-| `CASPA-W` | `core/adaptive_pipeline.py` | Every N cycles | Contextually Adaptive Self-Propagating Autonomous Workflow orchestration |
-
----
-
-## 8. Non-Functional Requirements
-
-### 8.1 Performance
-- Cycle latency: < 30 seconds for simple goals with a fast model (gemini-flash)
-- Sandbox timeout: 30 seconds per code snippet execution
-- Cache L1 hit → < 1ms response (LocalCacheAdapter)
-- Memory recall: < 100ms for up to 10,000 Brain entries
-
-### 8.2 Reliability
-- All skills: must not raise exceptions (return `{"error": "..."}` instead)
-- All agents: wrapped in try/except at adapter layer
-- Git stash/pop: protects filesystem before/after every cycle
-- Dry run: 100% of functionality exercisable without side effects
-
-### 8.3 Scalability
-- Goal queue: supports unlimited entries (JSON file backed)
-- Brain: SQLite handles millions of memory entries
-- Skills: independently parallelizable; no shared state
-
-### 8.4 Portability
-- Runs on: Linux, macOS, Android (Termux), GitHub Actions (ubuntu-latest)
-- Python 3.10+ required; no OS-specific APIs
-- Docker support via `Dockerfile`
-- Codespaces support via `.devcontainer/devcontainer.json`
-
----
-
-## 9. Data Models
-
-### 9.1 Change Set (ActAdapter output)
+#### `POST /goals`
 ```json
-{
-  "changes": [
-    {
-      "file_path": "core/goal_queue.py",
-      "old_code": "def next(self):\n    ...",
-      "new_code": "def next(self) -> Optional[str]:\n    ...",
-      "overwrite_file": false
-    }
-  ]
-}
-```
-- `old_code = ""` + `overwrite_file = true` → full file overwrite
-- `old_code` not found → raises `OldCodeNotFoundError`
-
-### 9.2 Task Bundle (Synthesizer output)
-```json
-{
-  "goal": "Add retry logic to HTTP client",
-  "tasks": ["1. Locate _make_request", "2. Wrap with retry decorator", "..."],
-  "target_files": ["core/model_adapter.py"],
-  "fix_hints": [],
-  "context": {"skill_results": {...}, "weaknesses": [...]}
-}
+Request:  {"goal": "Add type hints to all functions in core/", "priority": 3}
+Response: {"id": "uuid-...", "status": "pending", "position": 4}
 ```
 
-### 9.3 Cycle Summary (Reflector output)
+#### `GET /loop/status`
 ```json
 {
-  "goal": "...",
+  "running": true,
+  "current_goal": "Add type hints...",
   "cycle": 3,
-  "score": 0.87,
-  "phases_completed": ["ingest","plan","critique","synthesize","act","sandbox","apply","verify","reflect"],
-  "changes_applied": ["core/model_adapter.py"],
-  "weaknesses_added": [],
-  "ts": "2026-02-26T05:32:00Z"
+  "phase": "verify",
+  "last_verify_score": 0.87,
+  "goals_completed_today": 5
 }
 ```
 
-### 9.4 Skill Result (SkillBase output)
+#### `GET /metrics`
 ```json
 {
-  "skill": "security_scanner",
-  "critical_count": 0,
-  "findings": [],
-  "error": null
+  "skills": {
+    "security_scanner": {
+      "total_runs": 42, "success_count": 40, "failure_count": 2,
+      "avg_duration_ms": 230.5, "p95_duration_ms": 890.0,
+      "total_tokens_used": 15420
+    }
+  },
+  "router": {
+    "openrouter/auto": {"ema_score": 0.91, "total_calls": 128},
+    "openai/gpt-4o-mini": {"ema_score": 0.73, "total_calls": 22}
+  }
+}
+```
+
+### MCP Tool Interface
+
+All MCP servers use the Model Context Protocol JSON-RPC format:
+
+```json
+Request:
+{
+  "jsonrpc": "2.0",
+  "method": "tools/call",
+  "params": {
+    "name": "security_scanner",
+    "arguments": {"goal": "scan for hardcoded secrets", "context": {}}
+  },
+  "id": 1
+}
+
+Response:
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "content": [{"type": "text", "text": "{\"findings\": [...]}"}]
+  },
+  "id": 1
 }
 ```
 
 ---
 
-## 10. API Reference
+## 13. Security Requirements
 
-### POST /call
+### 13.1 HumanGate (`core/human_gate.py`)
+- Intercepts Phase 8 (Apply) before any filesystem write
+- **Blocking conditions:**
+  - `security_scanner` finding with severity >= HIGH
+  - Test coverage regression > configured threshold (default: 5%)
+  - Explicit `BLOCK` directive in skill results
+- **Action on block:** Logs detailed reason, skips apply, records to Brain, queues remediation goal
+- **Performance:** 10k decisions in 35ms (0.004ms each)
+
+### 13.2 API Keys
+- All API keys via environment variables, never hardcoded
+- `aura.config.json` uses `${VAR}` substitution syntax
+- `.gitignore` excludes `.env` and `*_secrets*` files
+
+### 13.3 Sandbox Isolation
+- Generated code runs in subprocess with:
+  - Configurable execution timeout
+  - Captured stdout/stderr (never executed in AURA's process)
+  - `OldCodeNotFoundError` cannot escape sandbox
+- 3x retry does not loosen sandbox constraints
+
+### 13.4 MCP Server Access
+- MCP servers bind to `localhost` by default
+- No authentication in v2.0 (planned: API key auth in roadmap)
+- Port 8001/8002/8006 should be firewalled in production
+
+---
+
+## 14. Error Handling & Failure Modes
+
+### 14.1 Phase-Level Failures
+
+| Phase | Failure | Behavior |
+|-------|---------|---------|
+| Ingest | File read error | Log warning, continue with partial snapshot |
+| Skill Dispatch | Skill exception | Log error, mark skill failed in SkillMetrics, continue |
+| Plan | 3x LLM parse failure | Skip cycle, record weakness, queue retry |
+| Critique | LLM error | Use empty critique, log warning |
+| Synthesize | Merge conflict | Use plan-only task_bundle, log warning |
+| Act | LLM error | Skip cycle, record to Brain |
+| Sandbox | 3x subprocess failure | Skip apply, record fix_hints to Brain |
+| Apply | Write failure | Full rollback via AtomicChangeSet |
+| Apply | HumanGate block | Skip apply, queue remediation |
+| Verify | pytest crash | Score = 0.0, record weakness |
+| Reflect | LLM error | Use template summary, continue |
+
+### 14.2 Known Error Classes
+
+```python
+# core/exceptions.py (canonical)
+class AuraError(Exception): ...
+class GitError(AuraError): ...           # ⚠️ Also in core/git_tools.py (duplicate)
+class SandboxError(AuraError): ...
+class ApplyError(AuraError): ...
+class OldCodeNotFoundError(ApplyError): ...  # Triggers fuzzy git recovery
+class HumanGateBlockError(AuraError): ...
+class SkillError(AuraError): ...
+class BrainError(AuraError): ...
+class ConfigError(AuraError): ...
+```
+
+### 14.3 OscillationDetector & Convergence Escape
+- Detects repeated identical failure patterns across N consecutive cycles
+- On detection: `ConvergenceEscapeLoop` injects goal diversification
+  - Changes model routing weights
+  - Injects a "break pattern" sub-goal
+  - Reduces max_cycles for this goal to prevent infinite loops
+
+---
+
+## 15. Testing Requirements & Coverage Gaps
+
+### 15.1 Current Test State
+
+| Metric | Value |
+|--------|-------|
+| Total test functions | 379 |
+| Test files | 20 |
+| **Tests passing** | **377** |
+| Tests failing | 0 |
+| Performance simulation tests | 48 (all passing) |
+| E2E integration tests | 5 (all passing) |
+
+### 15.2 Test File Inventory
+
+| File | Tests | Coverage Area |
+|------|-------|--------------|
+| `tests/test_skills.py` | ~50 | Skills registry (all 28, surface-level) |
+| `tests/test_performance_simulations.py` | 48 | Performance benchmarks (all modules) |
+| `tests/integration/test_orchestrator_e2e.py` | 5 | Full pipeline (fake LLM/FS) |
+| `tests/test_brain.py` | ~20 | Brain memory operations |
+| `tests/test_file_tools.py` | ~25 | AtomicChangeSet, safe_apply |
+| `tests/test_goal_queue.py` | ~15 | GoalQueue operations |
+| `tests/test_router.py` | ~15 | RouterAgent EMA logic |
+| `tests/test_human_gate.py` | ~12 | HumanGate blocking logic |
+| `tests/test_convergence.py` | ~10 | OscillationDetector |
+| `tests/test_skill_dispatcher.py` | ~20 | Skill dispatch + chainer |
+| `test_aura_doctor_root.py` | ~10 | Doctor diagnostics |
+| *(other test files)* | ~149 | Mixed |
+
+### 15.3 Critical Coverage Gaps (75+ Untested Modules)
+
+The following production modules have **no dedicated unit tests**:
+
+#### Agents (no unit tests)
+- `agents/coder.py` — CoderAgent LLM code generation
+- `agents/planner.py` — PlannerAgent LLM step generation
+- `agents/critic.py` — CriticAgent adversarial review
+- `agents/synthesizer.py` — SynthesizerAgent merge logic
+- `agents/verifier.py` — VerifierAgent pytest runner
+- `agents/reflector.py` — ReflectorAgent summary generation
+- `agents/debugger.py` — DebuggerAgent error diagnosis
+- `agents/ingest.py` — IngestAgent file walker
+- `agents/mutator.py` — MutatorAgent code patching
+- `agents/scaffolder.py` — ScaffolderAgent new file creation
+- `agents/tester.py` — TesterAgent test generation
+- `agents/context_manager.py` — Context window management
+- `agents/registry.py` — Adapter wrappers + default_agents()
+
+#### CLI & Server (no unit tests)
+- `aura_cli/server.py` — HTTP API server
+- `aura_cli/cli_main.py` — Primary CLI (465L)
+- `aura_cli/commands.py` — Command implementations
+
+#### Core Orchestration (no unit tests)
+- `core/orchestrator.py` (744L) — Only covered by E2E fakes
+- `core/config_manager.py` — Configuration loading/override
+- `core/adaptive_pipeline.py` (228L) — Phase selection logic
+
+#### Advanced Modules (no unit tests)
+- `core/workflow_engine.py` (879L) — Entire workflow engine
+- `core/autonomous_discovery.py` (246L) — Goal discovery
+- `core/context_graph.py` (285L) — Property graph operations
+- `core/propagation_engine.py` (315L) — Forward-chaining rules
+- `core/health_monitor.py` (194L) — Quality drift detection
+- `core/evolution_loop.py` (144L) — Evolutionary improvement
+- `core/reflection_loop.py` — DeepReflectionLoop
+- `core/weakness_remediator.py` — Weakness → goal generation
+- `core/memory_compaction.py` — Memory compression
+- `core/goal_decomposer.py` — Hierarchical decomposition
+
+#### MCP Servers (no unit tests)
+- `tools/aura_mcp_skills_server.py` (377L)
+- `tools/agentic_loop_mcp.py` (609L)
+- `tools/aura_control_mcp.py` (470L)
+- `tools/github_copilot_mcp.py` (791L)
+- `tools/sequential_thinking_mcp.py`
+
+#### Skills (registry-only, no per-skill unit tests)
+All 28 individual skill implementations are tested only via `test_skills.py` registry check (confirms they load), not for correctness of analysis output.
+
+### 15.4 Testing Roadmap Priority
+
+| Priority | Target | Type | Effort |
+|----------|--------|------|--------|
+| P0 | `core/orchestrator.py` | Unit (mock LLM) | High |
+| P0 | `agents/coder.py`, `agents/planner.py` | Unit (mock LLM) | Medium |
+| P1 | `core/workflow_engine.py` | Unit | High |
+| P1 | `core/context_graph.py` | Unit | Medium |
+| P1 | `aura_cli/server.py` | Integration | Medium |
+| P2 | All 28 skills individually | Unit per skill | High (bulk) |
+| P2 | `core/adaptive_pipeline.py` | Unit | Medium |
+| P3 | MCP servers | Integration | High |
+| P3 | `core/autonomous_discovery.py` | Unit | Medium |
+
+---
+
+## 16. Known Technical Debt
+
+These issues are identified, documented, and have defined remediation paths.
+
+### 16.1 Three Parallel CLI Entry Points
+**Severity:** High  
+**Files:** `main.py`, `aura_cli/cli_main.py`, `cli/cli_main.py`, `aura-cli/main.py`  
+**Problem:** Overlapping argument parsing, duplicate command definitions, unclear which is canonical.  
+**Remediation:**
+1. Designate `aura_cli/cli_main.py` (465L) as the **sole canonical entry point**
+2. Rewrite `main.py` as a 3-line shim: `from aura_cli.cli_main import main; main()`
+3. Archive `cli/cli_main.py` to `archive/` with deprecation note
+4. Delete `aura-cli/main.py` stub
+5. Update all documentation and workflow references
+
+### 16.2 Duplicated GitError Exception Class
+**Severity:** Medium  
+**Files:** `core/git_tools.py` AND `core/exceptions.py`  
+**Problem:** Two definitions of `GitError` — importing from wrong module causes silent type mismatch in `except` clauses.  
+**Remediation:**
+1. Keep canonical definition in `core/exceptions.py` only
+2. In `core/git_tools.py`: `from core.exceptions import GitError`
+3. Add `__all__` to `exceptions.py` to prevent future re-definition
+
+### 16.3 Duplicated Task/TaskManager
+**Severity:** Medium  
+**Files:** `task_manager.py` (root) AND `core/task_manager.py`  
+**Problem:** Two `TaskManager` implementations; unclear which is used by orchestrator.  
+**Remediation:**
+1. Audit imports to determine which is actually used
+2. Merge into `core/task_manager.py` (keep in `core/`)
+3. Delete root `task_manager.py`
+4. Update all imports
+
+### 16.4 CallRequest / ToolCallRequest Duplication
+**Severity:** Medium  
+**Files:** `tools/mcp_server.py`, `tools/aura_mcp_skills_server.py`, and 2 other MCP servers (4 total)  
+**Problem:** `ToolCallRequest` dataclass defined 4 times with potential schema divergence.  
+**Remediation:**
+1. Extract to `core/schema.py` or `tools/mcp_types.py`
+2. All MCP servers import from the shared location
+3. Enforce via `ruff` rule or import checker in CI
+
+### 16.5 HybridClosedLoop vs LoopOrchestrator (Legacy vs Modern)
+**Severity:** Medium  
+**Files:** `core/hybrid_loop.py` (6 imports) vs `core/orchestrator.py`  
+**Problem:** `HybridClosedLoop` coexists with `LoopOrchestrator` with no documented migration path. 6 files still import the legacy module.  
+**Remediation:**
+1. Document `HybridClosedLoop` as deprecated in docstring
+2. Create migration guide: which features exist only in `HybridClosedLoop`
+3. Port any missing features to `LoopOrchestrator`
+4. Migrate the 6 imports, remove `hybrid_loop.py`
+
+### 16.6 No Unit Tests for Agent Implementations
+**Severity:** High  
+**Scope:** 13 agent files, 0 unit tests  
+**Problem:** All agent logic is only tested via E2E fakes or not at all. Regression risk on refactors.  
+**Remediation:**
+1. Create `tests/agents/` directory
+2. Use `unittest.mock.AsyncMock` for LLM calls
+3. Target P0 agents first: `coder.py`, `planner.py`, `verifier.py`
+4. Add to CI requirements (min coverage threshold per module)
+
+### 16.7 goal_queue.json vs goal_queue_v2.json Path Confusion
+**Severity:** Low  
+**Files:** `memory/goal_queue.json` (configured), potential stale `goal_queue_v2.json` references  
+**Problem:** Version suffix in filename creates confusion; config and code may reference different paths.  
+**Remediation:**
+1. Standardize on `goal_queue.json` (no version suffix)
+2. Add migration script: if `goal_queue_v2.json` exists, merge into `goal_queue.json`
+3. Remove all `_v2` references from codebase
+
+### 16.8 MCP Server Port Proliferation Without Registry
+**Severity:** Low**  
+**Ports:** 8001, 8002, 8006 (+ 2 TBD)  
+**Problem:** No central port registry; hardcoded port numbers scattered in 5 files; port conflicts on multi-server startup.  
+**Remediation:**
+1. Add `[mcp_servers]` section to `aura.config.json`:
+   ```json
+   "mcp_servers": {
+     "dev_tools": {"port": 8001},
+     "skills": {"port": 8002},
+     "control": {"port": 8003},
+     "agentic_loop": {"port": 8006},
+     "copilot": {"port": 8007}
+   }
+   ```
+2. All MCP servers read port from config
+3. Add `aura mcp list` command showing server status/port
+
+---
+
+## 17. Deployment & Operations
+
+### 17.1 Local Development
+
 ```bash
-curl -X POST http://localhost:8001/call \
-  -H "Authorization: Bearer $AGENT_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"tool": "goal", "args": ["Add input validation to all API endpoints"]}'
-```
+# Prerequisites
+python3.10+ | pip | git
 
-**SSE Event stream:**
-```
-event: start
-data: {"goal": "Add input validation..."}
-
-event: health
-data: {"model_ok": true, "git_ok": true}
-
-event: cycle
-data: {"cycle": 1, "score": 0.0, "phase": "reflect"}
-
-event: complete
-data: {"cycles": 3, "final_score": 0.92, "changes": ["core/file_tools.py"]}
-```
-
-### POST /call (ask tool)
-```bash
-curl -X POST http://localhost:8001/call \
-  -H "Authorization: Bearer $AGENT_API_TOKEN" \
-  -d '{"tool": "ask", "args": ["What files handle goal processing?"]}'
-```
-```json
-{"result": "Goal processing is handled by core/task_handler.py..."}
-```
-
----
-
-## 11. Security Requirements
-
-| Requirement | Implementation |
-|---|---|
-| API key protection | `.env` is gitignored; never committed |
-| Shell command execution | `core/sanitizer.sanitize_command()` allowlist |
-| Subprocess isolation | SandboxAgent uses `subprocess` with timeout; no shell=True |
-| HTTP API auth | Bearer token via `AGENT_API_TOKEN` |
-| MCP server auth | Bearer token via `MCP_API_TOKEN` |
-| File path jail | `PROJECT_ROOT` validation prevents writes outside project |
-| No eval/exec | Code review enforced; no dynamic execution of untrusted strings |
-| Git audit trail | All changes committed with structured messages + Co-authored-by |
-
----
-
-## 12. Error Handling & Failure Modes
-
-| Error | Cause | Recovery |
-|---|---|---|
-| `OldCodeNotFoundError` | `old_code` string not found in target file | Route to `retry_act`; inject fix hint with fuzzy match |
-| `FileNotFoundError` | LLM hallucinated a target file path | `ActAdapter` falls back to keyword scoring; generates new file |
-| `NameResolutionError` | No network (DNS failure) | Model adapter falls back: OpenRouter → OpenAI → Gemini → Local |
-| Schema validation failure | Phase output missing required keys | Log warning; continue if `strict_schema=False` |
-| Sandbox timeout | Code snippet exceeded 30s | `SandboxResult.timed_out=True`; inject "optimize for speed" hint |
-| Sandbox syntax error | Generated code has syntax errors | Inject stderr into fix_hints; retry Act |
-| Git stash conflict | Concurrent writes to tracked files | `git checkout --theirs` on pycache/binary conflicts |
-| Brain DB corruption | SQLite journal crash | `_load_queue` returns empty deque; fresh start |
-
----
-
-## 13. Testing Requirements
-
-### 13.1 Current State
-- **332 passing tests** across 30+ test files
-- Test runner: `pytest -q --tb=short`
-- Required env: `AURA_SKIP_CHDIR=1`
-
-### 13.2 Test Organization
-
-| Directory | Coverage |
-|---|---|
-| `tests/` | Unit tests for all core modules, agents, skills |
-| `tests/integration/` | End-to-end orchestrator tests (mock LLM) |
-| `tests/fakes/` | Test doubles for Brain, ModelAdapter, etc. |
-| `core/test_goal_queue.py` | Legacy SQLite queue tests (excluded from CI) |
-
-### 13.3 Test Requirements per Feature
-
-| Feature | Required Coverage |
-|---|---|
-| All 23 Skills | `run()` returns dict, never raises, handles bad input |
-| All agent adapters | Happy path + failure path |
-| File tools | `replace_code`, `_safe_apply_change`, overwrite mode |
-| LocalCacheAdapter | TTL expiry, list ops, thread safety, pub/sub |
-| HTTP server | All endpoints, auth, SSE streaming |
-| CLI commands | Interactive + argparse flags |
-
----
-
-## 14. Deployment & Operations
-
-### 14.1 Local (Termux/Linux)
-```bash
-# Install
+# Setup
 git clone https://github.com/asshat1981ar/aura-cli
 cd aura-cli
 pip install -r requirements.txt
 
 # Configure
-cp .env.example .env
-# Edit .env: set OPENROUTER_API_KEY
+cp aura.config.json.example aura.config.json
+export OPENROUTER_API_KEY="sk-or-..."
+
+# Verify
+python -m pytest tests/ -q  # 377 tests should pass
 
 # Run
-python3 main.py --add-goal "Your goal here" --run-goals
+python main.py loop --max-cycles 5
 ```
 
-### 14.2 GitHub Codespaces
-Open repo in Codespaces → `.devcontainer/devcontainer.json` auto-installs all deps.  
-Ports 8001 and 8002 are auto-forwarded.
+### 17.2 Docker
 
-### 14.3 Docker
+```dockerfile
+# Dockerfile provided
+FROM python:3.11-slim
+WORKDIR /app
+COPY . .
+RUN pip install -r requirements.txt
+CMD ["python", "main.py", "loop"]
+```
+
 ```bash
 docker build -t aura-cli .
-docker run -e OPENROUTER_API_KEY=sk-or-... aura-cli python3 main.py --run-goals
+docker run -e OPENROUTER_API_KEY=$KEY -v ./memory:/app/memory aura-cli
 ```
 
-### 14.4 GitHub Actions (Autonomous)
-1. Add `AURA_API_KEY` as repository secret
-2. Push goal to `memory/goal_queue.json`
-3. Trigger `aura-agentic-loop.yml` manually or wait for daily schedule
+### 17.3 Android/Termux
 
-### 14.5 Monitoring
+AURA is tested and benchmarked on Android/Termux:
+- All performance benchmarks above measured on Termux
+- SQLite works natively
+- No Android-specific code paths required
+- `pip install termux-compat` may be needed for some deps
 
-| Signal | Location | Meaning |
-|---|---|---|
-| `cycle_complete` log event | stdout | Cycle finished; check `score` field |
-| `apply_change_failed` | stdout | File write error; see `details.error` |
-| GitHub issue `aura-loop-error` | GitHub Issues | Loop detected errors in CI; auto-created |
-| `memory/store/cycle_summaries.json` | filesystem | Persistent cycle history |
-| `/metrics` endpoint | HTTP API | Live skill stats and queue depth |
+### 17.4 CI/CD
+
+GitHub Actions matrix: Python 3.10 + 3.11 on push and PR to `main`.
+
+```yaml
+# ci.yml
+strategy:
+  matrix:
+    python-version: ["3.10", "3.11"]
+steps:
+  - uses: actions/setup-python@v4
+  - run: pip install -r requirements.txt
+  - run: python -m pytest tests/ -q --tb=short
+```
+
+### 17.5 Monitoring & Health
+
+- **Logs:** `logs/aura.log` (JSON structured, rotated daily)
+- **Metrics:** `GET /metrics` on HTTP API server
+- **Cycle summaries:** `memory/store/cycle_summaries/YYYY-MM-DD/`
+- **Decision log:** `memory/store/decision_log.jsonl`
+- **Health monitor:** Auto-generates goals on quality drift
+
+### 17.6 Secrets Management
+
+| Secret | Env Var | Required |
+|--------|---------|----------|
+| OpenRouter API key | `OPENROUTER_API_KEY` | Yes (primary) |
+| OpenAI API key | `OPENAI_API_KEY` | No (fallback) |
+| Gemini API key | `GEMINI_API_KEY` | No (review) |
+| Momento API key | `MOMENTO_API_KEY` | No (cloud cache) |
+| GitHub token | `GITHUB_TOKEN` | For workflows |
 
 ---
 
-## 15. Roadmap & Queued Goals
+## 18. Roadmap & Future Goals
 
-The following 15 goals are queued in `memory/goal_queue.json` for autonomous implementation:
+### 18.1 Priority Queue (P0 — Critical)
 
-| Priority | Goal | Value |
-|---|---|---|
-| 1 | Atomic multi-file transaction support in ApplicatorAgent | Prevents partial applies |
-| 2 | CoderAgent sandbox retry loop (3× with stderr feedback) | Reduces human intervention |
-| 3 | VectorStore-based token budget compression | Fixes planning phase token overflow |
-| 4 | Circular import detection in architecture_validator | Prevents architectural regressions |
-| 5 | Per-skill metrics → /metrics → skill_weight_adapter | Data-driven skill selection |
-| 6 | Incremental test coverage (git diff only) | 10× faster verification phase |
-| 7 | LLM-based goal type classifier | Smarter skill dispatch |
-| 8 | OldCodeNotFoundError recovery via git fuzzy history | Handles stale change sets |
-| 9 | End-to-end integration tests for LoopOrchestrator | Catches cross-phase regressions |
-| 10 | Human-in-loop gate for security criticals / coverage drops | Safe autonomous operation |
-| 11 | Skill chaining (security → remediation goals) | Emergent multi-skill capability |
-| 12 | Response cache preloading on startup | Eliminates cold-start latency |
-| 13 | `skill_failure_analyzer` skill | Self-healing skill system |
-| 14 | Verification-phase oscillation escape | Handles alternating pass/fail |
-| 15 | Adaptive context window sizing by goal complexity | Balances speed vs thoroughness |
+| # | Goal | Rationale |
+|---|------|-----------|
+| R1 | **Consolidate CLI entry points** (§16.1) | Eliminates confusing dual-entry architecture |
+| R2 | **Unit tests for all 16 agents** | P0 coverage gap; regression risk |
+| R3 | **Deduplicate GitError + TaskManager** (§16.2, §16.3) | Silent bugs in production |
+| R4 | **Unit tests for WorkflowEngine** (879L, 0 tests) | Largest untested module |
+| R5 | **MCP server port registry** (§16.8) | Prevents startup conflicts |
+
+### 18.2 High Priority (P1 — Next Sprint)
+
+| # | Goal | Rationale |
+|---|------|-----------|
+| R6 | **Per-skill unit tests for all 28 skills** | Only registry-tested currently |
+| R7 | **Migrate HybridClosedLoop users to LoopOrchestrator** (§16.5) | Remove legacy |
+| R8 | **MCP server authentication (API key)** | Security for production deployment |
+| R9 | **Integration tests for HTTP API server** | Critical path untested |
+| R10 | **ContextGraph query optimization** | Potential N+1 on large graphs |
+
+### 18.3 Medium Priority (P2 — Upcoming)
+
+| # | Goal | Rationale |
+|---|------|-----------|
+| R11 | **Async pipeline execution** | 5 sequential LLM calls → parallel |
+| R12 | **Streaming cycle output** (WebSocket/SSE) | Real-time UX for long cycles |
+| R13 | **Goal prioritization ML model** | Replace manual priority with learned weights |
+| R14 | **Multi-repo support** | AURA currently single-repo only |
+| R15 | **Plugin SDK for custom skills** | Enable community skill packages |
+| R16 | **ContextGraph visualization endpoint** | Graph viz for debugging |
+| R17 | **Coverage enforcement in CI** (`--cov-fail-under 80`) | Prevent coverage regression |
+
+### 18.4 Future Exploration (P3)
+
+| # | Goal | Rationale |
+|---|------|-----------|
+| R18 | **AURA self-hosts: improves own codebase via CI loop** | North star goal |
+| R19 | **Distributed goal execution across N machines** | Scale for large codebases |
+| R20 | **Fine-tuned local model for AURA_TARGET parsing** | Reduce OpenRouter dependency |
+| R21 | **Voice goal input** | Accessibility / mobile UX |
+| R22 | **VS Code extension with MCP integration** | Developer adoption |
+| R23 | **Benchmark suite vs Copilot/Cursor on real tasks** | Competitive positioning |
+| R24 | **ToolCallRequest deduplication** (§16.4) | Code quality |
 
 ---
 
-## 16. Glossary
+## 19. Glossary
 
 | Term | Definition |
-|---|---|
+|------|-----------|
 | **AURA** | Autonomous Unified Reasoning Agent |
-| **CASPA-W** | Contextually Adaptive Self-Propagating Autonomous Workflow |
-| **Brain** | SQLite-backed long-term memory for AURA |
-| **EMA** | Exponential Moving Average — used for skill weight updates |
-| **MCP** | Model Context Protocol — standard for exposing tools to AI assistants |
-| **OpenRouter** | LLM gateway service providing access to 100+ models via one API key |
-| **Phase** | One step in the 10-step autonomous loop pipeline |
-| **Sandbox** | Isolated subprocess that executes code before it touches the filesystem |
-| **Skill** | Pluggable static-analysis module implementing `SkillBase` |
-| **Task Bundle** | Structured dict passed between pipeline phases |
-| **TTL** | Time-To-Live — expiry time for cache entries |
-| **AURA_TARGET** | Comment directive in generated code specifying the target file path |
-| **Weakness** | A recorded failure pattern stored in Brain, used to guide future plans |
-| **Cycle** | One complete execution of all 9 pipeline phases for a single goal |
-| **Stopping Policy** | Rule governing when the loop terminates (by cycle count, time, or resources) |
+| **ABC** | Abstract Base Class — defines interface contract |
+| **AgentBase** | Base class for all 16 agents; error-swallowing `run()` |
+| **AtomicChangeSet** | All-or-nothing filesystem write transaction |
+| **AURA_TARGET** | Comment directive marking code insertion point |
+| **Brain** | SQLite-backed persistent memory (L2) |
+| **ContextGraph** | SQLite property graph (files/goals/skills/weaknesses) |
+| **ConvergenceEscapeLoop** | Anti-oscillation mechanism |
+| **CycleSummary** | Structured output of a complete pipeline run |
+| **DeepReflectionLoop** | Cross-cycle pattern analysis (every 5 cycles) |
+| **EMA** | Exponential Moving Average — used in RouterAgent scoring |
+| **GoalQueue** | Priority queue of pending natural language goals |
+| **HumanGate** | Pre-apply blocking gate for security/coverage |
+| **LoopOrchestrator** | Main 10-phase pipeline engine (744L) |
+| **MCP** | Model Context Protocol — JSON-RPC for LLM tool use |
+| **OscillationDetector** | Detects repeated failure patterns |
+| **PropagationEngine** | Forward-chaining event→rule→action system |
+| **RouterAgent** | EMA-weighted LLM provider selector |
+| **Sandbox** | Isolated subprocess for generated code execution |
+| **SkillBase** | ABC for all 28 analysis skills |
+| **SkillChainer** | Chains security findings → remediation goals |
+| **SkillMetrics** | Per-skill performance telemetry |
+| **TaskBundle** | Unified action spec output of Phase 5 |
+| **TaskHierarchy** | Sub-task decomposition tree |
+| **VectorStore** | Embedding-based semantic search (in Brain) |
+| **WeaknessRemediator** | Converts Brain weaknesses → fix goals |
+| **WorkflowEngine** | Reusable agentic workflow framework (879L) |
 
 ---
 
-*This document is auto-generated from the AURA CLI codebase and maintained as part of the repository.*  
-*Last updated: 2026-02-26*  
-*To update: analyze the codebase and regenerate — `python3 main.py --add-goal "Update PRD document in docs/PRD.md"`*
+*Document generated from deep semantic analysis of AURA CLI codebase at commit `5c9f90f`.*  
+*156 Python files | 26,428 LOC | 250 classes | 1,180 functions | 379 tests passing*  
+*PRD v2.0 — supersedes v1.0 (bb32efb)*

@@ -80,7 +80,7 @@ class Brain:
     def analyze_critique_for_weaknesses(self, critique: str):
         # Using TextBlob for sentiment analysis and noun phrase extraction
         blob = TextBlob(critique)
-        
+
         found_weaknesses = False
         for sentence in blob.sentences:
             # Check for negative sentiment
@@ -94,6 +94,37 @@ class Brain:
             elif any(keyword in str(sentence).lower() for keyword in ["fail", "error", "bug", "issue", "inefficient", "suboptimal", "lacks", "missing", "weakness"]):
                 self.add_weakness(f"Keyword-based weakness detected: '{sentence.strip()}'")
                 found_weaknesses = True
-        
+
         if not found_weaknesses:
             log_json("INFO", "brain_no_weaknesses_detected", details={"critique_snippet": critique[:100]})
+
+    def set_vector_store(self, vector_store):
+        """Attaches a VectorStore for semantic memory recall."""
+        self.vector_store = vector_store
+        log_json("INFO", "brain_vector_store_attached")
+
+    # ── Weakness queue tracking ──────────────────────────────────────────────
+
+    def _ensure_weakness_queue_table(self):
+        self.db.execute("""
+        CREATE TABLE IF NOT EXISTS weakness_queued(
+            hash TEXT PRIMARY KEY,
+            queued_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+        self.db.commit()
+
+    def mark_weakness_queued(self, weakness_hash: str) -> None:
+        """Record that a weakness has been turned into a goal (prevents re-queuing)."""
+        self._ensure_weakness_queue_table()
+        self.db.execute(
+            "INSERT OR IGNORE INTO weakness_queued(hash) VALUES (?)",
+            (weakness_hash,),
+        )
+        self.db.commit()
+
+    def recall_queued_weakness_hashes(self) -> list[str]:
+        """Return all weakness hashes that have already been queued as goals."""
+        self._ensure_weakness_queue_table()
+        rows = self.db.execute("SELECT hash FROM weakness_queued").fetchall()
+        return [r[0] for r in rows]

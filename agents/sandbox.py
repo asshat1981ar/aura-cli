@@ -1,3 +1,27 @@
+"""Isolated code execution sandbox for AURA's pre-apply safety check.
+
+This module provides :class:`SandboxAgent`, which runs LLM-generated Python
+snippets in a temporary subprocess **before** they are written to the real
+project filesystem.  This guards against obviously broken or dangerous code
+reaching disk.
+
+The agent never raises — all execution outcomes are returned as a
+:class:`SandboxResult` dataclass so the caller can inspect and route failures
+without exception handling.
+
+Typical usage::
+
+    sandbox = SandboxAgent(brain, timeout=30)
+
+    # Single-snippet smoke test
+    result = sandbox.run_code("print('hello')")
+    if not result.passed:
+        print(result.stderr)
+
+    # Code + test suite
+    result = sandbox.run_tests(source_code, test_code)
+    print(result.metadata)  # {"passed": 5, "failed": 0, "errors": 0}
+"""
 import os
 import re
 import subprocess
@@ -15,6 +39,22 @@ from core.logging_utils import log_json # Import log_json
 
 @dataclass
 class SandboxResult:
+    """Structured outcome of a single sandbox execution.
+
+    Attributes:
+        success: ``True`` iff the subprocess exited with code 0.
+        exit_code: Raw integer exit code from the subprocess.  ``-1`` signals
+            an internal error or timeout.
+        stdout: Full captured standard output from the subprocess.
+        stderr: Full captured standard error from the subprocess.
+        timed_out: ``True`` when the subprocess was forcibly killed because it
+            exceeded :attr:`SandboxAgent.timeout`.
+        execution_path: Absolute path to the temp file or directory that was
+            executed.  ``None`` when the execution did not reach the filesystem.
+        metadata: Arbitrary key-value store for extra data (e.g. parsed pytest
+            pass/fail counts populated by :meth:`SandboxAgent.run_tests`).
+    """
+
     success: bool           # True iff exit_code == 0
     exit_code: int
     stdout: str
@@ -28,9 +68,16 @@ class SandboxResult:
     # Convenience
     @property
     def passed(self) -> bool:
+        """``True`` when the execution succeeded and did not time out."""
         return self.success and not self.timed_out
 
     def summary(self) -> str:
+        """Return a compact one-line execution summary.
+
+        Returns:
+            A string of the form
+            ``"[PASS|FAIL|TIMEOUT] exit=<n> | stdout=<n>c | stderr=<n>c"``.
+        """
         status = "PASS" if self.passed else ("TIMEOUT" if self.timed_out else "FAIL")
         return (
             f"[{status}] exit={self.exit_code} | "
@@ -50,17 +97,25 @@ class SandboxResult:
 # ---------------------------------------------------------------------------
 
 class SandboxAgent:
-    """
-    Real code execution in an isolated subprocess.
+    """Runs Python code in an isolated subprocess for pre-apply safety validation.
 
-    Usage
-    -----
-    sandbox = SandboxAgent(brain, timeout=30)
-    result  = sandbox.run_code("print('hello')")
-    result  = sandbox.run_tests(code_str, test_str)
+    The agent creates a fresh temporary directory for every execution so that
+    generated snippets cannot pollute the real project tree.  All results are
+    returned as :class:`SandboxResult` instances and also persisted to *brain*
+    so that the orchestrator's memory layer can review past execution outcomes.
 
-    The agent always returns a SandboxResult — it never raises.
-    All execution evidence is persisted to brain.
+    The agent never raises; exceptions are caught and mapped to a failed
+    :class:`SandboxResult` with the error text in :attr:`SandboxResult.stderr`.
+
+    Attributes:
+        brain: The LLM brain object used for memory persistence via
+            :meth:`~core.brain.Brain.remember`.
+        timeout: Maximum wall-clock seconds to allow per subprocess.  Processes
+            exceeding this limit are killed and :attr:`SandboxResult.timed_out`
+            is set to ``True``.
+        python_exec: Absolute path to the Python interpreter used for
+            subprocesses.  Defaults to :func:`sys.executable` so that the same
+            environment (virtual-env, Termux, etc.) is used.
     """
 
     # Matches pytest summary lines e.g. "5 passed, 1 failed"
@@ -69,6 +124,16 @@ class SandboxAgent:
     )
 
     def __init__(self, brain, timeout: int = 30, python_exec: Optional[str] = None):
+        """Initialise the sandbox agent.
+
+        Args:
+            brain: Brain instance used to persist execution records via
+                ``brain.remember()``.
+            timeout: Subprocess timeout in seconds.  Defaults to ``30``.
+            python_exec: Path to the Python interpreter.  When ``None``
+                (default), :func:`sys.executable` is used so that the sandbox
+                runs in the same virtual environment as AURA itself.
+        """
         self.brain = brain
         self.timeout = timeout
         # Prefer the same interpreter running AURA
@@ -79,9 +144,21 @@ class SandboxAgent:
     # ------------------------------------------------------------------
 
     def run_code(self, code: str, extra_files: Optional[dict] = None) -> SandboxResult:
-        """
-        Execute a raw Python code string.
-        extra_files: {filename: content} — written alongside the main script.
+        """Execute a raw Python code string in a fresh temporary directory.
+
+        Writes *code* to ``aura_exec.py`` in a new temp dir, optionally writes
+        any *extra_files* alongside it, then runs the script via subprocess.
+
+        Args:
+            code: Python source code to execute.
+            extra_files: Optional dict of ``{filename: content}`` pairs.  Each
+                entry is written as a sibling file to the main script before
+                execution, allowing the script to import helpers.
+
+        Returns:
+            :class:`SandboxResult` with execution outcome.
+            :attr:`SandboxResult.execution_path` points to ``aura_exec.py``
+            inside the (now deleted) temp dir.
         """
         with tempfile.TemporaryDirectory(prefix="aura_sandbox_") as tmpdir:
             script = Path(tmpdir) / "aura_exec.py"
@@ -96,15 +173,37 @@ class SandboxAgent:
             return result
 
     def run_file(self, file_path: str) -> SandboxResult:
-        """Execute an existing Python file on disk."""
+        """Execute an existing Python file on disk in an isolated subprocess.
+
+        Unlike :meth:`run_code`, no temporary directory is created — the file
+        is executed in-place from its own parent directory.
+
+        Args:
+            file_path: Absolute or relative path to the ``.py`` file to run.
+
+        Returns:
+            :class:`SandboxResult` with execution outcome.
+        """
         result = self._run(file_path, cwd=str(Path(file_path).parent))
         self._record(result, label="run_file", code_snippet=file_path)
         return result
 
     def run_tests(self, code: str, tests: str) -> SandboxResult:
-        """
-        Write code + tests to a temp dir, then run pytest.
-        Returns structured SandboxResult with parsed pass/fail counts.
+        """Write *code* and *tests* to a temp dir, then run pytest (or unittest).
+
+        If the test file does not already import the source module, a
+        ``sys.path`` injection header is prepended automatically so that
+        ``from source import ...`` statements work without installation.
+
+        Args:
+            code: Source code to test, written to ``source.py``.
+            tests: Test code (pytest or unittest style), written to
+                ``test_source.py``.
+
+        Returns:
+            :class:`SandboxResult` with execution outcome.
+            :attr:`SandboxResult.metadata` is populated with parsed pytest
+            counts: ``{"passed": int, "failed": int, "errors": int}``.
         """
         with tempfile.TemporaryDirectory(prefix="aura_test_") as tmpdir:
             src = Path(tmpdir) / "source.py"

@@ -1,3 +1,22 @@
+"""Core orchestration engine for the AURA autonomous coding loop.
+
+This module implements :class:`LoopOrchestrator`, the central coordinator that
+drives a multi-phase *plan → critique → synthesize → act → sandbox → verify →
+reflect* pipeline.  Each phase is handled by a dedicated agent; the orchestrator
+sequences them, routes failures, manages retries, and persists cycle history via
+:class:`~memory.store.MemoryStore`.
+
+Typical usage::
+
+    from core.orchestrator import LoopOrchestrator
+    from memory.store import MemoryStore
+
+    orchestrator = LoopOrchestrator(agents=default_agents(brain, model),
+                                     memory_store=MemoryStore())
+    result = orchestrator.run_loop("Add a retry mechanism to the HTTP client",
+                                   max_cycles=3)
+    print(result["stop_reason"])
+"""
 import time
 import uuid
 from pathlib import Path
@@ -12,7 +31,58 @@ from memory.store import MemoryStore
 
 
 class LoopOrchestrator:
+    """Coordinates the full AURA autonomous-coding pipeline across one or more cycles.
+
+    Each *cycle* executes the following phases in order:
+
+    1. **Ingest** — gather project context and memory hints.
+    2. **Skill dispatch** — run adaptive static-analysis skills.
+    3. **Plan** — generate a step-by-step implementation plan (with retries).
+    4. **Critique** — adversarially review the plan for flaws.
+    5. **Synthesize** — merge plan + critique into an actionable task bundle.
+    6. **Act** — generate code changes (with retries on failure).
+    7. **Sandbox** — execute the generated snippet in an isolated subprocess.
+    8. **Apply** — write file changes to disk atomically.
+    9. **Verify** — run tests / linters against the applied changes.
+    10. **Reflect** — summarise outcomes and update skill weights.
+
+    Failure routing (:meth:`_route_failure`) decides whether a failed
+    verification warrants retrying the *act* phase, escalating to a full
+    re-plan, or skipping (when the cause is environmental/external).
+
+    Attributes:
+        agents: Mapping of phase-name → agent instance used for each pipeline step.
+        memory_store: Persistent log store for cycle history and summaries.
+        policy: Stopping-condition evaluator; defaults to :class:`~core.policy.Policy`
+            with an empty config.
+        project_root: Filesystem root against which all relative file paths are
+            resolved.  Defaults to the current working directory.
+        strict_schema: When ``True``, any phase that produces output not
+            matching the expected JSON schema immediately aborts the cycle.
+        debugger: Optional :class:`~agents.debugger.DebuggerAgent` invoked
+            when :class:`~agents.coder.CoderAgent` emits an invalid change-set.
+        skills: Dict of skill-name → skill instance, loaded lazily from
+            :mod:`agents.skills.registry`.
+    """
+
     def __init__(self, agents: Dict[str, object], memory_store: MemoryStore, policy: Policy = None, project_root: Path = None, strict_schema: bool = False, debugger=None):
+        """Initialise the orchestrator with its agents and supporting services.
+
+        Args:
+            agents: Dict mapping phase names (``"ingest"``, ``"plan"``, ``"act"``,
+                etc.) to agent instances that implement a ``run(input_data)`` method.
+            memory_store: Persistent store for cycle logs and summaries.
+            policy: Optional policy evaluator used to decide when to stop the
+                :meth:`run_loop`.  Defaults to a permissive :class:`~core.policy.Policy`.
+            project_root: Root directory of the target project.  All relative
+                file paths in change-sets are resolved against this path.
+                Defaults to the current working directory.
+            strict_schema: When ``True``, any phase output that fails schema
+                validation causes the cycle to stop immediately with
+                ``stop_reason="INVALID_OUTPUT"``.
+            debugger: Optional :class:`~agents.debugger.DebuggerAgent` consulted
+                when the coder produces an invalid change-set.
+        """
         self.agents = agents
         self.memory_store = memory_store
         self.policy = policy or Policy.from_config({})
@@ -38,7 +108,21 @@ class LoopOrchestrator:
         self._consecutive_fails: int = 0
 
     def attach_improvement_loops(self, *loops) -> None:
-        """Register improvement loops to be called after each cycle."""
+        """Register one or more self-improvement loops to be called after each cycle.
+
+        Each *loop* object must expose an ``on_cycle_complete(entry: dict)``
+        method.  Errors raised by individual loops are swallowed so they never
+        interrupt the main pipeline.
+
+        Args:
+            *loops: Variadic sequence of improvement-loop instances to append.
+                Multiple calls are additive — loops are never de-duplicated.
+
+        Example::
+
+            orchestrator.attach_improvement_loops(SkillWeightUpdater(),
+                                                   KnowledgeDistiller())
+        """
         self._improvement_loops.extend(loops)
         log_json("INFO", "orchestrator_loops_attached",
                  details={"count": len(self._improvement_loops),
@@ -50,7 +134,28 @@ class LoopOrchestrator:
         propagation_engine=None,
         context_graph=None,
     ) -> None:
-        """Attach CASPA-W components for contextually adaptive self-propagation."""
+        """Attach CASPA-W components for contextually adaptive self-propagation.
+
+        CASPA-W (Contextually Adaptive Self-Propagating Architecture — Wired)
+        extends the base pipeline with dynamic intensity scaling, cross-cycle
+        knowledge propagation, and a live context dependency graph.
+
+        All three components are optional; pass ``None`` to disable any of
+        them.  Components can be attached after construction and will take
+        effect on the next :meth:`run_cycle` call.
+
+        Args:
+            adaptive_pipeline: An :class:`~core.adaptive_pipeline.AdaptivePipeline`
+                instance that overrides per-cycle phase configuration (intensity,
+                skill set, retry limits, etc.).
+            propagation_engine: A
+                :class:`~core.propagation_engine.PropagationEngine` invoked after
+                all improvement loops complete, allowing insights to flow into the
+                next cycle's context.
+            context_graph: A :class:`~core.context_graph.ContextGraph` that is
+                updated after each cycle to track dependency relationships between
+                files and goals.
+        """
         self.adaptive_pipeline = adaptive_pipeline
         self.propagation_engine = propagation_engine
         self.context_graph = context_graph
@@ -65,6 +170,16 @@ class LoopOrchestrator:
 
         Ranks by a weighted score: keyword overlap (50%), recency (30%),
         past outcome success (20%) — replacing the old plain substring filter.
+
+        Args:
+            goal: Natural-language description of the current coding goal.
+                Used to extract keywords for relevance scoring.
+            limit: Maximum number of hint dicts to return.  Defaults to 5.
+
+        Returns:
+            A list of up to *limit* cycle-summary dicts from
+            :attr:`memory_store`, ordered from most to least relevant.
+            Returns ``[]`` when the memory store is unavailable or empty.
         """
         if not self.memory_store:
             return []
@@ -95,6 +210,20 @@ class LoopOrchestrator:
         return [s for _, s in ranked[:limit]]
 
     def _run_phase(self, name: str, input_data: Dict) -> Dict:
+        """Dispatch a single pipeline phase to its registered agent.
+
+        Looks up the agent by *name* in :attr:`agents` and calls
+        ``agent.run(input_data)``.  If no agent is registered for *name* the
+        phase is silently skipped.
+
+        Args:
+            name: The phase identifier (e.g. ``"plan"``, ``"act"``, ``"verify"``).
+            input_data: Arbitrary dict passed directly to ``agent.run()``.
+
+        Returns:
+            The dict returned by ``agent.run()``, or an empty dict ``{}`` when
+            no agent is registered for *name*.
+        """
         agent = self.agents.get(name)
         if not agent:
             return {}
@@ -103,12 +232,33 @@ class LoopOrchestrator:
     def _apply_change_set(
         self, change_set: Dict, dry_run: bool
     ) -> Dict[str, List]:
-        """Apply each change independently.  Returns ``{"applied": [...], "failed": [...]}``.
+        """Apply each change in *change_set* independently to the filesystem.
 
         Unlike the old all-or-nothing approach, a failure on one file is
         recorded and the loop continues so that other files are still applied.
-        Callers check ``result["failed"]`` to decide whether verification
-        should run.
+        Callers should inspect ``result["failed"]`` to decide whether the
+        verification phase should run.
+
+        Args:
+            change_set: A dict in one of two forms:
+
+                * A single change: ``{"file_path": ..., "old_code": ...,
+                  "new_code": ...}``.
+                * A batch: ``{"changes": [{"file_path": ..., ...}, ...]}``.
+
+                An optional ``"overwrite_file": True`` key on any individual
+                change forces a full-file overwrite instead of a targeted
+                ``old_code`` replacement.
+            dry_run: When ``True``, changes are logged but **not** written to
+                disk.  All paths are recorded in ``"applied"`` as if they
+                succeeded.
+
+        Returns:
+            A dict with two keys:
+
+            * ``"applied"`` (``List[str]``) — file paths successfully written.
+            * ``"failed"``  (``List[dict]``) — dicts with ``"file"`` and
+              ``"error"`` keys for each path that could not be written.
         """
         changes: List[Dict] = []
         if isinstance(change_set, dict):
@@ -151,12 +301,24 @@ class LoopOrchestrator:
         return {"applied": applied, "failed": failed}
 
     def _route_failure(self, verification: Dict) -> str:
-        """Classify a verification failure and return the re-entry point.
+        """Classify a verification failure and return the recommended re-entry point.
+
+        Inspects the ``"failures"`` list and ``"logs"`` string in *verification*
+        for well-known signal words to determine how the orchestrator should
+        respond.
+
+        Args:
+            verification: The dict returned by the ``"verify"`` phase.  The
+                keys ``"failures"`` (list) and ``"logs"`` (str) are inspected;
+                all other keys are ignored.
 
         Returns:
-            ``"act"``      — recoverable code-level error; retry generation.
-            ``"plan"``     — structural/design error; re-plan from scratch.
-            ``"skip"``     — external / environment issue; cannot self-fix.
+            One of three string literals:
+
+            * ``"act"``  — recoverable code-level error; retry the act phase.
+            * ``"plan"`` — structural or design error; re-plan from scratch.
+            * ``"skip"`` — external / environment issue that cannot be
+              self-fixed (e.g. missing dependency, network error).
         """
         failures = " ".join(str(f) for f in verification.get("failures", []))
         logs = str(verification.get("logs", ""))
@@ -178,6 +340,31 @@ class LoopOrchestrator:
         return "act"  # default: code-level fix is worth retrying
 
     def run_cycle(self, goal: str, dry_run: bool = False) -> Dict:
+        """Execute a single complete plan-act-verify cycle for *goal*.
+
+        Runs all pipeline phases (ingest → skill dispatch → plan → critique →
+        synthesize → act loop → sandbox → apply → verify → reflect) in order,
+        with adaptive retries.  The cycle result is appended to
+        :attr:`memory_store` and returned.
+
+        Args:
+            goal: Natural-language description of the coding task to complete.
+            dry_run: When ``True``, no files are written to disk.  All other
+                phases run normally so that the pipeline output can be inspected
+                without side-effects.
+
+        Returns:
+            A dict with the following keys:
+
+            * ``"cycle_id"`` (str) — unique hex identifier for this cycle.
+            * ``"goal_type"`` (str) — classified goal category from
+              :func:`~core.skill_dispatcher.classify_goal`.
+            * ``"phase_outputs"`` (dict) — keyed by phase name, each value is
+              the raw dict returned by that phase's agent.
+            * ``"stop_reason"`` (str | None) — ``None`` on a normal completion,
+              or ``"INVALID_OUTPUT"`` if :attr:`strict_schema` is ``True`` and a
+              phase violated its schema contract.
+        """
         cycle_id = f"cycle_{uuid.uuid4().hex[:12]}"
         phase_outputs = {}
 
@@ -463,6 +650,38 @@ class LoopOrchestrator:
         return entry
 
     def run_loop(self, goal: str, max_cycles: int = 5, dry_run: bool = False) -> Dict:
+        """Run :meth:`run_cycle` repeatedly until a stopping condition is met.
+
+        Stopping conditions (checked after every cycle in priority order):
+
+        1. The cycle itself sets ``stop_reason`` (e.g. ``"INVALID_OUTPUT"``).
+        2. :attr:`policy` returns a non-empty stop reason based on cycle history.
+        3. *max_cycles* have been executed.
+
+        Args:
+            goal: Natural-language description of the coding task to complete.
+            max_cycles: Hard upper limit on the number of cycles to run.
+                Defaults to 5.
+            dry_run: Passed through to each :meth:`run_cycle` call.  When
+                ``True``, no filesystem changes are made.
+
+        Returns:
+            A dict with the following keys:
+
+            * ``"goal"`` (str) — the original goal string.
+            * ``"stop_reason"`` (str) — why the loop terminated.  One of the
+              policy-defined reasons, a cycle-level ``"INVALID_OUTPUT"``, or
+              ``"MAX_CYCLES"`` when the hard limit was reached.
+            * ``"history"`` (list[dict]) — list of cycle-result dicts in
+              execution order, each as returned by :meth:`run_cycle`.
+
+        Example::
+
+            orchestrator = LoopOrchestrator(agents, memory_store)
+            result = orchestrator.run_loop("Refactor auth module", max_cycles=3)
+            for cycle in result["history"]:
+                print(cycle["cycle_id"], cycle["phase_outputs"]["verification"])
+        """
         history = []
         stop_reason = ""
         started_at = time.time()

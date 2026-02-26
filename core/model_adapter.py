@@ -44,6 +44,9 @@ class ModelAdapter:
             log_json("WARN", "gemini_cli_not_executable", details={"path": self.gemini_cli_path})
             self.gemini_cli_path = None
 
+        # In-memory cache (L0) — populated by preload_cache()
+        self._mem_cache: dict = {}
+
         # Define an explicit allowlist for tools
         self.ALLOWED_TOOLS = {
             "search", "read_file", "list_directory", "glob",
@@ -75,8 +78,49 @@ class ModelAdapter:
                 "ttl": ttl_seconds,
                 "l1_momento": bool(momento and momento.is_available()),
             })
+            self.preload_cache()
         except Exception as e:
             log_json("ERROR", "model_cache_init_failed", details={"error": str(e)})
+
+    def preload_cache(self):
+        """Loads the last 50 non-expired entries from the prompt_cache table into _mem_cache."""
+        if not self.cache_db:
+            return
+        try:
+            cursor = self.cache_db.execute(
+                "SELECT prompt_hash, response FROM prompt_cache "
+                "WHERE timestamp > datetime('now', ?) "
+                "ORDER BY timestamp DESC LIMIT 50",
+                (f"-{self.cache_ttl} seconds",)
+            )
+            rows = cursor.fetchall()
+            for prompt_hash, response in rows:
+                self._mem_cache[prompt_hash] = response
+            log_json("INFO", "model_cache_preloaded", details={"count": len(rows)})
+        except Exception as e:
+            log_json("WARN", "model_cache_preload_failed", details={"error": str(e)})
+
+    def estimate_context_budget(self, goal: str, goal_type: str = "default") -> int:
+        """Returns a token budget estimate based on goal_type and goal length."""
+        base_budgets = {
+            "docs": 2000,
+            "bug_fix": 4000,
+            "feature": 6000,
+            "refactor": 4000,
+            "security": 5000,
+            "default": 4000,
+        }
+        budget = base_budgets.get(goal_type, base_budgets["default"])
+        # Longer goals suggest more context is needed; add up to 2000 extra tokens
+        extra = min(len(goal) // 10, 2000)
+        return budget + extra
+
+    def compress_context(self, text: str, max_tokens: int) -> str:
+        """Truncates text to fit within max_tokens (rough estimate: 4 chars per token)."""
+        max_chars = max_tokens * 4
+        if len(text) <= max_chars:
+            return text
+        return text[:max_chars]
 
     def set_router(self, router):
         """Attaches an adaptive router to the adapter."""
@@ -85,6 +129,11 @@ class ModelAdapter:
 
     def _get_cached_response(self, prompt: str) -> str | None:
         prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
+
+        # L0: in-memory dict (fastest)
+        if prompt_hash in self._mem_cache:
+            log_json("INFO", "model_cache_l0_hit", details={"prompt_hash": prompt_hash})
+            return self._mem_cache[prompt_hash]
 
         # L1: Momento (sub-ms) — check before touching SQLite
         momento = getattr(self, "_momento", None)
@@ -117,6 +166,9 @@ class ModelAdapter:
 
     def _save_to_cache(self, prompt: str, response: str):
         prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
+
+        # L0: in-memory dict
+        self._mem_cache[prompt_hash] = response
 
         # L1: Momento write-through
         momento = getattr(self, "_momento", None)

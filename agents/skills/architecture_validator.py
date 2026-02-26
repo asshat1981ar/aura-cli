@@ -183,6 +183,37 @@ class ArchitectureValidatorSkill(SkillBase):
 
     name = "architecture_validator"
 
+    def detect_circular_imports(self, project_root: str) -> List[List[str]]:
+        """Walk all .py files under project_root, build a directed import graph,
+        detect cycles via DFS, and return each cycle as a list of module names."""
+        root = Path(project_root)
+        py_files = [
+            f for f in root.rglob("*.py")
+            if not any(part in _SKIP_DIRS for part in f.parts)
+        ]
+
+        local_mod_prefixes: Set[str] = set()
+        for f in py_files:
+            local_mod_prefixes.add(_module_name(f, root).split(".")[0])
+
+        graph: Dict[str, Set[str]] = {}
+        for f in py_files:
+            mod = _module_name(f, root)
+            try:
+                src = f.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                continue
+            imports = _get_imports(src)
+            graph[mod] = {
+                i for i in imports
+                if i in local_mod_prefixes
+                and any(_module_name(pf, root).startswith(i) for pf in py_files)
+            }
+
+        # Convert sets to lists for _detect_cycles
+        list_graph = {k: list(v) for k, v in graph.items()}
+        return _detect_cycles(list_graph)
+
     def _run(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         project_root_str: Optional[str] = input_data.get("project_root")
         paths: Optional[List[str]] = input_data.get("paths")
@@ -203,6 +234,7 @@ class ArchitectureValidatorSkill(SkillBase):
 
         root = Path(project_root_str or ".")
         result = _analyse_project(root, forbidden_patterns)
+        result["circular_imports"] = self.detect_circular_imports(str(root))
         log_json("INFO", "architecture_validator_complete", details={
             "modules": result["module_count"],
             "cycles": result["cycle_count"],

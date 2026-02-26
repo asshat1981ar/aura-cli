@@ -58,7 +58,82 @@ def _heuristic_coverage(root: Path) -> Dict[str, Any]:
 class TestCoverageAnalyzerSkill(SkillBase):
     name = "test_coverage_analyzer"
 
+    def run_incremental(self, project_root: str, changed_files: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Run coverage analysis only on files changed since the last commit.
+
+        If *changed_files* is ``None``, ``git diff --name-only HEAD~1 HEAD``
+        is used to discover changed ``.py`` files.  Falls back to a full
+        coverage run when git fails or no changed files are found.
+        """
+        root = Path(project_root)
+
+        if changed_files is None:
+            raw = _run_cmd(["git", "diff", "--name-only", "HEAD~1", "HEAD"], root)
+            if not raw:
+                return self._run({"project_root": project_root})
+            changed_files = [f.strip() for f in raw.splitlines() if f.strip().endswith(".py")]
+
+        if not changed_files:
+            return self._run({"project_root": project_root})
+
+        # Derive --cov=<module> args and find matching test files
+        cov_args: List[str] = []
+        test_files: List[str] = []
+        for cf in changed_files:
+            p = Path(cf)
+            mod = str(p).replace("\\", "/").removesuffix(".py").replace("/", ".")
+            cov_args.extend(["--cov", mod])
+            for tf in root.rglob(f"test_{p.stem}.py"):
+                rel = str(tf.relative_to(root))
+                if rel not in test_files:
+                    test_files.append(rel)
+
+        if not test_files:
+            # No matching test files found → full run
+            return self._run({"project_root": project_root})
+
+        cmd = ["python3", "-m", "pytest"] + cov_args + ["--cov-report=json", "-q"] + test_files
+        _run_cmd(cmd, root)
+
+        cov_json_path = root / "coverage.json"
+        if cov_json_path.exists():
+            try:
+                data = json.loads(cov_json_path.read_text())
+                files_data = {
+                    f: fd for f, fd in data.get("files", {}).items()
+                    if any(cf.replace("\\", "/") in f.replace("\\", "/") for cf in changed_files)
+                }
+                if files_data:
+                    pct = round(
+                        sum(fd.get("summary", {}).get("percent_covered", 0.0) for fd in files_data.values())
+                        / len(files_data),
+                        1,
+                    )
+                else:
+                    pct = 0.0
+                cov_json_path.unlink(missing_ok=True)
+                log_json("INFO", "test_coverage_incremental_complete", details={"pct": pct, "changed_files": changed_files})
+                return {
+                    "coverage_pct": pct,
+                    "changed_files": changed_files,
+                    "files": files_data,
+                    "missing_files": [],
+                    "untested_functions": [],
+                    "meets_target": pct >= 80,
+                    "method": "incremental",
+                }
+            except Exception:
+                pass
+
+        return self._run({"project_root": project_root})
+
     def _run(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
+        if input_data.get("incremental"):
+            return self.run_incremental(
+                str(input_data.get("project_root", ".")),
+                input_data.get("changed_files"),
+            )
+
         project_root = Path(input_data.get("project_root", "."))
         min_target = int(input_data.get("min_target", 80))
 

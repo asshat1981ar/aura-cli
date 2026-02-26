@@ -43,6 +43,7 @@ def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
     from agents.skills.observability_checker import ObservabilityCheckerSkill
     from agents.skills.changelog_generator import ChangelogGeneratorSkill
     from agents.skills.database_query_analyzer import DatabaseQueryAnalyzerSkill
+    from agents.skills.skill_failure_analyzer import SkillFailureAnalyzerSkill
 
     return {
         "dependency_analyzer": DependencyAnalyzerSkill(),
@@ -72,4 +73,5 @@ def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
         "observability_checker": ObservabilityCheckerSkill(),
         "changelog_generator": ChangelogGeneratorSkill(),
         "database_query_analyzer": DatabaseQueryAnalyzerSkill(),
+        "skill_failure_analyzer": SkillFailureAnalyzerSkill(),
     }

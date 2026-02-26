@@ -27,7 +27,10 @@ from core.policy import Policy
 from core.file_tools import _safe_apply_change, OldCodeNotFoundError
 from core.schema import validate_phase_output
 from core.skill_dispatcher import classify_goal, dispatch_skills
+from core.human_gate import HumanGate
 from memory.store import MemoryStore
+
+MAX_SANDBOX_RETRIES = 3
 
 
 class LoopOrchestrator:
@@ -89,6 +92,7 @@ class LoopOrchestrator:
         self.project_root = Path(project_root or ".")
         self.strict_schema = strict_schema
         self.debugger = debugger  # Optional DebuggerAgent for auto-recovery
+        self.human_gate = HumanGate()
 
         # Lazy-load skills so missing optional deps don't break startup
         try:
@@ -506,23 +510,41 @@ class LoopOrchestrator:
 
                 # ── 6a. SANDBOX (pre-apply code execution check) ─────────────
                 # Run the generated snippet in isolation before touching the fs.
-                # Failures here trigger the same retry logic as verify failures.
-                sandbox_result = self._run_phase("sandbox", {
-                    "act": act,
-                    "dry_run": dry_run,
-                    "project_root": str(self.project_root),
-                })
-                phase_outputs["sandbox"] = sandbox_result or {}
-                sandbox_passed = (sandbox_result or {}).get("passed", True)
-                if not sandbox_passed and not dry_run:
+                # Retry up to MAX_SANDBOX_RETRIES times, injecting stderr each time.
+                sandbox_passed = False
+                sandbox_result = {}
+                for _sandbox_try in range(MAX_SANDBOX_RETRIES):
+                    sandbox_result = self._run_phase("sandbox", {
+                        "act": act,
+                        "dry_run": dry_run,
+                        "project_root": str(self.project_root),
+                    }) or {}
+                    phase_outputs["sandbox"] = sandbox_result
+                    sandbox_passed = sandbox_result.get("passed", True)
+                    if sandbox_passed or dry_run:
+                        break
+                    stderr_hint = (sandbox_result.get("details") or {}).get("stderr", "") or sandbox_result.get("summary", "sandbox_failed")
                     log_json("WARN", "sandbox_pre_apply_failed",
-                             details={"summary": (sandbox_result or {}).get("summary", "")})
-                    # Treat as recoverable code error — same as verify fail
+                             details={"try": _sandbox_try + 1, "summary": sandbox_result.get("summary", "")})
+                    if _sandbox_try < MAX_SANDBOX_RETRIES - 1:
+                        # Inject stderr as fix_hint and re-generate code
+                        task_bundle["fix_hints"] = [stderr_hint]
+                        act = self._run_phase("act", {
+                            "task": goal,
+                            "task_bundle": task_bundle,
+                            "dry_run": dry_run,
+                            "project_root": str(self.project_root),
+                            "fix_hints": [stderr_hint],
+                        })
+                        act_attempt += 1
+                        phase_outputs["change_set"] = act
+                    else:
+                        log_json("WARN", "sandbox_max_retries_exceeded",
+                                 details={"max": MAX_SANDBOX_RETRIES, "continuing_with_best_attempt": True})
+                if not sandbox_passed and not dry_run:
                     task_bundle["fix_hints"] = [
-                        (sandbox_result or {}).get("summary", "sandbox_failed")
+                        (sandbox_result.get("details") or {}).get("stderr", "") or sandbox_result.get("summary", "sandbox_failed")
                     ]
-                    act_attempt += 1
-                    continue
 
                 # Apply changes — partial failures are tolerated
                 apply_result = self._apply_change_set(act, dry_run=dry_run)
@@ -563,6 +585,26 @@ class LoopOrchestrator:
 
                 verify_passed = verification.get("status") in ("pass", "skip")
                 if verify_passed:
+                    # ── HUMAN GATE ───────────────────────────────────────────
+                    blocked, gate_reason = self.human_gate.should_block(
+                        verification, skill_context
+                    )
+                    if blocked:
+                        approved = self.human_gate.request_approval(
+                            gate_reason,
+                            {"cycle_id": cycle_id, "goal": goal,
+                             "changes": len((act or {}).get("changes", []))},
+                        )
+                        if not approved:
+                            log_json("WARN", "human_gate_apply_skipped",
+                                     details={"reason": gate_reason})
+                            phase_outputs["human_gate"] = {
+                                "blocked": True, "reason": gate_reason, "approved": False
+                            }
+                            break  # skip — exit act loop without retrying
+                        phase_outputs["human_gate"] = {
+                            "blocked": True, "reason": gate_reason, "approved": True
+                        }
                     break  # success — exit act loop
 
                 # Failure routing

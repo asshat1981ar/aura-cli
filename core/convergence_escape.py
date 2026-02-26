@@ -26,12 +26,99 @@ Usage::
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from collections import deque
+from typing import Any, Deque, Dict, List, Optional
 
 from core.logging_utils import log_json
 
 # How many consecutive same-failure cycles before triggering escape
 STUCK_THRESHOLD: int = 3
+
+# Number of verify scores tracked for oscillation detection
+OSCILLATION_WINDOW: int = 8
+
+
+class OscillationDetector:
+    """Detect alternating pass/fail patterns in verify scores.
+
+    Tracks the last *window* verify scores and flags when a pass→fail→pass
+    alternation has repeated at least *min_alternations* times.  Oscillation
+    suggests the current strategy is bouncing around a saddle point rather
+    than converging; the caller should switch strategies.
+
+    Usage::
+
+        detector = OscillationDetector()
+        detector.record(0.8)   # pass
+        detector.record(0.3)   # fail
+        detector.record(0.9)   # pass
+        if detector.is_oscillating():
+            strategy = detector.suggest_strategy()
+    """
+
+    PASS_THRESHOLD: float = 0.5
+
+    def __init__(
+        self,
+        window: int = OSCILLATION_WINDOW,
+        min_alternations: int = 3,
+    ):
+        """Initialise the detector.
+
+        Args:
+            window: Maximum number of recent scores to retain.
+            min_alternations: Number of direction changes required before
+                :meth:`is_oscillating` returns ``True``.
+        """
+        self._window = window
+        self._min_alternations = min_alternations
+        self._scores: Deque[float] = deque(maxlen=window)
+
+    # ── Public API ───────────────────────────────────────────────────────────
+
+    def record(self, score: float) -> None:
+        """Append a new verify *score* to the sliding window.
+
+        Args:
+            score: Numeric verification score in [0, 1] where values above
+                :attr:`PASS_THRESHOLD` count as pass.
+        """
+        self._scores.append(float(score))
+
+    def is_oscillating(self) -> bool:
+        """Return ``True`` if the recorded scores show an alternating pattern.
+
+        An *alternation* is a transition between pass (> threshold) and fail
+        (<= threshold) or vice-versa.  Returns ``True`` once the number of
+        such transitions meets or exceeds *min_alternations*.
+        """
+        scores = list(self._scores)
+        if len(scores) < self._min_alternations + 1:
+            return False
+
+        passes = [s > self.PASS_THRESHOLD for s in scores]
+        alternations = sum(
+            1 for i in range(1, len(passes)) if passes[i] != passes[i - 1]
+        )
+        return alternations >= self._min_alternations
+
+    def suggest_strategy(self) -> str:
+        """Return a recommended escape strategy when oscillating.
+
+        Heuristic: if the most recent score is a *pass* (the cycle just
+        succeeded) prefer ``"vary_prompt"`` to slightly diversify the
+        generation; if it was a *fail* prefer ``"replan"`` to start fresh.
+
+        Returns:
+            One of ``"vary_prompt"`` or ``"replan"``.
+        """
+        if self._scores and self._scores[-1] > self.PASS_THRESHOLD:
+            return "vary_prompt"
+        return "replan"
+
+    def reset(self) -> None:
+        """Clear all recorded scores."""
+        self._scores.clear()
 
 # Minimum history to evaluate
 MIN_HISTORY: int = 3

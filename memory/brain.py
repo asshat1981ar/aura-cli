@@ -3,6 +3,7 @@ import networkx as nx
 from pathlib import Path
 from textblob import TextBlob # Import TextBlob
 import json # Added this line
+from typing import List, Optional
 from core.logging_utils import log_json # Import log_json
 
 class Brain:
@@ -58,6 +59,37 @@ class Brain:
     def recall_all(self):
         rows = self.db.execute("SELECT content FROM memory").fetchall()
         return [r[0] for r in rows]
+
+    @staticmethod
+    def compress_to_budget(entries: List[str], max_tokens: int) -> List[str]:
+        """Return a subset of entries that fits within max_tokens (4 chars ≈ 1 token).
+
+        Keeps the most recent entries (tail of the list) first and discards
+        older ones until the budget is satisfied.
+        """
+        max_chars = max_tokens * 4
+        result: List[str] = []
+        used = 0
+        for entry in reversed(entries):
+            cost = len(entry) + 1  # +1 for separator
+            if used + cost > max_chars:
+                break
+            result.append(entry)
+            used += cost
+        result.reverse()
+        return result
+
+    def recall_with_budget(self, max_tokens: int = 4000, tier: Optional[str] = None) -> List[str]:
+        """Retrieve memories truncated to fit within max_tokens.
+
+        Prioritises the most recent entries (highest id). The *tier* argument
+        is reserved for future filtered recall and is currently unused.
+        """
+        rows = self.db.execute(
+            "SELECT content FROM memory ORDER BY id ASC"
+        ).fetchall()
+        entries = [r[0] for r in rows]
+        return self.compress_to_budget(entries, max_tokens)
 
     def add_weakness(self, weakness_description: str):
         self.db.execute("INSERT INTO weaknesses(description) VALUES (?)", (weakness_description,))

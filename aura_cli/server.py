@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from aura_cli.cli_main import create_runtime
 from core.sanitizer import sanitize_command
 from core.logging_utils import log_json
+from core.skill_dispatcher import SKILL_METRICS
 from memory.store import MemoryStore
 
 # Initialise runtime without changing cwd
@@ -64,6 +65,15 @@ async def health(auth=Depends(require_auth)):
             "gemini": bool(os.getenv("GEMINI_API_KEY")),
         },
         "run_enabled": _agent_run_enabled(),
+    }
+
+
+@app.get("/metrics")
+async def metrics(auth=Depends(require_auth)):
+    skill_data = SKILL_METRICS.snapshot()
+    return {
+        "status": "ok",
+        "skill_metrics": skill_data,
     }
 
 

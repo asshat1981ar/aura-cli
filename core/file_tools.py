@@ -20,7 +20,10 @@ Custom exceptions:
 """
 import os
 import tempfile
+import difflib
+import subprocess
 from pathlib import Path
+from typing import Optional
 import re # Added for _aura_clean_json
 import json # Added for _aura_safe_loads
 from core.logging_utils import log_json
@@ -33,6 +36,65 @@ class FileToolsError(Exception):
 class OldCodeNotFoundError(FileToolsError):
     """Exception raised when old_code is not found in the file."""
     pass
+
+def find_historical_match(old_code: str, file_path: str, project_root: Path) -> Optional[str]:
+    """Search the last 10 git commits for a version of *file_path* containing *old_code*.
+
+    Uses :class:`difflib.SequenceMatcher` for fuzzy matching when an exact
+    match is not found.
+
+    Args:
+        old_code: The code snippet we are trying to locate.
+        file_path: Path to the file relative to *project_root*.
+        project_root: Root of the git repository.
+
+    Returns:
+        The historical file content (as a string) from the commit where
+        *old_code* appears (or has the highest similarity), provided the
+        best similarity ratio exceeds 0.8.  Returns ``None`` otherwise.
+    """
+    try:
+        log_result = subprocess.run(
+            ["git", "log", "--oneline", "-10", "--", file_path],
+            cwd=str(project_root), capture_output=True, text=True, timeout=15,
+        )
+        if log_result.returncode != 0 or not log_result.stdout.strip():
+            return None
+
+        commits = [line.split()[0] for line in log_result.stdout.strip().splitlines() if line.strip()]
+        best_content: Optional[str] = None
+        best_ratio = 0.0
+
+        for sha in commits:
+            show = subprocess.run(
+                ["git", "show", f"{sha}:{file_path}"],
+                cwd=str(project_root), capture_output=True, text=True, timeout=15,
+            )
+            if show.returncode != 0:
+                continue
+            hist = show.stdout
+            if old_code in hist:
+                return hist  # exact match – return immediately
+            ratio = difflib.SequenceMatcher(None, old_code, hist).ratio()
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_content = hist
+
+        if best_ratio > 0.8:
+            return best_content
+        return None
+    except Exception:
+        return None
+
+
+def recover_old_code_from_git(old_code: str, file_path: str, project_root: Path) -> Optional[str]:
+    """Return the most recent historical file content that contains *old_code*.
+
+    Thin wrapper around :func:`find_historical_match` provided as a
+    callable hook for callers that only need a yes/no recovery path.
+    """
+    return find_historical_match(old_code, file_path, project_root)
+
 
 def replace_code(file_path: str, old_code: str, new_code: str, dry_run: bool = False, overwrite_file: bool = False):
     """Replace a block of code inside a file, or overwrite the entire file.
@@ -246,6 +308,14 @@ def _safe_apply_change(project_root: Path, file_path: str, old_code: str, new_co
     # If old_code is provided but not found, and new_code is present, assume full overwrite intention.
     # Log a warning so the caller can audit unexpected overwrites.
     if old_code and old_code not in current:
+        # Attempt to recover the correct base from git history before overwriting.
+        hist = recover_old_code_from_git(old_code, file_path, project_root)
+        if hist and old_code in hist:
+            recovered = hist.replace(old_code, new_code)
+            path_obj.write_text(recovered, encoding="utf-8")
+            log_json("INFO", "file_tools_recovered_from_git", details={"file": str(path_obj)})
+            return
+
         if new_code:
             log_json("WARN", "file_tools_old_code_mismatch_overwrite", details={
                 "file": str(path_obj),
@@ -258,3 +328,84 @@ def _safe_apply_change(project_root: Path, file_path: str, old_code: str, new_co
             raise OldCodeNotFoundError(f"'{old_code}' not found in '{path_obj}' and no new_code for overwrite.")
 
     replace_code(str(path_obj), old_code, new_code, overwrite_file=overwrite_file)
+
+
+class AtomicChangeSet:
+    """Apply a list of file changes atomically with in-memory rollback.
+
+    If any change fails, all previously modified files are restored to
+    their pre-apply content.  Backups are kept in memory (no temp files).
+
+    Args:
+        changes: List of change dicts, each with keys
+            ``file_path``, ``old_code``, ``new_code``, and
+            optionally ``overwrite_file`` (default ``False``).
+        project_root: Root directory used to resolve relative paths.
+    """
+
+    def __init__(self, changes: list, project_root: Path):
+        self.changes = changes
+        self.project_root = project_root
+
+    def apply(self) -> list:
+        """Apply all changes atomically.
+
+        Returns:
+            List of file paths that were successfully written.
+
+        Raises:
+            Exception: Re-raises the first failure after restoring all
+                previously modified files to their original content.
+        """
+        backups: dict = {}  # file_path_str -> original content (or None if new)
+        applied: list = []
+
+        for change in self.changes:
+            file_path = change["file_path"]
+            old_code = change.get("old_code", "")
+            new_code = change.get("new_code", "")
+            overwrite_file = change.get("overwrite_file", False)
+
+            path_obj = self.project_root / file_path
+            key = str(path_obj)
+
+            # Capture backup before first touch
+            if key not in backups:
+                backups[key] = path_obj.read_text(encoding="utf-8", errors="ignore") if path_obj.exists() else None
+
+            try:
+                _safe_apply_change(self.project_root, file_path, old_code, new_code, overwrite_file)
+                applied.append(file_path)
+            except Exception as exc:
+                log_json("ERROR", "atomic_change_set_failure", details={
+                    "file": file_path, "error": str(exc),
+                })
+                # Restore all modified files
+                for restore_key, original in backups.items():
+                    try:
+                        restore_path = Path(restore_key)
+                        if original is None:
+                            if restore_path.exists():
+                                restore_path.unlink()
+                        else:
+                            restore_path.write_text(original, encoding="utf-8")
+                    except Exception as restore_exc:  # pragma: no cover
+                        log_json("ERROR", "atomic_change_set_restore_failed", details={
+                            "file": restore_key, "error": str(restore_exc),
+                        })
+                raise
+        return applied
+
+
+def apply_atomic(changes: list, project_root: Path) -> list:
+    """Apply *changes* as an atomic transaction using :class:`AtomicChangeSet`.
+
+    Args:
+        changes: List of change dicts (``file_path``, ``old_code``,
+            ``new_code``, ``overwrite_file``).
+        project_root: Project root for resolving relative paths.
+
+    Returns:
+        List of file paths successfully applied.
+    """
+    return AtomicChangeSet(changes, project_root).apply()

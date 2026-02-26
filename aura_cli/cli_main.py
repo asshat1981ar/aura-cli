@@ -175,25 +175,24 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     goal_queue = GoalQueue()
     goal_archive = GoalArchive()
 
-    # ── Momento: initialise first so it can be passed to Brain + ModelAdapter ─
+    # ── Cache adapter: Momento (cloud) when API key set, else local in-process ─
     try:
-        from memory.momento_adapter import MomentoAdapter
+        from memory.cache_adapter_factory import create_cache_adapter
         from memory.momento_brain import MomentoBrain
         from memory.momento_memory_store import MomentoMemoryStore
-        _momento = MomentoAdapter()
-        if _momento.is_available():
-            brain_instance = MomentoBrain(_momento)
-            log_json("INFO", "runtime_momento_brain_active")
-        else:
-            brain_instance = Brain()
-            log_json("INFO", "runtime_momento_unavailable_using_local_brain")
+        _momento = create_cache_adapter()
+        # MomentoBrain works with both MomentoAdapter and LocalCacheAdapter
+        brain_instance = MomentoBrain(_momento)
+        _adapter_name = type(_momento).__name__
+        log_json("INFO", "runtime_cache_adapter_active",
+                 details={"adapter": _adapter_name})
     except Exception as _exc:
-        log_json("WARN", "momento_brain_init_failed", details={"error": str(_exc)})
+        log_json("WARN", "cache_adapter_init_failed", details={"error": str(_exc)})
         _momento = None
         brain_instance = Brain()
 
     model_adapter = ModelAdapter()
-    # Enable prompt-response cache (1hr TTL) — pass Momento for L1
+    # Enable prompt-response cache (1hr TTL) — L1 via cache adapter
     model_adapter.enable_cache(brain_instance.db, ttl_seconds=3600,
                                momento=_momento)
     # Attach VectorStore for semantic memory recall
@@ -205,15 +204,16 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     debugger_instance = DebuggerAgent(brain_instance, model_adapter)
     planner_instance = PlannerAgent(brain_instance, model_adapter)
 
-    # MemoryStore: use Momento-backed version when available
+    # MemoryStore: use cache-adapter-backed version
     _mem_root = Path(config.get("memory_store_path", "memory/store"))
-    if _momento and _momento.is_available():
+    if _momento is not None:
         try:
             from memory.momento_memory_store import MomentoMemoryStore
             memory_store = MomentoMemoryStore(_mem_root, _momento)
-            log_json("INFO", "runtime_momento_memory_store_active")
+            log_json("INFO", "runtime_memory_store_active",
+                     details={"adapter": type(_momento).__name__})
         except Exception as _exc:
-            log_json("WARN", "momento_memstore_init_failed", details={"error": str(_exc)})
+            log_json("WARN", "memory_store_init_failed", details={"error": str(_exc)})
             memory_store = MemoryStore(_mem_root)
     else:
         memory_store = MemoryStore(_mem_root)

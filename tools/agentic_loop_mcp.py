@@ -98,20 +98,8 @@ async def _check_auth(authorization: Optional[str] = Header(default=None)) -> No
 
 
 # ---------------------------------------------------------------------------
-# Pydantic models
-# ---------------------------------------------------------------------------
-
-class ToolCallRequest(BaseModel):
-    tool_name: str
-    args: Dict[str, Any] = Field(default_factory=dict)
-
-
-class ToolResult(BaseModel):
-    tool_name: str
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-    elapsed_ms: float = 0.0
-
+# R3: ToolCallRequest / ToolResult are now canonical in tools/mcp_types.py
+from tools.mcp_types import ToolCallRequest, ToolResult  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Tool schemas (MCP descriptors)
@@ -605,5 +593,7 @@ async def get_metrics(_: None = Depends(_check_auth)) -> Dict:
 
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("AGENTIC_LOOP_PORT", "8006"))
+    from core.config_manager import config as _cfg
+    # R4: port from config registry; env var still overrides for backward-compat
+    port = int(os.getenv("AGENTIC_LOOP_PORT", _cfg.get_mcp_server_port("agentic_loop")))
     uvicorn.run("tools.agentic_loop_mcp:app", host="0.0.0.0", port=port, reload=False)

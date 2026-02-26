@@ -18,5 +18,21 @@
     [
         "automated goal handling and updating for autonomous development",
         7.2
+    ],
+    [
+        "Add rollback/transaction support to ApplicatorAgent so multiple file changes in a cycle succeed or fail atomically, preventing half-applied mutations that leave the codebase in an inconsistent state.",
+        7.05
+    ],
+    [
+        "When SandboxAgent execution fails, have CoderAgent automatically re-generate code with sandbox stderr as feedback context, retrying up to 3 times before escalating to verification failure.",
+        8.049999999999999
+    ],
+    [
+        "Use VectorStore semantic search to intelligently compress Brain memory dumps that exceed the model token budget, retaining the most-relevant entries to prevent token overflow errors in the planning phase.",
+        7.05
+    ],
+    [
+        "Extend architecture_validator skill to build a directed import graph from the project and detect circular imports using strongly connected components, flagging them with file paths and remediation suggestions.",
+        0.0
     ]
 ]

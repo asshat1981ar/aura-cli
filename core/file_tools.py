@@ -264,11 +264,11 @@ def _safe_apply_change(project_root: Path, file_path: str, old_code: str, new_co
     Handles three edge cases that would otherwise cause :func:`replace_code`
     to fail or behave unexpectedly:
 
-    * **Missing file** — creates the file with *new_code* as content.
-    * **Empty file** — overwrites the empty file with *new_code* directly.
-    * **Old-code mismatch** — when *old_code* is provided but cannot be found
-      in the existing file and *new_code* is non-empty, logs a ``WARN`` and
-      falls back to a full-file overwrite rather than raising.
+    *   **Missing file** — creates the file with *new_code* as content.
+    *   **Empty file** — overwrites the empty file with *new_code* directly.
+    *   **Old-code mismatch** — when *old_code* is provided but cannot be found
+        in the existing file and *new_code* is non-empty, logs a ``WARN`` and
+        falls back to a full-file overwrite rather than raising.
 
     Args:
         project_root: Absolute :class:`~pathlib.Path` of the project root.
@@ -289,6 +289,7 @@ def _safe_apply_change(project_root: Path, file_path: str, old_code: str, new_co
     """
     path_obj = project_root / file_path
     path_obj.parent.mkdir(parents=True, exist_ok=True)
+
 
     if not path_obj.exists():
         path_obj.write_text(new_code or "", encoding="utf-8")

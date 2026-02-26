@@ -372,6 +372,8 @@ async def root() -> Dict:
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
-    port = int(os.getenv("MCP_SKILLS_PORT", "8002"))
+    from core.config_manager import config as _cfg
+    # R4: port from config registry; env var still overrides for backward-compat
+    port = int(os.getenv("MCP_SKILLS_PORT", _cfg.get_mcp_server_port("skills")))
     log_json("INFO", "mcp_skills_server_starting", details={"port": port, "skills": len(_skills)})
     uvicorn.run("tools.aura_mcp_skills_server:app", host="0.0.0.0", port=port, reload=False)

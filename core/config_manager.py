@@ -18,7 +18,8 @@ DEFAULT_CONFIG = {
     "policy_max_seconds": 120,
     "memory_persistence_path": "memory/task_hierarchy_v2.json",
     "memory_store_path": "memory/store",
-    "goal_queue_path": "memory/goal_queue_v2.json",
+    # R8: standardised path — no v2 suffix
+    "goal_queue_path": "memory/goal_queue.json",
     "goal_archive_path": "memory/goal_archive_v2.json",
     "brain_db_path": "memory/brain_v2.db",
     "model_routing": {
@@ -29,7 +30,15 @@ DEFAULT_CONFIG = {
         "embedding": "openai/text-embedding-3-small",
         "fast": "google/gemini-2.0-flash-exp:free",
         "quality": "anthropic/claude-3.5-sonnet"
-    }
+    },
+    # R4: MCP server port registry
+    "mcp_servers": {
+        "dev_tools": 8001,
+        "skills": 8002,
+        "control": 8003,
+        "agentic_loop": 8006,
+        "copilot": 8007,
+    },
 }
 
 class ConfigManager:
@@ -113,6 +122,30 @@ class ConfigManager:
         except Exception as e:
             log_json("ERROR", "config_save_failed", details={"error": str(e)})
             raise ConfigurationError(f"Failed to save config: {e}")
+
+    def get_mcp_server_port(self, server_name: str) -> int:
+        """R4: Return the configured port for a named MCP server.
+
+        Falls back to the DEFAULT_CONFIG registry when the key is absent from
+        the effective config.  Raises ``ConfigurationError`` for unknown names.
+
+        Args:
+            server_name: One of ``dev_tools``, ``skills``, ``control``,
+                         ``agentic_loop``, or ``copilot``.
+
+        Returns:
+            TCP port number (int).
+        """
+        registry: dict = self.effective_config.get("mcp_servers", {})
+        if server_name not in registry:
+            default_registry = DEFAULT_CONFIG.get("mcp_servers", {})
+            if server_name not in default_registry:
+                raise ConfigurationError(
+                    f"Unknown MCP server name '{server_name}'. "
+                    f"Known servers: {list(default_registry.keys())}"
+                )
+            return int(default_registry[server_name])
+        return int(registry[server_name])
 
     def bootstrap(self):
         """Generates a default aura.config.json if it doesn't exist."""

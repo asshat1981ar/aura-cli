@@ -645,5 +645,7 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
 
 if __name__ == "__main__":
     import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8000")))
+    from core.config_manager import config as _cfg
+    # R4: port from config registry; env var PORT still overrides for backward-compat
+    port = int(os.getenv("PORT", _cfg.get_mcp_server_port("dev_tools")))
+    uvicorn.run(app, host="0.0.0.0", port=port)

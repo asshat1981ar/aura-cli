@@ -210,36 +210,35 @@ class TestAtomicChangeSetPerformance:
         print(f"\n  [PASS] AtomicChangeSet apply {n_files} files: {elapsed:.2f}ms")
 
     def test_rollback_on_failure(self, tmp_path):
-        from core.file_tools import AtomicChangeSet
-        import core.file_tools as ft
+        from core.file_tools import AtomicChangeSet, OldCodeNotFoundError
         # Create 5 valid files
         changes = self._make_changes(tmp_path, 5)
+        # Create a real file that will be modified, then later cause an error
+        error_file_path = str(changes[2]["file_path"]) # Use an existing file
+        (tmp_path / error_file_path).write_text("initial content to be replaced")
+
+        # Make the 3rd change (index 2) target existing content that cannot be found
+        # and new_code is empty, forcing OldCodeNotFoundError.
+        changes[2]["file_path"] = error_file_path
+        changes[2]["old_code"] = "this content will not be found" # Does not exist
+        changes[2]["new_code"] = "" # Empty new_code triggers OldCodeNotFoundError if old_code not found
 
         original_contents = {
             c["file_path"]: (tmp_path / c["file_path"]).read_text()
-            for c in changes
+            for c in changes[:2] # Only files before the failing change should be considered for rollback check
         }
+        # Also include the error_file's original content for rollback verification
+        original_contents[error_file_path] = "initial content to be replaced"
 
-        call_count = 0
-        real_apply = ft._safe_apply_change
 
-        def failing_apply(project_root, file_path, old_code, new_code, overwrite_file=False):
-            nonlocal call_count
-            call_count += 1
-            if call_count == 3:
-                raise RuntimeError("Simulated write failure on 3rd file")
-            return real_apply(project_root, file_path, old_code, new_code, overwrite_file)
+        with pytest.raises(OldCodeNotFoundError): # Expecting OldCodeNotFoundError from _safe_apply_change
+            AtomicChangeSet(changes, tmp_path).apply()
 
-        with patch("core.file_tools._safe_apply_change", side_effect=failing_apply):
-            with pytest.raises(RuntimeError, match="Simulated write failure"):
-                AtomicChangeSet(changes, tmp_path).apply()
-
-        # Files 0 and 1 (applied before failure at 3) should be restored
-        for i in (0, 1):
-            fp = f"file_{i}.py"
+        # All modified files (before and including the failed one) should be restored to original
+        for fp, orig in original_contents.items():
             current = (tmp_path / fp).read_text()
-            assert current == original_contents[fp], f"{fp} was not rolled back"
-        print(f"\n  [PASS] AtomicChangeSet rollback: files 0+1 restored after 3rd change failure")
+            assert current == orig, f"File {fp} was not rolled back correctly"
+        print(f"\n  [PASS] AtomicChangeSet rollback: files restored after missing-old-code failure")
 
     def test_concurrent_apply_isolation(self, tmp_path):
         """Two concurrent AtomicChangeSets on different files don't interfere."""

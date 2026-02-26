@@ -1,39 +1,19 @@
 from git import Repo
 from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError
-from core.logging_utils import log_json # Import the new logging utility
+from core.logging_utils import log_json  # Import the new logging utility
 
-# Custom Exception Classes for GitTools
-class GitToolsError(Exception):
-    """Base exception for GitTools operations."""
-    pass
+# R2: Exception classes are now canonical in core/exceptions.py — import from there.
+from core.exceptions import (  # noqa: F401 (re-exported for backward-compat)
+    GitToolsError,
+    GitRepoError,
+    GitCommitError,
+    GitRollbackError,
+    GitDiffError,
+    GitBranchError,
+    GitStashError,
+    GitStashPopError,
+)
 
-class GitRepoError(GitToolsError):
-    """Exception raised when the Git repository is invalid or not found."""
-    pass
-
-class GitCommitError(GitToolsError):
-    """Exception raised for errors during Git commit operations."""
-    pass
-
-class GitRollbackError(GitToolsError):
-    """Exception raised for errors during Git rollback operations."""
-    pass
-
-class GitDiffError(GitToolsError):
-    """Exception raised for errors during Git diff operations."""
-    pass
-
-class GitBranchError(GitToolsError):
-    """Exception raised for errors during Git branch operations."""
-    pass
-
-class GitStashError(GitToolsError):
-    """Exception raised for errors during Git stash operations."""
-    pass
-
-class GitStashPopError(GitToolsError):
-    """Exception raised for errors during Git stash pop operations."""
-    pass
 
 class GitTools:
     def __init__(self, repo_path: str = None):

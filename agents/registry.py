@@ -414,7 +414,7 @@ class SandboxAdapter:
         }
 
 
-def default_agents(brain, model):
+def default_agents(brain, model, context_manager=None):
     """Build and return the full agent dict used by :class:`~core.orchestrator.LoopOrchestrator`.
 
     Instantiates every pipeline phase adapter with the provided *brain* and
@@ -427,6 +427,7 @@ def default_agents(brain, model):
             :class:`~core.brain.Brain` instance.
         model: Model identifier string passed to agents that call the LLM
             (e.g. ``"gpt-4o"``).
+        context_manager: Optional ContextManager instance for semantic ingestion.
 
     Returns:
         Dict mapping phase-name strings to their adapter/agent instances:
@@ -452,7 +453,7 @@ def default_agents(brain, model):
     act = ActAdapter(CoderAgent(brain, model))
     sandbox = SandboxAdapter(sandbox_agent)
     return {
-        "ingest": IngestAgent(brain),
+        "ingest": IngestAgent(brain, context_manager=context_manager),
         "plan": planner,
         "critique": critic,
         "synthesize": SynthesizerAgent(),

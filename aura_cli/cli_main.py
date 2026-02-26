@@ -201,6 +201,19 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     debugger_instance = DebuggerAgent(brain_instance, model_adapter)
     planner_instance = PlannerAgent(brain_instance, model_adapter)
 
+    # ── Context Manager: Advanced Semantic Ingestion ────────────────────────
+    try:
+        from core.context_manager import ContextManager
+        context_manager = ContextManager(
+            vector_store=vector_store,
+            context_graph=_context_graph if "_context_graph" in dir() else None,
+            project_root=project_root
+        )
+        log_json("INFO", "context_manager_initialized")
+    except Exception as _exc:
+        log_json("WARN", "context_manager_init_failed", details={"error": str(_exc)})
+        context_manager = None
+
     # MemoryStore: use cache-adapter-backed version
     _mem_root = Path(config.get("memory_store_path", "memory/store"))
     if _momento is not None:
@@ -218,7 +231,7 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     policy_config = config.effective_config.copy()
     policy = Policy.from_config(policy_config)
     orchestrator = LoopOrchestrator(
-        agents=default_agents(brain_instance, model_adapter),
+        agents=default_agents(brain_instance, model_adapter, context_manager=context_manager),
         memory_store=memory_store,
         policy=policy,
         project_root=project_root,

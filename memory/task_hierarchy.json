@@ -143,5 +143,53 @@
         "description": "",
         "subtasks": [],
         "result": null
+    },
+    {
+        "id": "goal_1772083383",
+        "title": "Add rollback/transaction support to ApplicatorAgent so multiple file changes in a cycle succeed or fail atomically, preventing half-applied mutations.",
+        "status": "in_progress",
+        "description": "",
+        "subtasks": [],
+        "result": null
+    },
+    {
+        "id": "goal_1772084071",
+        "title": "Add rollback/transaction support to ApplicatorAgent so multiple file changes in a cycle succeed or fail atomically, preventing half-applied mutations that leave the codebase in an inconsistent state.",
+        "status": "failed",
+        "description": "",
+        "subtasks": [],
+        "result": null
+    },
+    {
+        "id": "goal_1772084081",
+        "title": "When SandboxAgent execution fails, have CoderAgent automatically re-generate code with sandbox stderr as feedback context, retrying up to 3 times before escalating to verification failure.",
+        "status": "failed",
+        "description": "",
+        "subtasks": [],
+        "result": null
+    },
+    {
+        "id": "goal_1772084086",
+        "title": "Use VectorStore semantic search to intelligently compress Brain memory dumps that exceed the model token budget, retaining the most-relevant entries to prevent token overflow errors in the planning phase.",
+        "status": "failed",
+        "description": "",
+        "subtasks": [],
+        "result": null
+    },
+    {
+        "id": "goal_1772084094",
+        "title": "Extend architecture_validator skill to build a directed import graph from the project and detect circular imports using strongly connected components, flagging them with file paths and remediation suggestions.",
+        "status": "failed",
+        "description": "",
+        "subtasks": [],
+        "result": null
+    },
+    {
+        "id": "goal_1772084105",
+        "title": "Add per-skill call metrics (success rate, average latency, signal rate) stored in memory/strategy_stats.json and exposed via the /metrics endpoint in aura_cli/server.py; feed results into skill_weight_adapter for data-driven skill selection.",
+        "status": "in_progress",
+        "description": "",
+        "subtasks": [],
+        "result": null
     }
 ]

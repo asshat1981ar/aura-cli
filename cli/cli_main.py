@@ -1,3 +1,6 @@
+# DEPRECATED: This module is a legacy entry point kept for backward-compatibility.
+# The canonical CLI implementation lives in aura_cli/cli_main.py.
+# All new code should import from `aura_cli.cli_main` instead of `cli.cli_main`.
 import os
 import sys
 import argparse

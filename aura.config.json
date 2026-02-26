@@ -1,4 +1,12 @@
 {
-    "model_name": "google/gemini-2.0-flash-exp:free",
-    "api_key": "YOUR_OPENROUTER_API_KEY_HERE"
+  "model_name": "google/gemini-2.0-flash-exp:free",
+  "api_key": "your-openrouter-api-key-here",
+  "model_routing": {
+    "code_generation": "google/gemini-2.0-flash-exp:free",
+    "planning": "google/gemini-2.0-flash-exp:free",
+    "analysis": "google/gemini-2.0-flash-exp:free",
+    "critique": "google/gemini-2.0-flash-exp:free",
+    "fast": "google/gemini-2.0-flash-exp:free",
+    "quality": "google/gemini-2.5-pro"
+  }
 }

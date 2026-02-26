@@ -277,7 +277,7 @@ class ModelAdapter:
         openrouter_key = os.getenv("OPENROUTER_API_KEY")
         if not openrouter_key:
             raise ValueError("OPENROUTER_API_KEY not set for OpenRouter call.")
-        url = "https://api.openrouter.ai/v1/chat/completions"
+        url = "https://openrouter.ai/api/v1/chat/completions"
 
         headers = {
             "Authorization": f"Bearer {openrouter_key}",

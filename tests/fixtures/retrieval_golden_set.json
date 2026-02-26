@@ -1,0 +1,45 @@
+{
+  "records": [
+    {
+      "id": "rec_1",
+      "content": "def calculate_metric(a, b): return a + b",
+      "source_ref": "metrics.py:10",
+      "tags": ["math", "core"]
+    },
+    {
+      "id": "rec_2",
+      "content": "class UserAuth: def login(self): pass",
+      "source_ref": "auth.py:5",
+      "tags": ["security", "class"]
+    },
+    {
+      "id": "rec_3",
+      "content": "def save_to_db(record): db.insert(record)",
+      "source_ref": "db.py:20",
+      "tags": ["database", "io"]
+    },
+    {
+      "id": "rec_4",
+      "content": "Authentication middleware for API requests.",
+      "source_ref": "middleware.py:1",
+      "tags": ["security", "api"]
+    }
+  ],
+  "queries": [
+    {
+      "text": "How do I authenticate users?",
+      "expected_ids": ["rec_2", "rec_4"],
+      "description": "Should match auth class and middleware"
+    },
+    {
+      "text": "database saving function",
+      "expected_ids": ["rec_3"],
+      "description": "Should match db save function"
+    },
+    {
+      "text": "calculate metric",
+      "expected_ids": ["rec_1"],
+      "description": "Exact match for function name"
+    }
+  ]
+}

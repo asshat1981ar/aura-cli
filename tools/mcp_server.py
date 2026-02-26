@@ -1,10 +1,9 @@
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from .github_tools import GitHubTools
 from core.logging_utils import log_json
 import uvicorn
-import os
 
 app = FastAPI(title="AURA MCP GitHub Tools Server", version="0.1.0")
 
@@ -68,13 +67,13 @@ async def execute_tool(tool_name: str, request: ToolRequest):
 
     try:
         result = tool_function(**request.args)
-        log_json("INFO", f"mcp_tool_execution_success", details={"tool_name": tool_name, "args": request.args})
+        log_json("INFO", "mcp_tool_execution_success", details={"tool_name": tool_name, "args": request.args})
         return result
     except ValueError as e:
-        log_json("ERROR", f"mcp_tool_execution_failed", details={"tool_name": tool_name, "args": request.args, "error": str(e)})
+        log_json("ERROR", "mcp_tool_execution_failed", details={"tool_name": tool_name, "args": request.args, "error": str(e)})
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
-        log_json("CRITICAL", f"mcp_tool_execution_unexpected_error", details={"tool_name": tool_name, "args": request.args, "error": str(e)})
+        log_json("CRITICAL", "mcp_tool_execution_unexpected_error", details={"tool_name": tool_name, "args": request.args, "error": str(e)})
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="An unexpected error occurred during tool execution.")
 
 

@@ -1,5 +1,4 @@
 import re
-from rich import print
 from core.logging_utils import log_json
 
 class CoderAgent:
@@ -87,6 +86,6 @@ Wrap everything in a single ```python ... ``` block.
                 self.brain.remember(f"Code for '{task}': {code}")
                 return code # No tester, so return the first generated code
 
-        log_json("ERROR", "coder_max_iterations_reached", goal=task, details={"max_iterations": max_iterations})
+        log_json("ERROR", "coder_max_iterations_reached", goal=task, details={"max_iterations": self.MAX_ITERATIONS})
         self.brain.remember(f"Final code after max iterations for '{task}': {code}")
         return code

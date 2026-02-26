@@ -1,8 +1,6 @@
 import json
-from core.git_tools import GitToolsError
 from core.logging_utils import log_json # Import the new logging utility
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
-from agents.debugger import DebuggerAgent
 
 class EvolutionLoop:
     """

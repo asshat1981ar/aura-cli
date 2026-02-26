@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from core.logging_utils import log_json # Import log_json
-from core.file_tools import _aura_clean_json, _aura_safe_loads # Import _aura_clean_json and _aura_safe_loads
+from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
 
 # Removed dangerous global IPv4-only monkeypatch for socket.getaddrinfo.
 # This monkeypatch forced all network connections to use IPv4, potentially

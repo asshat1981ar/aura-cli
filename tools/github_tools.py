@@ -1,7 +1,6 @@
 import base64
 import os
 import requests
-import json
 import time
 from typing import Dict, Any, Optional
 
@@ -80,11 +79,9 @@ class GitHubTools:
         try:
             file_info = self._make_request("GET", contents_url, params={"ref": branch})
             sha = file_info["sha"]
-            action = "updated"
         except ValueError as e:
             if "Resource not found" in str(e):
                 sha = None
-                action = "created"
             else:
                 raise
         

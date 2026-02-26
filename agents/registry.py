@@ -18,7 +18,6 @@ Adapters defined here:
   handles smart file-path selection for generated code.
 * :class:`SandboxAdapter`  — wraps :class:`~agents.sandbox.SandboxAgent`
 """
-import os
 import re
 from pathlib import Path
 
@@ -30,7 +29,6 @@ from agents.planner import PlannerAgent
 from agents.critic import CriticAgent
 from agents.coder import CoderAgent
 from agents.sandbox import SandboxAgent
-from agents.tester import TesterAgent
 
 
 class PlannerAdapter:

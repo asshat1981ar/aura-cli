@@ -34,7 +34,7 @@ import json
 import re
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from core.logging_utils import log_json
 

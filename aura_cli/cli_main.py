@@ -22,7 +22,6 @@ from core.policy import Policy
 from memory.store import MemoryStore
 from agents.registry import default_agents
 from core.git_tools import GitTools
-from core.exceptions import GitToolsError
 from core.logging_utils import log_json
 from agents.debugger import DebuggerAgent
 from agents.planner import PlannerAgent
@@ -152,7 +151,6 @@ class _ConvergenceEscapeLoop:
         goal = str(entry.get("phase_outputs", {}).get("context", {}).get("goal", ""))
         if not goal:
             # fallback: try to find goal string anywhere in phase_outputs
-            import json
             goal = str(entry.get("phase_outputs", {}).get("plan", {}).get("goal", ""))
         if goal:
             self._escape.check_and_escape(goal, entry)
@@ -179,7 +177,6 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     try:
         from memory.cache_adapter_factory import create_cache_adapter
         from memory.momento_brain import MomentoBrain
-        from memory.momento_memory_store import MomentoMemoryStore
         _momento = create_cache_adapter()
         # MomentoBrain works with both MomentoAdapter and LocalCacheAdapter
         brain_instance = MomentoBrain(_momento)

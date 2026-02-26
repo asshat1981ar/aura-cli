@@ -20,7 +20,7 @@ Typical usage::
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List
 
 from core.logging_utils import log_json
 from core.policy import Policy

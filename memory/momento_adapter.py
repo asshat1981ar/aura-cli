@@ -28,11 +28,9 @@ Topics used by AURA:
 """
 from __future__ import annotations
 
-import json
 import os
-import time
 from datetime import timedelta
-from typing import Any, List, Optional
+from typing import List, Optional
 
 from core.logging_utils import log_json
 

@@ -17,7 +17,6 @@ Usage::
 """
 from __future__ import annotations
 
-import json
 import uuid
 from typing import Any, Dict, List, Optional
 
@@ -116,8 +115,6 @@ class GoalDecomposer:
             try:
                 result = skills["symbol_indexer"].run({"project_root": project_root})
                 file_count = result.get("files", 0)
-                # Heuristic: goal mentions >8 distinct file stems
-                goal_words = set(goal_lower.split())
                 # crude: count how many result symbols appear in goal text
                 if file_count > FILE_COUNT_THRESHOLD * 10:
                     return True

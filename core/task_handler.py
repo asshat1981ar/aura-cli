@@ -1,9 +1,8 @@
-import os
 import json
 import time
 from pathlib import Path
 from core.logging_utils import log_json
-from core.file_tools import replace_code, OldCodeNotFoundError, FileToolsError
+from core.file_tools import replace_code, OldCodeNotFoundError
 from task_manager import TaskManager, Task
 
 def _check_project_writability(project_root: Path) -> bool:

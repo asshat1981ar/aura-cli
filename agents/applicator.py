@@ -24,7 +24,6 @@ Typical usage::
         print(f"Wrote {len(result.code)} chars → {result.target_path}")
 """
 import re
-import os
 import shutil
 from dataclasses import dataclass, field
 from datetime import datetime

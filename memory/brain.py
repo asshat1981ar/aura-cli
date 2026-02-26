@@ -1,8 +1,6 @@
 import sqlite3
 import networkx as nx
-import os # Import os
 from pathlib import Path
-from typing import List
 from textblob import TextBlob # Import TextBlob
 import json # Added this line
 from core.logging_utils import log_json # Import log_json
@@ -51,7 +49,7 @@ class Brain:
             content_to_store = str(data)
 
         # Store in textual memory
-        cursor = self.db.execute(
+        self.db.execute(
             "INSERT INTO memory(content) VALUES (?)",
             (content_to_store,)
         )

@@ -1,4 +1,3 @@
-from core.prompts import BOOTSTRAP_PROMPT_CLOSED_LOOP
 
 class ClosedDevelopmentLoop:
     """

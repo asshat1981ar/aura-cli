@@ -1,5 +1,7 @@
+import re
 from core.logging_utils import log_json
-from core.file_tools import _safe_apply_change, Path, OldCodeNotFoundError, FileToolsError
+from core.file_tools import _safe_apply_change, Path
+
 
 class MutatorAgent:
     """
@@ -8,6 +10,7 @@ class MutatorAgent:
     adding new files or replacing content within existing files, with robust
     path validation to ensure operations are confined to the project root.
     """
+
     def __init__(self, project_root: Path):
         """
         Initializes the MutatorAgent.
@@ -33,7 +36,7 @@ class MutatorAgent:
         # 2. Prevent path traversal (e.g., '..')
         if '..' in path_obj.parts:
             raise ValueError(f"Path traversal ('..') is not allowed: {file_path}")
-        
+
         # 3. Resolve path and ensure it's within project_root
         resolved_path = (self.project_root / path_obj).resolve()
         if not resolved_path.is_relative_to(self.project_root.resolve()):
@@ -41,182 +44,109 @@ class MutatorAgent:
 
         return resolved_path
 
-        def apply_mutation(self, mutation_proposal: str):
+    def apply_mutation(self, mutation_proposal: str):
+        """
+        Applies one or more mutations to the codebase based on the `mutation_proposal`.
 
-            """
+        The proposal is parsed for multiple commands (ADD_FILE or REPLACE_IN_FILE).
+        Path validation is performed for every operation.
 
-            Applies one or more mutations to the codebase based on the `mutation_proposal`.
+        Args:
+            mutation_proposal (str): A string detailing the mutations to apply.
+        """
+        log_json("INFO", "mutator_applying_mutation", details={"proposal_snippet": mutation_proposal[:200]})
 
-            The proposal is parsed for multiple commands (ADD_FILE or REPLACE_IN_FILE).
+        # Split into blocks based on command keywords at start of lines
+        blocks = re.split(r'^(?=ADD_FILE|REPLACE_IN_FILE)', mutation_proposal, flags=re.MULTILINE)
 
-            Path validation is performed for every operation.
+        for block in blocks:
+            block = block.strip()
+            if not block:
+                continue
 
-    
+            lines = block.split('\n')
+            command_line = lines[0].strip()
 
-            Args:
+            if command_line.startswith("ADD_FILE"):
+                self._handle_add_file(command_line, lines[1:])
+            elif command_line.startswith("REPLACE_IN_FILE"):
+                self._handle_replace_in_file(command_line, lines[1:], block)
+            else:
+                log_json("WARN", "mutator_skipping_unrecognized_block", details={"command_line": command_line})
 
-                mutation_proposal (str): A string detailing the mutations to apply.
+        log_json("INFO", "mutator_application_attempt_complete")
 
-            """
+    def _handle_add_file(self, command_line: str, content_lines: list):
+        try:
+            parts = command_line.split(' ', 1)
+            if len(parts) < 2:
+                log_json("ERROR", "mutator_add_file_missing_filepath", details={"command_line": command_line})
+                return
+            file_path = parts[1].strip()
+            content = "\n".join(content_lines)
 
-            log_json("INFO", "mutator_applying_mutation", details={"proposal_snippet": mutation_proposal[:200]})
+            validated_file_path = self._validate_file_path(file_path)
+            _safe_apply_change(
+                self.project_root,
+                str(validated_file_path.relative_to(self.project_root)),
+                "",
+                content,
+                overwrite_file=True,
+            )
+            log_json("INFO", "mutator_add_file_success", details={
+                "file_path": str(validated_file_path.relative_to(self.project_root)),
+                "content_length": len(content),
+            })
+        except Exception as e:
+            log_json("ERROR", "mutator_add_file_failed", details={"error": str(e), "command": command_line})
 
-    
-
-            # Split into blocks based on command keywords at start of lines
-
-            # Using a regex to find commands that are followed by a space and are at the start of a line
-
-            blocks = re.split(r'^(?=ADD_FILE|REPLACE_IN_FILE)', mutation_proposal, flags=re.MULTILINE)
-
-            
-
-            for block in blocks:
-
-                block = block.strip()
-
-                if not block:
-
-                    continue
-
-    
-
-                lines = block.split('\n')
-
-                command_line = lines[0].strip()
-
-    
-
-                if command_line.startswith("ADD_FILE"):
-
-                    self._handle_add_file(command_line, lines[1:])
-
-                elif command_line.startswith("REPLACE_IN_FILE"):
-
-                    self._handle_replace_in_file(command_line, lines[1:], block)
-
-                else:
-
-                    log_json("WARN", "mutator_skipping_unrecognized_block", details={"command_line": command_line})
-
-            
-
-            log_json("INFO", "mutator_application_attempt_complete")
-
-    
-
-        def _handle_add_file(self, command_line: str, content_lines: list):
-
-            try:
-
-                parts = command_line.split(' ', 1)
-
-                if len(parts) < 2:
-
-                    log_json("ERROR", "mutator_add_file_missing_filepath", details={"command_line": command_line})
-
-                    return
-
+    def _handle_replace_in_file(self, command_line: str, lines: list, full_block: str):
+        file_path = "N/A"
+        try:
+            # Expected format variations:
+            # 1. REPLACE_IN_FILE <filepath>\n---OLD_CONTENT_START---...
+            # 2. REPLACE_IN_FILE\n<filepath>\n---OLD_CONTENT_START---...
+            parts = command_line.split(' ', 1)
+            if len(parts) >= 2:
                 file_path = parts[1].strip()
+                content_start_idx = 0
+            else:
+                if not lines:
+                    log_json("ERROR", "mutator_replace_in_file_empty", details={"command": command_line})
+                    return
+                file_path = lines[0].strip()
+                content_start_idx = 1
 
-                content = "\n".join(content_lines)
-
-                
-
-                validated_file_path = self._validate_file_path(file_path)
-
-                _safe_apply_change(self.project_root, str(validated_file_path.relative_to(self.project_root)), "", content, overwrite_file=True)
-
-                log_json("INFO", "mutator_add_file_success", details={"file_path": str(validated_file_path.relative_to(self.project_root)), "content_length": len(content)})
-
-            except Exception as e:
-
-                log_json("ERROR", "mutator_add_file_failed", details={"error": str(e), "command": command_line})
-
-    
-
-        def _handle_replace_in_file(self, command_line: str, lines: list, full_block: str):
+            old_content_start_marker = "---OLD_CONTENT_START---"
+            old_content_end_marker = "---OLD_CONTENT_END---"
+            new_content_start_marker = "---NEW_CONTENT_START---"
+            new_content_end_marker = "---NEW_CONTENT_END---"
 
             try:
+                search_lines = lines[content_start_idx:]
+                old_start_idx = search_lines.index(old_content_start_marker)
+                old_end_idx = search_lines.index(old_content_end_marker, old_start_idx + 1)
+                new_start_idx = search_lines.index(new_content_start_marker, old_end_idx + 1)
+                new_end_idx = search_lines.index(new_content_end_marker, new_start_idx + 1)
+            except ValueError:
+                log_json("ERROR", "mutator_replace_in_file_format_error", details={
+                    "file_path": file_path,
+                    "block_snippet": full_block[:200],
+                })
+                return
 
-                # Expected format variations:
+            old_string = "\n".join(search_lines[old_start_idx + 1: old_end_idx])
+            new_string = "\n".join(search_lines[new_start_idx + 1: new_end_idx])
 
-                # 1. REPLACE_IN_FILE <filepath>\n---OLD_CONTENT_START---...
-
-                # 2. REPLACE_IN_FILE\n<filepath>\n---OLD_CONTENT_START---...
-
-                
-
-                parts = command_line.split(' ', 1)
-
-                if len(parts) >= 2:
-
-                    file_path = parts[1].strip()
-
-                    content_start_idx = 0
-
-                else:
-
-                    if not lines:
-
-                        log_json("ERROR", "mutator_replace_in_file_empty", details={"command": command_line})
-
-                        return
-
-                    file_path = lines[0].strip()
-
-                    content_start_idx = 1
-
-    
-
-                old_content_start_marker = "---OLD_CONTENT_START---"
-
-                old_content_end_marker = "---OLD_CONTENT_END---"
-
-                new_content_start_marker = "---NEW_CONTENT_START---"
-
-                new_content_end_marker = "---NEW_CONTENT_END---"
-
-    
-
-                try:
-
-                    # Find indices within the remaining lines
-
-                    # Note: We use the list 'lines' starting from content_start_idx
-
-                    search_lines = lines[content_start_idx:]
-
-                    old_start_idx = search_lines.index(old_content_start_marker)
-
-                    old_end_idx = search_lines.index(old_content_end_marker, old_start_idx + 1)
-
-                    new_start_idx = search_lines.index(new_content_start_marker, old_end_idx + 1)
-
-                    new_end_idx = search_lines.index(new_content_end_marker, new_start_idx + 1)
-
-                except ValueError:
-
-                    log_json("ERROR", "mutator_replace_in_file_format_error", details={"file_path": file_path, "block_snippet": full_block[:200]})
-
-                    return
-
-    
-
-                old_string = "\n".join(search_lines[old_start_idx + 1 : old_end_idx])
-
-                new_string = "\n".join(search_lines[new_start_idx + 1 : new_end_idx])
-
-    
-
-                validated_file_path = self._validate_file_path(file_path)
-
-                _safe_apply_change(self.project_root, str(validated_file_path.relative_to(self.project_root)), old_string, new_string)
-
-                log_json("INFO", "mutator_replace_in_file_success", details={"file_path": str(validated_file_path.relative_to(self.project_root))})
-
-            except Exception as e:
-
-                log_json("ERROR", "mutator_replace_in_file_failed", details={"error": str(e), "file": file_path if 'file_path' in locals() else 'N/A'})
-
-    
+            validated_file_path = self._validate_file_path(file_path)
+            _safe_apply_change(
+                self.project_root,
+                str(validated_file_path.relative_to(self.project_root)),
+                old_string,
+                new_string,
+            )
+            log_json("INFO", "mutator_replace_in_file_success", details={
+                "file_path": str(validated_file_path.relative_to(self.project_root)),
+            })
+        except Exception as e:
+            log_json("ERROR", "mutator_replace_in_file_failed", details={"error": str(e), "file": file_path})

@@ -1,7 +1,6 @@
 import unittest
 import os
 import json
-from collections import deque
 from pathlib import Path
 from core.goal_queue import GoalQueue
 

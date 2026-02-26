@@ -1,6 +1,6 @@
 import time
 import json
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, asdict
 from typing import Optional, Callable
 from core.logging_utils import log_json # Import log_json
 

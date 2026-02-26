@@ -1,6 +1,5 @@
 from git import Repo
 from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError
-import os
 from core.logging_utils import log_json # Import the new logging utility
 
 # Custom Exception Classes for GitTools

@@ -29,7 +29,7 @@ def _aura_safe_loads(raw, ctx="unknown"):
     """Parse JSON with markdown cleaning"""
     try:
         return __import__("json").loads(raw)
-    except:
+    except Exception:
         cleaned = _aura_clean_json(raw)
         return __import__("json").loads(cleaned)
 

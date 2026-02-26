@@ -1,0 +1,257 @@
+name: AURA Agentic Loop
+
+on:
+  schedule:
+    # Run daily at 02:00 UTC
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      goal:
+        description: "One-off goal to run through the AURA loop"
+        required: false
+        type: string
+      dry_run:
+        description: "Dry run (no file writes)"
+        required: false
+        default: "true"
+        type: choice
+        options: ["true", "false"]
+      max_cycles:
+        description: "Maximum loop cycles"
+        required: false
+        default: "3"
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  aura-loop:
+    name: AURA Autonomous Loop
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          [ -f requirements.txt ] && pip install -r requirements.txt
+          pip install pytest
+
+      - name: Configure git
+        run: |
+          git config --global user.name "aura-loop[bot]"
+          git config --global user.email "aura-loop[bot]@users.noreply.github.com"
+
+      - name: Run AURA agentic loop
+        id: loop
+        env:
+          AURA_SKIP_CHDIR: "1"
+          AURA_DRY_RUN: ${{ github.event.inputs.dry_run || 'true' }}
+          AURA_API_KEY: ${{ secrets.AURA_API_KEY }}
+          AURA_MAX_CYCLES: ${{ github.event.inputs.max_cycles || '3' }}
+        run: |
+          set -o pipefail
+          GOAL="${{ github.event.inputs.goal }}"
+
+          if [ -n "$GOAL" ]; then
+            echo "Running one-off goal: $GOAL"
+            python3 main.py --goal "$GOAL" 2>&1 | tee loop-output.txt || true
+          else
+            echo "Running queued goals (max $AURA_MAX_CYCLES cycles)"
+            python3 main.py --run-goals 2>&1 | tee loop-output.txt || true
+          fi
+
+          # Capture summary
+          echo "output<<EOF" >> $GITHUB_OUTPUT
+          tail -60 loop-output.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+          # Count cycles completed
+          CYCLES=$(grep -c '"event": "cycle_complete"' loop-output.txt 2>/dev/null || echo "0")
+          echo "cycles=$CYCLES" >> $GITHUB_OUTPUT
+
+          ERRORS=$(grep -c '"level": "error"' loop-output.txt 2>/dev/null || echo "0")
+          echo "errors=$ERRORS" >> $GITHUB_OUTPUT
+
+      - name: Commit any loop-generated changes
+        if: github.event.inputs.dry_run != 'true'
+        run: |
+          git add -A
+          git diff --staged --quiet || \
+            git commit -m "chore(aura-loop): apply autonomous loop changes [skip ci]
+
+Cycles completed: ${{ steps.loop.outputs.cycles }}
+Errors: ${{ steps.loop.outputs.errors }}
+
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+          git push || true
+
+      - name: Create issue on error
+        if: steps.loop.outputs.errors > '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const output = `${{ steps.loop.outputs.output }}`;
+            const cycles = `${{ steps.loop.outputs.cycles }}`;
+            const errors = `${{ steps.loop.outputs.errors }}`;
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🔴 AURA Loop errors detected (${errors} errors, ${cycles} cycles)`,
+              body: [
+                '## AURA Agentic Loop — Error Report',
+                '',
+                `**Workflow run:** ${context.runId}`,
+                `**Cycles completed:** ${cycles}`,
+                `**Errors:** ${errors}`,
+                '',
+                '### Loop Output (last 60 lines)',
+                '```',
+                output,
+                '```',
+                '',
+                '_Auto-created by aura-loop workflow_',
+              ].join('\n'),
+              labels: ['aura-loop-error', 'bug'],
+            });
+
+      - name: Upload loop artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aura-loop-output-${{ github.run_number }}
+          path: |
+            loop-output.txt
+            memory/store/
+          retention-days: 7
+
+  # ── Self-Reflection Phase ─────────────────────────────────────────────────
+  aura-reflect:
+    name: AURA Self-Reflection
+    runs-on: ubuntu-latest
+    needs: aura-loop
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          [ -f requirements.txt ] && pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run AURA skills analysis
+        id: skills
+        env:
+          AURA_SKIP_CHDIR: "1"
+        run: |
+          python3 - <<'PYEOF' 2>&1 | tee reflect-out.txt || true
+          import sys, os
+          os.environ["AURA_SKIP_CHDIR"] = "1"
+          sys.path.insert(0, ".")
+          try:
+              from agents.skills.registry import all_skills
+              skills = all_skills()
+              results = {}
+              for name in ["tech_debt_quantifier", "complexity_scorer", "security_scanner", "test_coverage_analyzer"]:
+                  if name in skills:
+                      r = skills[name].run({"project_root": "."})
+                      results[name] = {k: v for k, v in r.items()
+                                       if k in ("debt_score","high_risk_count","critical_count","coverage_pct","meets_target")}
+                      print(f"{name}: {results[name]}")
+              if "adaptive_strategy_selector" in skills:
+                  r = skills["adaptive_strategy_selector"].run({"goal": "improve codebase quality"})
+                  print(f"strategy: {r.get('recommended_strategy','?')} (confidence={r.get('confidence','?')})")
+          except Exception as e:
+              print(f"Reflection skills error: {e}")
+          PYEOF
+          echo "reflection<<EOF" >> $GITHUB_OUTPUT
+          cat reflect-out.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Run test suite
+        id: tests
+        env:
+          AURA_SKIP_CHDIR: "1"
+        run: |
+          pytest -q --tb=line 2>&1 | tee pytest-out.txt || true
+          echo "tests<<EOF" >> $GITHUB_OUTPUT
+          tail -20 pytest-out.txt >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Post reflection summary to job summary
+        run: |
+          cat >> $GITHUB_STEP_SUMMARY << 'SUMMARY'
+          ## 🧠 AURA Self-Reflection Report
+          SUMMARY
+          echo "### Skills Analysis" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat reflect-out.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "### Test Suite" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat pytest-out.txt | tail -20 >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  # ── Skill Improvement Phase ───────────────────────────────────────────────
+  aura-skill-improve:
+    name: AURA Skill Improvement Check
+    runs-on: ubuntu-latest
+    needs: aura-reflect
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          [ -f requirements.txt ] && pip install -r requirements.txt
+
+      - name: Run skill composer + multi-file editor analysis
+        env:
+          AURA_SKIP_CHDIR: "1"
+          AURA_DRY_RUN: "1"
+        run: |
+          python3 - <<'PYEOF' 2>&1 || true
+          import sys, os
+          os.environ["AURA_SKIP_CHDIR"] = "1"
+          sys.path.insert(0, ".")
+          try:
+              from agents.skills.registry import all_skills
+              skills = all_skills()
+              if "skill_composer" in skills:
+                  goals = [
+                      "reduce technical debt in core modules",
+                      "improve test coverage to 80%",
+                      "fix security vulnerabilities",
+                  ]
+                  for goal in goals:
+                      r = skills["skill_composer"].run({"goal": goal})
+                      workflow = r.get("workflow", [])
+                      print(f"goal='{goal}' workflow={workflow[:3]}")
+          except Exception as e:
+              print(f"Skill composer error: {e}")
+          PYEOF

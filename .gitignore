@@ -1,21 +1,69 @@
 
-# Local backups / scratch
+# ── Local backups / scratch ───────────────────────────────────────────────
 *.bak_*
 *.backup*
+tmp*/
+tmp_out/
+tmp_tail.log
+tmp2*
+*.tmp
 
-# Environment and secrets
+# ── Environment and secrets ───────────────────────────────────────────────
 .env
 *.key
 *.pat
 .aura_history
+secrets/
 
-# Python bytecode and caches
+# ── Python bytecode and caches ────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+*.egg-info/
+dist/
+build/
+.eggs/
 
-# Database files (auto-generated at runtime)
+# ── Database / runtime state (auto-generated) ─────────────────────────────
 memory/brain.db
+memory/brain_v2.db
 memory/local_cache.db
+memory/context_graph.db
+memory/thinking_sessions.db
+memory/goal_queue_v2.json
+memory/goal_archive_v2.json
+memory/task_hierarchy_v2.json
+memory/strategy_stats.json
+memory/store/
+*.db
+*.db-shm
+*.db-wal
+
+# ── Node / npm ────────────────────────────────────────────────────────────
+node_modules/
+package-lock.json
+
+# ── GitHub Actions loop artifacts ─────────────────────────────────────────
+loop-output.txt
+reflect-out.txt
+pytest-out.txt
+lint-errors.txt
+test-results.txt
+pylint-out.txt
+skills-out.txt
+changed.txt
+
+# ── Gemini CLI ────────────────────────────────────────────────────────────
+.gemini/
+
+# ── IDE / editor ──────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+.DS_Store

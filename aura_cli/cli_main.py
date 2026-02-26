@@ -226,6 +226,32 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         )
     except Exception as _exc:
         log_json("WARN", "improvement_loops_setup_failed", details={"error": str(_exc)})
+
+    # ── CASPA-W: Contextually Adaptive Self-Propagating Workflow ─────────────
+    try:
+        from core.context_graph import ContextGraph
+        from core.adaptive_pipeline import AdaptivePipeline
+        from core.propagation_engine import PropagationEngine
+        from core.autonomous_discovery import AutonomousDiscovery
+
+        _context_graph = ContextGraph()
+        _adaptive_pipeline = AdaptivePipeline(
+            context_graph=_context_graph,
+            skill_weight_adapter=_skill_adapt if "_skill_adapt" in dir() else None,
+            memory_store=memory_store,
+        )
+        _propagation = PropagationEngine(goal_queue, _context_graph, memory_store)
+        _discovery = AutonomousDiscovery(goal_queue, memory_store, project_root=str(project_root))
+
+        orchestrator.attach_caspa(
+            adaptive_pipeline=_adaptive_pipeline,
+            propagation_engine=_propagation,
+            context_graph=_context_graph,
+        )
+        # Discovery runs on its own cycle counter via improvement loop interface
+        orchestrator.attach_improvement_loops(_discovery)
+    except Exception as _exc:
+        log_json("WARN", "caspa_setup_failed", details={"error": str(_exc)})
     # ─────────────────────────────────────────────────────────────────────────
 
     loop = HybridClosedLoop(model_adapter, brain_instance, git_tools_instance)

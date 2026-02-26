@@ -31,16 +31,34 @@ class LoopOrchestrator:
         # Self-improvement loops (all optional — never block the main loop)
         self._improvement_loops: list = []
 
-    def attach_improvement_loops(self, *loops) -> None:
-        """Register improvement loops to be called after each cycle.
+        # CASPA-W components — set via attach_caspa() after construction
+        self.adaptive_pipeline = None   # AdaptivePipeline
+        self.propagation_engine = None  # PropagationEngine
+        self.context_graph = None       # ContextGraph
+        self._consecutive_fails: int = 0
 
-        Loops must implement ``on_cycle_complete(cycle_entry: dict) -> None``.
-        Call from ``create_runtime()`` after constructing the orchestrator.
-        """
+    def attach_improvement_loops(self, *loops) -> None:
+        """Register improvement loops to be called after each cycle."""
         self._improvement_loops.extend(loops)
         log_json("INFO", "orchestrator_loops_attached",
                  details={"count": len(self._improvement_loops),
                            "types": [type(l).__name__ for l in self._improvement_loops]})
+
+    def attach_caspa(
+        self,
+        adaptive_pipeline=None,
+        propagation_engine=None,
+        context_graph=None,
+    ) -> None:
+        """Attach CASPA-W components for contextually adaptive self-propagation."""
+        self.adaptive_pipeline = adaptive_pipeline
+        self.propagation_engine = propagation_engine
+        self.context_graph = context_graph
+        log_json("INFO", "orchestrator_caspa_attached", details={
+            "adaptive_pipeline": adaptive_pipeline is not None,
+            "propagation_engine": propagation_engine is not None,
+            "context_graph": context_graph is not None,
+        })
 
     def _retrieve_hints(self, goal: str, limit: int = 5) -> list[dict]:
         """Return the most relevant past cycle summaries for *goal*.
@@ -163,6 +181,28 @@ class LoopOrchestrator:
         cycle_id = f"cycle_{uuid.uuid4().hex[:12]}"
         phase_outputs = {}
 
+        # ── 0. ADAPTIVE PIPELINE CONFIG ──────────────────────────────────────
+        # Ask AdaptivePipeline for a context-aware configuration.
+        # Falls back to static defaults if CASPA-W is not attached.
+        goal_type = classify_goal(goal)
+        if self.adaptive_pipeline:
+            pipeline_cfg = self.adaptive_pipeline.configure(
+                goal, goal_type,
+                consecutive_fails=self._consecutive_fails,
+                past_failures=list(
+                    phase_outputs.get("_failure_context", {}).get("failures", [])
+                ),
+            )
+        else:
+            from core.adaptive_pipeline import AdaptivePipeline
+            pipeline_cfg = AdaptivePipeline()._default_config(goal_type)
+
+        phase_outputs["pipeline_config"] = {
+            "intensity": pipeline_cfg.intensity,
+            "phases": pipeline_cfg.phases,
+            "skills": pipeline_cfg.skill_set,
+        }
+
         # ── 1. INGEST ────────────────────────────────────────────────────────
         context = self._run_phase("ingest", {
             "goal": goal,
@@ -176,19 +216,15 @@ class LoopOrchestrator:
                 return {"cycle_id": cycle_id, "phase_outputs": {"context": context}, "stop_reason": "INVALID_OUTPUT"}
         phase_outputs["context"] = context
 
-        # ── 2. SKILL DISPATCH ────────────────────────────────────────────────
-        # Classify goal, run relevant skills in parallel, enrich the context
-        # that gets passed to the Planner.
-        goal_type = classify_goal(goal)
+        # ── 2. SKILL DISPATCH (adaptive skill set) ───────────────────────────
         skill_context: Dict = {}
-        if self.skills:
-            skill_context = dispatch_skills(
-                goal_type, self.skills, str(self.project_root)
-            )
+        if self.skills and pipeline_cfg.skill_set:
+            active_skills = {k: self.skills[k] for k in pipeline_cfg.skill_set if k in self.skills}
+            skill_context = dispatch_skills(goal_type, active_skills, str(self.project_root))
         phase_outputs["skill_context"] = skill_context
 
         # ── 3. PLAN ──────────────────────────────────────────────────────────
-        max_plan_retries = 2
+        max_plan_retries = pipeline_cfg.plan_retries
         plan_attempt = 0
         plan = {}
         critique = {}
@@ -205,6 +241,7 @@ class LoopOrchestrator:
                 "known_weaknesses": "",
                 "skill_context": skill_context,
                 "failure_context": failure_context,
+                "extra_context": pipeline_cfg.extra_plan_ctx,
             })
             errors = validate_phase_output("plan", plan)
             if errors:
@@ -242,7 +279,7 @@ class LoopOrchestrator:
             # Retry code generation up to max_act_attempts times.
             # On verification failure, route_failure() decides whether to
             # retry act (recoverable) or break out and re-plan (structural).
-            max_act_attempts = 3
+            max_act_attempts = pipeline_cfg.max_act_attempts
             act_attempt = 0
             verification: Dict = {}
             replan_needed = False
@@ -364,6 +401,13 @@ class LoopOrchestrator:
         # Remove internal scratchpad key before persisting
         phase_outputs.pop("_failure_context", None)
 
+        # Track consecutive failures for AdaptivePipeline intensity tuning
+        verify_status = phase_outputs.get("verification", {}).get("status", "skip")
+        if verify_status == "pass":
+            self._consecutive_fails = 0
+        elif verify_status == "fail":
+            self._consecutive_fails += 1
+
         entry = {
             "cycle_id": cycle_id,
             "goal_type": goal_type,
@@ -372,6 +416,14 @@ class LoopOrchestrator:
         }
         self.memory_store.append_log(entry)
 
+        # ── CASPA-W: Update context graph ───────────────────────────────────
+        if self.context_graph is not None:
+            try:
+                self.context_graph.update_from_cycle(entry)
+            except Exception as exc:
+                log_json("WARN", "context_graph_update_failed",
+                         details={"error": str(exc)})
+
         # Fire all registered self-improvement loops (errors are swallowed)
         for loop in self._improvement_loops:
             try:
@@ -379,6 +431,14 @@ class LoopOrchestrator:
             except Exception as exc:
                 log_json("WARN", "improvement_loop_error",
                          details={"loop": type(loop).__name__, "error": str(exc)})
+
+        # ── CASPA-W: Propagation engine fires after all loops ────────────────
+        if self.propagation_engine is not None:
+            try:
+                self.propagation_engine.on_cycle_complete(entry)
+            except Exception as exc:
+                log_json("WARN", "propagation_engine_error",
+                         details={"error": str(exc)})
 
         return entry
 

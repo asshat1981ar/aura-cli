@@ -8,3 +8,18 @@
 *.key
 *.pat
 .aura_history
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Databases
+*.db
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/

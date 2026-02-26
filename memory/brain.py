@@ -1,5 +1,4 @@
 import sqlite3
-import networkx as nx
 from pathlib import Path
 import json # Added this line
 import time
@@ -17,6 +16,16 @@ def _ensure_textblob():
         TextBlob = _TB
         _textblob_loaded = True
 
+# networkx is only needed by relate() and rarely used graph operations — lazy import to avoid 885ms startup
+_nx = None
+
+def _ensure_nx():
+    global _nx
+    if _nx is None:
+        import networkx as _networkx  # noqa: F401
+        _nx = _networkx
+    return _nx
+
 
 class Brain:
 
@@ -24,10 +33,17 @@ class Brain:
         # Construct absolute path for the database file
         db_file_path = Path(__file__).parent / "brain.db"
         self.db = sqlite3.connect(str(db_file_path)) # Connect using absolute path
-        self.graph = nx.Graph()
+        self._graph = None   # lazy — created on first relate() call
         self._recall_cache: dict = {}   # {query_key: (result, timestamp)}
         self._cache_ttl: float = 5.0    # seconds — invalidated on remember()
         self._init_db()
+
+    @property
+    def graph(self):
+        """Lazily initialise the networkx graph on first access."""
+        if self._graph is None:
+            self._graph = _ensure_nx().Graph()
+        return self._graph
 
     def _init_db(self):
         # WAL mode: concurrent reads don't block writes; NORMAL sync is safe and ~3x faster

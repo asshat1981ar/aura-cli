@@ -105,7 +105,13 @@ class SkillMetrics:
 
     def snapshot(self) -> Dict[str, Dict[str, float]]:
         with self._lock:
-            return {k: dict(v) for k, v in self._data.items()}
+            out = {}
+            for k, v in self._data.items():
+                entry = dict(v)
+                # 'count' alias for backward compatibility with older consumers
+                entry["count"] = entry["call_count"]
+                out[k] = entry
+            return out
 
 
 SKILL_METRICS = SkillMetrics()

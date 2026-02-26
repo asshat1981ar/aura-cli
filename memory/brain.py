@@ -1,10 +1,22 @@
 import sqlite3
 import networkx as nx
 from pathlib import Path
-from textblob import TextBlob # Import TextBlob
 import json # Added this line
+import time
 from typing import List, Optional
 from core.logging_utils import log_json # Import log_json
+
+# textblob is only needed by analyze_critique_for_weaknesses — lazy import to avoid 1.3s startup cost
+_textblob_loaded = False
+TextBlob = None
+
+def _ensure_textblob():
+    global TextBlob, _textblob_loaded
+    if not _textblob_loaded:
+        from textblob import TextBlob as _TB  # noqa: F401
+        TextBlob = _TB
+        _textblob_loaded = True
+
 
 class Brain:
 
@@ -13,9 +25,15 @@ class Brain:
         db_file_path = Path(__file__).parent / "brain.db"
         self.db = sqlite3.connect(str(db_file_path)) # Connect using absolute path
         self.graph = nx.Graph()
+        self._recall_cache: dict = {}   # {query_key: (result, timestamp)}
+        self._cache_ttl: float = 5.0    # seconds — invalidated on remember()
         self._init_db()
-        
+
     def _init_db(self):
+        # WAL mode: concurrent reads don't block writes; NORMAL sync is safe and ~3x faster
+        self.db.execute("PRAGMA journal_mode=WAL")
+        self.db.execute("PRAGMA synchronous=NORMAL")
+        self.db.execute("PRAGMA cache_size=10000")
         self.db.execute("""
         CREATE TABLE IF NOT EXISTS memory(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,10 +73,18 @@ class Brain:
             (content_to_store,)
         )
         self.db.commit()
+        # Invalidate recall cache on write
+        self._recall_cache.clear()
 
     def recall_all(self):
+        key = "recall_all"
+        cached = self._recall_cache.get(key)
+        if cached and (time.time() - cached[1]) < self._cache_ttl:
+            return cached[0]
         rows = self.db.execute("SELECT content FROM memory").fetchall()
-        return [r[0] for r in rows]
+        result = [r[0] for r in rows]
+        self._recall_cache[key] = (result, time.time())
+        return result
 
     @staticmethod
     def compress_to_budget(entries: List[str], max_tokens: int) -> List[str]:
@@ -109,6 +135,7 @@ class Brain:
 
     def analyze_critique_for_weaknesses(self, critique: str):
         # Using TextBlob for sentiment analysis and noun phrase extraction
+        _ensure_textblob()
         blob = TextBlob(critique)
 
         found_weaknesses = False

@@ -9,13 +9,17 @@
 *.pat
 .aura_history
 
-# Python bytecode and caches
+# Python
 __pycache__/
-*.py[cod]
+*.pyc
 *.pyo
 *.pyd
-.pytest_cache/
+.Python
 
-# Database files (auto-generated at runtime)
-memory/brain.db
-memory/local_cache.db
+# Databases
+*.db
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/

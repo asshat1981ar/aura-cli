@@ -19,7 +19,7 @@ from agents.debugger import DebuggerAgent
 from agents.planner import PlannerAgent
 
 from core.task_handler import _check_project_writability, run_goals_loop
-from cli.commands import _handle_add, _handle_run, _handle_status, _handle_exit, _handle_help
+from cli.commands import _handle_add, _handle_run, _handle_status, _handle_exit, _handle_help, _handle_doctor, _handle_clear
 
 def cli_interaction_loop(args, goal_queue, goal_archive, loop, debugger_instance, planner_instance, project_root):
     while True:

@@ -57,11 +57,3 @@ class GoalArchive:
                     log_json("WARN", "goal_archive_corrupted", details={"path": str(self.archive_path), "message": "Starting with empty archive."})
                     return []
         return []
-        if self.archive_path.exists(): # Use Path.exists()
-            with open(self.archive_path, 'r') as f:
-                try:
-                    return json.load(f)
-                except json.JSONDecodeError:
-                    print(f"Warning: Could not decode JSON from {self.archive_path}. Starting with empty archive.")
-                    return []
-        return []

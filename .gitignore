@@ -8,3 +8,14 @@
 *.key
 *.pat
 .aura_history
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Database files (auto-generated at runtime)
+memory/brain.db
+memory/local_cache.db

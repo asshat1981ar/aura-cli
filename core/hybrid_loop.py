@@ -4,7 +4,7 @@ import re # Import re for _validate_file_path
 
 from core.git_tools import GitToolsError
 from core.logging_utils import log_json
-from core.file_tools import _safe_apply_change, _aura_safe_loads # Import _aura_safe_loads
+from core.file_tools import _safe_apply_change, _aura_safe_loads, OldCodeNotFoundError, FileToolsError
 from agents.debugger import DebuggerAgent
 
 class HybridClosedLoop:
@@ -221,7 +221,7 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
         changes_applied_successfully = True
         try:
             log_json("INFO", "applying_code_change", goal=current_goal, details={"file": sanitized_file_path, "change_idx": change_idx, "overwrite": overwrite_file})
-            _safe_apply_change(project_root / sanitized_file_path, old_code, new_code, overwrite_file)
+            _safe_apply_change(project_root, sanitized_file_path, old_code, new_code, overwrite_file)
         except OldCodeNotFoundError as e:
             changes_applied_successfully = self._log_and_diagnose_error(
                 str(e), current_goal, sanitized_file_path, change_idx,

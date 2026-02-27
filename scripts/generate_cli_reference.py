@@ -84,6 +84,13 @@ def _render_json_contracts(schema: dict) -> list[str]:
                 lines.append(f"- `{record_field}`")
             lines.append("")
 
+        optional_fields = contract.get("optional_fields") or []
+        if optional_fields:
+            lines.append("Optional fields:")
+            for optional_field in optional_fields:
+                lines.append(f"- `{optional_field}`")
+            lines.append("")
+
         record_codes = contract.get("record_codes") or []
         if record_codes:
             lines.append("Known record codes:")

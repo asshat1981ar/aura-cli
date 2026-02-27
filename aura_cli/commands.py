@@ -34,7 +34,7 @@ def _handle_doctor():
         f"Environment Variables: {check_env_vars()[0]} - {check_env_vars()[1]}",
         f"SQLite Write Access: {check_sqlite_write_access(repo_root)[0]} - {check_sqlite_write_access(repo_root)[1]}",
         f"Git Status: {check_git_status(repo_root)[0]} - {check_git_status(repo_root)[1]}",
-        f"Pytest Tests: {check_pytest_and_run_tests(repo_root, True)[0]} - {check_pytest_and_run_tests(repo_root, True)[1]}"
+        f"Pytest Tests: {check_pytest_and_run_tests(repo_root, False)[0]} - {check_pytest_and_run_tests(repo_root, False)[1]}"
     ]
     
     print("\n--- AURA Doctor Report ---")

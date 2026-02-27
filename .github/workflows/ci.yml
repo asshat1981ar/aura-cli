@@ -52,6 +52,9 @@ jobs:
     - name: Verify CLI parser/dispatch contracts
       run: |
         pytest -q tests/test_cli_contract.py tests/test_cli_options.py
+    - name: Verify CLI dispatch runtime contract subset
+      run: |
+        pytest -q tests/test_cli_main_dispatch.py -k "runtime_initialization_follows_action_contract_for_all_actions or dispatch_config_does_not_create_runtime or watch_and_studio_commands_have_runtime_and_ui_parity or watch_and_studio_autonomous_flag_is_forwarded_to_ui_run"
     - name: Verify CLI help/error snapshots
       run: |
         pytest -q tests/test_cli_help_snapshots.py tests/test_cli_error_snapshots.py

@@ -92,6 +92,45 @@ class TestCLIErrorSnapshots(unittest.TestCase):
         actual = json.dumps(json.loads(proc.stdout), indent=2, sort_keys=True) + "\n"
         self.assertEqual(actual, self._snapshot_text("cli_error_unrecognized_subcommand_argument.json"))
 
+    def test_missing_goal_subcommand_text_error_matches_snapshot(self):
+        proc = _run_main("goal")
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(proc.stdout, "")
+        self.assertEqual(proc.stderr, self._snapshot_text("cli_error_missing_goal_subcommand.txt"))
+
+    def test_missing_goal_subcommand_json_error_matches_snapshot(self):
+        proc = _run_main("goal", "--json")
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(proc.stderr, "")
+        actual = json.dumps(json.loads(proc.stdout), indent=2, sort_keys=True) + "\n"
+        self.assertEqual(actual, self._snapshot_text("cli_error_missing_goal_subcommand.json"))
+
+    def test_missing_mcp_subcommand_text_error_matches_snapshot(self):
+        proc = _run_main("mcp")
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(proc.stdout, "")
+        self.assertEqual(proc.stderr, self._snapshot_text("cli_error_missing_mcp_subcommand.txt"))
+
+    def test_missing_mcp_subcommand_json_error_matches_snapshot(self):
+        proc = _run_main("mcp", "--json")
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(proc.stderr, "")
+        actual = json.dumps(json.loads(proc.stdout), indent=2, sort_keys=True) + "\n"
+        self.assertEqual(actual, self._snapshot_text("cli_error_missing_mcp_subcommand.json"))
+
+    def test_missing_workflow_subcommand_text_error_matches_snapshot(self):
+        proc = _run_main("workflow")
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(proc.stdout, "")
+        self.assertEqual(proc.stderr, self._snapshot_text("cli_error_missing_workflow_subcommand.txt"))
+
+    def test_missing_workflow_subcommand_json_error_matches_snapshot(self):
+        proc = _run_main("workflow", "--json")
+        self.assertEqual(proc.returncode, 2)
+        self.assertEqual(proc.stderr, "")
+        actual = json.dumps(json.loads(proc.stdout), indent=2, sort_keys=True) + "\n"
+        self.assertEqual(actual, self._snapshot_text("cli_error_missing_workflow_subcommand.json"))
+
 
 if __name__ == "__main__":
     unittest.main()

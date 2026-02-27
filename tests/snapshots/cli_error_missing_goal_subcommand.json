@@ -1,0 +1,6 @@
+{
+  "code": "cli_parse_error",
+  "message": "the following arguments are required: COMMAND",
+  "status": "error",
+  "usage": "usage: aura goal [-h] COMMAND ...\n"
+}

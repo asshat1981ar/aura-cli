@@ -180,8 +180,18 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         for k, v in overrides.items():
             config.set_runtime_override(k, v)
 
-    goal_queue = GoalQueue()
+    goal_queue = GoalQueue(config.get("goal_queue_path", "memory/goal_queue.json"))
     goal_archive = GoalArchive()
+
+    # Early API key check — warn clearly so users know what to fix
+    _api_key = config.get("api_key", "") or ""
+    if not _api_key or _api_key in ("YOUR_OPENROUTER_API_KEY", "YOUR_API_KEY_HERE", "placeholder"):
+        log_json("WARN", "aura_api_key_missing",
+                 details={"message": "api_key is not set. LLM calls will fail. "
+                          "Set AURA_API_KEY env var or add api_key to aura.config.json."})
+        import sys as _sys
+        print("⚠️  AURA: No API key configured. Set AURA_API_KEY or edit aura.config.json.",
+              file=_sys.stderr)
 
     # ── Cache adapter: Momento (cloud) when API key set, else local in-process ─
     try:

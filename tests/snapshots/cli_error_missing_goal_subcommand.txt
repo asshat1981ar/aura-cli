@@ -1,0 +1,3 @@
+Error: the following arguments are required: COMMAND
+usage: aura goal [-h] COMMAND ...
+

@@ -80,7 +80,7 @@ class PipelineConfig:
     skill_set: List[str]
     hints: List[str] = field(default_factory=list)
     intensity: str = "normal"
-    confidence: float = 0.0
+    confidence: float = 0.8
     skip_verify: bool = False
     max_act_attempts: int = 3
     plan_retries: int = 2

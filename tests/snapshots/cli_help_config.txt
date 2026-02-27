@@ -1,0 +1,7 @@
+aura config
+
+Print the resolved effective runtime configuration.
+
+Examples:
+  python3 main.py config
+

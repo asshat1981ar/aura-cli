@@ -400,17 +400,14 @@ class ModelAdapter:
     def embed(self, texts: List[str]) -> List[np.ndarray]:
         """
         Generates vector embeddings for a list of texts.
-        Includes a small delay to avoid 429 Rate Limit errors.
-        
-        Args:
-            texts: List of strings to embed.
-            
-        Returns:
-            List of numpy arrays (float32).
+        Falls back to zero vectors when OPENAI_API_KEY is not set.
         """
         openai_api_key = os.getenv("OPENAI_API_KEY")
         if not openai_api_key:
-            raise ValueError("OPENAI_API_KEY not set for OpenAI embedding call.")
+            log_json("WARN", "search_embedding_failed",
+                     details={"error": "OPENAI_API_KEY not set for OpenAI embedding call."})
+            # Return zero vectors — VectorStore search will rank all equally (no semantic search)
+            return [np.zeros(self._embedding_dims, dtype=np.float32) for _ in texts]
 
         # Rate Limit Protection: Small sleep to avoid hitting burst limits
         import random

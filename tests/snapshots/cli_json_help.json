@@ -301,6 +301,31 @@
   "deterministic": true,
   "generated_by": "aura_cli.options.help_schema",
   "json_contracts": {
+    "cli_errors": {
+      "description": "Structured CLI JSON error payloads for parse and help-topic failures.",
+      "inclusion_rule": "Returned as the top-level JSON payload when `--json` is used and an error occurs.",
+      "optional_fields": [
+        "usage"
+      ],
+      "record_codes": [
+        {
+          "code": "cli_parse_error",
+          "description": "CLI argument parsing or validation failed.",
+          "status": "error"
+        },
+        {
+          "code": "unknown_command_help_topic",
+          "description": "Help topic path was not recognized.",
+          "status": "error"
+        }
+      ],
+      "record_fields": [
+        "status",
+        "code",
+        "message"
+      ],
+      "version": 1
+    },
     "cli_warnings": {
       "description": "Structured CLI warnings attached to JSON outputs when legacy flags are used.",
       "field": "cli_warnings",

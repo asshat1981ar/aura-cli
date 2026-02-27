@@ -168,8 +168,11 @@ class PropagationEngine:
                 events.append("weakness_detected")
                 break
 
-        # Phase failure spike from reflection loop output
+        # Phase failure spike from reflection loop output — only if report is recent (<1h)
         for report in (self.memory.query("reflection_reports", limit=1) or []):
+            report_age = time.time() - report.get("timestamp", 0)
+            if report_age > 3600:  # ignore stale reports older than 1 hour
+                continue
             for ins in report.get("insights", []):
                 if ins.get("type") == "phase_failure" and ins.get("severity") == "HIGH":
                     events.append("phase_failure_spike")
@@ -208,9 +211,19 @@ class PropagationEngine:
         }
 
     def _can_fire(self, rule_name: str, goal_text: str) -> bool:
-        """Anti-loop guard — cap fires per unique goal text."""
+        """Anti-loop guard — cap fires per unique goal text, and skip if already queued."""
         key = f"{rule_name}:{hashlib.sha256(goal_text.encode()).hexdigest()[:12]}"
-        return self._propagation_log.get(key, 0) < MAX_PROPAGATION_DEPTH
+        if self._propagation_log.get(key, 0) >= MAX_PROPAGATION_DEPTH:
+            return False
+        # Don't queue if an identical/highly similar goal is already pending
+        try:
+            goal_lower = goal_text.lower()[:80]
+            pending = [g for g in self.queue._load_queue() if isinstance(g, str)]
+            if any(goal_lower in g.lower() or g.lower() in goal_lower for g in pending):
+                return False
+        except Exception:
+            pass
+        return True
 
     def _record_fire(self, rule_name: str, goal_text: str) -> None:
         key = f"{rule_name}:{hashlib.sha256(goal_text.encode()).hexdigest()[:12]}"

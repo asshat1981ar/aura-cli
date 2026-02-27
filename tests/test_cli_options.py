@@ -1,6 +1,7 @@
 import json
 import unittest
 
+import aura_cli.options as cli_options_meta
 from aura_cli.cli_options import (
     CLI_PARSE_ERROR_CODE,
     CLIParseError,
@@ -65,7 +66,7 @@ class TestCLIOptions(unittest.TestCase):
         self.assertTrue(parsed.warnings)
         self.assertTrue(parsed.warning_records)
         warning = parsed.warning_records[0]
-        self.assertEqual(warning.code, "legacy_cli_flags_deprecated")
+        self.assertEqual(warning.code, cli_options_meta.CLI_WARNINGS_CODE_LEGACY_FLAGS_DEPRECATED)
         self.assertEqual(warning.category, "deprecation")
         self.assertEqual(warning.action, "goal_add_run")
         self.assertEqual(warning.replacement_command, "aura goal add")
@@ -100,7 +101,7 @@ class TestCLIOptions(unittest.TestCase):
         self.assertIn("cli_warnings", payload)
         self.assertEqual(len(payload["cli_warnings"]), 1)
         warning = payload["cli_warnings"][0]
-        self.assertEqual(warning["code"], "legacy_cli_flags_deprecated")
+        self.assertEqual(warning["code"], cli_options_meta.CLI_WARNINGS_CODE_LEGACY_FLAGS_DEPRECATED)
         self.assertEqual(warning["category"], "deprecation")
         self.assertEqual(warning["action"], "mcp_tools")
         self.assertEqual(warning["replacement_command"], "aura mcp tools")
@@ -146,6 +147,62 @@ class TestCLIOptions(unittest.TestCase):
         with self.assertRaises(CLIParseError) as ctx:
             parse_cli_args(["--diag", "--status"])
         self.assertIn("Conflicting legacy actions provided", str(ctx.exception))
+
+    def test_legacy_primary_flags_emit_structured_deprecation_warning_records(self):
+        cases = [
+            (["--bootstrap"], "bootstrap"),
+            (["--diag"], "diag"),
+            (["--mcp-tools"], "mcp_tools"),
+            (["--mcp-call", "limits"], "mcp_call"),
+            (["--workflow-goal", "Summarize repo"], "workflow_run"),
+            (["--status"], "goal_status"),
+            (["--add-goal", "Fix tests"], "goal_add"),
+            (["--goal", "Summarize repo"], "goal_once"),
+            (["--run-goals"], "goal_run"),
+            (["--scaffold", "demo"], "scaffold"),
+            (["--evolve"], "evolve"),
+            (["--add-goal", "Fix tests", "--run-goals"], "goal_add_run"),
+        ]
+
+        for argv, expected_action in cases:
+            with self.subTest(argv=argv):
+                parsed = parse_cli_args(argv)
+                self.assertTrue(parsed.legacy_invocation_used)
+                self.assertFalse(parsed.uses_subcommand)
+                self.assertEqual(parsed.action, expected_action)
+                self.assertEqual(len(parsed.warning_records), 1)
+
+                warning = parsed.warning_records[0]
+                self.assertEqual(warning.code, cli_options_meta.CLI_WARNINGS_CODE_LEGACY_FLAGS_DEPRECATED)
+                self.assertEqual(warning.category, "deprecation")
+                self.assertEqual(warning.phase, "compatibility")
+                self.assertEqual(warning.action, expected_action)
+                self.assertEqual(parsed.warnings, [warning.message])
+
+                canonical_path = cli_options_meta.action_default_canonical_path(expected_action)
+                expected_replacement = f"aura {' '.join(canonical_path)}" if canonical_path else None
+                self.assertEqual(warning.replacement_command, expected_replacement)
+
+                expected_flags = tuple(sorted(token for token in argv if token.startswith("--")))
+                self.assertEqual(warning.legacy_flags, expected_flags)
+
+    def test_error_json_payload_codes_are_documented_in_help_schema_contract(self):
+        schema = cli_options_meta.help_schema()
+        json_contracts = schema.get("json_contracts") or {}
+        contract = json_contracts[cli_options_meta.CLI_ERRORS_JSON_CONTRACT_NAME]
+        documented_codes = {item["code"]: item for item in (contract.get("record_codes") or [])}
+
+        parse_payload = cli_parse_error_payload(CLIParseError("bad input", usage="usage: aura ..."))
+        self.assertEqual(parse_payload["code"], cli_options_meta.CLI_PARSE_ERROR_CODE)
+        self.assertIn(parse_payload["code"], documented_codes)
+        self.assertEqual(parse_payload["status"], documented_codes[parse_payload["code"]]["status"])
+        self.assertIn("usage", parse_payload)
+
+        help_payload = unknown_command_help_topic_payload("Unknown command help topic 'x'.")
+        self.assertEqual(help_payload["code"], cli_options_meta.UNKNOWN_COMMAND_HELP_TOPIC_CODE)
+        self.assertIn(help_payload["code"], documented_codes)
+        self.assertEqual(help_payload["status"], documented_codes[help_payload["code"]]["status"])
+        self.assertNotIn("usage", help_payload)
 
 
 if __name__ == "__main__":

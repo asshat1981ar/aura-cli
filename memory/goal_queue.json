@@ -1,5 +1,8 @@
 [
     "Investigate and fix repeated 'sandbox' phase failures (rate: 1.0)",
     "Investigate and fix repeated 'sandbox' phase failures (rate: 1.0)",
-    "Perform a comprehensive repository-wide architectural audit using the structural_analyzer skill. Identify the top 3 circular dependencies and complexity hotspots, and implement iterative refactors to decouple modules and reduce cyclomatic complexity, starting with the most central bottleneck."
+    "Perform a comprehensive repository-wide architectural audit using the structural_analyzer skill. Identify the top 3 circular dependencies and complexity hotspots, and implement iterative refactors to decouple modules and reduce cyclomatic complexity, starting with the most central bottleneck.",
+    "Investigate and fix repeated 'sandbox' phase failures (rate: 1.0)",
+    "Validate API contracts after new feature addition",
+    "Run architecture validation after refactor \u2014 check for new circular deps"
 ]

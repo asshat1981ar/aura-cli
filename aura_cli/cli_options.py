@@ -7,8 +7,11 @@ from dataclasses import dataclass, field
 from typing import Any, Mapping, Sequence
 
 from aura_cli.options import (
+    CLI_PARSE_ERROR_CODE,
+    CLI_WARNINGS_CODE_LEGACY_FLAGS_DEPRECATED,
     COMMAND_SPECS,
     COMMAND_SPECS_BY_PATH,
+    UNKNOWN_COMMAND_HELP_TOPIC_CODE,
     action_default_canonical_path,
     action_display_command,
     action_display_subcommand,
@@ -93,10 +96,6 @@ def attach_cli_warnings(payload: Mapping[str, Any], parsed: "ParsedCLIArgs | Non
         return result
     result["cli_warnings"] = [record.to_dict() for record in records]
     return result
-
-
-CLI_PARSE_ERROR_CODE = "cli_parse_error"
-UNKNOWN_COMMAND_HELP_TOPIC_CODE = "unknown_command_help_topic"
 
 
 def cli_parse_error_payload(exc: CLIParseError) -> dict[str, Any]:
@@ -351,6 +350,14 @@ def parser_leaf_command_paths() -> set[tuple[str, ...]]:
     return set(_leaf_command_paths())
 
 
+def parser_parent_command_paths() -> set[tuple[str, ...]]:
+    return {path for path in _children_by_parent() if path}
+
+
+def parser_required_subcommand_parent_paths() -> set[tuple[str, ...]]:
+    return set(_REQUIRED_SUBCOMMAND_PARENT_PATHS)
+
+
 
 def build_parser() -> AuraArgumentParser:
     parser = AuraArgumentParser(prog="aura", allow_abbrev=False, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -435,7 +442,7 @@ def _legacy_warning_record(action: str, explicit_legacy_flags: set[str]) -> CLIW
     path = action_default_canonical_path(action)
     replacement_command = f"aura {' '.join(path)}" if path else None
     return CLIWarningRecord(
-        code="legacy_cli_flags_deprecated",
+        code=CLI_WARNINGS_CODE_LEGACY_FLAGS_DEPRECATED,
         message=message,
         action=action,
         replacement_command=replacement_command,
@@ -614,5 +621,7 @@ __all__ = [
     "parse_cli_args",
     "parser_customizer_paths",
     "parser_leaf_command_paths",
+    "parser_parent_command_paths",
+    "parser_required_subcommand_parent_paths",
     "render_help",
 ]

@@ -16,6 +16,26 @@ Recommended update steps:
 
 ## JSON Output Contracts
 
+### `cli_errors`
+
+Structured CLI JSON error payloads for parse and help-topic failures.
+
+Field name: `cli_errors`
+Version: `1`
+Inclusion rule: Returned as the top-level JSON payload when `--json` is used and an error occurs.
+
+Record fields:
+- `status`
+- `code`
+- `message`
+
+Optional fields:
+- `usage`
+
+Known record codes:
+- `cli_parse_error`: CLI argument parsing or validation failed.
+- `unknown_command_help_topic`: Help topic path was not recognized.
+
 ### `cli_warnings`
 
 Structured CLI warnings attached to JSON outputs when legacy flags are used.

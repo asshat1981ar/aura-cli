@@ -230,6 +230,7 @@ HELP_SCHEMA_VERSION = 3
 HELP_SCHEMA_GENERATED_BY = "aura_cli.options.help_schema"
 CLI_WARNINGS_JSON_CONTRACT_VERSION = 1
 CLI_WARNINGS_JSON_FIELD = "cli_warnings"
+CLI_WARNINGS_CODE_LEGACY_FLAGS_DEPRECATED = "legacy_cli_flags_deprecated"
 CLI_WARNINGS_RECORD_FIELDS: tuple[str, ...] = (
     "code",
     "message",
@@ -241,10 +242,35 @@ CLI_WARNINGS_RECORD_FIELDS: tuple[str, ...] = (
 )
 CLI_WARNINGS_RECORD_CODES: tuple[dict[str, str], ...] = (
     {
-        "code": "legacy_cli_flags_deprecated",
+        "code": CLI_WARNINGS_CODE_LEGACY_FLAGS_DEPRECATED,
         "category": "deprecation",
         "phase": "compatibility",
         "description": "Legacy flat CLI flags were used and mapped to a canonical command.",
+    },
+)
+
+CLI_PARSE_ERROR_CODE = "cli_parse_error"
+UNKNOWN_COMMAND_HELP_TOPIC_CODE = "unknown_command_help_topic"
+CLI_ERRORS_JSON_CONTRACT_NAME = "cli_errors"
+CLI_ERRORS_JSON_CONTRACT_VERSION = 1
+CLI_ERRORS_RECORD_FIELDS: tuple[str, ...] = (
+    "status",
+    "code",
+    "message",
+)
+CLI_ERRORS_OPTIONAL_FIELDS: tuple[str, ...] = (
+    "usage",
+)
+CLI_ERRORS_RECORD_CODES: tuple[dict[str, str], ...] = (
+    {
+        "code": CLI_PARSE_ERROR_CODE,
+        "status": "error",
+        "description": "CLI argument parsing or validation failed.",
+    },
+    {
+        "code": UNKNOWN_COMMAND_HELP_TOPIC_CODE,
+        "status": "error",
+        "description": "Help topic path was not recognized.",
     },
 )
 
@@ -456,14 +482,29 @@ def help_schema() -> dict[str, Any]:
                 ),
                 "record_fields": list(CLI_WARNINGS_RECORD_FIELDS),
                 "record_codes": [dict(item) for item in CLI_WARNINGS_RECORD_CODES],
-            }
+            },
+            CLI_ERRORS_JSON_CONTRACT_NAME: {
+                "version": CLI_ERRORS_JSON_CONTRACT_VERSION,
+                "description": "Structured CLI JSON error payloads for parse and help-topic failures.",
+                "inclusion_rule": "Returned as the top-level JSON payload when `--json` is used and an error occurs.",
+                "record_fields": list(CLI_ERRORS_RECORD_FIELDS),
+                "optional_fields": list(CLI_ERRORS_OPTIONAL_FIELDS),
+                "record_codes": [dict(item) for item in CLI_ERRORS_RECORD_CODES],
+            },
         },
         "commands": commands,
     }
 
 
 __all__ = [
+    "CLI_ERRORS_JSON_CONTRACT_NAME",
+    "CLI_ERRORS_JSON_CONTRACT_VERSION",
+    "CLI_ERRORS_OPTIONAL_FIELDS",
+    "CLI_ERRORS_RECORD_CODES",
+    "CLI_ERRORS_RECORD_FIELDS",
+    "CLI_PARSE_ERROR_CODE",
     "CLI_WARNINGS_JSON_CONTRACT_VERSION",
+    "CLI_WARNINGS_CODE_LEGACY_FLAGS_DEPRECATED",
     "CLI_WARNINGS_JSON_FIELD",
     "CLI_WARNINGS_RECORD_CODES",
     "CLI_WARNINGS_RECORD_FIELDS",
@@ -490,4 +531,5 @@ __all__ = [
     "match_legacy_action",
     "render_examples",
     "spec_argparse_kwargs",
+    "UNKNOWN_COMMAND_HELP_TOPIC_CODE",
 ]

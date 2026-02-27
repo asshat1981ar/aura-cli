@@ -295,7 +295,7 @@ class TestCLIMainDispatch(unittest.TestCase):
         payload = json.loads(out)
         self.assertEqual(payload["status"], 200)
         self.assertIn("cli_warnings", payload)
-        self.assertEqual(payload["cli_warnings"][0]["code"], "legacy_cli_flags_deprecated")
+        self.assertEqual(payload["cli_warnings"][0]["code"], cli_options_meta.CLI_WARNINGS_CODE_LEGACY_FLAGS_DEPRECATED)
         self.assertEqual(payload["cli_warnings"][0]["action"], "mcp_tools")
         runtime_factory.assert_not_called()
 

@@ -29,14 +29,19 @@ def _ensure_nx():
 
 class Brain:
 
+    # Current schema version. Bump when adding columns / tables.
+    SCHEMA_VERSION = 2
+
     def __init__(self, db_path: Optional[str] = None):
         # Construct absolute path for the database file
         db_file_path = Path(db_path) if db_path else Path(__file__).parent / "brain.db"
-        self.db = sqlite3.connect(str(db_file_path), check_same_thread=False) # Connect using absolute path
+        self._db_path = db_file_path
+        self.db = sqlite3.connect(str(db_file_path), check_same_thread=False)
         self._graph = None   # lazy — created on first relate() call
         self._recall_cache: dict = {}   # {query_key: (result, timestamp)}
         self._cache_ttl: float = 5.0    # seconds — invalidated on remember()
         self._init_db()
+        self._migrate()
 
     @property
     def graph(self):
@@ -50,6 +55,11 @@ class Brain:
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.execute("PRAGMA synchronous=NORMAL")
         self.db.execute("PRAGMA cache_size=10000")
+        self.db.execute("""
+        CREATE TABLE IF NOT EXISTS schema_version(
+            version INTEGER PRIMARY KEY
+        )
+        """)
         self.db.execute("""
         CREATE TABLE IF NOT EXISTS memory(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,6 +84,70 @@ class Brain:
         # vs full-table scan on 30k+ row databases)
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_memory_id ON memory(id)")
         self.db.commit()
+
+    def _get_schema_version(self) -> int:
+        """Return stored schema version, or 0 if none recorded."""
+        try:
+            row = self.db.execute("SELECT version FROM schema_version").fetchone()
+            return row[0] if row else 0
+        except sqlite3.OperationalError:
+            return 0
+
+    def _set_schema_version(self, version: int) -> None:
+        self.db.execute("DELETE FROM schema_version")
+        self.db.execute("INSERT INTO schema_version(version) VALUES (?)", (version,))
+        self.db.commit()
+
+    def _migrate(self) -> None:
+        """Apply any pending schema migrations idempotently.
+
+        Migration log:
+          v0 → v1: initial schema (memory, weaknesses, vector_store_data)
+          v1 → v2: absorb rows from legacy brain_v2.db (same directory)
+        """
+        current = self._get_schema_version()
+        if current >= self.SCHEMA_VERSION:
+            return
+
+        # v0 → v1: tables already created by _init_db; just record version
+        if current < 1:
+            log_json("INFO", "brain_migration", details={"from": current, "to": 1})
+            self._set_schema_version(1)
+            current = 1
+
+        # v1 → v2: migrate rows from brain_v2.db if it exists alongside brain.db
+        if current < 2:
+            legacy_path = self._db_path.parent / "brain_v2.db"
+            if legacy_path.exists() and legacy_path != self._db_path:
+                self._absorb_legacy_db(legacy_path)
+            self._set_schema_version(2)
+            log_json("INFO", "brain_migration", details={"from": 1, "to": 2})
+
+    def _absorb_legacy_db(self, legacy_path: Path) -> None:
+        """Copy rows from *legacy_path* into this DB, skipping duplicates."""
+        try:
+            legacy = sqlite3.connect(str(legacy_path), check_same_thread=False)
+            # memory rows
+            rows = legacy.execute("SELECT content FROM memory").fetchall()
+            existing = {r[0] for r in self.db.execute("SELECT content FROM memory").fetchall()}
+            new_rows = [r for r in rows if r[0] not in existing]
+            if new_rows:
+                self.db.executemany("INSERT INTO memory(content) VALUES (?)", new_rows)
+            # weaknesses rows
+            wrows = legacy.execute("SELECT description, timestamp FROM weaknesses").fetchall()
+            self.db.executemany(
+                "INSERT OR IGNORE INTO weaknesses(description, timestamp) VALUES (?, ?)",
+                wrows
+            )
+            self.db.commit()
+            legacy.close()
+            log_json("INFO", "brain_legacy_absorbed",
+                     details={"path": str(legacy_path),
+                              "memory_rows": len(new_rows),
+                              "weakness_rows": len(wrows)})
+        except Exception as exc:
+            log_json("WARN", "brain_legacy_absorb_failed",
+                     details={"path": str(legacy_path), "error": str(exc)})
 
     def remember(self, data): # Changed parameter name from 'text' to 'data' for clarity
         # If data is a dictionary, serialize it to JSON

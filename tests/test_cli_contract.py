@@ -1,4 +1,5 @@
 import json
+import shlex
 from dataclasses import fields
 import unittest
 
@@ -14,6 +15,13 @@ import aura_cli.options as cli_options_meta
 
 
 class TestCLIContract(unittest.TestCase):
+    def _argv_from_example(self, example: str) -> list[str]:
+        tokens = shlex.split(example)
+        self.assertGreaterEqual(len(tokens), 3, f"Example too short: {example}")
+        self.assertEqual(tokens[0], "python3", f"Example must start with 'python3': {example}")
+        self.assertEqual(tokens[1], "main.py", f"Example must target main.py: {example}")
+        return tokens[2:]
+
     def test_help_specs_cover_parser_commands(self):
         report = cli_contract_report()
         self.assertEqual(report["missing_in_specs"], [], f"Parser commands missing from help specs: {report['missing_in_specs']}")
@@ -128,6 +136,13 @@ class TestCLIContract(unittest.TestCase):
         studio_rule = cli_main.COMMAND_DISPATCH_REGISTRY["studio"]
         self.assertIs(watch_rule.handler, studio_rule.handler)
         self.assertEqual(watch_rule.requires_runtime, studio_rule.requires_runtime)
+
+    def test_command_spec_examples_parse_successfully(self):
+        for spec in cli_options_meta.COMMAND_SPECS:
+            for example in spec.examples:
+                with self.subTest(path=spec.path, example=example):
+                    argv = self._argv_from_example(example)
+                    parse_cli_args(argv)
 
 
 if __name__ == "__main__":

@@ -47,6 +47,12 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         legacy_flags=("--bootstrap",),
     ),
     CommandSpec(
+        path=("config",),
+        summary="Show effective config",
+        description="Print the resolved effective runtime configuration.",
+        examples=("python3 main.py config",),
+    ),
+    CommandSpec(
         path=("diag",),
         summary="MCP diagnostics snapshot",
         description="Fetch MCP health, metrics, limits, and recent logs via HTTP.",
@@ -180,6 +186,7 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("help", False, ("help",)),
     CLIActionSpec("doctor", False, ("doctor",)),
     CLIActionSpec("bootstrap", False, ("bootstrap",), legacy_primary_flags=("bootstrap",)),
+    CLIActionSpec("show_config", False, ("config",)),
     CLIActionSpec("mcp_tools", False, ("mcp", "tools"), legacy_primary_flags=("mcp_tools",)),
     CLIActionSpec("mcp_call", False, ("mcp", "call"), legacy_primary_flags=("mcp_call",)),
     CLIActionSpec("diag", False, ("diag",), legacy_primary_flags=("diag",)),
@@ -246,6 +253,7 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("help",): "help",
     ("doctor",): "doctor",
     ("bootstrap",): "bootstrap",
+    ("config",): "show_config",
     ("diag",): "diag",
     ("logs",): "logs",
     ("watch",): "watch",

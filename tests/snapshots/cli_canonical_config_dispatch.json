@@ -1,0 +1,4 @@
+{
+  "model_name": "gpt-5",
+  "policy_max_cycles": 5
+}

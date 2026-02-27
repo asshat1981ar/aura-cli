@@ -1,7 +1,16 @@
 import json
 import unittest
 
-from aura_cli.cli_options import CLIParseError, attach_cli_warnings, parse_cli_args, render_help
+from aura_cli.cli_options import (
+    CLI_PARSE_ERROR_CODE,
+    CLIParseError,
+    UNKNOWN_COMMAND_HELP_TOPIC_CODE,
+    attach_cli_warnings,
+    cli_parse_error_payload,
+    parse_cli_args,
+    render_help,
+    unknown_command_help_topic_payload,
+)
 
 
 class TestCLIOptions(unittest.TestCase):
@@ -101,6 +110,22 @@ class TestCLIOptions(unittest.TestCase):
         parsed = parse_cli_args(["mcp", "tools"])
         payload = attach_cli_warnings({"status": "ok"}, parsed)
         self.assertEqual(payload, {"status": "ok"})
+
+    def test_cli_parse_error_payload_uses_shared_contract(self):
+        exc = CLIParseError("bad input", usage="usage: aura ...")
+        payload = cli_parse_error_payload(exc)
+
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["code"], CLI_PARSE_ERROR_CODE)
+        self.assertEqual(payload["message"], "bad input")
+        self.assertEqual(payload["usage"], "usage: aura ...")
+
+    def test_unknown_help_topic_payload_uses_shared_contract(self):
+        payload = unknown_command_help_topic_payload("Unknown command help topic 'x'.")
+
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["code"], UNKNOWN_COMMAND_HELP_TOPIC_CODE)
+        self.assertEqual(payload["message"], "Unknown command help topic 'x'.")
 
     def test_parse_error_suggests_top_level_command(self):
         with self.assertRaises(CLIParseError) as ctx:

@@ -43,6 +43,19 @@
       "summary": "Create default config"
     },
     {
+      "action": "show_config",
+      "description": "Print the resolved effective runtime configuration.",
+      "examples": [
+        "python3 main.py config"
+      ],
+      "legacy_flags": [],
+      "path": [
+        "config"
+      ],
+      "requires_runtime": false,
+      "summary": "Show effective config"
+    },
+    {
       "action": "diag",
       "description": "Fetch MCP health, metrics, limits, and recent logs via HTTP.",
       "examples": [

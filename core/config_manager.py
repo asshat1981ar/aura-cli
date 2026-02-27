@@ -1,9 +1,63 @@
 import os
 import json
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from core.logging_utils import log_json
 from core.exceptions import ConfigurationError
+
+# ---------------------------------------------------------------------------
+# Value validators — each returns (is_valid: bool, coerced_value, reason: str)
+# ---------------------------------------------------------------------------
+
+def _validate_positive_int(key: str, val: Any) -> Tuple[bool, Any, str]:
+    try:
+        v = int(val)
+        if v > 0:
+            return True, v, ""
+        return False, None, f"{key} must be a positive integer, got {val!r}"
+    except (ValueError, TypeError):
+        return False, None, f"{key} must be an integer, got {val!r}"
+
+
+def _validate_bool(key: str, val: Any) -> Tuple[bool, Any, str]:
+    if isinstance(val, bool):
+        return True, val, ""
+    if isinstance(val, str) and val.lower() in ("true", "false", "1", "0", "yes", "no"):
+        return True, val.lower() in ("true", "1", "yes"), ""
+    return False, None, f"{key} must be a boolean, got {val!r}"
+
+
+def _validate_string(key: str, val: Any) -> Tuple[bool, Any, str]:
+    if val is None or isinstance(val, str):
+        return True, val, ""
+    return False, None, f"{key} must be a string, got {val!r}"
+
+
+def _validate_float_range(key: str, val: Any, lo: float, hi: float) -> Tuple[bool, Any, str]:
+    try:
+        v = float(val)
+        if lo <= v <= hi:
+            return True, v, ""
+        return False, None, f"{key} must be in [{lo}, {hi}], got {val!r}"
+    except (ValueError, TypeError):
+        return False, None, f"{key} must be a number, got {val!r}"
+
+
+# Key → validator function (None = no validation, just pass through)
+_KEY_VALIDATORS = {
+    "max_iterations":   lambda k, v: _validate_positive_int(k, v),
+    "max_cycles":       lambda k, v: _validate_positive_int(k, v),
+    "policy_max_cycles": lambda k, v: _validate_positive_int(k, v),
+    "policy_max_seconds": lambda k, v: _validate_positive_int(k, v),
+    "dry_run":          lambda k, v: _validate_bool(k, v),
+    "decompose":        lambda k, v: _validate_bool(k, v),
+    "strict_schema":    lambda k, v: _validate_bool(k, v),
+    "model_name":       lambda k, v: _validate_string(k, v),
+    "api_key":          lambda k, v: _validate_string(k, v),
+    "memory_store_path": lambda k, v: _validate_string(k, v),
+    "brain_db_path":    lambda k, v: _validate_string(k, v),
+    "goal_queue_path":  lambda k, v: _validate_string(k, v),
+}
 
 DEFAULT_CONFIG = {
     "model_name": "google/gemini-2.0-flash-exp:free",
@@ -155,9 +209,28 @@ class ConfigManager:
         
         self.effective_config = merged
 
+    def _validate_value(self, key: str, value: Any) -> Any:
+        """Validate *value* for *key*; return coerced value or DEFAULT_CONFIG fallback on error."""
+        validator = _KEY_VALIDATORS.get(key)
+        if validator is None:
+            return value
+        ok, coerced, reason = validator(key, value)
+        if ok:
+            return coerced
+        default = DEFAULT_CONFIG.get(key)
+        log_json("ERROR", "config_value_invalid",
+                 details={"key": key, "value": value, "reason": reason,
+                           "fallback": default})
+        return default
+
     def get(self, key: str, default: Any = None) -> Any:
         """Retrieves a configuration value from the effective config."""
-        return self.effective_config.get(key, default)
+        val = self.effective_config.get(key, default)
+        return self._validate_value(key, val) if key in _KEY_VALIDATORS else val
+
+    def show_config(self) -> Dict[str, Any]:
+        """Return the effective config dict (for --show-config / diagnostics)."""
+        return dict(self.effective_config)
 
     def set_runtime_override(self, key: str, value: Any):
         """Sets a temporary runtime override."""

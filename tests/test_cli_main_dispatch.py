@@ -9,6 +9,7 @@ from unittest.mock import MagicMock, patch, call
 
 from aura_cli.cli_options import parse_cli_args
 import aura_cli.cli_main as cli_main
+import aura_cli.options as cli_options_meta
 
 
 class TestCLIMainDispatch(unittest.TestCase):
@@ -50,6 +51,43 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertEqual(out.getvalue().strip(), "HELP TEXT")
         runtime_factory.assert_not_called()
 
+    def test_runtime_initialization_follows_action_contract_for_all_actions(self):
+        runtime_factory = MagicMock(return_value={})
+        runtime_seen: dict[str, bool] = {}
+
+        def _make_handler(action_name: str):
+            def _handler(ctx):
+                runtime_seen[action_name] = ctx.runtime is not None
+                return 0
+
+            return _handler
+
+        stub_registry = {
+            action: cli_main.DispatchRule(
+                action=action,
+                requires_runtime=rule.requires_runtime,
+                handler=_make_handler(action),
+            )
+            for action, rule in cli_main.COMMAND_DISPATCH_REGISTRY.items()
+        }
+
+        with patch.dict(cli_main.COMMAND_DISPATCH_REGISTRY, stub_registry, clear=True), \
+             patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"):
+            for action, spec in sorted(cli_options_meta.CLI_ACTION_SPECS_BY_ACTION.items()):
+                with self.subTest(action=action):
+                    argv = list(cli_options_meta.action_smoke_argv(action))
+                    parsed = parse_cli_args(argv)
+                    runtime_factory.reset_mock()
+                    code = cli_main.dispatch_command(parsed, project_root=Path("."), runtime_factory=runtime_factory)
+
+                    self.assertEqual(code, 0)
+                    self.assertEqual(runtime_seen.get(action), spec.requires_runtime)
+                    if spec.requires_runtime:
+                        runtime_factory.assert_called_once()
+                    else:
+                        runtime_factory.assert_not_called()
+
     def test_dispatch_doctor_does_not_create_runtime(self):
         parsed = parse_cli_args(["doctor"])
         runtime_factory = MagicMock()
@@ -59,6 +97,32 @@ class TestCLIMainDispatch(unittest.TestCase):
 
         self.assertEqual(code, 0)
         mock_doctor.assert_called_once()
+        runtime_factory.assert_not_called()
+
+    def test_dispatch_config_does_not_create_runtime(self):
+        parsed = parse_cli_args(["config"])
+        runtime_factory = MagicMock()
+
+        out = io.StringIO()
+        with patch("aura_cli.cli_main.config.show_config", return_value={"model_name": "gpt-5"}), redirect_stdout(out):
+            code = cli_main.dispatch_command(parsed, project_root=Path("."), runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out.getvalue()), {"model_name": "gpt-5"})
+        runtime_factory.assert_not_called()
+
+    def test_canonical_config_json_output_matches_snapshot(self):
+        runtime_factory = MagicMock()
+
+        with patch(
+            "aura_cli.cli_main.config.show_config",
+            return_value={"policy_max_cycles": 5, "model_name": "gpt-5"},
+        ):
+            code, out, err, _ = self._dispatch(["config"], runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self._assert_json_snapshot(out, "cli_canonical_config_dispatch.json")
         runtime_factory.assert_not_called()
 
     def test_dispatch_goal_status_uses_runtime_and_status_handler(self):

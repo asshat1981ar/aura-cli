@@ -41,6 +41,7 @@ Known record codes:
 - [`help`](#help)
 - [`doctor`](#doctor)
 - [`bootstrap`](#bootstrap)
+- [`config`](#config)
 - [`diag`](#diag)
 - [`logs`](#logs)
 - [`watch`](#watch)
@@ -100,6 +101,19 @@ Legacy flags:
 
 Examples:
 - `python3 main.py bootstrap`
+
+## `config`
+
+### `aura config`
+
+Show effective config
+
+Print the resolved effective runtime configuration.
+
+`action`: `show_config` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py config`
 
 ## `diag`
 

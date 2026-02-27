@@ -31,7 +31,14 @@ from core.vector_store import VectorStore
 
 from core.task_handler import _check_project_writability, run_goals_loop
 from aura_cli.commands import _handle_add, _handle_run, _handle_status, _handle_exit, _handle_help, _handle_doctor, _handle_clear
-from aura_cli.cli_options import CLIParseError, attach_cli_warnings, parse_cli_args, render_help
+from aura_cli.cli_options import (
+    CLIParseError,
+    attach_cli_warnings,
+    cli_parse_error_payload,
+    parse_cli_args,
+    render_help,
+    unknown_command_help_topic_payload,
+)
 from aura_cli.options import action_runtime_required
 
 
@@ -421,11 +428,7 @@ def _handle_help_dispatch(ctx: DispatchContext) -> int:
         print(render_help(getattr(ctx.args, "help_topics", None)))
     except ValueError as exc:
         if getattr(ctx.args, "json", False):
-            print(json.dumps(attach_cli_warnings({
-                "status": "error",
-                "code": "unknown_command_help_topic",
-                "message": str(exc),
-            }, ctx.parsed)))
+            print(json.dumps(attach_cli_warnings(unknown_command_help_topic_payload(str(exc)), ctx.parsed)))
         else:
             print(f"Error: {exc}", file=sys.stderr)
         return 2
@@ -445,6 +448,12 @@ def _handle_doctor_dispatch(_ctx: DispatchContext) -> int:
 def _handle_bootstrap_dispatch(_ctx: DispatchContext) -> int:
     config.bootstrap()
     print("AURA bootstrapped! Edit aura.config.json and add your API key.")
+    return 0
+
+
+def _handle_show_config_dispatch(_ctx: DispatchContext) -> int:
+    """Print the resolved effective configuration as JSON."""
+    print(json.dumps(config.show_config(), indent=2, default=str))
     return 0
 
 
@@ -652,6 +661,7 @@ COMMAND_DISPATCH_REGISTRY = {
     "help": _dispatch_rule("help", _handle_help_dispatch),
     "doctor": _dispatch_rule("doctor", _handle_doctor_dispatch),
     "bootstrap": _dispatch_rule("bootstrap", _handle_bootstrap_dispatch),
+    "show_config": _dispatch_rule("show_config", _handle_show_config_dispatch),
     "mcp_tools": _dispatch_rule("mcp_tools", _handle_mcp_tools_dispatch),
     "mcp_call": _dispatch_rule("mcp_call", _handle_mcp_call_dispatch),
     "diag": _dispatch_rule("diag", _handle_diag_dispatch),
@@ -729,12 +739,7 @@ def main(project_root_override=None, argv=None):
         parsed = parse_cli_args(raw_argv)
     except CLIParseError as exc:
         if "--json" in raw_argv:
-            print(json.dumps(attach_cli_warnings({
-                "status": "error",
-                "code": "cli_parse_error",
-                "message": str(exc),
-                "usage": exc.usage,
-            })))
+            print(json.dumps(attach_cli_warnings(cli_parse_error_payload(exc))))
         else:
             print(f"Error: {exc}", file=sys.stderr)
             if exc.usage:

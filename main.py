@@ -4,6 +4,7 @@ import json
 import sys
 
 from aura_cli.cli_options import CLIParseError, attach_cli_warnings, parse_cli_args, render_help
+from aura_cli.cli_options import cli_parse_error_payload, unknown_command_help_topic_payload
 
 
 def main(*args, **kwargs):  # noqa: D401
@@ -22,12 +23,7 @@ if __name__ == "__main__":
         parsed = parse_cli_args(raw_argv)
     except CLIParseError as exc:
         if "--json" in raw_argv:
-            print(json.dumps(attach_cli_warnings({
-                "status": "error",
-                "code": "cli_parse_error",
-                "message": str(exc),
-                "usage": exc.usage,
-            })))
+            print(json.dumps(attach_cli_warnings(cli_parse_error_payload(exc))))
         else:
             print(f"Error: {exc}", file=sys.stderr)
             if exc.usage:
@@ -40,11 +36,7 @@ if __name__ == "__main__":
             raise SystemExit(0)
         except ValueError as exc:
             if getattr(parsed.namespace, "json", False):
-                print(json.dumps(attach_cli_warnings({
-                    "status": "error",
-                    "code": "unknown_command_help_topic",
-                    "message": str(exc),
-                }, parsed)))
+                print(json.dumps(attach_cli_warnings(unknown_command_help_topic_payload(str(exc)), parsed)))
             else:
                 print(f"Error: {exc}", file=sys.stderr)
             raise SystemExit(2)

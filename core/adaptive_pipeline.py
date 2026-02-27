@@ -70,6 +70,7 @@ class PipelineConfig:
         skill_set:     Skills to dispatch during triage (by name).
         hints:         Extra context strings injected into the plan phase.
         intensity:     ``"minimal"`` | ``"normal"`` | ``"deep"``.
+        confidence:    Confidence score (0.0–1.0) for the chosen intensity level.
         skip_verify:   True if verification should be skipped (e.g. dry-run docs goals).
         max_act_attempts: How many times the act loop may retry.
         plan_retries:  How many times to re-plan on structural failure.
@@ -79,6 +80,7 @@ class PipelineConfig:
     skill_set: List[str]
     hints: List[str] = field(default_factory=list)
     intensity: str = "normal"
+    confidence: float = 0.0
     skip_verify: bool = False
     max_act_attempts: int = 3
     plan_retries: int = 2

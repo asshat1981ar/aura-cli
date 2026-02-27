@@ -127,7 +127,7 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
         Returns:
             str: A string representation of the system snapshot.
         """
-        return f"Memory entries: {len(self.brain.recall_all())}"
+        return f"Memory entries: {self.brain.count_memories()}"
 
     def extract_scores(self, critique_dict: dict, goal: str):
         """

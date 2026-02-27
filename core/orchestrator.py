@@ -367,6 +367,400 @@ class LoopOrchestrator:
             return "skip"
         return "act"  # default: code-level fix is worth retrying
 
+    # ── Inner loop helpers ────────────────────────────────────────────────────
+
+    def _run_sandbox_loop(
+        self,
+        goal: str,
+        act: Dict,
+        task_bundle: Dict,
+        dry_run: bool,
+        phase_outputs: Dict,
+    ):
+        """Run the sandbox pre-apply check, retrying up to MAX_SANDBOX_RETRIES.
+
+        On each failure, injects stderr as a fix_hint and re-generates code.
+
+        Returns:
+            Tuple of (final_act_dict, sandbox_passed, act_attempt_delta).
+        """
+        sandbox_passed = False
+        sandbox_result = {}
+        act_attempts_used = 0
+
+        for _sandbox_try in range(MAX_SANDBOX_RETRIES):
+            self._notify_ui("on_phase_start", "sandbox")
+            t0_sandbox = time.time()
+            sandbox_result = self._run_phase("sandbox", {
+                "act": act,
+                "dry_run": dry_run,
+                "project_root": str(self.project_root),
+            }) or {}
+            self._notify_ui("on_phase_complete", "sandbox", (time.time() - t0_sandbox) * 1000)
+
+            phase_outputs["sandbox"] = sandbox_result
+            sandbox_passed = sandbox_result.get("passed", True)
+            if sandbox_passed or dry_run:
+                break
+
+            stderr_hint = (
+                (sandbox_result.get("details") or {}).get("stderr", "")
+                or sandbox_result.get("summary", "sandbox_failed")
+            )
+            log_json("WARN", "sandbox_pre_apply_failed",
+                     details={"try": _sandbox_try + 1,
+                              "summary": sandbox_result.get("summary", "")})
+
+            if _sandbox_try < MAX_SANDBOX_RETRIES - 1:
+                task_bundle["fix_hints"] = [stderr_hint]
+                act = self._run_phase("act", {
+                    "task": goal,
+                    "task_bundle": task_bundle,
+                    "dry_run": dry_run,
+                    "project_root": str(self.project_root),
+                    "fix_hints": [stderr_hint],
+                })
+                act_attempts_used += 1
+                phase_outputs["change_set"] = act
+            else:
+                log_json("WARN", "sandbox_max_retries_exceeded",
+                         details={"max": MAX_SANDBOX_RETRIES,
+                                  "continuing_with_best_attempt": True})
+
+        if not sandbox_passed and not dry_run:
+            task_bundle["fix_hints"] = [
+                (sandbox_result.get("details") or {}).get("stderr", "")
+                or sandbox_result.get("summary", "sandbox_failed")
+            ]
+
+        return act, sandbox_passed, act_attempts_used
+
+    def _run_act_loop(
+        self,
+        goal: str,
+        plan: Dict,
+        task_bundle: Dict,
+        pipeline_cfg,
+        cycle_id: str,
+        phase_outputs: Dict,
+        dry_run: bool,
+        plan_attempt: int,
+        max_plan_retries: int,
+        skill_context: Dict,
+    ):
+        """Execute the act → sandbox → apply → verify loop with retries and backoff.
+
+        On each failed verify, delegates to :meth:`_route_failure` to decide
+        whether to retry the act, escalate to re-planning, or skip.
+
+        Returns:
+            Tuple of (verification_dict, replan_needed, early_return_dict_or_None).
+            ``early_return_dict_or_None`` is set when strict_schema aborts early.
+        """
+        max_act_attempts = pipeline_cfg.max_act_attempts
+        act_attempt = 0
+        verification: Dict = {}
+        replan_needed = False
+
+        while act_attempt < max_act_attempts:
+            act_attempt += 1
+
+            # Exponential backoff between retries (not on first attempt)
+            if act_attempt > 1:
+                backoff = min(2 ** (act_attempt - 2), 16)
+                log_json("INFO", "act_retry_backoff",
+                         details={"attempt": act_attempt, "backoff_s": backoff})
+                time.sleep(backoff)
+
+            self._notify_ui("on_phase_start", "act")
+            t0_act = time.time()
+            act = self._run_phase("act", {
+                "task": goal,
+                "task_bundle": task_bundle,
+                "dry_run": dry_run,
+                "project_root": str(self.project_root),
+                "fix_hints": task_bundle.get("fix_hints", []),
+            })
+            self._notify_ui("on_phase_complete", "act", (time.time() - t0_act) * 1000)
+
+            errors = validate_phase_output("change_set", act)
+            if errors:
+                log_json("ERROR", "phase_schema_invalid",
+                         details={"phase": "change_set", "errors": errors})
+                if self.debugger is not None:
+                    log_json("INFO", "orchestrator_invoking_debugger_on_act_failure")
+                    debug_hint = self.debugger.diagnose(
+                        error=f"CoderAgent produced invalid change_set: {errors}",
+                        context={"goal": goal, "plan": plan,
+                                 "task_bundle": task_bundle},
+                    )
+                    act = self._run_phase("act", {
+                        "task": goal,
+                        "task_bundle": task_bundle,
+                        "dry_run": dry_run,
+                        "project_root": str(self.project_root),
+                        "debug_hint": debug_hint,
+                    })
+                    errors = validate_phase_output("change_set", act)
+                    if errors:
+                        log_json("WARN", "orchestrator_act_retry_still_invalid")
+                if errors and self.strict_schema:
+                    return verification, replan_needed, {
+                        "cycle_id": cycle_id,
+                        "phase_outputs": phase_outputs,
+                        "stop_reason": "INVALID_OUTPUT",
+                    }
+            phase_outputs["change_set"] = act
+
+            # ── SANDBOX ───────────────────────────────────────────────────────
+            act, _sandbox_passed, extra_act_uses = self._run_sandbox_loop(
+                goal, act, task_bundle, dry_run, phase_outputs
+            )
+            act_attempt += extra_act_uses
+
+            # ── APPLY ─────────────────────────────────────────────────────────
+            self._notify_ui("on_phase_start", "apply")
+            t0_apply = time.time()
+            apply_result = self._apply_change_set(act, dry_run=dry_run)
+            self._notify_ui("on_phase_complete", "apply", (time.time() - t0_apply) * 1000)
+            phase_outputs["apply_result"] = apply_result
+
+            nothing_applied = (
+                not apply_result["applied"] and bool(apply_result["failed"])
+            )
+            if nothing_applied:
+                verification = {
+                    "status": "fail",
+                    "failures": [f["error"] for f in apply_result["failed"]],
+                    "logs": "apply_change_failed — no files written",
+                }
+            else:
+                tests = []
+                if isinstance(task_bundle, dict):
+                    tasks = task_bundle.get("tasks", [])
+                    if tasks:
+                        tests = tasks[0].get("tests", []) or []
+
+                self._notify_ui("on_phase_start", "verify")
+                t0_verify = time.time()
+                verification = self._run_phase("verify", {
+                    "change_set": act,
+                    "dry_run": dry_run,
+                    "project_root": str(self.project_root),
+                    "tests": tests,
+                })
+                self._notify_ui(
+                    "on_phase_complete", "verify",
+                    (time.time() - t0_verify) * 1000,
+                    success=(verification.get("status") in ("pass", "skip")),
+                )
+                if not verification:
+                    verification = {"status": "skip", "failures": [], "logs": ""}
+
+            errors = validate_phase_output("verification", verification)
+            if errors:
+                log_json("ERROR", "phase_schema_invalid",
+                         details={"phase": "verification", "errors": errors})
+                if self.strict_schema:
+                    return verification, replan_needed, {
+                        "cycle_id": cycle_id,
+                        "phase_outputs": phase_outputs,
+                        "stop_reason": "INVALID_OUTPUT",
+                    }
+            phase_outputs["verification"] = verification
+
+            verify_passed = verification.get("status") in ("pass", "skip")
+            if verify_passed:
+                # ── HUMAN GATE ────────────────────────────────────────────────
+                blocked, gate_reason = self.human_gate.should_block(
+                    verification, skill_context
+                )
+                if blocked:
+                    approved = self.human_gate.request_approval(
+                        gate_reason,
+                        {"cycle_id": cycle_id, "goal": goal,
+                         "changes": len((act or {}).get("changes", []))},
+                    )
+                    if not approved:
+                        log_json("WARN", "human_gate_apply_skipped",
+                                 details={"reason": gate_reason})
+                        phase_outputs["human_gate"] = {
+                            "blocked": True, "reason": gate_reason, "approved": False
+                        }
+                        break
+                    phase_outputs["human_gate"] = {
+                        "blocked": True, "reason": gate_reason, "approved": True
+                    }
+                break  # success — exit act loop
+
+            # ── Failure routing ───────────────────────────────────────────────
+            # On verify fail, stash applied changes so the project is restored.
+            if apply_result.get("applied") and not dry_run:
+                self._git_stash_changes(apply_result["applied"])
+
+            route = self._route_failure(verification)
+            log_json("INFO", "verification_failed_routing",
+                     details={"route": route, "act_attempt": act_attempt,
+                              "plan_attempt": plan_attempt})
+
+            if route == "plan" and plan_attempt < max_plan_retries:
+                phase_outputs["_failure_context"] = {
+                    "failures": verification.get("failures", []),
+                    "logs": verification.get("logs", ""),
+                    "route": "plan",
+                }
+                replan_needed = True
+                break
+            elif route == "skip":
+                log_json("WARN", "verification_failure_external_skip")
+                break
+            else:
+                task_bundle["fix_hints"] = verification.get("failures", [])
+                log_json("INFO", "act_retry",
+                         details={"attempt": act_attempt,
+                                  "hints": task_bundle["fix_hints"]})
+
+        return verification, replan_needed, None
+
+    def _run_plan_loop(
+        self,
+        goal: str,
+        context: Dict,
+        skill_context: Dict,
+        pipeline_cfg,
+        cycle_id: str,
+        phase_outputs: Dict,
+        dry_run: bool,
+    ):
+        """Execute the plan → critique → synthesize → act loop with retries.
+
+        Returns:
+            Tuple of (verification_dict, early_return_dict_or_None).
+            ``early_return_dict_or_None`` is non-None when strict_schema aborts.
+        """
+        max_plan_retries = pipeline_cfg.plan_retries
+        plan_attempt = 0
+        verification: Dict = {}
+
+        while plan_attempt < max_plan_retries:
+            plan_attempt += 1
+            failure_context = phase_outputs.get("_failure_context", {})
+
+            # ── PLAN ──────────────────────────────────────────────────────────
+            self._notify_ui("on_phase_start", "plan")
+            t0_plan = time.time()
+            plan = self._run_phase("plan", {
+                "goal": goal,
+                "memory_snapshot": context.get("memory_summary", ""),
+                "similar_past_problems": context.get("hints_summary", ""),
+                "known_weaknesses": "",
+                "skill_context": skill_context,
+                "failure_context": failure_context,
+                "extra_context": pipeline_cfg.extra_plan_ctx,
+            })
+            self._notify_ui("on_phase_complete", "plan", (time.time() - t0_plan) * 1000)
+
+            errors = validate_phase_output("plan", plan)
+            if errors:
+                log_json("ERROR", "phase_schema_invalid",
+                         details={"phase": "plan", "errors": errors})
+                if self.strict_schema:
+                    return verification, {
+                        "cycle_id": cycle_id,
+                        "phase_outputs": phase_outputs,
+                        "stop_reason": "INVALID_OUTPUT",
+                    }
+            phase_outputs["plan"] = plan
+
+            # ── CRITIQUE ──────────────────────────────────────────────────────
+            self._notify_ui("on_phase_start", "critique")
+            t0_crit = time.time()
+            critique = self._run_phase("critique", {
+                "task": goal,
+                "plan": plan.get("steps", []),
+            })
+            self._notify_ui("on_phase_complete", "critique", (time.time() - t0_crit) * 1000)
+
+            errors = validate_phase_output("critique", critique)
+            if errors:
+                log_json("ERROR", "phase_schema_invalid",
+                         details={"phase": "critique", "errors": errors})
+                if self.strict_schema:
+                    return verification, {
+                        "cycle_id": cycle_id,
+                        "phase_outputs": phase_outputs,
+                        "stop_reason": "INVALID_OUTPUT",
+                    }
+            phase_outputs["critique"] = critique
+
+            # ── SYNTHESIZE ────────────────────────────────────────────────────
+            self._notify_ui("on_phase_start", "synthesize")
+            t0_synth = time.time()
+            task_bundle = self._run_phase("synthesize", {
+                "goal": goal,
+                "plan": plan,
+                "critique": critique,
+            })
+            self._notify_ui("on_phase_complete", "synthesize", (time.time() - t0_synth) * 1000)
+
+            errors = validate_phase_output("task_bundle", task_bundle)
+            if errors:
+                log_json("ERROR", "phase_schema_invalid",
+                         details={"phase": "task_bundle", "errors": errors})
+                if self.strict_schema:
+                    return verification, {
+                        "cycle_id": cycle_id,
+                        "phase_outputs": phase_outputs,
+                        "stop_reason": "INVALID_OUTPUT",
+                    }
+            phase_outputs["task_bundle"] = task_bundle
+
+            # ── ACT LOOP ──────────────────────────────────────────────────────
+            verification, replan_needed, early_return = self._run_act_loop(
+                goal=goal,
+                plan=plan,
+                task_bundle=task_bundle,
+                pipeline_cfg=pipeline_cfg,
+                cycle_id=cycle_id,
+                phase_outputs=phase_outputs,
+                dry_run=dry_run,
+                plan_attempt=plan_attempt,
+                max_plan_retries=max_plan_retries,
+                skill_context=skill_context,
+            )
+            if early_return is not None:
+                return verification, early_return
+
+            if not replan_needed:
+                break  # done — exit plan retry loop
+
+        return verification, None
+
+    def _git_stash_changes(self, applied_paths: List[str]) -> None:
+        """Stash applied changes via ``git stash`` to restore project state.
+
+        Called when verify fails after changes were already written to disk.
+        Failure is non-fatal — logs a warning and continues.
+
+        Args:
+            applied_paths: File paths that were written (for log context only).
+        """
+        try:
+            import subprocess as _sp
+            result = _sp.run(
+                ["git", "-C", str(self.project_root), "stash", "--include-untracked"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if result.returncode == 0:
+                log_json("INFO", "verify_fail_git_stash_ok",
+                         details={"files": applied_paths,
+                                  "stash_out": result.stdout.strip()})
+            else:
+                log_json("WARN", "verify_fail_git_stash_failed",
+                         details={"stderr": result.stderr.strip()})
+        except Exception as exc:
+            log_json("WARN", "verify_fail_git_stash_error", details={"error": str(exc)})
+
     def run_cycle(self, goal: str, dry_run: bool = False) -> Dict:
         """Execute a single complete plan-act-verify cycle for *goal*."""
         cycle_id = f"cycle_{uuid.uuid4().hex[:12]}"
@@ -374,8 +768,6 @@ class LoopOrchestrator:
         self._notify_ui("on_cycle_start", goal)
 
         # ── 0. ADAPTIVE PIPELINE CONFIG ──────────────────────────────────────
-        # Ask AdaptivePipeline for a context-aware configuration.
-        # Falls back to static defaults if CASPA-W is not attached.
         goal_type = classify_goal(goal)
         if self.adaptive_pipeline:
             pipeline_cfg = self.adaptive_pipeline.configure(
@@ -393,7 +785,6 @@ class LoopOrchestrator:
             "intensity": pipeline_cfg.intensity,
             "phases": pipeline_cfg.phases,
             "skills": pipeline_cfg.skill_set,
-            "confidence": pipeline_cfg.confidence,
         }
         self._notify_ui("on_pipeline_configured", phase_outputs["pipeline_config"])
 
@@ -406,15 +797,20 @@ class LoopOrchestrator:
             "hints": self._retrieve_hints(goal),
         })
         self._notify_ui("on_phase_complete", "ingest", (time.time() - t0_ingest) * 1000)
-        
+
         if "bundle" in context:
             self._notify_ui("on_context_assembled", context["bundle"])
 
         errors = validate_phase_output("context", context)
         if errors:
-            log_json("ERROR", "phase_schema_invalid", details={"phase": "context", "errors": errors})
+            log_json("ERROR", "phase_schema_invalid",
+                     details={"phase": "context", "errors": errors})
             if self.strict_schema:
-                return {"cycle_id": cycle_id, "phase_outputs": {"context": context}, "stop_reason": "INVALID_OUTPUT"}
+                return {
+                    "cycle_id": cycle_id,
+                    "phase_outputs": {"context": context},
+                    "stop_reason": "INVALID_OUTPUT",
+                }
         phase_outputs["context"] = context
 
         # ── 2. SKILL DISPATCH (adaptive skill set) ───────────────────────────
@@ -422,258 +818,26 @@ class LoopOrchestrator:
         t0_skills = time.time()
         skill_context: Dict = {}
         if self.skills and pipeline_cfg.skill_set:
-            active_skills = {k: self.skills[k] for k in pipeline_cfg.skill_set if k in self.skills}
+            active_skills = {
+                k: self.skills[k] for k in pipeline_cfg.skill_set if k in self.skills
+            }
             skill_context = dispatch_skills(goal_type, active_skills, str(self.project_root))
         phase_outputs["skill_context"] = skill_context
-        self._notify_ui("on_phase_complete", "skill_dispatch", (time.time() - t0_skills) * 1000)
+        self._notify_ui("on_phase_complete", "skill_dispatch",
+                        (time.time() - t0_skills) * 1000)
 
-        # ── 3. PLAN ──────────────────────────────────────────────────────────
-        max_plan_retries = pipeline_cfg.plan_retries
-        plan_attempt = 0
-        plan = {}
-        critique = {}
-        task_bundle = {}
-
-        while plan_attempt < max_plan_retries:
-            plan_attempt += 1
-            failure_context = phase_outputs.get("_failure_context", {})
-
-            self._notify_ui("on_phase_start", "plan")
-            t0_plan = time.time()
-            plan = self._run_phase("plan", {
-                "goal": goal,
-                "memory_snapshot": context.get("memory_summary", ""),
-                "similar_past_problems": context.get("hints_summary", ""),
-                "known_weaknesses": "",
-                "skill_context": skill_context,
-                "failure_context": failure_context,
-                "extra_context": pipeline_cfg.extra_plan_ctx,
-            })
-            self._notify_ui("on_phase_complete", "plan", (time.time() - t0_plan) * 1000)
-            
-            errors = validate_phase_output("plan", plan)
-            if errors:
-                log_json("ERROR", "phase_schema_invalid", details={"phase": "plan", "errors": errors})
-                if self.strict_schema:
-                    return {"cycle_id": cycle_id, "phase_outputs": phase_outputs, "stop_reason": "INVALID_OUTPUT"}
-            phase_outputs["plan"] = plan
-
-            # ── 4. CRITIQUE ──────────────────────────────────────────────────
-            self._notify_ui("on_phase_start", "critique")
-            t0_crit = time.time()
-            critique = self._run_phase("critique", {
-                "task": goal,
-                "plan": plan.get("steps", []),
-            })
-            self._notify_ui("on_phase_complete", "critique", (time.time() - t0_crit) * 1000)
-            
-            errors = validate_phase_output("critique", critique)
-            if errors:
-                log_json("ERROR", "phase_schema_invalid", details={"phase": "critique", "errors": errors})
-                if self.strict_schema:
-                    return {"cycle_id": cycle_id, "phase_outputs": phase_outputs, "stop_reason": "INVALID_OUTPUT"}
-            phase_outputs["critique"] = critique
-
-            # ── 5. SYNTHESIZE ────────────────────────────────────────────────
-            self._notify_ui("on_phase_start", "synthesize")
-            t0_synth = time.time()
-            task_bundle = self._run_phase("synthesize", {
-                "goal": goal,
-                "plan": plan,
-                "critique": critique,
-            })
-            self._notify_ui("on_phase_complete", "synthesize", (time.time() - t0_synth) * 1000)
-            
-            errors = validate_phase_output("task_bundle", task_bundle)
-            if errors:
-                log_json("ERROR", "phase_schema_invalid", details={"phase": "task_bundle", "errors": errors})
-                if self.strict_schema:
-                    return {"cycle_id": cycle_id, "phase_outputs": phase_outputs, "stop_reason": "INVALID_OUTPUT"}
-            phase_outputs["task_bundle"] = task_bundle
-
-            # ── 6. ACT LOOP ──────────────────────────────────────────────────
-            # Retry code generation up to max_act_attempts times.
-            # On verification failure, route_failure() decides whether to
-            # retry act (recoverable) or break out and re-plan (structural).
-            max_act_attempts = pipeline_cfg.max_act_attempts
-            act_attempt = 0
-            verification: Dict = {}
-            replan_needed = False
-
-            while act_attempt < max_act_attempts:
-                act_attempt += 1
-
-                self._notify_ui("on_phase_start", "act")
-                t0_act = time.time()
-                act = self._run_phase("act", {
-                    "task": goal,
-                    "task_bundle": task_bundle,
-                    "dry_run": dry_run,
-                    "project_root": str(self.project_root),
-                    "fix_hints": task_bundle.get("fix_hints", []),
-                })
-                self._notify_ui("on_phase_complete", "act", (time.time() - t0_act) * 1000)
-                
-                errors = validate_phase_output("change_set", act)
-                if errors:
-                    log_json("ERROR", "phase_schema_invalid", details={"phase": "change_set", "errors": errors})
-                    if self.debugger is not None:
-                        log_json("INFO", "orchestrator_invoking_debugger_on_act_failure")
-                        debug_hint = self.debugger.diagnose(
-                            error=f"CoderAgent produced invalid change_set: {errors}",
-                            context={"goal": goal, "plan": plan, "task_bundle": task_bundle},
-                        )
-                        act = self._run_phase("act", {
-                            "task": goal,
-                            "task_bundle": task_bundle,
-                            "dry_run": dry_run,
-                            "project_root": str(self.project_root),
-                            "debug_hint": debug_hint,
-                        })
-                        errors = validate_phase_output("change_set", act)
-                        if errors:
-                            log_json("WARN", "orchestrator_act_retry_still_invalid")
-                    if errors and self.strict_schema:
-                        return {"cycle_id": cycle_id, "phase_outputs": phase_outputs, "stop_reason": "INVALID_OUTPUT"}
-                phase_outputs["change_set"] = act
-
-                # ── 6a. SANDBOX (pre-apply code execution check) ─────────────
-                # Run the generated snippet in isolation before touching the fs.
-                # Retry up to MAX_SANDBOX_RETRIES times, injecting stderr each time.
-                sandbox_passed = False
-                sandbox_result = {}
-                for _sandbox_try in range(MAX_SANDBOX_RETRIES):
-                    self._notify_ui("on_phase_start", "sandbox")
-                    t0_sandbox = time.time()
-                    sandbox_result = self._run_phase("sandbox", {
-                        "act": act,
-                        "dry_run": dry_run,
-                        "project_root": str(self.project_root),
-                    }) or {}
-                    self._notify_ui("on_phase_complete", "sandbox", (time.time() - t0_sandbox) * 1000)
-                    
-                    phase_outputs["sandbox"] = sandbox_result
-                    sandbox_passed = sandbox_result.get("passed", True)
-                    if sandbox_passed or dry_run:
-                        break
-                    stderr_hint = (sandbox_result.get("details") or {}).get("stderr", "") or sandbox_result.get("summary", "sandbox_failed")
-                    log_json("WARN", "sandbox_pre_apply_failed",
-                             details={"try": _sandbox_try + 1, "summary": sandbox_result.get("summary", "")})
-                    if _sandbox_try < MAX_SANDBOX_RETRIES - 1:
-                        # Inject stderr as fix_hint and re-generate code
-                        task_bundle["fix_hints"] = [stderr_hint]
-                        act = self._run_phase("act", {
-                            "task": goal,
-                            "task_bundle": task_bundle,
-                            "dry_run": dry_run,
-                            "project_root": str(self.project_root),
-                            "fix_hints": [stderr_hint],
-                        })
-                        act_attempt += 1
-                        phase_outputs["change_set"] = act
-                    else:
-                        log_json("WARN", "sandbox_max_retries_exceeded",
-                                 details={"max": MAX_SANDBOX_RETRIES, "continuing_with_best_attempt": True})
-                if not sandbox_passed and not dry_run:
-                    task_bundle["fix_hints"] = [
-                        (sandbox_result.get("details") or {}).get("stderr", "") or sandbox_result.get("summary", "sandbox_failed")
-                    ]
-
-                # Apply changes — partial failures are tolerated
-                self._notify_ui("on_phase_start", "apply")
-                t0_apply = time.time()
-                apply_result = self._apply_change_set(act, dry_run=dry_run)
-                self._notify_ui("on_phase_complete", "apply", (time.time() - t0_apply) * 1000)
-                
-                phase_outputs["apply_result"] = apply_result
-
-                nothing_applied = (
-                    not apply_result["applied"] and bool(apply_result["failed"])
-                )
-                if nothing_applied:
-                    # Treat complete apply failure as a recoverable code error
-                    verification = {
-                        "status": "fail",
-                        "failures": [f["error"] for f in apply_result["failed"]],
-                        "logs": "apply_change_failed — no files written",
-                    }
-                else:
-                    tests = []
-                    if isinstance(task_bundle, dict):
-                        tasks = task_bundle.get("tasks", [])
-                        if tasks:
-                            tests = tasks[0].get("tests", []) or []
-
-                    self._notify_ui("on_phase_start", "verify")
-                    t0_verify = time.time()
-                    verification = self._run_phase("verify", {
-                        "change_set": act,
-                        "dry_run": dry_run,
-                        "project_root": str(self.project_root),
-                        "tests": tests,
-                    })
-                    self._notify_ui("on_phase_complete", "verify", (time.time() - t0_verify) * 1000, success=(verification.get("status") in ("pass", "skip")))
-                    
-                    if not verification:
-                        verification = {"status": "skip", "failures": [], "logs": ""}
-
-                errors = validate_phase_output("verification", verification)
-                if errors:
-                    log_json("ERROR", "phase_schema_invalid", details={"phase": "verification", "errors": errors})
-                    if self.strict_schema:
-                        return {"cycle_id": cycle_id, "phase_outputs": phase_outputs, "stop_reason": "INVALID_OUTPUT"}
-                phase_outputs["verification"] = verification
-
-                verify_passed = verification.get("status") in ("pass", "skip")
-                if verify_passed:
-                    # ── HUMAN GATE ───────────────────────────────────────────
-                    blocked, gate_reason = self.human_gate.should_block(
-                        verification, skill_context
-                    )
-                    if blocked:
-                        approved = self.human_gate.request_approval(
-                            gate_reason,
-                            {"cycle_id": cycle_id, "goal": goal,
-                             "changes": len((act or {}).get("changes", []))},
-                        )
-                        if not approved:
-                            log_json("WARN", "human_gate_apply_skipped",
-                                     details={"reason": gate_reason})
-                            phase_outputs["human_gate"] = {
-                                "blocked": True, "reason": gate_reason, "approved": False
-                            }
-                            break  # skip — exit act loop without retrying
-                        phase_outputs["human_gate"] = {
-                            "blocked": True, "reason": gate_reason, "approved": True
-                        }
-                    break  # success — exit act loop
-
-                # Failure routing
-                route = self._route_failure(verification)
-                log_json("INFO", "verification_failed_routing",
-                         details={"route": route, "act_attempt": act_attempt,
-                                  "plan_attempt": plan_attempt})
-
-                if route == "plan" and plan_attempt < max_plan_retries:
-                    # Escalate: break act loop, re-run planning with failure ctx
-                    phase_outputs["_failure_context"] = {
-                        "failures": verification.get("failures", []),
-                        "logs": verification.get("logs", ""),
-                        "route": "plan",
-                    }
-                    replan_needed = True
-                    break
-                elif route == "skip":
-                    log_json("WARN", "verification_failure_external_skip")
-                    break
-                else:
-                    # Recoverable — inject failure hints and retry act
-                    task_bundle["fix_hints"] = verification.get("failures", [])
-                    log_json("INFO", "act_retry",
-                             details={"attempt": act_attempt, "hints": task_bundle["fix_hints"]})
-
-            if not replan_needed:
-                break  # done — exit plan retry loop
+        # ── 3-8. PLAN → CRITIQUE → SYNTHESIZE → ACT → VERIFY (with retries) ─
+        verification, early_return = self._run_plan_loop(
+            goal=goal,
+            context=context,
+            skill_context=skill_context,
+            pipeline_cfg=pipeline_cfg,
+            cycle_id=cycle_id,
+            phase_outputs=phase_outputs,
+            dry_run=dry_run,
+        )
+        if early_return is not None:
+            return early_return
 
         # ── 7. REFLECT ───────────────────────────────────────────────────────
         self._notify_ui("on_phase_start", "reflect")

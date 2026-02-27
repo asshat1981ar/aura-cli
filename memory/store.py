@@ -1,6 +1,11 @@
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, List
+
+# Maximum size (bytes) of decision_log.jsonl before rotation
+_LOG_MAX_BYTES = int(os.getenv("AURA_LOG_MAX_BYTES", str(10 * 1024 * 1024)))  # 10 MB
+_LOG_KEEP_ROTATIONS = 3  # number of rotated files to keep
 
 
 class MemoryStore:
@@ -33,7 +38,37 @@ class MemoryStore:
             return []
         return data[-limit:]
 
+    def _rotate_log_if_needed(self) -> None:
+        """Rotate decision_log.jsonl when it exceeds *_LOG_MAX_BYTES*.
+
+        Keeps up to *_LOG_KEEP_ROTATIONS* compressed copies named
+        ``decision_log.jsonl.1``, ``.2``, …  Older files are deleted.
+        """
+        if not self.log_path.exists():
+            return
+        if self.log_path.stat().st_size < _LOG_MAX_BYTES:
+            return
+
+        # Shift existing rotations down: .2 → .3, .1 → .2, etc.
+        for i in range(_LOG_KEEP_ROTATIONS - 1, 0, -1):
+            src = self.log_path.with_suffix(f".jsonl.{i}")
+            dst = self.log_path.with_suffix(f".jsonl.{i + 1}")
+            if src.exists():
+                if dst.exists():
+                    dst.unlink()
+                src.rename(dst)
+
+        # Rotate current log to .1
+        rotated = self.log_path.with_suffix(".jsonl.1")
+        self.log_path.rename(rotated)
+
+        # Prune anything beyond the keep window
+        excess = self.log_path.with_suffix(f".jsonl.{_LOG_KEEP_ROTATIONS + 1}")
+        if excess.exists():
+            excess.unlink()
+
     def append_log(self, entry: Dict[str, Any]) -> None:
+        self._rotate_log_if_needed()
         with self.log_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(entry) + "\n")
 

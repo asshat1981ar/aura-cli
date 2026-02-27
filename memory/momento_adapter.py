@@ -29,6 +29,8 @@ Topics used by AURA:
 from __future__ import annotations
 
 import os
+import time
+import threading
 from datetime import timedelta
 from typing import List, Optional
 
@@ -50,12 +52,61 @@ LIST_MAX_SIZE = 200
 DEFAULT_TTL_SECONDS = int(os.getenv("MOMENTO_CACHE_TTL_SECONDS", "3600"))
 
 
+class _CircuitBreaker:
+    """Simple circuit breaker: open after THRESHOLD consecutive failures,
+    half-open after RESET_SECONDS for a single probe request.
+
+    States: closed (normal) → open (fail-fast) → half-open (probe) → closed.
+    """
+
+    THRESHOLD = 5        # failures before opening
+    RESET_SECONDS = 30.0 # seconds before attempting a probe
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._failures = 0
+        self._state = "closed"   # "closed" | "open" | "half_open"
+        self._opened_at: float = 0.0
+
+    def allow_request(self) -> bool:
+        with self._lock:
+            if self._state == "closed":
+                return True
+            if self._state == "open":
+                if time.monotonic() - self._opened_at >= self.RESET_SECONDS:
+                    self._state = "half_open"
+                    return True
+                return False
+            # half_open — allow one probe
+            return True
+
+    def record_success(self) -> None:
+        with self._lock:
+            self._failures = 0
+            self._state = "closed"
+
+    def record_failure(self) -> None:
+        with self._lock:
+            self._failures += 1
+            if self._failures >= self.THRESHOLD or self._state == "half_open":
+                if self._state != "open":
+                    log_json("WARN", "momento_circuit_open",
+                             details={"failures": self._failures})
+                self._state = "open"
+                self._opened_at = time.monotonic()
+
+
 class MomentoAdapter:
     """Lazy-init wrapper around Momento CacheClient + TopicsClient.
 
     All methods are safe to call even when Momento is unavailable — they
     return ``None`` / ``[]`` / ``False`` silently so callers never need to
     guard against a missing Momento connection.
+
+    A built-in :class:`_CircuitBreaker` opens automatically after
+    ``_CircuitBreaker.THRESHOLD`` (default 5) consecutive failures and
+    half-opens after ``_CircuitBreaker.RESET_SECONDS`` (default 30 s),
+    preventing cascading timeouts from overwhelming the main pipeline.
     """
 
     def __init__(self):
@@ -64,12 +115,15 @@ class MomentoAdapter:
         self._topics_client = None
         self._initialized = False
         self._available = False
+        self._circuit = _CircuitBreaker()
 
     # ── Availability ─────────────────────────────────────────────────────────
 
     def is_available(self) -> bool:
-        """Return True if Momento is configured and the client initialised."""
+        """Return True if Momento is configured, client initialised, and circuit closed."""
         if not self._api_key:
+            return False
+        if not self._circuit.allow_request():
             return False
         if not self._initialized:
             self._lazy_init()
@@ -85,9 +139,12 @@ class MomentoAdapter:
             from momento.responses import CacheGet
             resp = self._cache_client.get(cache, key)
             if isinstance(resp, CacheGet.Hit):
+                self._circuit.record_success()
                 return resp.value_string
+            self._circuit.record_success()
             return None
         except Exception as exc:
+            self._circuit.record_failure()
             log_json("WARN", "momento_cache_get_failed",
                      details={"cache": cache, "key": key, "error": str(exc)})
             return None
@@ -106,8 +163,14 @@ class MomentoAdapter:
             from momento.responses import CacheSet
             ttl = timedelta(seconds=ttl_seconds) if ttl_seconds > 0 else None
             resp = self._cache_client.set(cache, key, value, ttl)
-            return isinstance(resp, CacheSet.Success)
+            ok = isinstance(resp, CacheSet.Success)
+            if ok:
+                self._circuit.record_success()
+            else:
+                self._circuit.record_failure()
+            return ok
         except Exception as exc:
+            self._circuit.record_failure()
             log_json("WARN", "momento_cache_set_failed",
                      details={"cache": cache, "key": key, "error": str(exc)})
             return False

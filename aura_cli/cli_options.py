@@ -95,6 +95,27 @@ def attach_cli_warnings(payload: Mapping[str, Any], parsed: "ParsedCLIArgs | Non
     return result
 
 
+CLI_PARSE_ERROR_CODE = "cli_parse_error"
+UNKNOWN_COMMAND_HELP_TOPIC_CODE = "unknown_command_help_topic"
+
+
+def cli_parse_error_payload(exc: CLIParseError) -> dict[str, Any]:
+    return {
+        "status": "error",
+        "code": CLI_PARSE_ERROR_CODE,
+        "message": str(exc),
+        "usage": exc.usage,
+    }
+
+
+def unknown_command_help_topic_payload(message: str) -> dict[str, Any]:
+    return {
+        "status": "error",
+        "code": UNKNOWN_COMMAND_HELP_TOPIC_CODE,
+        "message": message,
+    }
+
+
 _PARSER_CUSTOMIZERS: dict[tuple[str, ...], Any] = {}
 
 
@@ -579,13 +600,17 @@ def cli_contract_report() -> dict[str, Any]:
 
 __all__ = [
     "attach_cli_warnings",
+    "cli_parse_error_payload",
+    "CLI_PARSE_ERROR_CODE",
     "AuraArgumentParser",
     "CLIWarningRecord",
     "CLIParseError",
+    "UNKNOWN_COMMAND_HELP_TOPIC_CODE",
     "ParsedCLIArgs",
     "build_parser",
     "cli_contract_report",
     "iter_parser_command_paths",
+    "unknown_command_help_topic_payload",
     "parse_cli_args",
     "parser_customizer_paths",
     "parser_leaf_command_paths",

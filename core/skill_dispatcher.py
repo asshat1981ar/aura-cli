@@ -237,18 +237,30 @@ def dispatch_skills(
         for fut in done:
             name = futures[fut]
             try:
-                results[name] = fut.result()
-            except Exception as exc:  # skill raised despite SkillBase guard
+                result = fut.result()
+                # Distinguish a real skill error ({"error": ...}) from a
+                # legitimate empty result so the orchestrator can tell them apart.
+                if isinstance(result, dict) and "error" in result:
+                    log_json("WARN", "skill_returned_error",
+                             details={"skill": name, "error": result["error"],
+                                      "is_skill_fault": True})
+                results[name] = result
+            except Exception as exc:
                 log_json("WARN", "skill_dispatch_error",
-                         details={"skill": name, "error": str(exc)})
-                results[name] = {"error": str(exc), "skill": name}
+                         details={"skill": name, "error": str(exc),
+                                  "is_skill_fault": True})
+                results[name] = {"error": str(exc), "skill": name,
+                                 "is_skill_fault": True}
 
         for fut in not_done:
             name = futures[fut]
             SKILL_METRICS.record(name, timeout * 1000, error=True)
-            log_json("WARN", "skill_dispatch_timeout", details={"skill": name})
+            log_json("WARN", "skill_dispatch_timeout",
+                     details={"skill": name, "timeout_s": timeout,
+                              "is_skill_fault": True})
             fut.cancel()
-            results[name] = {"error": "timeout", "skill": name}
+            results[name] = {"error": "timeout", "skill": name,
+                             "is_skill_fault": True}
 
     log_json(
         "INFO", "skill_dispatch_done",

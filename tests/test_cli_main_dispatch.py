@@ -142,7 +142,7 @@ class TestCLIMainDispatch(unittest.TestCase):
              patch("aura_cli.cli_main.Policy.from_config", return_value=fake_policy), \
              patch("aura_cli.cli_main.LoopOrchestrator", return_value=fake_orchestrator), \
              patch("aura_cli.cli_main.GitTools", return_value=fake_git_tools), \
-             patch("aura_cli.cli_main.HybridClosedLoop") as mock_hybrid_loop, \
+             patch("core.hybrid_loop.HybridClosedLoop") as mock_hybrid_loop, \
              patch("aura_cli.cli_main.log_json"), \
              patch("builtins.__import__", side_effect=_guarded_import):
             runtime = cli_main.create_runtime(Path(d), overrides=None)
@@ -594,7 +594,7 @@ class TestCLIMainDispatch(unittest.TestCase):
 
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
              patch("aura_cli.cli_main.log_json"), \
-             patch("aura_cli.cli_main.HybridClosedLoop", return_value=fake_loop) as mock_hybrid, \
+             patch("core.hybrid_loop.HybridClosedLoop", return_value=fake_loop) as mock_hybrid, \
              patch("aura_cli.cli_main.run_goals_loop") as mock_run_goals:
             code1, *_ = self._dispatch(["goal", "run"], runtime_factory=runtime_factory)
             code2, *_ = self._dispatch(["goal", "run"], runtime_factory=runtime_factory)

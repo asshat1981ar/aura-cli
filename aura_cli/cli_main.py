@@ -15,7 +15,6 @@ except ImportError:
 
 from core.config_manager import config
 from core.goal_queue import GoalQueue
-from core.hybrid_loop import HybridClosedLoop
 from core.goal_archive import GoalArchive
 from memory.brain import Brain
 from core.model_adapter import ModelAdapter
@@ -223,15 +222,28 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
             context_graph=_context_graph if "_context_graph" in dir() else None,
             project_root=project_root
         )
-        # Run sync in background thread to not block CLI startup
+        # Run sync in background thread to not block CLI startup.
+        # Register atexit to signal the syncer to stop before process exit
+        # so it doesn't corrupt the DB mid-write.
         import threading
+        import atexit
+
+        _stop_event = threading.Event()
+
         def _bg_sync():
             try:
                 syncer.sync_all()
             except Exception as e:
                 log_json("WARN", "background_sync_failed", details={"error": str(e)})
-        
-        threading.Thread(target=_bg_sync, daemon=True).start()
+
+        _sync_thread = threading.Thread(target=_bg_sync, daemon=True, name="aura-bg-sync")
+        _sync_thread.start()
+
+        def _on_exit():
+            _stop_event.set()
+            _sync_thread.join(timeout=5)
+
+        atexit.register(_on_exit)
         log_json("INFO", "background_sync_started")
 
     except Exception as _exc:
@@ -357,6 +369,9 @@ class DispatchRule:
 
 
 def _ensure_legacy_loop(runtime: dict, *, project_root: Path) -> object:
+    # Lazy import so HybridClosedLoop is only loaded for legacy commands.
+    from core.hybrid_loop import HybridClosedLoop
+
     loop = runtime.get("loop")
     if loop is not None:
         return loop

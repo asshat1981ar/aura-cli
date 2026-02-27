@@ -1,0 +1,6 @@
+{
+  "code": "cli_parse_error",
+  "message": "unrecognized arguments: --run-goals",
+  "status": "error",
+  "usage": "usage: aura [-h] [--json-help] [--json] [--dry-run] [--decompose]\n            [--model MODEL] [--explain] [--max-cycles MAX_CYCLES]\n            [--add-goal ADD_GOAL] [--run-goals] [--status] [--goal GOAL]\n            [--workflow-goal WORKFLOW_GOAL]\n            [--workflow-max-cycles WORKFLOW_MAX_CYCLES] [--mcp-tools]\n            [--mcp-call MCP_CALL] [--mcp-args MCP_ARGS] [--diag] [--bootstrap]\n            [--scaffold SCAFFOLD] [--scaffold-desc SCAFFOLD_DESC] [--evolve]\n            COMMAND ...\n"
+}

@@ -1,0 +1,8 @@
+aura watch
+
+Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.
+
+Examples:
+  python3 main.py watch
+  python3 main.py watch --autonomous
+

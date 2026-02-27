@@ -36,6 +36,7 @@ class CoderAgent:
             str: The final generated Python code after refinement, or the initial
                  generated code if no TesterAgent is provided.
         """
+        import json as _json
         code = ""
         tests = ""
         feedback = ""
@@ -54,20 +55,44 @@ Previous memory:
 {"Tests:\\n```python\\n" + tests + "\\n```" if tests else ""}
 {"Sandbox feedback:\\n" + feedback if feedback else ""}
 
-CRITICAL: The first line of your code block MUST be: {self.AURA_TARGET_DIRECTIVE}<path/to/file.py>
-Choose a path under agents/, core/, or memory/ that reflects the task.
+IMPORTANT: Respond with a single JSON object on one line (no markdown), like:
+{{"aura_target": "path/to/file.py", "code": "<full python code>"}}
 
-Then produce the complete, working Python code.
-Wrap everything in a single ```python ... ``` block.
+Choose a path under agents/, core/, or memory/ that reflects the task.
+The "code" value must be a valid Python string (escape newlines as \\n).
 """
-            # Generate or refine code
             raw_response = self.model.respond(prompt)
-            # Extract code from response (assuming it's in a markdown code block)
-            new_code_match = self.CODE_BLOCK_RE.search(raw_response)
-            if new_code_match:
-                code = new_code_match.group(1).strip()
-            else:
-                code = raw_response.strip() # Fallback if no code block
+
+            # Try structured JSON first (preferred)
+            parsed_target = None
+            parsed_code = None
+            stripped = raw_response.strip()
+            # Find the first '{' to tolerate any leading whitespace/text
+            brace_idx = stripped.find("{")
+            if brace_idx != -1:
+                try:
+                    obj = _json.loads(stripped[brace_idx:stripped.rfind("}") + 1])
+                    if "aura_target" in obj and "code" in obj:
+                        parsed_target = obj["aura_target"]
+                        parsed_code = obj["code"]
+                except (ValueError, KeyError):
+                    pass
+
+            # Legacy fallback: # AURA_TARGET: directive + code block
+            if parsed_code is None:
+                target_match = None
+                for line in stripped.splitlines():
+                    if line.startswith(self.AURA_TARGET_DIRECTIVE):
+                        parsed_target = line[len(self.AURA_TARGET_DIRECTIVE):].strip()
+                        break
+                code_match = self.CODE_BLOCK_RE.search(stripped)
+                parsed_code = code_match.group(1).strip() if code_match else stripped
+
+            code = parsed_code or ""
+            if parsed_target:
+                # Embed target into code as a comment so ActAdapter can extract it
+                if not code.startswith(self.AURA_TARGET_DIRECTIVE):
+                    code = f"{self.AURA_TARGET_DIRECTIVE}{parsed_target}\n{code}"
 
             if self.tester:
                 tests = self.tester.generate_tests(code, task)
@@ -84,7 +109,7 @@ Wrap everything in a single ```python ... ``` block.
                     self.brain.remember(f"Attempt {i+1} for '{task}': {code} -> Feedback: {feedback}")
             else:
                 self.brain.remember(f"Code for '{task}': {code}")
-                return code # No tester, so return the first generated code
+                return code
 
         log_json("ERROR", "coder_max_iterations_reached", goal=task, details={"max_iterations": self.MAX_ITERATIONS})
         self.brain.remember(f"Final code after max iterations for '{task}': {code}")

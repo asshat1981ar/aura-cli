@@ -1,3 +1,4 @@
+import concurrent.futures
 import hashlib
 import os
 import subprocess
@@ -321,27 +322,43 @@ class ModelAdapter:
             return "Local model not configured. Set the AURA_LOCAL_MODEL_COMMAND environment variable " \
                    "to specify a command for local inference (e.g., 'ollama run llama2')."
 
+    # Default timeout (seconds) for a single LLM call; overridable via env var
+    LLM_TIMEOUT = int(os.getenv("AURA_LLM_TIMEOUT", "60"))
+
+    def _call_with_timeout(self, fn, *args, timeout: int | None = None) -> str:
+        """Run *fn(*args)* in a thread and raise TimeoutError if it exceeds *timeout* seconds."""
+        _timeout = timeout if timeout is not None else self.LLM_TIMEOUT
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(fn, *args)
+            try:
+                return future.result(timeout=_timeout)
+            except concurrent.futures.TimeoutError:
+                log_json("ERROR", "llm_call_timeout",
+                         details={"fn": fn.__name__, "timeout_s": _timeout})
+                raise TimeoutError(
+                    f"LLM call to {fn.__name__!r} exceeded {_timeout}s timeout"
+                )
+
     def respond(self, prompt: str):
-        # [respond logic unchanged]
         cached = self._get_cached_response(prompt)
         if cached:
             return cached
         model_response = None
         if self.router:
             try:
-                model_response = self.router.route(prompt)
+                model_response = self._call_with_timeout(self.router.route, prompt)
             except Exception as e:
                 log_json("WARN", "router_call_failed", details={"error": str(e), "fallback": "Direct fallbacks"})
         if not model_response:
             try:
-                model_response = self.call_openai(prompt)
+                model_response = self._call_with_timeout(self.call_openai, prompt)
             except Exception as e:
                 log_json("WARN", "openai_call_failed", details={"error": str(e), "fallback": "OpenRouter"})
                 try:
-                    model_response = self.call_openrouter(prompt)
+                    model_response = self._call_with_timeout(self.call_openrouter, prompt)
                 except Exception as e:
                     log_json("WARN", "openrouter_call_failed", details={"error": str(e), "fallback": "Local Model"})
-                    model_response = self.call_local(prompt)
+                    model_response = self._call_with_timeout(self.call_local, prompt)
         if model_response is None:
             return "Error: No model successfully responded."
         self._save_to_cache(prompt, model_response)

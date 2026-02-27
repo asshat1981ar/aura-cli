@@ -39,6 +39,18 @@ class TestCLIHelpSnapshots(unittest.TestCase):
         self.assertEqual(proc.stderr, "")
         self.assertEqual(proc.stdout, self._snapshot_text("cli_help_goal_add.txt"))
 
+    def test_main_help_watch_matches_snapshot(self):
+        proc = _run_main("help", "watch")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stderr, "")
+        self.assertEqual(proc.stdout, self._snapshot_text("cli_help_watch.txt"))
+
+    def test_main_help_studio_matches_snapshot(self):
+        proc = _run_main("help", "studio")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.stderr, "")
+        self.assertEqual(proc.stdout, self._snapshot_text("cli_help_studio.txt"))
+
     def test_main_json_help_matches_snapshot(self):
         proc = _run_main("--json-help")
         self.assertEqual(proc.returncode, 0, proc.stderr)

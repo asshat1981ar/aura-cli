@@ -8,7 +8,15 @@ from unittest.mock import patch # Import patch
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core.file_tools import replace_code, OldCodeNotFoundError, FileToolsError
+from core.file_tools import (
+    FileToolsError,
+    MismatchOverwriteBlockedError,
+    OldCodeNotFoundError,
+    _safe_apply_change,
+    apply_change_with_explicit_overwrite_policy,
+    allow_mismatch_overwrite_for_change,
+    replace_code,
+)
 
 class TestFileTools(unittest.TestCase):
 
@@ -111,6 +119,67 @@ Line 3""")
         # This is implicitly handled by tempfile.NamedTemporaryFile's context manager,
         # but we can't directly assert its absence here without exposing internal tempfile logic.
         # The key assertion is the original file's integrity.
+
+    def test_safe_apply_change_blocks_mismatch_overwrite_when_disabled(self):
+        with patch("core.file_tools.recover_old_code_from_git", return_value=None), \
+             patch("core.file_tools.log_json") as mock_log:
+            with self.assertRaisesRegex(MismatchOverwriteBlockedError, "mismatch overwrite fallback is disabled"):
+                _safe_apply_change(
+                    self.test_dir,
+                    "test_file.txt",
+                    old_code="missing marker",
+                    new_code="replacement content",
+                    allow_mismatch_overwrite=False,
+                )
+
+        self.assertEqual(self.test_file_path.read_text(), self.initial_content)
+        events = [c.args[1] for c in mock_log.call_args_list if len(c.args) >= 2]
+        self.assertIn("file_tools_old_code_mismatch_blocked", events)
+        self.assertNotIn("file_tools_old_code_mismatch_overwrite", events)
+
+    def test_safe_apply_change_mismatch_overwrite_default_remains_enabled(self):
+        with patch("core.file_tools.recover_old_code_from_git", return_value=None), \
+             patch("core.file_tools.log_json") as mock_log:
+            _safe_apply_change(
+                self.test_dir,
+                "test_file.txt",
+                old_code="missing marker",
+                new_code="replacement content",
+            )
+
+        self.assertEqual(self.test_file_path.read_text(), "replacement content")
+        events = [c.args[1] for c in mock_log.call_args_list if len(c.args) >= 2]
+        self.assertIn("file_tools_old_code_mismatch_overwrite", events)
+        self.assertNotIn("file_tools_old_code_mismatch_blocked", events)
+
+    def test_allow_mismatch_overwrite_for_change_requires_explicit_full_file_form(self):
+        self.assertFalse(allow_mismatch_overwrite_for_change("stale", True))
+        self.assertFalse(allow_mismatch_overwrite_for_change("", False))
+        self.assertFalse(allow_mismatch_overwrite_for_change(None, True))
+        self.assertTrue(allow_mismatch_overwrite_for_change("", True))
+
+    def test_apply_change_with_explicit_overwrite_policy_passes_expected_flag(self):
+        with patch("core.file_tools._safe_apply_change") as mock_safe:
+            apply_change_with_explicit_overwrite_policy(
+                self.test_dir,
+                "test_file.txt",
+                old_code="stale",
+                new_code="replacement",
+                overwrite_file=True,
+            )
+
+        self.assertFalse(mock_safe.call_args.kwargs["allow_mismatch_overwrite"])
+
+        with patch("core.file_tools._safe_apply_change") as mock_safe:
+            apply_change_with_explicit_overwrite_policy(
+                self.test_dir,
+                "test_file.txt",
+                old_code="",
+                new_code="replacement",
+                overwrite_file=True,
+            )
+
+        self.assertTrue(mock_safe.call_args.kwargs["allow_mismatch_overwrite"])
 
 if __name__ == '__main__':
     unittest.main()

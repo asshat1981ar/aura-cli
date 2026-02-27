@@ -1,12 +1,5 @@
 [
-    "Modify test_coverage_analyzer skill to run coverage.py only on files changed since last git commit (via git diff HEAD) plus their corresponding test files, instead of scanning the full suite each cycle.",
-    "Add LLM-based goal type classification to GoalDecomposer that tags each incoming goal as bug_fix, feature, refactor, security, docs, or unknown, persisting the tag to goal_queue_v2.json to guide skill dispatch.",
-    "When ApplicatorAgent raises OldCodeNotFoundError, automatically query git log to find the nearest matching version of the target code via fuzzy matching and retry the apply with the corrected old_code.",
-    "Create end-to-end integration tests in tests/integration/ that mock all external model calls, run a 2-cycle LoopOrchestrator loop on a synthetic mini-project, and assert that cycle outputs are persisted correctly to MemoryStore.",
-    "When VerifierAgent detects a security_scanner critical finding or test coverage drops by more than 20%, automatically pause the loop and queue a needs_human_review goal instead of continuing autonomous cycles.",
-    "Extend skill_dispatcher to detect when one skill's output contains data that is valid input for a downstream skill (e.g., security_scanner findings feeding remediation goals) and chain them automatically within the same cycle.",
-    "Implement cache preloading in ModelAdapter: on startup load the top-50 most-recently-used prompt hashes from brain_v2.db response_cache into LocalCacheAdapter to eliminate cold-start latency on the first loop cycle.",
-    "Create a new skill agents/skills/skill_failure_analyzer.py that parses skill exception logs clustered by error type and generates actionable repair goals (e.g., update symbol_indexer to handle async/await patterns).",
-    "Enhance ConvergenceEscapeLoop to detect verification-phase oscillation (tests alternately pass/fail across cycles) and trigger escalation strategies: increase prompt verbosity, run linter auto-fix, or request human context.",
-    "Track goal complexity metrics (cyclomatic complexity, lines of code affected, number of files changed) at cycle start and use them to adaptively adjust skill dispatch depth and prompt context window size, logging decisions to goal_queue_v2.json."
+    "Investigate and fix repeated 'sandbox' phase failures (rate: 1.0)",
+    "Investigate and fix repeated 'sandbox' phase failures (rate: 1.0)",
+    "Perform a comprehensive repository-wide architectural audit using the structural_analyzer skill. Identify the top 3 circular dependencies and complexity hotspots, and implement iterative refactors to decouple modules and reduce cyclomatic complexity, starting with the most central bottleneck."
 ]

@@ -1,9 +1,11 @@
 import os
 import sys
-import argparse
 import json
+import io
 import urllib.request
 import urllib.error
+from contextlib import redirect_stdout
+from dataclasses import dataclass
 from pathlib import Path
 
 try:
@@ -30,6 +32,8 @@ from core.vector_store import VectorStore
 
 from core.task_handler import _check_project_writability, run_goals_loop
 from aura_cli.commands import _handle_add, _handle_run, _handle_status, _handle_exit, _handle_help, _handle_doctor, _handle_clear
+from aura_cli.cli_options import CLIParseError, attach_cli_warnings, parse_cli_args, render_help
+from aura_cli.options import action_runtime_required
 
 
 def _mcp_headers():
@@ -204,12 +208,32 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     # ── Context Manager: Advanced Semantic Ingestion ────────────────────────
     try:
         from core.context_manager import ContextManager
+        from core.project_syncer import ProjectKnowledgeSyncer
+        
         context_manager = ContextManager(
             vector_store=vector_store,
             context_graph=_context_graph if "_context_graph" in dir() else None,
             project_root=project_root
         )
         log_json("INFO", "context_manager_initialized")
+        
+        # ── Background Project Sync ─────────────────────────────────────────
+        syncer = ProjectKnowledgeSyncer(
+            vector_store=vector_store,
+            context_graph=_context_graph if "_context_graph" in dir() else None,
+            project_root=project_root
+        )
+        # Run sync in background thread to not block CLI startup
+        import threading
+        def _bg_sync():
+            try:
+                syncer.sync_all()
+            except Exception as e:
+                log_json("WARN", "background_sync_failed", details={"error": str(e)})
+        
+        threading.Thread(target=_bg_sync, daemon=True).start()
+        log_json("INFO", "background_sync_started")
+
     except Exception as _exc:
         log_json("WARN", "context_manager_init_failed", details={"error": str(_exc)})
         context_manager = None
@@ -297,15 +321,16 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         log_json("WARN", "caspa_setup_failed", details={"error": str(_exc)})
     # ─────────────────────────────────────────────────────────────────────────
 
-    loop = HybridClosedLoop(model_adapter, brain_instance, git_tools_instance)
-
     return {
         "goal_queue": goal_queue,
         "goal_archive": goal_archive,
         "orchestrator": orchestrator,
         "debugger": debugger_instance,
         "planner": planner_instance,
-        "loop": loop,
+        # Legacy loop is initialized lazily so non-legacy commands do not
+        # instantiate deprecated HybridClosedLoop unnecessarily.
+        "loop": None,
+        "git_tools": git_tools_instance,
         "project_root": project_root,
         "model_adapter": model_adapter,
         "memory_store": memory_store,
@@ -315,7 +340,347 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     }
 
 
-def main(project_root_override=None):
+@dataclass
+class DispatchContext:
+    parsed: object
+    project_root: Path
+    runtime_factory: object
+    args: object
+    runtime: dict | None = None
+
+
+@dataclass(frozen=True)
+class DispatchRule:
+    action: str
+    requires_runtime: bool
+    handler: object
+
+
+def _ensure_legacy_loop(runtime: dict, *, project_root: Path) -> object:
+    loop = runtime.get("loop")
+    if loop is not None:
+        return loop
+
+    model_adapter = runtime.get("model_adapter")
+    brain_instance = runtime.get("brain")
+    git_tools_instance = runtime.get("git_tools")
+    if git_tools_instance is None:
+        git_tools_instance = GitTools(repo_path=str(project_root))
+        runtime["git_tools"] = git_tools_instance
+
+    loop = HybridClosedLoop(model_adapter, brain_instance, git_tools_instance)
+    runtime["loop"] = loop
+    return loop
+
+
+def _resolve_dispatch_action(parsed) -> str:
+    action = getattr(parsed, "action", None)
+    if action:
+        return action
+    return "interactive"
+
+
+def _prepare_runtime_context(ctx: DispatchContext) -> int | None:
+    if ctx.runtime is not None:
+        return None
+
+    args = ctx.args
+    if getattr(args, "dry_run", False):
+        config.set_runtime_override("dry_run", True)
+    if getattr(args, "decompose", False):
+        config.set_runtime_override("decompose", True)
+    if getattr(args, "model", None):
+        config.set_runtime_override("model_name", args.model)
+
+    ctx.runtime = ctx.runtime_factory(ctx.project_root, overrides=None)
+    log_json("INFO", "aura_cli_online", details={"dry_run_mode": getattr(args, 'dry_run', False)})
+
+    if not _check_project_writability(ctx.project_root):
+        log_json("CRITICAL", "aura_cli_startup_aborted_not_writable")
+        return 1
+    return None
+
+
+def _handle_help_dispatch(ctx: DispatchContext) -> int:
+    try:
+        print(render_help(getattr(ctx.args, "help_topics", None)))
+    except ValueError as exc:
+        if getattr(ctx.args, "json", False):
+            print(json.dumps(attach_cli_warnings({
+                "status": "error",
+                "code": "unknown_command_help_topic",
+                "message": str(exc),
+            }, ctx.parsed)))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _handle_json_help_dispatch(_ctx: DispatchContext) -> int:
+    print(render_help(format="json"))
+    return 0
+
+
+def _handle_doctor_dispatch(_ctx: DispatchContext) -> int:
+    _handle_doctor()
+    return 0
+
+
+def _handle_bootstrap_dispatch(_ctx: DispatchContext) -> int:
+    config.bootstrap()
+    print("AURA bootstrapped! Edit aura.config.json and add your API key.")
+    return 0
+
+
+def _print_json_payload(payload: dict, *, parsed=None, **json_kwargs) -> None:
+    print(json.dumps(attach_cli_warnings(payload, parsed), **json_kwargs))
+
+
+def _run_json_printing_callable_with_warnings(ctx: DispatchContext, func, *args, **kwargs) -> None:
+    warning_records = getattr(ctx.parsed, "warning_records", None) or []
+    if not warning_records:
+        func(*args, **kwargs)
+        return
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        func(*args, **kwargs)
+    raw = buf.getvalue()
+    if raw == "":
+        return
+
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        print(raw, end="")
+        return
+
+    _print_json_payload(payload, parsed=ctx.parsed, indent=2)
+
+
+def _handle_mcp_tools_dispatch(ctx: DispatchContext) -> int:
+    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_tools)
+    return 0
+
+
+def _handle_mcp_call_dispatch(ctx: DispatchContext) -> int:
+    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_call, ctx.args.mcp_call, ctx.args.mcp_args)
+    return 0
+
+
+def _handle_diag_dispatch(ctx: DispatchContext) -> int:
+    _run_json_printing_callable_with_warnings(ctx, cmd_diag)
+    return 0
+
+
+def _handle_logs_dispatch(ctx: DispatchContext) -> int:
+    from aura_cli.tui.log_streamer import LogStreamer
+
+    streamer = LogStreamer(level_filter=getattr(ctx.args, "level", "info"))
+    if getattr(ctx.args, "file", None):
+        streamer.stream_file(Path(ctx.args.file), tail=getattr(ctx.args, "tail", None), follow=getattr(ctx.args, "follow", False))
+    else:
+        streamer.stream_stdin(tail=getattr(ctx.args, "tail", None))
+    return 0
+
+
+def _handle_watch_dispatch(ctx: DispatchContext) -> int:
+    from aura_cli.tui.app import AuraStudio
+
+    studio = AuraStudio(runtime=ctx.runtime or {})
+    orchestrator = ctx.runtime.get("orchestrator")
+    if orchestrator:
+        orchestrator.attach_ui_callback(studio)
+    
+    studio.run(autonomous=getattr(ctx.args, "autonomous", False))
+    return 0
+
+
+def _handle_workflow_run_dispatch(ctx: DispatchContext) -> int:
+    args = ctx.args
+    orchestrator = ctx.runtime["orchestrator"]
+    result = orchestrator.run_loop(
+        args.workflow_goal,
+        max_cycles=args.workflow_max_cycles or args.max_cycles or config.get("policy_max_cycles", config.get("max_cycles", 5)),
+        dry_run=args.dry_run,
+    )
+    _print_json_payload(
+        {"goal": args.workflow_goal, "stop_reason": result.get("stop_reason"), "cycles": len(result.get("history", []))},
+        parsed=ctx.parsed,
+        indent=2,
+    )
+    return 0
+
+
+def _handle_scaffold_dispatch(ctx: DispatchContext) -> int:
+    args = ctx.args
+    runtime = ctx.runtime
+    from agents.scaffolder import ScaffolderAgent
+
+    scaffolder = ScaffolderAgent(runtime.get("brain", None) or __import__("memory.brain", fromlist=["Brain"]).Brain(), runtime["model_adapter"])
+    result = scaffolder.scaffold_project(args.scaffold, args.scaffold_desc)
+    print(result)
+    return 0
+
+
+def _handle_evolve_dispatch(ctx: DispatchContext) -> int:
+    args = ctx.args
+    runtime = ctx.runtime
+    from core.evolution_loop import EvolutionLoop
+    from agents.mutator import MutatorAgent
+    from core.vector_store import VectorStore
+
+    _brain = runtime.get("brain") or __import__("memory.brain", fromlist=["Brain"]).Brain()
+    _model = runtime["model_adapter"]
+    _planner = runtime["planner"]
+    _coder = default_agents(_brain, _model).get("act")
+    _critic = default_agents(_brain, _model).get("critique")
+    _git = GitTools(repo_path=str(ctx.project_root))
+    _mutator = MutatorAgent(ctx.project_root)
+    _vec = VectorStore(_model, _brain)
+    evo = EvolutionLoop(_planner, _coder, _critic, _brain, _vec, _git, _mutator)
+    goal = args.goal or args.workflow_goal or "evolve and improve the AURA system"
+    result = evo.run(goal)
+    _print_json_payload(result, parsed=ctx.parsed, indent=2, default=str)
+    return 0
+
+
+def _handle_goal_status_dispatch(ctx: DispatchContext) -> int:
+    runtime = ctx.runtime
+    if ctx.args.json:
+        _run_json_printing_callable_with_warnings(
+            ctx,
+            _handle_status,
+            runtime["goal_queue"],
+            runtime["goal_archive"],
+            runtime["orchestrator"],
+            as_json=True,
+        )
+    else:
+        _handle_status(runtime["goal_queue"], runtime["goal_archive"], runtime["orchestrator"], as_json=False)
+    return 0
+
+
+def _maybe_add_goal(ctx: DispatchContext) -> None:
+    if not getattr(ctx.args, "add_goal", None):
+        return
+    goal_queue = ctx.runtime["goal_queue"]
+    goal_queue.add(ctx.args.add_goal)
+    log_json("INFO", "goal_added_from_cli", goal=ctx.args.add_goal)
+
+
+def _handle_goal_once_dispatch(ctx: DispatchContext) -> int:
+    from core.explain import format_decision_log
+
+    args = ctx.args
+    orchestrator = ctx.runtime["orchestrator"]
+    result = orchestrator.run_loop(
+        args.goal,
+        max_cycles=args.max_cycles or config.get("policy_max_cycles", config.get("max_cycles", 5)),
+        dry_run=args.dry_run,
+    )
+    history = result.get("history", [])
+    if args.explain:
+        print(format_decision_log(history))
+    return 0
+
+
+def _handle_goal_run_dispatch(ctx: DispatchContext) -> int:
+    args = ctx.args
+    runtime = ctx.runtime
+    loop = _ensure_legacy_loop(runtime, project_root=ctx.project_root)
+    run_goals_loop(
+        args,
+        runtime["goal_queue"],
+        loop,
+        runtime["debugger"],
+        runtime["planner"],
+        runtime["goal_archive"],
+        ctx.project_root,
+        decompose=args.decompose,
+    )
+    return 0
+
+
+def _handle_goal_add_dispatch(ctx: DispatchContext) -> int:
+    _maybe_add_goal(ctx)
+    return 0
+
+
+def _handle_goal_add_run_dispatch(ctx: DispatchContext) -> int:
+    _maybe_add_goal(ctx)
+    return _handle_goal_run_dispatch(ctx)
+
+
+def _handle_interactive_dispatch(ctx: DispatchContext) -> int:
+    runtime = ctx.runtime
+    loop = _ensure_legacy_loop(runtime, project_root=ctx.project_root)
+    cli_interaction_loop(
+        ctx.args,
+        runtime["goal_queue"],
+        runtime["goal_archive"],
+        loop,
+        runtime["debugger"],
+        runtime["planner"],
+        ctx.project_root,
+    )
+    return 0
+
+
+def _dispatch_rule(action: str, handler) -> DispatchRule:
+    return DispatchRule(action, action_runtime_required(action), handler)
+
+
+COMMAND_DISPATCH_REGISTRY = {
+    "json_help": _dispatch_rule("json_help", _handle_json_help_dispatch),
+    "help": _dispatch_rule("help", _handle_help_dispatch),
+    "doctor": _dispatch_rule("doctor", _handle_doctor_dispatch),
+    "bootstrap": _dispatch_rule("bootstrap", _handle_bootstrap_dispatch),
+    "mcp_tools": _dispatch_rule("mcp_tools", _handle_mcp_tools_dispatch),
+    "mcp_call": _dispatch_rule("mcp_call", _handle_mcp_call_dispatch),
+    "diag": _dispatch_rule("diag", _handle_diag_dispatch),
+    "logs": _dispatch_rule("logs", _handle_logs_dispatch),
+    "watch": _dispatch_rule("watch", _handle_watch_dispatch),
+    "studio": _dispatch_rule("studio", _handle_watch_dispatch),
+    "workflow_run": _dispatch_rule("workflow_run", _handle_workflow_run_dispatch),
+    "scaffold": _dispatch_rule("scaffold", _handle_scaffold_dispatch),
+    "evolve": _dispatch_rule("evolve", _handle_evolve_dispatch),
+    "goal_status": _dispatch_rule("goal_status", _handle_goal_status_dispatch),
+    "goal_add": _dispatch_rule("goal_add", _handle_goal_add_dispatch),
+    "goal_add_run": _dispatch_rule("goal_add_run", _handle_goal_add_run_dispatch),
+    "goal_once": _dispatch_rule("goal_once", _handle_goal_once_dispatch),
+    "goal_run": _dispatch_rule("goal_run", _handle_goal_run_dispatch),
+    "interactive": _dispatch_rule("interactive", _handle_interactive_dispatch),
+}
+
+
+def dispatch_command(parsed, *, project_root: Path, runtime_factory=create_runtime):
+    ctx = DispatchContext(parsed=parsed, project_root=project_root, runtime_factory=runtime_factory, args=parsed.namespace)
+
+    warning_records = getattr(parsed, "warning_records", None) or []
+    if warning_records:
+        for warning in warning_records:
+            print(f"Warning: {warning.message}", file=sys.stderr)
+    else:
+        for warning in parsed.warnings:
+            print(f"Warning: {warning}", file=sys.stderr)
+
+    action = _resolve_dispatch_action(parsed)
+    rule = COMMAND_DISPATCH_REGISTRY.get(action)
+    if rule is None:
+        print(f"Error: No dispatch rule registered for action '{action}'", file=sys.stderr)
+        return 1
+
+    if rule.requires_runtime:
+        prep_rc = _prepare_runtime_context(ctx)
+        if prep_rc is not None:
+            return prep_rc
+
+    return rule.handler(ctx)
+
+
+def main(project_root_override=None, argv=None):
     # Resolve project root
     if project_root_override:
         project_root = Path(project_root_override)
@@ -344,129 +709,25 @@ def main(project_root_override=None):
         except Exception:
             pass # Silent fail if history loading fails
 
-    parser = argparse.ArgumentParser(description="AURA CLI for autonomous development.")
-    parser.add_argument("--dry-run", action="store_true", help="Run the AURA loop in dry-run mode.")
-    parser.add_argument("--add-goal", type=str, help="Add a goal to the queue.")
-    parser.add_argument("--run-goals", action="store_true", help="Run the AURA loop for goals currently in the queue.")
-    parser.add_argument("--decompose", action="store_true", help="Decompose complex goals into hierarchical sub-tasks.")
-    parser.add_argument("--bootstrap", action="store_true", help="Initialize a default aura.config.json file.")
-    parser.add_argument("--model", type=str, help="Override the model to use.")
-    parser.add_argument("--max-cycles", type=int, help="Maximum cycles per goal.")
-    parser.add_argument("--explain", action="store_true", help="Print decision logs after each run.")
-    parser.add_argument("--goal", type=str, help="Run a single goal without using the queue.")
-    parser.add_argument("--status", action="store_true", help="Show status and exit.")
-    parser.add_argument("--json", action="store_true", help="Use JSON output where supported.")
-    parser.add_argument("--policy", type=str, help="Select convergence policy (e.g., sliding_window, time_bound).")
-    # New CLI helpers
-    parser.add_argument("--workflow-goal", type=str, help="Run a one-off workflow goal (shortcut for orchestrator.run_loop).")
-    parser.add_argument("--workflow-max-cycles", type=int, help="Max cycles for workflow goal.")
-    parser.add_argument("--mcp-tools", action="store_true", help="List MCP tools via HTTP client.")
-    parser.add_argument("--mcp-call", type=str, help="Call MCP tool by name.")
-    parser.add_argument("--mcp-args", type=str, help="JSON args for --mcp-call.")
-    parser.add_argument("--diag", action="store_true", help="Fetch MCP health/metrics/limits/log tail.")
-    parser.add_argument("--evolve", action="store_true", help="Run EvolutionLoop (self-improvement mode) instead of standard orchestrator.")
-    parser.add_argument("--scaffold", type=str, metavar="PROJECT_NAME", help="Scaffold a new project (use with --scaffold-desc).")
-    parser.add_argument("--scaffold-desc", type=str, default="", help="Description for --scaffold.")
-    args = parser.parse_args()
-
-    # Initialize Unified Config with CLI overrides
-    if args.bootstrap:
-        config.bootstrap()
-        print("AURA bootstrapped! Edit aura.config.json and add your API key.")
-        return
-
-    # MCP / diagnostics shortcuts (no full runtime needed)
-    if args.mcp_tools:
-        cmd_mcp_tools()
-        return
-    if args.mcp_call:
-        cmd_mcp_call(args.mcp_call, args.mcp_args)
-        return
-    if args.diag:
-        cmd_diag()
-        return
-
-    if args.dry_run:
-        config.set_runtime_override("dry_run", True)
-    if args.decompose:
-        config.set_runtime_override("decompose", True)
-    if args.model:
-        config.set_runtime_override("model_name", args.model)
-
-    # Build runtime (CLI-specific overrides applied below)
-    runtime = create_runtime(project_root, overrides=None)
-    goal_queue = runtime["goal_queue"]
-    goal_archive = runtime["goal_archive"]
-    orchestrator = runtime["orchestrator"]
-    debugger_instance = runtime["debugger"]
-    planner_instance = runtime["planner"]
-    loop = runtime["loop"]
-
-    log_json("INFO", "aura_cli_online", details={"dry_run_mode": getattr(args, 'dry_run', False)})
-
-    if not _check_project_writability(project_root):
-        log_json("CRITICAL", "aura_cli_startup_aborted_not_writable")
-        return
-
-    # One-off workflow goal (bypasses queue)
-    if args.workflow_goal:
-        result = orchestrator.run_loop(
-            args.workflow_goal,
-            max_cycles=args.workflow_max_cycles or args.max_cycles or config.get("policy_max_cycles", config.get("max_cycles", 5)),
-            dry_run=args.dry_run,
-        )
-        print(json.dumps({"goal": args.workflow_goal, "stop_reason": result.get("stop_reason"), "cycles": len(result.get("history", []))}, indent=2))
-        return
-
-    # Scaffold a new project via ScaffolderAgent
-    if args.scaffold:
-        from agents.scaffolder import ScaffolderAgent
-        scaffolder = ScaffolderAgent(runtime.get("brain", None) or __import__("memory.brain", fromlist=["Brain"]).Brain(), runtime["model_adapter"])
-        result = scaffolder.scaffold_project(args.scaffold, args.scaffold_desc)
-        print(result)
-        return
-
-    # Self-improvement EvolutionLoop mode
-    if args.evolve:
-        from core.evolution_loop import EvolutionLoop
-        from agents.mutator import MutatorAgent
-        from core.vector_store import VectorStore
-        _brain = runtime.get("brain") or __import__("memory.brain", fromlist=["Brain"]).Brain()
-        _model = runtime["model_adapter"]
-        _planner = runtime["planner"]
-        _coder = default_agents(_brain, _model).get("act")
-        _critic = default_agents(_brain, _model).get("critique")
-        _git = GitTools(repo_path=str(project_root))
-        _mutator = MutatorAgent(project_root)
-        _vec = VectorStore(_model, _brain)
-        evo = EvolutionLoop(_planner, _coder, _critic, _brain, _vec, _git, _mutator)
-        goal = args.goal or args.workflow_goal or "evolve and improve the AURA system"
-        result = evo.run(goal)
-        print(json.dumps(result, indent=2, default=str))
-        return
-
-    if args.status:
-        _handle_status(goal_queue, goal_archive, orchestrator, as_json=args.json)
-        return
-
-    if args.add_goal:
-        goal_queue.add(args.add_goal)
-        log_json("INFO", "goal_added_from_cli", goal=args.add_goal)
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    try:
+        parsed = parse_cli_args(raw_argv)
+    except CLIParseError as exc:
+        if "--json" in raw_argv:
+            print(json.dumps(attach_cli_warnings({
+                "status": "error",
+                "code": "cli_parse_error",
+                "message": str(exc),
+                "usage": exc.usage,
+            })))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+            if exc.usage:
+                print(exc.usage, file=sys.stderr)
+        return exc.code
 
     try:
-        if args.goal:
-            from core.explain import format_decision_log
-            result = orchestrator.run_loop(args.goal, max_cycles=args.max_cycles or config.get("policy_max_cycles", config.get("max_cycles", 5)), dry_run=args.dry_run)
-            history = result.get("history", [])
-            if args.explain:
-                print(format_decision_log(history))
-            return
-
-        if args.run_goals:
-            run_goals_loop(args, goal_queue, loop, debugger_instance, planner_instance, goal_archive, project_root, decompose=args.decompose)
-            return
-
-        cli_interaction_loop(args, goal_queue, goal_archive, loop, debugger_instance, planner_instance, project_root)
+        return dispatch_command(parsed, project_root=project_root)
     finally:
         if readline:
             try:
@@ -475,4 +736,4 @@ def main(project_root_override=None):
                 pass
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

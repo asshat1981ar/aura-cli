@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from aura_cli.cli_options import CLIParseError, parse_cli_args, render_help
+from aura_cli.cli_options import CLIParseError, attach_cli_warnings, parse_cli_args, render_help
 
 
 class TestCLIOptions(unittest.TestCase):
@@ -54,17 +54,53 @@ class TestCLIOptions(unittest.TestCase):
         self.assertEqual(args.add_goal, "Fix tests")
         self.assertTrue(args.run_goals)
         self.assertTrue(parsed.warnings)
+        self.assertTrue(parsed.warning_records)
+        warning = parsed.warning_records[0]
+        self.assertEqual(warning.code, "legacy_cli_flags_deprecated")
+        self.assertEqual(warning.category, "deprecation")
+        self.assertEqual(warning.action, "goal_add_run")
+        self.assertEqual(warning.replacement_command, "aura goal add")
+        self.assertEqual(warning.legacy_flags, ("--add-goal", "--run-goals"))
+        self.assertEqual(warning.message, parsed.warnings[0])
 
     def test_help_subcommand_topic_is_captured(self):
         parsed = parse_cli_args(["help", "goal", "add"])
         self.assertEqual(parsed.command, "help")
         self.assertEqual(parsed.namespace.help_topics, ["goal", "add"])
 
+    def test_watch_and_studio_parse_autonomous_flag(self):
+        watch = parse_cli_args(["watch", "--autonomous"])
+        studio = parse_cli_args(["studio", "--autonomous"])
+
+        self.assertEqual(watch.action, "watch")
+        self.assertEqual(studio.action, "studio")
+        self.assertTrue(watch.namespace.autonomous)
+        self.assertTrue(studio.namespace.autonomous)
+
     def test_render_help_json_contains_canonical_command(self):
         payload = json.loads(render_help(format="json"))
         paths = [tuple(item["path"]) for item in payload["commands"]]
         self.assertIn(("goal", "add"), paths)
         self.assertIn(("mcp", "call"), paths)
+
+    def test_attach_cli_warnings_serializes_legacy_warning_records(self):
+        parsed = parse_cli_args(["--mcp-tools"])
+        payload = attach_cli_warnings({"status": "ok"}, parsed)
+
+        self.assertEqual(payload["status"], "ok")
+        self.assertIn("cli_warnings", payload)
+        self.assertEqual(len(payload["cli_warnings"]), 1)
+        warning = payload["cli_warnings"][0]
+        self.assertEqual(warning["code"], "legacy_cli_flags_deprecated")
+        self.assertEqual(warning["category"], "deprecation")
+        self.assertEqual(warning["action"], "mcp_tools")
+        self.assertEqual(warning["replacement_command"], "aura mcp tools")
+        self.assertEqual(warning["legacy_flags"], ["--mcp-tools"])
+
+    def test_attach_cli_warnings_omits_key_when_no_warnings(self):
+        parsed = parse_cli_args(["mcp", "tools"])
+        payload = attach_cli_warnings({"status": "ok"}, parsed)
+        self.assertEqual(payload, {"status": "ok"})
 
     def test_parse_error_suggests_top_level_command(self):
         with self.assertRaises(CLIParseError) as ctx:

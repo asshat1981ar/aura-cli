@@ -39,7 +39,7 @@ class MyAgent:
 
 def test_syncer_hydrates_store(temp_project):
     db_path = temp_project / "brain.db"
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
     brain = MagicMock()
     brain.db = conn
     

@@ -1,0 +1,19 @@
+{
+  "cli_warnings": [
+    {
+      "action": "goal_status",
+      "category": "deprecation",
+      "code": "legacy_cli_flags_deprecated",
+      "legacy_flags": [
+        "--status"
+      ],
+      "message": "Legacy flags are deprecated; use `aura goal status` instead.",
+      "phase": "compatibility",
+      "replacement_command": "aura goal status"
+    }
+  ],
+  "completed": [],
+  "completed_count": 0,
+  "queue": [],
+  "queue_length": 0
+}

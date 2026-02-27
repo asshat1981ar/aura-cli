@@ -58,7 +58,7 @@ def check_sqlite_write_access(repo_root: Path):
     """Checks for SQLite write access in the repository directory."""
     test_db_path = repo_root / "test_write_access.db"
     try:
-        conn = sqlite3.connect(test_db_path)
+        conn = sqlite3.connect(test_db_path, check_same_thread=False)
         cursor = conn.cursor()
         cursor.execute("CREATE TABLE IF NOT EXISTS test (id INTEGER)")
         conn.commit()

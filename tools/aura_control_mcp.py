@@ -61,6 +61,10 @@ _SERVER_START = time.time()
 _call_counts: Dict[str, int] = {}
 _call_errors: Dict[str, int] = {}
 
+# Short-lived cache for memory reads — avoids full-DB scan on every HTTP request
+_memory_cache: Dict[str, tuple] = {}
+_MEMORY_CACHE_TTL = 30.0  # seconds
+
 # Lazy-loaded singletons (initialised on first request to avoid startup cost)
 _goal_queue: Optional[GoalQueue] = None
 _goal_archive: Optional[GoalArchive] = None
@@ -86,6 +90,17 @@ def _get_brain() -> Brain:
     if _brain is None:
         _brain = Brain(db_path=str(_ROOT / "memory" / "brain_v2.db"))
     return _brain
+
+
+def _get_memories_cached(brain: Brain) -> list:
+    """Return recent memories with a 30s TTL cache to avoid per-request full scans."""
+    now = time.time()
+    entry = _memory_cache.get("recent")
+    if entry and now - entry[1] < _MEMORY_CACHE_TTL:
+        return entry[0]
+    result = brain.recall_with_budget(max_tokens=4000)
+    _memory_cache["recent"] = (result, now)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -246,7 +261,7 @@ def _memory_search(args: Dict) -> Any:
         raise ValueError("'query' is required.")
     limit = int(args.get("limit", 20))
     brain = _get_brain()
-    all_memories = brain.recall_all()
+    all_memories = _get_memories_cached(brain)
     q_lower = query.lower()
     matches = [m for m in all_memories if q_lower in str(m).lower()]
     return {"matches": matches[:limit], "total_matched": len(matches)}
@@ -316,7 +331,7 @@ def _project_status(args: Dict) -> Any:
 
     try:
         brain = _get_brain()
-        memory_count = len(brain.recall_all())
+        memory_count = brain.count_memories()
         weakness_count = len(brain.recall_weaknesses())
     except Exception as e:
         memory_count = weakness_count = f"error: {e}"
@@ -424,8 +439,7 @@ async def get_metrics(_: None = Depends(_check_auth)) -> Dict:
     # Live memory count (best-effort)
     memory_count: int = 0
     try:
-        memories = _get_brain().recall_all()
-        memory_count = len(memories)
+        memory_count = _get_brain().count_memories()
     except Exception:
         pass
 

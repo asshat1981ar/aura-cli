@@ -8,6 +8,7 @@ structural relationships (imports/calls) into the ContextGraph.
 from __future__ import annotations
 
 import ast
+import json
 import hashlib
 import time
 from pathlib import Path
@@ -32,7 +33,24 @@ class ProjectKnowledgeSyncer:
         self.vs = vector_store
         self.cg = context_graph
         self.root = Path(project_root)
+        self._hash_map_path = self.root / "memory" / "project_sync_hashes.json"
+        self._hashes: Dict[str, str] = self._load_hashes()
         
+    def _load_hashes(self) -> Dict[str, str]:
+        try:
+            if self._hash_map_path.exists():
+                return json.loads(self._hash_map_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+        return {}
+
+    def _save_hashes(self):
+        try:
+            self._hash_map_path.parent.mkdir(parents=True, exist_ok=True)
+            self._hash_map_path.write_text(json.dumps(self._hashes, indent=2), encoding="utf-8")
+        except Exception as e:
+            log_json("WARN", "project_sync_save_hashes_failed", details={"error": str(e)})
+
     def sync_all(self) -> Dict[str, Any]:
         """Perform a full sync of the project knowledge. Never raises."""
         log_json("INFO", "project_sync_start", details={"root": str(self.root)})
@@ -40,6 +58,7 @@ class ProjectKnowledgeSyncer:
         
         stats = {
             "files_processed": 0,
+            "files_skipped": 0,
             "chunks_created": 0,
             "relationships_extracted": 0,
             "errors": 0
@@ -56,7 +75,17 @@ class ProjectKnowledgeSyncer:
                         continue
                     
                     try:
-                        f_stats = self._sync_file(py_file)
+                        rel_path = str(py_file.relative_to(self.root))
+                        content = py_file.read_text(encoding="utf-8", errors="replace")
+                        current_hash = hashlib.sha256(content.encode()).hexdigest()
+                        
+                        if self._hashes.get(rel_path) == current_hash:
+                            stats["files_skipped"] += 1
+                            continue
+
+                        f_stats = self._sync_file(py_file, content)
+                        self._hashes[rel_path] = current_hash
+                        
                         stats["files_processed"] += 1
                         stats["chunks_created"] += f_stats["chunks"]
                         stats["relationships_extracted"] += f_stats["relations"]
@@ -65,6 +94,7 @@ class ProjectKnowledgeSyncer:
                         log_json("WARN", "project_sync_file_failed", 
                                  details={"file": str(py_file), "error": str(exc)})
 
+            self._save_hashes()
             log_json("INFO", "project_sync_complete", details={
                 "duration_sec": round(time.time() - start_time, 2),
                 **stats
@@ -74,16 +104,15 @@ class ProjectKnowledgeSyncer:
             
         return stats
 
-    def _sync_file(self, path: Path) -> Dict[str, int]:
+    def _sync_file(self, path: Path, content: str) -> Dict[str, int]:
         """Index a single file: chunking + relationships."""
         rel_path = str(path.relative_to(self.root))
-        content = path.read_text(encoding="utf-8", errors="replace")
-        content_hash = hashlib.sha256(content.encode()).hexdigest()
         
-        # 1. Check for incremental update skip
-        # (For now, we re-index, but in v2.1 we check content_hash in DB)
-        
-        tree = ast.parse(content)
+        try:
+            tree = ast.parse(content)
+        except SyntaxError:
+            return {"chunks": 0, "relations": 0}
+
         chunks: List[MemoryRecord] = []
         relations_count = 0
 
@@ -113,19 +142,48 @@ class ProjectKnowledgeSyncer:
         if chunks:
             self.vs.upsert(chunks)
 
-        # 4. Extract Relationships (Imports)
+        # 4. Extract Relationships (Imports & Calls)
         if self.cg:
+            imports_map = {} # alias -> module_name
+            
+            # First pass: gather imports
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
                     for alias in node.names:
+                        target = alias.name
+                        name = alias.asname or alias.name
+                        imports_map[name] = target
                         try:
-                            self.cg.add_edge(rel_path, alias.name, "imports")
+                            self.cg.add_edge(rel_path, target, "imports")
                             relations_count += 1
                         except Exception: continue
                 elif isinstance(node, ast.ImportFrom):
                     if node.module:
+                        for alias in node.names:
+                            target = f"{node.module}.{alias.name}"
+                            name = alias.asname or alias.name
+                            imports_map[name] = target
+                            try:
+                                self.cg.add_edge(rel_path, node.module, "imports_from")
+                                relations_count += 1
+                            except Exception: continue
+
+            # Second pass: gather calls and link to imports
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call):
+                    called_name = None
+                    if isinstance(node.func, ast.Name):
+                        called_name = node.func.id
+                    elif isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name):
+                        # e.g. os.path.join -> module 'os.path' if 'os' imported, or alias 'os'
+                        called_name = node.func.value.id
+                    
+                    if called_name and called_name in imports_map:
+                        target_module = imports_map[called_name]
                         try:
-                            self.cg.add_edge(rel_path, node.module, "imports_from")
+                            # Edge: file -> module (relation="calls")
+                            # We interpret this as "depends on functionality from"
+                            self.cg.add_edge(rel_path, target_module, "calls", weight=0.5)
                             relations_count += 1
                         except Exception: continue
 

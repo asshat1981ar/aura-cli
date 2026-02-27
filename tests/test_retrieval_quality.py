@@ -53,8 +53,9 @@ def golden_set():
 @pytest.fixture
 def vector_store(tmp_path):
     db_path = tmp_path / "brain_test.db"
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
     brain = MagicMock()
+
     brain.db = conn
     return VectorStore(DeterministicMockAdapter(), brain)
 

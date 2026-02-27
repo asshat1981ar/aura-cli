@@ -17,6 +17,9 @@ class MockModelAdapter:
         self._embedding_model = "test-model"
         self._embedding_dims = 4
 
+    def model_id(self):
+        return self._embedding_model
+
     def embed(self, texts):
         # Deterministic dummy embeddings based on text length
         embeddings = []
@@ -34,8 +37,9 @@ class MockModelAdapter:
 @pytest.fixture
 def mock_brain(tmp_path):
     db_path = tmp_path / "test_brain.db"
-    conn = sqlite3.connect(str(db_path))
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
     brain = MagicMock()
+
     brain.db = conn
     return brain
 

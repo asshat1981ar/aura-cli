@@ -39,6 +39,17 @@ DEFAULT_CONFIG = {
         "agentic_loop": 8006,
         "copilot": 8007,
     },
+    # ASCM v2 Configuration
+    "semantic_memory": {
+        "enabled": True,
+        "backend": "sqlite_local",
+        "embedding_model": "text-embedding-3-small",
+        "top_k": 10,
+        "min_score": 0.65,
+        "max_snippet_chars": 2000,
+        "reindex_on_model_change": True,
+        "eval_sampling_rate": 0.1
+    }
 }
 
 class ConfigManager:
@@ -79,6 +90,7 @@ class ConfigManager:
                     env_config[key] = int(val)
                 else:
                     env_config[key] = val
+        
         # Handle nested model_routing overrides
         routing_overrides = {}
         for sub_key in ["code_generation", "planning", "analysis", "critique", "embedding", "fast", "quality"]:
@@ -87,6 +99,24 @@ class ConfigManager:
                 routing_overrides[sub_key] = os.environ[env_name]
         if routing_overrides:
             env_config["model_routing"] = {**DEFAULT_CONFIG["model_routing"], **routing_overrides}
+            
+        # Handle nested semantic_memory overrides
+        sem_mem_overrides = {}
+        for sub_key, default_val in DEFAULT_CONFIG["semantic_memory"].items():
+            env_name = f"AURA_SEMANTIC_MEMORY_{sub_key.upper()}"
+            if env_name in os.environ:
+                val = os.environ[env_name]
+                if isinstance(default_val, bool):
+                    sem_mem_overrides[sub_key] = val.lower() in ("true", "1", "yes")
+                elif isinstance(default_val, int):
+                    sem_mem_overrides[sub_key] = int(val)
+                elif isinstance(default_val, float):
+                    sem_mem_overrides[sub_key] = float(val)
+                else:
+                    sem_mem_overrides[sub_key] = val
+        if sem_mem_overrides:
+            env_config["semantic_memory"] = {**DEFAULT_CONFIG["semantic_memory"], **sem_mem_overrides}
+
         return env_config
 
     def refresh(self):
@@ -96,8 +126,31 @@ class ConfigManager:
         
         # Merge hierarchy: Defaults < JSON < ENV < Overrides
         merged = DEFAULT_CONFIG.copy()
-        merged.update(self.file_config)
-        merged.update(env_config)
+        
+        # Deep merge for model_routing and semantic_memory to preserve defaults if partial override
+        if "model_routing" in self.file_config:
+            merged["model_routing"].update(self.file_config["model_routing"])
+        if "semantic_memory" in self.file_config:
+            merged["semantic_memory"].update(self.file_config["semantic_memory"])
+            
+        # Update other top-level keys
+        for k, v in self.file_config.items():
+            if k not in ["model_routing", "semantic_memory"]:
+                merged[k] = v
+        
+        # Merge ENV (env_config already has merged sub-dicts)
+        # But we need to be careful not to overwrite file_config partials with defaults if env is empty
+        # Actually _load_from_env returns only set keys + merged sub-dicts if env vars exist.
+        
+        if "model_routing" in env_config:
+            merged["model_routing"].update(env_config["model_routing"])
+        if "semantic_memory" in env_config:
+            merged["semantic_memory"].update(env_config["semantic_memory"])
+            
+        for k, v in env_config.items():
+            if k not in ["model_routing", "semantic_memory"]:
+                merged[k] = v
+                
         merged.update(self.runtime_overrides)
         
         self.effective_config = merged

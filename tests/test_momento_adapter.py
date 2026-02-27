@@ -186,7 +186,7 @@ class TestModelAdapterCacheWithMomento(unittest.TestCase):
         import sqlite3
         from core.model_adapter import ModelAdapter
         adapter = ModelAdapter()
-        db = sqlite3.connect(":memory:")
+        db = sqlite3.connect(":memory:", check_same_thread=False)
         # Should not raise even with momento=None
         adapter.enable_cache(db, ttl_seconds=60, momento=None)
         self.assertIs(adapter.cache_db, db)
@@ -195,7 +195,7 @@ class TestModelAdapterCacheWithMomento(unittest.TestCase):
         import sqlite3
         from core.model_adapter import ModelAdapter
         adapter = ModelAdapter()
-        db = sqlite3.connect(":memory:")
+        db = sqlite3.connect(":memory:", check_same_thread=False)
         adapter.enable_cache(db, ttl_seconds=60, momento=None)
         result = adapter._get_cached_response("test prompt")
         self.assertIsNone(result)
@@ -204,7 +204,7 @@ class TestModelAdapterCacheWithMomento(unittest.TestCase):
         import sqlite3
         from core.model_adapter import ModelAdapter
         adapter = ModelAdapter()
-        db = sqlite3.connect(":memory:")
+        db = sqlite3.connect(":memory:", check_same_thread=False)
         adapter.enable_cache(db, ttl_seconds=3600, momento=None)
         adapter._save_to_cache("test prompt", "test response")
         result = adapter._get_cached_response("test prompt")

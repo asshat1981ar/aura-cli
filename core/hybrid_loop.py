@@ -1,10 +1,19 @@
 import json
+import warnings
 from pathlib import Path # Import Path for _validate_file_path
 import re # Import re for _validate_file_path
 
 from core.git_tools import GitToolsError
 from core.logging_utils import log_json
-from core.file_tools import _safe_apply_change, _aura_safe_loads, OldCodeNotFoundError, FileToolsError
+from core.file_tools import (
+    FileToolsError,
+    MISMATCH_OVERWRITE_BLOCK_EVENT,
+    MismatchOverwriteBlockedError,
+    OldCodeNotFoundError,
+    _aura_safe_loads,
+    apply_change_with_explicit_overwrite_policy,
+    mismatch_overwrite_block_log_details,
+)
 from agents.debugger import DebuggerAgent
 
 class HybridClosedLoop:
@@ -92,6 +101,11 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
         self.git = git_tools
         self.debugger = DebuggerAgent(brain, model)
         self.prompt_template = prompt_template or self._bootstrap_prompt_template
+        warnings.warn(
+            "HybridClosedLoop is deprecated. Use LoopOrchestrator (core/orchestrator.py) instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
         self.weights = {
             "performance": 0.30,
@@ -184,7 +198,8 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
         log_event: str,
         result_json: dict,
         change: dict,
-        context_message: str = ""
+        context_message: str = "",
+        extra_details: dict | None = None,
     ):
         diagnosis = self.debugger.diagnose( # Changed from debugger_instance to self.debugger
             error_message=error_message,
@@ -193,16 +208,20 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
             improve_plan=result_json.get("IMPROVE", ""),
             implement_details=change
         )
+        details = {
+            "error": error_message,
+            "file": file_path,
+            "change_idx": change_idx,
+            "diagnosis": diagnosis
+        }
+        if extra_details:
+            details.update(extra_details)
+
         log_json(
             log_level,
             log_event,
             goal=current_goal,
-            details={
-                "error": error_message,
-                "file": file_path,
-                "change_idx": change_idx,
-                "diagnosis": diagnosis
-            }
+            details=details
         )
         return False # Indicates that changes were not applied successfully
 
@@ -221,7 +240,20 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
         changes_applied_successfully = True
         try:
             log_json("INFO", "applying_code_change", goal=current_goal, details={"file": sanitized_file_path, "change_idx": change_idx, "overwrite": overwrite_file})
-            _safe_apply_change(project_root, sanitized_file_path, old_code, new_code, overwrite_file)
+            apply_change_with_explicit_overwrite_policy(
+                project_root,
+                sanitized_file_path,
+                old_code,
+                new_code,
+                overwrite_file=overwrite_file,
+            )
+        except MismatchOverwriteBlockedError as e:
+            changes_applied_successfully = self._log_and_diagnose_error(
+                str(e), current_goal, sanitized_file_path, change_idx,
+                "ERROR", MISMATCH_OVERWRITE_BLOCK_EVENT, result_json, change,
+                context_message="Policy blocked mismatch-overwrite fallback; explicit overwrite_file with empty old_code required.",
+                extra_details=mismatch_overwrite_block_log_details(e, sanitized_file_path),
+            )
         except OldCodeNotFoundError as e:
             changes_applied_successfully = self._log_and_diagnose_error(
                 str(e), current_goal, sanitized_file_path, change_idx,

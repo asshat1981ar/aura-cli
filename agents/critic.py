@@ -42,7 +42,7 @@ Plan to critique:
 {"\n".join(plan)}
 
 Previous memory:
-{self.brain.recall_all()}
+{chr(10).join(self.brain.recall_with_budget(max_tokens=1500))}
 
 Evaluate the plan for completeness, clarity, feasibility, and alignment with the high-level task.
 Suggest improvements or identify missing steps.
@@ -79,7 +79,7 @@ Requirements:
 {requirements if requirements else "No specific requirements provided beyond the task."}
 
 Previous memory:
-{self.brain.recall_all()}
+{chr(10).join(self.brain.recall_with_budget(max_tokens=1500))}
 
 Evaluate the code for correctness, efficiency, readability, maintainability, and adherence to requirements.
 Suggest improvements or identify potential issues.

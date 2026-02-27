@@ -58,6 +58,24 @@ The core iterative process is managed by `HybridClosedLoop.run(current_goal)`, w
     *   In `main.py`, after `HybridClosedLoop.run(current_goal)` returns its JSON result, the `IMPLEMENT` section of the JSON is parsed to extract `file_path`, `old_code`, and `new_code`.
     *   Currently, `main.py` *simulates* the code replacement by printing a message: `SIMULATING: replace('{file_path}', old_code, new_code)`. The actual call to `file_tools.replace_code` is not directly made in `main.py` based on the current code, implying that the agents within the `HybridClosedLoop` or a later stage are responsible for invoking `file_tools.replace_code` if modifications are to be persisted.
 
+### Explicit Overwrite Safety Policy (Autonomous Apply Paths)
+
+Autonomous apply paths in the repo (queue loop, orchestrator, hybrid loop, mutator, and atomic change application) use a stricter policy than raw `replace_code(...)` to avoid accidental full-file overwrites when an LLM supplies a stale `old_code` snippet.
+
+*   **Blocked by default**: `overwrite_file=True` does **not** permit mismatch-overwrite fallback unless the change is expressed as an explicit full-file replacement.
+*   **Allowed explicit full-file form**:
+    *   `overwrite_file=True`
+    *   `old_code=""` (empty string)
+*   **Policy-block event**:
+    *   `old_code_mismatch_overwrite_blocked`
+    *   policy tag: `explicit_overwrite_file_required`
+
+This behavior is centralized in `core/file_tools.py` through:
+
+*   `allow_mismatch_overwrite_for_change(...)`
+*   `apply_change_with_explicit_overwrite_policy(...)`
+*   `MismatchOverwriteBlockedError`
+
 ## Persistence
 
 AURA utilizes two primary mechanisms for persistence: SQLite databases and JSON files.

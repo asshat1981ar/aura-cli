@@ -20,6 +20,7 @@ def build_cycle_panel(
     current_goal: str,
     phases_status: Dict[str, str],
     current_phase: str,
+    confidence: Optional[float] = None,
 ) -> "Panel":
     """Build the pipeline progress panel."""
     if not _RICH_AVAILABLE:
@@ -36,9 +37,13 @@ def build_cycle_panel(
         table.add_row(phase_label, icon)
 
     goal_text = (current_goal[:55] + "…") if len(current_goal) > 56 else (current_goal or "(waiting)")
+    title = f"[bold blue]Pipeline[/bold blue] [dim]{goal_text}[/dim]"
+    if confidence is not None:
+        color = "green" if confidence > 0.7 else "yellow" if confidence > 0.4 else "red"
+        title += f" [dim]|[/dim] [bold {color}]Conf: {confidence*100:.0f}%[/bold {color}]"
 
     return Panel(
         table,
-        title=f"[bold blue]Pipeline[/bold blue] [dim]{goal_text}[/dim]",
+        title=title,
         border_style="blue",
     )

@@ -29,10 +29,10 @@ def _ensure_nx():
 
 class Brain:
 
-    def __init__(self):
+    def __init__(self, db_path: Optional[str] = None):
         # Construct absolute path for the database file
-        db_file_path = Path(__file__).parent / "brain.db"
-        self.db = sqlite3.connect(str(db_file_path)) # Connect using absolute path
+        db_file_path = Path(db_path) if db_path else Path(__file__).parent / "brain.db"
+        self.db = sqlite3.connect(str(db_file_path), check_same_thread=False) # Connect using absolute path
         self._graph = None   # lazy — created on first relate() call
         self._recall_cache: dict = {}   # {query_key: (result, timestamp)}
         self._cache_ttl: float = 5.0    # seconds — invalidated on remember()
@@ -162,6 +162,11 @@ class Brain:
         ).fetchall()
         entries = [r[0] for r in reversed(rows)]
         return self.compress_to_budget(entries, max_tokens)
+
+    def count_memories(self) -> int:
+        """Return total memory entry count using a fast COUNT(*) query."""
+        row = self.db.execute("SELECT COUNT(*) FROM memory").fetchone()
+        return row[0] if row else 0
 
     def add_weakness(self, weakness_description: str):
         self.db.execute("INSERT INTO weaknesses(description) VALUES (?)", (weakness_description,))

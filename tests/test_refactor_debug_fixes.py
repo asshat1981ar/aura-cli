@@ -10,6 +10,7 @@ import sys
 import tempfile
 import json
 import unittest
+import warnings
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -120,7 +121,9 @@ class TestHybridLoopApplyChangeCallSignature(unittest.TestCase):
         model = MagicMock()
         git = MagicMock()
         from core.hybrid_loop import HybridClosedLoop
-        return HybridClosedLoop(model, brain, git)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            return HybridClosedLoop(model, brain, git)
 
     def test_apply_change_calls_safe_apply_with_correct_args(self):
         loop = self._make_loop()
@@ -136,14 +139,14 @@ class TestHybridLoopApplyChangeCallSignature(unittest.TestCase):
 
         captured = {}
 
-        def fake_safe_apply(root, fp, oc, nc, owf=False):
+        def fake_safe_apply(root, fp, oc, nc, overwrite_file=False):
             captured["root"] = root
             captured["file_path"] = fp
             captured["old_code"] = oc
             captured["new_code"] = nc
-            captured["overwrite_file"] = owf
+            captured["overwrite_file"] = overwrite_file
 
-        with patch("core.hybrid_loop._safe_apply_change", side_effect=fake_safe_apply):
+        with patch("core.hybrid_loop.apply_change_with_explicit_overwrite_policy", side_effect=fake_safe_apply):
             result = loop._apply_change_with_debug(
                 project_root=project_root,
                 sanitized_file_path=file_path,
@@ -170,10 +173,12 @@ class TestHybridLoopApplyChangeCallSignature(unittest.TestCase):
         model.respond.return_value = '{"summary":"err","diagnosis":"d","fix_strategy":"f","severity":"HIGH"}'
         git = MagicMock()
         from core.hybrid_loop import HybridClosedLoop
-        loop = HybridClosedLoop(model, brain, git)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            loop = HybridClosedLoop(model, brain, git)
         project_root = Path(tempfile.mkdtemp())
 
-        with patch("core.hybrid_loop._safe_apply_change", side_effect=OldCodeNotFoundError("not found")):
+        with patch("core.hybrid_loop.apply_change_with_explicit_overwrite_policy", side_effect=OldCodeNotFoundError("not found")):
             result = loop._apply_change_with_debug(
                 project_root=project_root,
                 sanitized_file_path="file.py",
@@ -187,6 +192,38 @@ class TestHybridLoopApplyChangeCallSignature(unittest.TestCase):
             )
         self.assertFalse(result, "OldCodeNotFoundError should return False")
 
+    def test_apply_change_handles_mismatch_overwrite_blocked(self):
+        from core.file_tools import MismatchOverwriteBlockedError
+        brain = MagicMock()
+        model = MagicMock()
+        model.respond.return_value = '{"summary":"err","diagnosis":"d","fix_strategy":"f","severity":"HIGH"}'
+        git = MagicMock()
+        from core.hybrid_loop import HybridClosedLoop
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            loop = HybridClosedLoop(model, brain, git)
+        project_root = Path(tempfile.mkdtemp())
+
+        with patch("core.hybrid_loop.apply_change_with_explicit_overwrite_policy", side_effect=MismatchOverwriteBlockedError("blocked")), \
+             patch.object(loop, "_log_and_diagnose_error", return_value=False) as mock_diag:
+            result = loop._apply_change_with_debug(
+                project_root=project_root,
+                sanitized_file_path="file.py",
+                old_code="missing",
+                new_code="new",
+                overwrite_file=False,
+                current_goal="test goal",
+                change_idx=0,
+                result_json={},
+                change={},
+            )
+        self.assertFalse(result, "MismatchOverwriteBlockedError should return False")
+        self.assertEqual(mock_diag.call_args.args[5], "old_code_mismatch_overwrite_blocked")
+        self.assertEqual(
+            mock_diag.call_args.kwargs["extra_details"]["policy"],
+            "explicit_overwrite_file_required",
+        )
+
     def test_apply_change_handles_file_tools_error(self):
         from core.file_tools import FileToolsError
         brain = MagicMock()
@@ -194,10 +231,12 @@ class TestHybridLoopApplyChangeCallSignature(unittest.TestCase):
         model.respond.return_value = '{"summary":"err","diagnosis":"d","fix_strategy":"f","severity":"HIGH"}'
         git = MagicMock()
         from core.hybrid_loop import HybridClosedLoop
-        loop = HybridClosedLoop(model, brain, git)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", DeprecationWarning)
+            loop = HybridClosedLoop(model, brain, git)
         project_root = Path(tempfile.mkdtemp())
 
-        with patch("core.hybrid_loop._safe_apply_change", side_effect=FileToolsError("fs error")):
+        with patch("core.hybrid_loop.apply_change_with_explicit_overwrite_policy", side_effect=FileToolsError("fs error")):
             result = loop._apply_change_with_debug(
                 project_root=project_root,
                 sanitized_file_path="file.py",

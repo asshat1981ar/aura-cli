@@ -49,7 +49,7 @@ class EvolutionLoop:
                   such as hypothesis, tasks, implementation, evaluation, and mutation.
         """
         # Gather system state for PlannerAgent
-        memory_snapshot = "\n".join(self.brain.recall_all())
+        memory_snapshot = "\n".join(self.brain.recall_with_budget(max_tokens=3000))
         similar_past_problems = "\n".join(self.vector.search(goal))
         known_weaknesses = "\n".join(self.brain.recall_weaknesses())
 

@@ -1,0 +1,23 @@
+AURA CLI
+
+Commands:
+  help         Show CLI help
+  doctor       Run system diagnostics
+  bootstrap    Create default config
+  diag         MCP diagnostics snapshot
+  logs         Stream AURA logs
+  watch        Launch TUI monitor
+  studio       Launch AURA Studio
+  goal         Goal queue operations
+  workflow     Workflow operations
+  mcp          MCP HTTP client commands
+  scaffold     Scaffold a project
+  evolve       Run evolution loop
+
+Examples:
+  python3 main.py goal add "Refactor queue" --run
+  python3 main.py mcp tools
+  python3 main.py help goal add
+
+Legacy flat flags remain supported but are deprecated.
+

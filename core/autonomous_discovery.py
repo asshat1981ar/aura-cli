@@ -68,6 +68,8 @@ class AutonomousDiscovery:
         goal_queue,
         memory_store,
         project_root: str = ".",
+        *,
+        goal_queue_extra=None,
     ):
         self.queue = goal_queue
         self.memory = memory_store
@@ -75,6 +77,7 @@ class AutonomousDiscovery:
         self._seen_path = self.root / "memory" / "discovery_seen.json"
         self._seen: set = self._load_seen()
         self._cycle_count = 0
+        self._goal_queue = goal_queue_extra
 
     # ── Public API ───────────────────────────────────────────────────────────
 
@@ -91,6 +94,20 @@ class AutonomousDiscovery:
         except Exception as exc:
             log_json("ERROR", "autonomous_discovery_failed", details={"error": str(exc)})
             return {"error": str(exc)}
+
+    def _enqueue_findings(self, findings: Dict) -> int:
+        """Enqueue up to 3 high-priority findings as goals."""
+        suggestions = findings.get("suggestions", [])[:3]
+        if not suggestions or not hasattr(self, '_goal_queue') or self._goal_queue is None:
+            return 0
+        new_goals = [s.get("suggested_goal", s.get("description", "")) for s in suggestions]
+        new_goals = [g for g in new_goals if g]
+        if new_goals and hasattr(self._goal_queue, 'batch_add'):
+            self._goal_queue.batch_add(new_goals)
+        elif new_goals:
+            for g in new_goals:
+                self._goal_queue.add(g)
+        return len(new_goals)
 
     # ── Internal ─────────────────────────────────────────────────────────────
 
@@ -211,6 +228,43 @@ class AutonomousDiscovery:
                     "file": rel,
                     "line": 0,
                 })
+        return findings
+
+    def _scan_structural_debt(self) -> List[Dict]:
+        """Use StructuralAnalyzerSkill to find architectural issues."""
+        findings = []
+        try:
+            from agents.skills.structural_analyzer import StructuralAnalyzerSkill
+            # We don't have easy access to the ContextGraph from here currently, 
+            # unless we instantiate it. Luckily StructuralAnalyzerSkill handles default.
+            analyzer = StructuralAnalyzerSkill()
+            result = analyzer.run({"project_root": str(self.root)})
+            
+            # 1. Cycles
+            for cycle in result.get("circular_dependencies", []):
+                goal = f"Fix circular dependency cycle: {' -> '.join(cycle)}"
+                item_hash = hashlib.sha256(f"cycle:{''.join(sorted(cycle))}".encode()).hexdigest()[:16]
+                findings.append({
+                    "signal": "architectural_cycle",
+                    "priority": "high",
+                    "goal": goal,
+                    "hash": item_hash
+                })
+            
+            # 2. Hotspots
+            for hs in result.get("hotspots", []):
+                goal = f"Refactor hotspot {hs['file']} (Centrality: {hs['centrality']:.2f}, Complexity: {hs['max_complexity']})"
+                item_hash = hashlib.sha256(f"hotspot:{hs['file']}".encode()).hexdigest()[:16]
+                findings.append({
+                    "signal": "structural_hotspot",
+                    "priority": "high" if hs["risk_level"] == "CRITICAL" else "medium",
+                    "goal": goal,
+                    "hash": item_hash
+                })
+                
+        except Exception as e:
+            log_json("WARN", "structural_debt_scan_failed", details={"error": str(e)})
+            
         return findings
 
     def _has_definitions(self, path: Path) -> bool:

@@ -1,0 +1,4 @@
+Task: Enhance StructuralAnalyzerSkill for Coverage Reporting
+Summary: Updated the StructuralAnalyzerSkill to optionally run the TestCoverageAnalyzerSkill and report files with 0% coverage as gaps. This is a foundational step for the autonomous feature backfill mechanism.
+Files: agents/skills/structural_analyzer.py, tests/test_structural_analyzer_coverage.py
+Why: To enable AURA to autonomously identify and fill coverage gaps.

@@ -40,6 +40,16 @@ class MemoryStore:
         self._root = Path(root)
         self._root.mkdir(parents=True, exist_ok=True)
 
+    @property
+    def root(self) -> Path:
+        """Return the root directory of this store."""
+        return self._root
+
+    @property
+    def log_path(self) -> Path:
+        """Return the path to the decision log file."""
+        return self._root / self._LOG_FILE
+
     # ── Tier store ────────────────────────────────────────────────────────────
 
     def put(self, tier: str, record: Dict[str, Any]) -> None:

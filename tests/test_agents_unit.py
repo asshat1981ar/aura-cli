@@ -501,6 +501,18 @@ class TestRegistryAdapters:
         adapter = ActAdapter(CoderAgent(self.brain, self.model))
         assert adapter.name == "act"
 
+    def test_act_adapter_parses_aura_target_directive(self):
+        from agents.registry import ActAdapter
+
+        mock_agent = MagicMock()
+        mock_agent.implement.return_value = "# AURA_TARGET: foo.py\ncode here"
+        mock_agent.AURA_TARGET_DIRECTIVE = "# AURA_TARGET:"
+
+        result = ActAdapter(mock_agent).run({"task": "test goal"})
+
+        assert result["changes"][0]["file_path"] == "foo.py"
+        assert result["changes"][0]["new_code"] == "code here"
+
     def test_default_agents_returns_dict(self):
         from agents.registry import default_agents
         agents = default_agents(self.brain, self.model)

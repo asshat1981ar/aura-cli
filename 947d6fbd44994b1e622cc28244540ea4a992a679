@@ -1,0 +1,4 @@
+Task: Add Configuration Settings
+Summary: Added 'auto_backfill_coverage' and 'reliability_threshold' to ConfigManager. Updated DEFAULT_CONFIG and added validators to ensure the threshold is a float between 0 and 100.
+Files: core/config_manager.py, tests/test_config_backfill.py
+Why: To allow users to enable/disable the autonomous backfill mechanism and customize the coverage level that triggers it.

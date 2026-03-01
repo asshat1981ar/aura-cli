@@ -2,6 +2,7 @@ import json
 import datetime
 import os
 import sys
+from core.redaction import mask_secrets
 
 def log_json(level: str, event: str, goal: str = None, details: dict = None):
     """
@@ -15,11 +16,7 @@ def log_json(level: str, event: str, goal: str = None, details: dict = None):
         details (dict, optional): A dictionary for additional information. Defaults to None.
     """
     # R3: Unified Control Plane - Automated Secret Masking
-    try:
-        from core.sanitizer import mask_secrets
-        safe_details = mask_secrets(details) if details else None
-    except ImportError:
-        safe_details = details
+    safe_details = mask_secrets(details) if details else None
 
     log_entry = {
         "ts": datetime.datetime.now(datetime.timezone.utc).isoformat(),

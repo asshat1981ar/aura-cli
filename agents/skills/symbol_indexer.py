@@ -20,14 +20,15 @@ def _first_docstring(node: ast.AST) -> str:
 
 
 def _get_imports(tree: ast.Module) -> List[str]:
-    """Return list of top-level module names this file imports from."""
+    """Return list of module paths this file imports from."""
     imports = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                imports.append(alias.name.split(".")[0])
+                imports.append(alias.name)
         elif isinstance(node, ast.ImportFrom) and node.module:
-            imports.append(node.module.split(".")[0])
+            # For 'from a.b import c', we want 'a.b'
+            imports.append(node.module)
     return list(dict.fromkeys(imports))  # deduplicated, order-preserving
 
 

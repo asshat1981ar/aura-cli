@@ -10,6 +10,8 @@ from agents.skills.base import SkillBase
 from core.context_graph import ContextGraph
 from agents.skills.complexity_scorer import ComplexityScorerSkill
 
+from agents.skills.symbol_indexer import SymbolIndexerSkill
+
 class StructuralAnalyzerSkill(SkillBase):
     """
     Analyzes the ContextGraph for circular dependencies and bottlenecks,
@@ -20,13 +22,39 @@ class StructuralAnalyzerSkill(SkillBase):
     def __init__(self, context_graph: Optional[ContextGraph] = None):
         self.cg = context_graph or ContextGraph()
         self.complexity_scorer = ComplexityScorerSkill()
+        self.symbol_indexer = SymbolIndexerSkill()
 
     def _run(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         project_root = input_data.get("project_root")
         if not project_root:
             return {"error": "Provide 'project_root'"}
 
-        # 1. Graph Analysis
+        # 1. Populate graph from symbol indexer if it looks empty or needs refresh
+        index_results = self.symbol_indexer.run({"project_root": project_root})
+        import_graph = index_results.get("import_graph", {})
+        
+        # Build mapping from module path to file path
+        # core.logging_utils -> core/logging_utils.py
+        mod_to_file = {}
+        for f in import_graph.keys():
+            if f.endswith(".py"):
+                mod_name = f[:-3].replace("/", ".").replace("\\", ".")
+                mod_to_file[mod_name] = f
+                # Also handle __init__.py modules
+                if mod_name.endswith(".__init__"):
+                    mod_to_file[mod_name[:-9]] = f
+
+        for file_path, imports in import_graph.items():
+            for imp in imports:
+                # Try resolving to project file
+                resolved = mod_to_file.get(imp)
+                if resolved:
+                    self.cg.add_edge(file_path, resolved, "imports")
+                else:
+                    # Fallback for 3rd party or unresolved local
+                    self.cg.add_edge(file_path, f"module:{imp}", "imports")
+
+        # 2. Graph Analysis
         cycles = self.cg.find_circular_dependencies()
         bottlenecks = self.cg.find_bottleneck_files(limit=10)
 

@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, List, Union
 from core.exceptions import AuraError
 from core.config_manager import config
+from core.redaction import mask_secrets
 
 class SecurityError(AuraError):
     """Raised when a security boundary is violated."""
@@ -11,20 +12,13 @@ class SecurityError(AuraError):
 
 # Hardcoded safe commands for AURA
 BASE_ALLOWED_COMMANDS = {
-    "python", "python3", "pytest", "git", "ls", "cat", "rm", "mkdir", "mv", "grep", "sed", "npx"
+    "python", "python3", "python3.10", "python3.11", "python3.12", "pytest", "git", "ls", "cat", "rm", "mkdir", "mv", "grep", "sed", "npx"
 }
 
 def get_allowed_commands() -> set:
     """Returns the effective set of allowed commands from config + base."""
     extra = config.get("security", {}).get("allowed_commands", [])
     return BASE_ALLOWED_COMMANDS.union(set(extra))
-
-# Regex for masking secrets (best-effort)
-SECRET_PATTERNS = [
-    re.compile(r"sk-[a-zA-Z0-9]{32,}", re.IGNORECASE), # Generic OpenAI/OpenRouter style
-    re.compile(r"Bearer\s+[a-zA-Z0-9._-]+", re.IGNORECASE),
-    re.compile(r"api[-_]?key", re.IGNORECASE) # Catch key names in dicts
-]
 
 def sanitize_path(file_path: Union[str, Path], root_dir: Union[str, Path]) -> Path:
     """
@@ -52,37 +46,24 @@ def sanitize_command(cmd: List[str]):
     
     allowed = get_allowed_commands()
     base_cmd = os.path.basename(cmd[0])
-    if base_cmd not in allowed:
+    is_python = base_cmd.startswith("python")
+    
+    # We allow python, python3, python3.x etc.
+    if is_python:
+        # Check if it's literally "python" or "python3" or "python3.X"
+        if not re.match(r"^python(\d+(\.\d+)?)?$", base_cmd):
+            # Not a standard python name, check if it's in the allowed set.
+            if base_cmd not in allowed:
+                raise SecurityError(f"Access denied: Command '{base_cmd}' is not in the allowlist.")
+    elif base_cmd not in allowed:
         raise SecurityError(f"Access denied: Command '{base_cmd}' is not in the allowlist.")
     
     # Flag dangerous flags (shallow check)
     dangerous_args = ["--eval", "-e", "--exec", "-c"]
-    if base_cmd == "python" or base_cmd == "python3":
+    if is_python:
         for arg in cmd[1:]:
             if arg in dangerous_args:
-                # We allow -m for pytest/compile
+                # We allow -m for pytest/compile/unittest
                 if "-m" in cmd: continue
                 raise SecurityError(f"Access denied: Dangerous argument '{arg}' in command.")
 
-def mask_secrets(data: Any) -> Any:
-    """
-    Unified Control Plane: Recursively redacts sensitive info from data.
-    """
-    if isinstance(data, dict):
-        new_dict = {}
-        for k, v in data.items():
-            if any(p.search(k) for p in SECRET_PATTERNS if "api" in p.pattern or "key" in p.pattern):
-                new_dict[k] = "[REDACTED]"
-            else:
-                new_dict[k] = mask_secrets(v)
-        return new_dict
-    elif isinstance(data, list):
-        return [mask_secrets(i) for i in data]
-    elif isinstance(data, str):
-        masked = data
-        for p in SECRET_PATTERNS:
-            # Mask the actual secret value if found in string
-            if "sk-" in p.pattern or "Bearer" in p.pattern:
-                masked = p.sub("[REDACTED]", masked)
-        return masked
-    return data

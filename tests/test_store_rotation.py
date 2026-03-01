@@ -88,3 +88,32 @@ class TestStoreRotation(unittest.TestCase):
         for i, line in enumerate(lines):
             parsed = json.loads(line)
             self.assertEqual(parsed["step"], i)
+
+    # ── read_log limit behaviour ──────────────────────────────────────────────
+
+    def test_read_log_no_limit_returns_all(self):
+        """Default limit=0 must return every entry."""
+        for i in range(10):
+            self.store.append_log({"n": i})
+        result = self.store.read_log()
+        self.assertEqual(len(result), 10)
+
+    def test_read_log_limit_returns_last_n(self):
+        """Positive limit returns only the last N entries."""
+        for i in range(10):
+            self.store.append_log({"n": i})
+        result = self.store.read_log(limit=3)
+        self.assertEqual(len(result), 3)
+        self.assertEqual([e["n"] for e in result], [7, 8, 9])
+
+    def test_read_log_limit_zero_returns_all(self):
+        """Explicit limit=0 still returns all entries (no truncation)."""
+        for i in range(5):
+            self.store.append_log({"n": i})
+        result = self.store.read_log(limit=0)
+        self.assertEqual(len(result), 5)
+
+    def test_read_log_empty_log(self):
+        """read_log on a missing log file returns an empty list."""
+        result = self.store.read_log()
+        self.assertEqual(result, [])

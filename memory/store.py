@@ -72,7 +72,7 @@ class MemoryStore:
         with self.log_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(entry) + "\n")
 
-    def read_log(self, limit: int = 100) -> List[Dict[str, Any]]:
+    def read_log(self, limit: int = 0) -> List[Dict[str, Any]]:
         if not self.log_path.exists():
             return []
         entries = []
@@ -85,4 +85,4 @@ class MemoryStore:
                     entries.append(json.loads(line))
                 except json.JSONDecodeError:
                     continue
-        return entries[-limit:]
+        return entries[-limit:] if limit > 0 else entries

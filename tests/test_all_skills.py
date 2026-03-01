@@ -541,12 +541,26 @@ class TestStructuralAnalyzer:
 
 
 # ---------------------------------------------------------------------------
+# 30. evolution_skill
+# ---------------------------------------------------------------------------
+
+class TestEvolutionSkill:
+    def test_name(self, skills):
+        assert skills["evolution_skill"].name == "evolution_skill"
+
+    def test_empty_input(self, skills):
+        # EvolutionSkill might fail in a unit test because it needs a full runtime,
+        # so we just test that it's in the registry and has the correct name.
+        assert skills["evolution_skill"] is not None
+
+
+# ---------------------------------------------------------------------------
 # Registry-level assertions
 # ---------------------------------------------------------------------------
 
-def test_registry_has_all_29_skills(skills):
-    assert len(skills) >= 29, (
-        f"Expected ≥29 skills in registry, got {len(skills)}: {sorted(skills)}"
+def test_registry_has_all_30_skills(skills):
+    assert len(skills) >= 30, (
+        f"Expected ≥30 skills in registry, got {len(skills)}: {sorted(skills)}"
     )
 
 

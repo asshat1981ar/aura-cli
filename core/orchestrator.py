@@ -114,6 +114,8 @@ class LoopOrchestrator:
         """
         self.agents = agents
         self.memory_controller = memory_controller
+        if memory_store is not None:
+            self.memory_controller.set_store(memory_store)
         self.policy = policy or Policy.from_config({})
         self.project_root = Path(project_root or ".")
         self.strict_schema = strict_schema
@@ -446,6 +448,20 @@ class LoopOrchestrator:
             return "skip"
         return "act"  # default: code-level fix is worth retrying
 
+    def _normalize_verification_result(self, verification: Dict) -> Dict:
+        """Accept both legacy ``passed`` and canonical ``status`` verification payloads."""
+        if not isinstance(verification, dict):
+            return {"status": "fail", "failures": ["invalid verification payload"], "logs": str(verification)}
+        if verification.get("status") in ("pass", "fail", "skip"):
+            return verification
+        if "passed" in verification:
+            normalized = dict(verification)
+            normalized["status"] = "pass" if bool(verification.get("passed")) else "fail"
+            normalized.setdefault("failures", [])
+            normalized.setdefault("logs", "")
+            return normalized
+        return verification
+
     # ── Inner loop helpers ────────────────────────────────────────────────────
 
     def _run_sandbox_loop(
@@ -548,6 +564,7 @@ class LoopOrchestrator:
             }
         else:
             verification = self._run_phase("verify", {"change_set": act, "dry_run": dry_run, "project_root": str(self.project_root), "tests": tests})
+        verification = self._normalize_verification_result(verification)
         self._notify_ui("on_phase_complete", "verify", (time.time() - t0_verify) * 1000, success=(verification.get("status") in ("pass", "skip")))
         
         phase_outputs["verification"] = verification

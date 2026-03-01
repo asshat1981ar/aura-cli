@@ -13,6 +13,8 @@ from core.vector_store import VectorStore
 from core.memory_types import RetrievalQuery
 
 class MockAdapter:
+    def model_id(self):
+        return "test-model"
     def embed(self, texts):
         # Return a simple non-zero vector
         v = np.zeros(1536, dtype=np.float32)

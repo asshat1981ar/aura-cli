@@ -50,6 +50,7 @@ class TaskManager:
     Unified Control Plane: Manages task hierarchies via MemoryController.
     """
     def __init__(self, persistence_path=None):
+        self.persistence_path = Path(persistence_path) if persistence_path else None
         self.root_tasks: List[Task] = []
         self.load()
 
@@ -60,10 +61,30 @@ class TaskManager:
 
     def save(self):
         data = [t.to_dict() for t in self.root_tasks]
+        if self.persistence_path is not None:
+            try:
+                self.persistence_path.parent.mkdir(parents=True, exist_ok=True)
+                self.persistence_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            except Exception as e:
+                log_json("WARN", "task_hierarchy_file_save_failed", details={"error": str(e), "path": str(self.persistence_path)})
         memory_controller.store(MemoryTier.PROJECT, {"type": "task_hierarchy", "data": data}, metadata={"authority": "task_manager"})
         log_json("INFO", "task_hierarchy_persisted_to_controller", details={"root_count": len(self.root_tasks)})
 
     def load(self):
+        if self.persistence_path is not None:
+            if not self.persistence_path.exists():
+                self.root_tasks = []
+                log_json("INFO", "task_hierarchy_file_not_found", details={"path": str(self.persistence_path)})
+                return
+            try:
+                data = json.loads(self.persistence_path.read_text(encoding="utf-8"))
+                self.root_tasks = [Task.from_dict(t) for t in data]
+                log_json("INFO", "task_hierarchy_loaded_from_file", details={"root_count": len(self.root_tasks), "path": str(self.persistence_path)})
+            except Exception as e:
+                self.root_tasks = []
+                log_json("WARN", "task_hierarchy_file_load_failed", details={"error": str(e), "path": str(self.persistence_path)})
+            return
+
         # Retrieve the hierarchy from the project memory tier
         records = memory_controller.retrieve(MemoryTier.PROJECT, limit=500)
         # Look for the most recent task_hierarchy record

@@ -19,6 +19,7 @@ class GoalQueue:
                               Defaults to "memory/goal_queue.json".
         """
         self.queue_path = Path(queue_path) # Convert to Path object
+        self.queue_path.parent.mkdir(parents=True, exist_ok=True)
         self.queue = self._load_queue() # Load into a deque
 
     def add(self, goal):
@@ -79,11 +80,12 @@ class GoalQueue:
     def _save_queue(self):
         """
         Persists the current state of the goal queue to the configured JSON file.
-        Ensures the parent directory exists before writing.
+        Uses a compact encoding because this path is on the hot add/pop loop.
         """
-        self.queue_path.parent.mkdir(parents=True, exist_ok=True) # Use Path.parent and mkdir
-        with open(self.queue_path, 'w') as f:
-            json.dump(list(self.queue), f, indent=4) # Convert deque to list for JSON serialization
+        self.queue_path.write_text(
+            json.dumps(list(self.queue), separators=(",", ":")),
+            encoding="utf-8",
+        )
 
     def _load_queue(self):
         """
@@ -94,7 +96,7 @@ class GoalQueue:
             collections.deque: The loaded goal queue.
         """
         if self.queue_path.exists(): # Use Path.exists()
-            with open(self.queue_path, 'r') as f:
+            with self.queue_path.open('r', encoding='utf-8') as f:
                 try:
                     return deque(json.load(f))
                 except json.JSONDecodeError:

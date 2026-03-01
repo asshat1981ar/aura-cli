@@ -488,6 +488,8 @@ class WorkflowEngine:
 
     def cancel_execution(self, exec_id: str) -> None:
         exc = self._get_execution(exec_id)
+        if not exc:
+            raise KeyError(f"Execution '{exec_id}' not found.")
         if exc.is_terminal():
             raise ValueError(f"Execution {exec_id} is already terminal ({exc.status}).")
         exc.status = "cancelled"
@@ -497,6 +499,8 @@ class WorkflowEngine:
 
     def execution_status(self, exec_id: str) -> Dict[str, Any]:
         exc = self._get_execution(exec_id)
+        if not exc:
+            return {"id": exec_id, "status": "not_found", "error": f"Execution {exec_id} not found."}
         return {
             "id": exc.id,
             "workflow": exc.workflow_name,
@@ -519,12 +523,15 @@ class WorkflowEngine:
 
     def get_step_output(self, exec_id: str, step_name: str) -> Dict:
         exc = self._get_execution(exec_id)
+        if not exc:
+            raise KeyError(f"Execution '{exec_id}' not found.")
         if step_name not in exc.step_outputs:
             raise KeyError(f"Step '{step_name}' output not available in execution {exec_id}.")
         return exc.step_outputs[step_name]
 
     def list_executions(self, status_filter: Optional[str] = None) -> List[Dict]:
-        items = list(self._executions.values())
+        with self._global_lock:
+            items = list(self._executions.values())
         if status_filter:
             items = [e for e in items if e.status == status_filter]
         return [
@@ -573,12 +580,15 @@ class WorkflowEngine:
         loop_status() shows a terminal state.
         """
         loop = self._get_loop(loop_id)
+        if not loop:
+            return {"error": f"Loop {loop_id} not found."}
         if loop.is_terminal():
             return {"error": f"Loop {loop_id} is already '{loop.status}'."}
 
         lock = self._locks.get(loop_id, threading.Lock())
         with lock:
             loop = self._get_loop(loop_id)  # re-read under lock
+            if not loop: return {"error": "Loop deleted during tick"}
             if loop.current_cycle >= loop.max_cycles:
                 loop.status = "completed"
                 loop.stop_reason = "max_cycles_reached"
@@ -648,6 +658,7 @@ class WorkflowEngine:
 
     def stop_loop(self, loop_id: str, reason: str = "user_requested") -> None:
         loop = self._get_loop(loop_id)
+        if not loop: raise KeyError(f"Loop {loop_id} not found")
         if loop.is_terminal():
             raise ValueError(f"Loop {loop_id} is already terminal ({loop.status}).")
         loop.status = "stopped"
@@ -658,6 +669,7 @@ class WorkflowEngine:
 
     def pause_loop(self, loop_id: str) -> None:
         loop = self._get_loop(loop_id)
+        if not loop: raise KeyError(f"Loop {loop_id} not found")
         if loop.is_terminal():
             raise ValueError(f"Loop {loop_id} already terminal ({loop.status}).")
         loop.status = "paused"
@@ -666,6 +678,7 @@ class WorkflowEngine:
 
     def resume_loop(self, loop_id: str) -> None:
         loop = self._get_loop(loop_id)
+        if not loop: raise KeyError(f"Loop {loop_id} not found")
         if loop.status != "paused":
             raise ValueError(f"Loop {loop_id} is '{loop.status}', not 'paused'.")
         loop.status = "running"
@@ -674,6 +687,8 @@ class WorkflowEngine:
 
     def loop_status(self, loop_id: str) -> Dict[str, Any]:
         loop = self._get_loop(loop_id)
+        if not loop:
+            return {"id": loop_id, "status": "not_found", "error": f"Loop {loop_id} not found."}
         return {
             "id": loop.id,
             "goal": loop.goal,
@@ -696,7 +711,8 @@ class WorkflowEngine:
         }
 
     def list_loops(self, status_filter: Optional[str] = None) -> List[Dict]:
-        items = list(self._loops.values())
+        with self._global_lock:
+            items = list(self._loops.values())
         if status_filter:
             items = [l for l in items if l.status == status_filter]
         return [
@@ -722,6 +738,7 @@ class WorkflowEngine:
         Returns {"healthy": bool, "warnings": [...], "recommendation": str}
         """
         loop = self._get_loop(loop_id)
+        if not loop: return {"healthy": False, "error": "Loop not found"}
         warnings: List[str] = []
 
         if loop.is_terminal():
@@ -798,25 +815,25 @@ class WorkflowEngine:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get_execution(self, exec_id: str) -> WorkflowExecution:
-        exc = self._executions.get(exec_id)
-        if not exc:
-            raise KeyError(f"Execution '{exec_id}' not found.")
-        return exc
+    def _get_execution(self, exec_id: str) -> Optional[WorkflowExecution]:
+        with self._global_lock:
+            return self._executions.get(exec_id)
 
-    def _get_loop(self, loop_id: str) -> AgenticLoop:
-        loop = self._loops.get(loop_id)
-        if not loop:
-            raise KeyError(f"Loop '{loop_id}' not found.")
-        return loop
+    def _get_loop(self, loop_id: str) -> Optional[AgenticLoop]:
+        with self._global_lock:
+            return self._loops.get(loop_id)
 
     def _get_orchestrator(self):
         """Lazy-load LoopOrchestrator with default agents. Cached after first call."""
         if not hasattr(self, "_orchestrator"):
+            project_root = Path(__file__).resolve().parent.parent
             try:
                 from aura_cli.cli_main import create_runtime
-                rt = create_runtime()
-                self._orchestrator = rt["orchestrator"]
+                rt = create_runtime(project_root, overrides=None)
+                orchestrator = rt.get("orchestrator")
+                if orchestrator is None:
+                    raise KeyError("Runtime factory returned no orchestrator")
+                self._orchestrator = orchestrator
             except Exception as exc:
                 # Fallback: minimal orchestrator for testing
                 log_json("WARN", "workflow_engine_orchestrator_fallback", details={"error": str(exc)})
@@ -828,7 +845,12 @@ class WorkflowEngine:
                 brain = Brain()
                 model = ModelAdapter()
                 agents = default_agents(brain, model)
-                self._orchestrator = LoopOrchestrator(agents=agents, memory_store=MemoryStore())
+                memory_store_root = project_root / "memory" / "store"
+                self._orchestrator = LoopOrchestrator(
+                    agents=agents,
+                    memory_store=MemoryStore(memory_store_root),
+                    project_root=project_root,
+                )
         return self._orchestrator
 
     def _journal_execution(self, exc: WorkflowExecution) -> None:

@@ -1,0 +1,21 @@
+# AURA CLI — runtime and development dependencies
+#
+# Install all runtime deps plus dev/test tools:
+#   pip install -r requirements.txt
+#
+# Runtime (same as tools/requirements.txt)
+fastapi==0.129.0
+uvicorn==0.40.0
+requests==2.32.3
+pydantic==2.12.5
+python-dotenv
+numpy
+gitpython
+rich
+textblob
+networkx
+
+# Development / testing
+pytest>=7.0
+httpx>=0.24
+anyio>=4.0

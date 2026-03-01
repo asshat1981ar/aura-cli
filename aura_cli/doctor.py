@@ -58,7 +58,7 @@ def check_sqlite_write_access(repo_root: Path):
     """Checks for SQLite write access in the repository directory."""
     test_db_path = repo_root / "test_write_access.db"
     try:
-        conn = sqlite3.connect(test_db_path)
+        conn = sqlite3.connect(test_db_path, check_same_thread=False)
         cursor = conn.cursor()
         cursor.execute("CREATE TABLE IF NOT EXISTS test (id INTEGER)")
         conn.commit()
@@ -186,4 +186,155 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# ---------------------------------------------------------------------------
+# Doctor v2 — Rich-formatted comprehensive health check
+# ---------------------------------------------------------------------------
+
+def run_doctor_v2(project_root: Path = None, rich_output: bool = True) -> list:
+    """
+    Run all AURA health checks and return results as a list of dicts.
+
+    Each dict has: {"check": str, "status": "PASS"|"WARN"|"FAIL", "detail": str}
+
+    Args:
+        project_root: Override project root (default: auto-detect)
+        rich_output:  Print rich-formatted table if True and rich is available
+    """
+    import importlib.util
+    import json
+    import time
+
+    if project_root is None:
+        project_root = Path(__file__).resolve().parent.parent
+
+    results = []
+
+    def _add(check: str, status: str, detail: str):
+        results.append({"check": check, "status": status, "detail": detail})
+
+    # 1. Python version
+    v = sys.version_info
+    if v >= (3, 9):
+        _add("Python version", "PASS", f"{v.major}.{v.minor}.{v.micro}")
+    else:
+        _add("Python version", "FAIL", f"{v.major}.{v.minor}.{v.micro} (need ≥3.9)")
+
+    # 2. Config file
+    cfg_path = project_root / "aura.config.json"
+    if cfg_path.exists():
+        try:
+            cfg = json.loads(cfg_path.read_text())
+            _add("Config file", "PASS", f"aura.config.json ({len(cfg)} keys)")
+        except json.JSONDecodeError as e:
+            _add("Config file", "FAIL", f"Invalid JSON: {e}")
+    else:
+        _add("Config file", "WARN", "aura.config.json not found")
+
+    # 3. API key
+    key = os.getenv("AURA_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+    if key and len(key) > 10:
+        _add("API key", "PASS", "AURA_API_KEY / OPENROUTER_API_KEY set")
+    else:
+        _add("API key", "WARN", "No API key found (set AURA_API_KEY)")
+
+    # 4. Brain DB
+    brain_db = project_root / "memory" / "brain.db"
+    if brain_db.exists():
+        try:
+            conn = sqlite3.connect(str(brain_db), check_same_thread=False)
+            row = conn.execute("SELECT COUNT(*) FROM memory").fetchone()
+            wal = conn.execute("PRAGMA journal_mode").fetchone()
+            count = row[0] if row else 0
+            mode = wal[0] if wal else "unknown"
+            conn.close()
+            status = "PASS" if mode == "wal" else "WARN"
+            _add("Brain DB", status, f"{count:,} entries, journal={mode}")
+        except Exception as e:
+            _add("Brain DB", "FAIL", str(e))
+    else:
+        _add("Brain DB", "WARN", "memory/brain.db not found")
+
+    # 5. Goal queue
+    for qpath in ["memory/goal_queue.json", "memory/goal_queue_v2.json"]:
+        fpath = project_root / qpath
+        if fpath.exists():
+            try:
+                goals = json.loads(fpath.read_text())
+                _add("Goal queue", "PASS", f"{qpath} ({len(goals)} goals)")
+            except Exception as e:
+                _add("Goal queue", "FAIL", f"{qpath}: {e}")
+            break
+    else:
+        _add("Goal queue", "WARN", "No goal queue file found")
+
+    # 6. Dependencies
+    required = {
+        "fastapi": "fastapi",
+        "uvicorn": "uvicorn",
+        "pydantic": "pydantic",
+        "numpy": "numpy",
+        "rich": "rich",
+    }
+    missing = [pkg for mod, pkg in required.items()
+               if importlib.util.find_spec(mod) is None]
+    if missing:
+        _add("Dependencies", "WARN", f"Missing: {', '.join(missing)}")
+    else:
+        _add("Dependencies", "PASS", "All core packages present")
+
+    # 7. rich available (for TUI)
+    if importlib.util.find_spec("rich") is not None:
+        _add("TUI (rich)", "PASS", f"rich available — run: aura watch")
+    else:
+        _add("TUI (rich)", "WARN", "pip install rich (for TUI dashboard)")
+
+    # 8. Git repo
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, cwd=project_root, timeout=5
+        )
+        if result.returncode == 0:
+            _add("Git repo", "PASS", f"HEAD={result.stdout.strip()}")
+        else:
+            _add("Git repo", "WARN", "Not a git repo or git unavailable")
+    except Exception:
+        _add("Git repo", "WARN", "git not available")
+
+    # 9. OpenRouter reachable (quick DNS check only)
+    try:
+        import socket
+        socket.setdefaulttimeout(2)
+        socket.getaddrinfo("openrouter.ai", 443)
+        _add("OpenRouter DNS", "PASS", "openrouter.ai resolves")
+    except Exception:
+        _add("OpenRouter DNS", "WARN", "openrouter.ai not reachable (offline?)")
+
+    # Print rich table if requested
+    if rich_output:
+        try:
+            from rich.console import Console
+            from rich.table import Table
+            from rich import box
+
+            console = Console()
+            table = Table(title="AURA Doctor v2", box=box.ROUNDED, show_lines=False)
+            table.add_column("Check", style="bold", width=18)
+            table.add_column("Status", width=6)
+            table.add_column("Detail")
+
+            _icons = {"PASS": "[green]✓[/green]", "WARN": "[yellow]![/yellow]", "FAIL": "[red]✗[/red]"}
+            for r in results:
+                icon = _icons.get(r["status"], "?")
+                table.add_row(r["check"], icon, r["detail"])
+
+            console.print(table)
+        except ImportError:
+            for r in results:
+                icon = {"PASS": "✓", "WARN": "!", "FAIL": "✗"}.get(r["status"], "?")
+                print(f"  [{icon}] {r['check']:<20} {r['detail']}")
+
+    return results
 

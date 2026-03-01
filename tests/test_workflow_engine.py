@@ -299,6 +299,45 @@ class TestAgenticLoop:
         fresh_engine._orchestrator = mock_orch
         return mock_orch
 
+    def test_get_orchestrator_passes_project_root_to_runtime_factory(self, fresh_engine):
+        import core.workflow_engine as wfe
+
+        expected_root = Path(wfe.__file__).resolve().parent.parent
+        sentinel_orchestrator = object()
+
+        with patch("aura_cli.cli_main.create_runtime", return_value={"orchestrator": sentinel_orchestrator}) as mock_create:
+            orchestrator = fresh_engine._get_orchestrator()
+
+        assert orchestrator is sentinel_orchestrator
+        mock_create.assert_called_once_with(expected_root, overrides=None)
+
+    def test_get_orchestrator_fallback_builds_valid_memory_store(self, fresh_engine):
+        import core.workflow_engine as wfe
+
+        expected_root = Path(wfe.__file__).resolve().parent.parent
+        expected_memory_root = expected_root / "memory" / "store"
+        fake_memory_store = object()
+        fake_orchestrator = object()
+        fake_brain = MagicMock()
+        fake_model = MagicMock()
+        fake_agents = {"ingest": MagicMock()}
+
+        with patch("aura_cli.cli_main.create_runtime", side_effect=TypeError("missing project_root")), \
+             patch("memory.store.MemoryStore", return_value=fake_memory_store) as mock_store, \
+             patch("memory.brain.Brain", return_value=fake_brain), \
+             patch("core.model_adapter.ModelAdapter", return_value=fake_model), \
+             patch("agents.registry.default_agents", return_value=fake_agents), \
+             patch("core.orchestrator.LoopOrchestrator", return_value=fake_orchestrator) as mock_orch:
+            orchestrator = fresh_engine._get_orchestrator()
+
+        assert orchestrator is fake_orchestrator
+        mock_store.assert_called_once_with(expected_memory_root)
+        mock_orch.assert_called_once_with(
+            agents=fake_agents,
+            memory_store=fake_memory_store,
+            project_root=expected_root,
+        )
+
     def test_create_loop(self, fresh_engine):
         loop_id = fresh_engine.create_loop("Fix the bug", max_cycles=3)
         assert loop_id

@@ -31,10 +31,12 @@ def reset_singletons():
     mod._goal_queue = None
     mod._goal_archive = None
     mod._brain = None
+    mod._memory_cache.clear()
     yield
     mod._goal_queue = None
     mod._goal_archive = None
     mod._brain = None
+    mod._memory_cache.clear()
 
 
 @pytest.fixture()
@@ -58,7 +60,10 @@ def mock_archive():
 @pytest.fixture()
 def mock_brain():
     b = MagicMock()
-    b.recall_all = MagicMock(return_value=["memory about Python", "memory about tests"])
+    _memories = ["memory about Python", "memory about tests"]
+    b.recall_all = MagicMock(return_value=_memories)
+    b.recall_with_budget = MagicMock(return_value=_memories)
+    b.count_memories = MagicMock(return_value=len(_memories))
     b.recall_weaknesses = MagicMock(return_value=["sometimes forgets context"])
     b.remember = MagicMock()
     return b

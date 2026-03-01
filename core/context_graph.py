@@ -177,6 +177,66 @@ class ContextGraph:
             ).fetchall())
         return {"nodes": node_counts, "edges": edge_counts}
 
+    def get_nx_graph(self, relations: Optional[List[str]] = None):
+        """Export the graph to a networkx.DiGraph for complex analysis."""
+        import networkx as nx
+        G = nx.DiGraph()
+        
+        with self._conn() as db:
+            nodes = db.execute("SELECT id, type, label, meta FROM nodes").fetchall()
+            for nid, ntype, label, meta in nodes:
+                G.add_node(nid, type=ntype, label=label, meta=self._parse_meta(meta))
+            
+            query = "SELECT src_id, dst_id, relation, weight FROM edges"
+            params = []
+            if relations:
+                query += " WHERE relation IN ({})".format(",".join(["?"] * len(relations)))
+                params = relations
+            
+            edges = db.execute(query, params).fetchall()
+            for src, dst, rel, weight in edges:
+                G.add_edge(src, dst, relation=rel, weight=weight)
+        return G
+
+    def find_circular_dependencies(self) -> List[List[str]]:
+        """Identify cycles in the 'imports' and 'calls' graph."""
+        import networkx as nx
+        G = self.get_nx_graph(relations=["imports", "imports_from", "calls"])
+        cycles = list(nx.simple_cycles(G))
+        # Map IDs back to labels
+        labels = nx.get_node_attributes(G, 'label')
+        return [[labels.get(node, node) for node in cycle] for cycle in cycles]
+
+    def find_bottleneck_files(self, limit: int = 5) -> List[Dict]:
+        """Find files with high centrality (highly depended on)."""
+        import networkx as nx
+        G = self.get_nx_graph(relations=["imports", "imports_from", "calls"])
+        if not G.nodes:
+            return []
+        
+        try:
+            # PageRank often requires scipy for performance
+            centrality = nx.pagerank(G, weight='weight')
+        except Exception:
+            # Fallback to degree centrality (no extra dependencies)
+            log_json("INFO", "pagerank_failed_fallback_to_degree")
+            centrality = nx.degree_centrality(G)
+            
+        sorted_nodes = sorted(centrality.items(), key=lambda x: x[1], reverse=True)
+        
+        labels = nx.get_node_attributes(G, 'label')
+        results = []
+        for nid, score in sorted_nodes:
+            if len(results) >= limit:
+                break
+            # Ensure node still exists and is a file
+            if nid in G.nodes and G.nodes[nid].get('type') == 'file':
+                results.append({
+                    "file": labels.get(nid, nid),
+                    "centrality_score": round(score, 4)
+                })
+        return results
+
     # ── Ingest logic ─────────────────────────────────────────────────────────
 
     def _ingest(self, entry: Dict) -> None:
@@ -272,8 +332,16 @@ class ContextGraph:
                      weight, json.dumps(meta or {}), now),
                 )
 
+    def add_edge(self, src_label: str, dst_label: str, relation: str, weight: float = 1.0):
+        """Public helper to add a relationship between two generic nodes (defaults to 'file' type)."""
+        src_id = f"file:{src_label}"
+        dst_id = f"file:{dst_label}"
+        self._upsert_node(src_id, "file", src_label, {})
+        self._upsert_node(dst_id, "file", dst_label, {})
+        self._upsert_edge(src_id, dst_id, relation, weight)
+
     def _conn(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self._db_path))
+        conn = sqlite3.connect(str(self._db_path), check_same_thread=False)
         conn.row_factory = sqlite3.Row
         return conn
 

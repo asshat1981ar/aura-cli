@@ -1,179 +1,106 @@
+import tempfile
 import unittest
-import json
-from unittest.mock import MagicMock, patch
 from pathlib import Path
-import os
-import sys
+from unittest.mock import patch
 
-# Ensure the project root is on the path for imports
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from core.file_tools import apply_change_with_explicit_overwrite_policy as real_apply_change
+from core.orchestrator import LoopOrchestrator
+from core.policy import Policy
+from memory.store import MemoryStore
 
-from core.hybrid_loop import HybridClosedLoop
-from core.git_tools import GitTools
-from memory.brain import Brain
-from core.model_adapter import ModelAdapter
-from core.file_tools import replace_code # Need to import it to mock it
 
-# === AURA JSON FIX INJECTED ===
-import re as _aura_re
+class _StaticAgent:
+    def __init__(self, payload):
+        self._payload = payload
 
-def _aura_clean_json(raw):
-    """Strip markdown code blocks from LLM responses"""
-    if not raw:
-        return raw
-    text = _aura_re.sub(r"^\s*```[a-zA-Z]*\s*\n?", "", raw.strip())
-    text = _aura_re.sub(r"\n?```\s*$", "", text)
-    return text.strip()
+    def run(self, _input_data):
+        return self._payload
 
-def _aura_safe_loads(raw, ctx="unknown"):
-    """Parse JSON with markdown cleaning"""
-    try:
-        return __import__("json").loads(raw)
-    except Exception:
-        cleaned = _aura_clean_json(raw)
-        return __import__("json").loads(cleaned)
 
-# === END AURA JSON FIX ===
-
+def _base_agents(*, change_set):
+    return {
+        "ingest": _StaticAgent({
+            "goal": "test goal",
+            "snapshot": "snapshot",
+            "memory_summary": "",
+            "constraints": {},
+        }),
+        "plan": _StaticAgent({"steps": ["step"], "risks": []}),
+        "critique": _StaticAgent({"issues": [], "fixes": []}),
+        "synthesize": _StaticAgent({
+            "tasks": [{"id": "t1", "title": "demo", "intent": "", "files": [], "tests": []}],
+        }),
+        "act": _StaticAgent(change_set),
+        "sandbox": _StaticAgent({"passed": True, "summary": "ok"}),
+        "verify": _StaticAgent({"status": "pass", "failures": [], "logs": ""}),
+        "reflect": _StaticAgent({"summary": "done", "learnings": [], "next_actions": []}),
+    }
 
 
 class TestDryRunWorkflow(unittest.TestCase):
+    def _make_orchestrator(self, project_root: Path, *, change_set):
+        return LoopOrchestrator(
+            agents=_base_agents(change_set=change_set),
+            memory_store=MemoryStore(project_root / "memory_store"),
+            policy=Policy(max_cycles=1),
+            project_root=project_root,
+        )
 
-    def setUp(self):
-        # Mock dependencies for HybridClosedLoop
-        self.mock_model = MagicMock(spec=ModelAdapter)
-        self.mock_brain = MagicMock(spec=Brain)
-        self.mock_git = MagicMock(spec=GitTools)
+    def test_dry_run_mode_no_changes(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            target = root / "test_file.py"
+            orchestrator = self._make_orchestrator(
+                root,
+                change_set={
+                    "changes": [{
+                        "file_path": "test_file.py",
+                        "old_code": "",
+                        "new_code": "def new_func():\n    return 1\n",
+                        "overwrite_file": True,
+                    }],
+                },
+            )
 
-        # Instantiate HybridClosedLoop with mocks
-        self.loop = HybridClosedLoop(self.mock_model, self.mock_brain, self.mock_git)
+            with patch("core.orchestrator.apply_change_with_explicit_overwrite_policy") as mock_apply:
+                result = orchestrator.run_loop("Test dry run functionality", max_cycles=1, dry_run=True)
 
-        # Define a sample model response for mocking
-        self.sample_model_response = {
-            "DEFINE": "Define phase output.",
-            "PLAN": "Plan phase output.",
-            "IMPLEMENT": {
-                "file_path": "test_file.py",
-                "old_code": "def old_func(): pass",
-                "new_code": "def new_func(): pass"
-            },
-            "TEST": "Test phase output.",
-            "CRITIQUE": {
-                "performance_score": 10, # High scores to ensure immediate convergence for dry-run test
-                "stability_score": 10,
-                "security_score": 10,
-                "elegance_score": 10,
-                "weaknesses": ["Minor weakness identified."]
-            },
-            "IMPROVE": "Improve phase output.",
-            "VERSION": "Dry run test commit message.",
-            "SUMMARY": "Summary of dry run iteration."
-        }
-        self.mock_model.respond.return_value = json.dumps(self.sample_model_response)
+            self.assertEqual(result["stop_reason"], "PASS")
+            mock_apply.assert_not_called()
+            self.assertFalse(target.exists())
 
-        # Mock initial state for snapshot
-        self.mock_brain.recall_all.return_value = []
-        self.mock_brain.recall_weaknesses.return_value = []
-    
-    @patch('core.file_tools.replace_code')
-    def test_dry_run_mode_no_changes(self, mock_replace_code):
-        goal = "Test dry run functionality"
-        
-        # To make it converge in 3 iterations (Stable Convergence Logic)
-        # We need to simulate 3 calls where absolute_pass is true and score is >= previous_score
-        # For this test, we mock respond() three times with the same high-scoring response.
-        self.mock_model.respond.side_effect = [
-            json.dumps(self.sample_model_response),
-            json.dumps(self.sample_model_response),
-            json.dumps(self.sample_model_response)
-        ]
+            entry = result["history"][0]
+            self.assertEqual(entry["phase_outputs"]["apply_result"]["applied"], ["test_file.py"])
+            self.assertEqual(entry["phase_outputs"]["verification"]["status"], "pass")
 
-        # Run in dry-run mode for 3 cycles to trigger convergence
-        result_json_str = ""
-        for _ in range(3):
-            result_json_str = self.loop.run(goal, dry_run=True)
-            result = json.loads(result_json_str)
-            if result.get("FINAL_STATUS", "").startswith("Optimization converged"):
-                break
+    def test_normal_run_mode_applies_change(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = Path(d)
+            target = root / "test_file.py"
+            target.write_text("def old_func():\n    pass\n", encoding="utf-8")
 
-        # Assert that git methods were NOT called
-        self.mock_git.stash.assert_not_called()
-        self.mock_git.commit_all.assert_not_called()
-        self.mock_git.rollback_last_commit.assert_not_called()
-        self.mock_git.stash_pop.assert_not_called()
-        
-        # Assert that replace_code was NOT called
-        mock_replace_code.assert_not_called()
+            orchestrator = self._make_orchestrator(
+                root,
+                change_set={
+                    "changes": [{
+                        "file_path": "test_file.py",
+                        "old_code": "def old_func():\n    pass\n",
+                        "new_code": "def new_func():\n    return 1\n",
+                        "overwrite_file": False,
+                    }],
+                },
+            )
 
-        # Assert that brain.remember WAS called (to record weaknesses)
-        # It's called twice per run: for goal and for structured_response.
-        # So it should be called 6 times for 3 iterations.
-        self.assertEqual(self.mock_brain.remember.call_count, 6)
+            with patch(
+                "core.orchestrator.apply_change_with_explicit_overwrite_policy",
+                wraps=real_apply_change,
+            ) as mock_apply:
+                result = orchestrator.run_loop("Test normal run functionality", max_cycles=1, dry_run=False)
 
-        # Assert that the output JSON contains "DRY_RUN": true
-        self.assertTrue(result.get("DRY_RUN"))
-        # Expected score from mock_scores_list in sample_model_response should be 10.0
-        self.assertEqual(result["FINAL_STATUS"], "Optimization converged at 10.0 with Robust Confirmation.")
+            self.assertEqual(result["stop_reason"], "PASS")
+            mock_apply.assert_called_once()
+            self.assertEqual(target.read_text(encoding="utf-8"), "def new_func():\n    return 1\n")
 
-    @patch('core.file_tools.replace_code')
-    def test_normal_run_mode_calls_git_and_replace(self, mock_replace_code):
-        goal = "Test normal run functionality"
-
-        # Mock scores to ensure commit logic is triggered and convergence happens
-        mock_scores_list = [
-            # All scores high to ensure immediate absolute_pass and stable_convergence
-            {"performance_score": 9, "stability_score": 9, "security_score": 9, "elegance_score": 9}, # score 9.0
-            {"performance_score": 9, "stability_score": 9, "security_score": 9, "elegance_score": 9}, # score 9.0
-            {"performance_score": 9, "stability_score": 9, "security_score": 9, "elegance_score": 9}, # score 9.0
-            # Add more if the loop goes beyond 3 iterations, though it should converge
-        ]
-        
-        # Mock model response to control critique scores
-        def mock_respond_side_effect(prompt):
-            current_iteration = self.mock_model.respond.call_count
-            
-            response = self.sample_model_response.copy()
-            # Ensure the structure of CRITIQUE matches what extract_scores expects
-            if current_iteration < len(mock_scores_list):
-                response["CRITIQUE"] = mock_scores_list[current_iteration]
-            else:
-                # If more calls than mocked scores, return a default high-scoring response
-                response["CRITIQUE"] = {"performance_score": 9, "stability_score": 9, "security_score": 9, "elegance_score": 9, "weaknesses": ["Simulated weakness."]}
-            
-            response["CRITIQUE"]["weaknesses"] = ["Simulated weakness."]
-            return json.dumps(response)
-
-        self.mock_model.respond.side_effect = mock_respond_side_effect
-        
-        # Run in normal mode, should converge in 3 iterations
-        self.loop.previous_score = 0 # Reset for consistent scoring
-        result_json_str = ""
-        
-        # Loop enough times to guarantee convergence (at least 3 if scores are stable high)
-        # Using a higher range to ensure convergence is hit, the break statement will exit early
-        for i in range(5): 
-            result_json_str = self.loop.run(goal, dry_run=False)
-            result = json.loads(result_json_str)
-            if result.get("FINAL_STATUS", "").startswith("Optimization converged"):
-                break
-
-        result = json.loads(result_json_str)
-
-        # Assert that git methods WERE called
-        self.mock_git.stash.assert_called()
-        self.mock_git.commit_all.assert_called()
-        # rollback_last_commit should NOT be called in a successful path
-        self.mock_git.rollback_last_commit.assert_not_called() 
-        self.mock_git.stash_pop.assert_called()
-        
-        # Assert that replace_code was NOT called by HybridLoop (it's external)
-        mock_replace_code.assert_not_called()
-
-        # Assert that brain.remember WAS called (twice per iteration for goal and structured_response)
-        # Check call_count dynamically as loop iterations can vary slightly for convergence
-        self.assertTrue(self.mock_brain.remember.call_count >= 6) # At least 3 iterations * 2 calls
-
-        # Assert that the output JSON does NOT contain "DRY_RUN": true
-        self.assertFalse(result.get("DRY_RUN"))
-        # Expected score from mock_scores_list should be 9.0
-        self.assertEqual(result["FINAL_STATUS"], "Optimization converged at 9.0 with Robust Confirmation.")
+            entry = result["history"][0]
+            self.assertEqual(entry["phase_outputs"]["apply_result"]["failed"], [])
+            self.assertEqual(entry["phase_outputs"]["verification"]["status"], "pass")

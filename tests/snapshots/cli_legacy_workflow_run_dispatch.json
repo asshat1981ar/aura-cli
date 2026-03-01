@@ -1,0 +1,18 @@
+{
+  "cli_warnings": [
+    {
+      "action": "workflow_run",
+      "category": "deprecation",
+      "code": "legacy_cli_flags_deprecated",
+      "legacy_flags": [
+        "--workflow-goal"
+      ],
+      "message": "Legacy flags are deprecated; use `aura workflow run` instead.",
+      "phase": "compatibility",
+      "replacement_command": "aura workflow run"
+    }
+  ],
+  "cycles": 2,
+  "goal": "Summarize repo",
+  "stop_reason": "done"
+}

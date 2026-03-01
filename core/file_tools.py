@@ -37,6 +37,52 @@ class OldCodeNotFoundError(FileToolsError):
     """Exception raised when old_code is not found in the file."""
     pass
 
+
+class MismatchOverwriteBlockedError(OldCodeNotFoundError):
+    """Raised when mismatch-overwrite fallback is disabled by caller policy."""
+    pass
+
+
+MISMATCH_OVERWRITE_BLOCK_POLICY = "explicit_overwrite_file_required"
+MISMATCH_OVERWRITE_BLOCK_EVENT = "old_code_mismatch_overwrite_blocked"
+
+
+def allow_mismatch_overwrite_for_change(old_code: object, overwrite_file: object) -> bool:
+    """Return True only for explicit full-file replacement form.
+
+    The safety policy requires both:
+    - ``overwrite_file`` is truthy, and
+    - ``old_code`` is exactly ``""`` (empty string)
+    """
+    return bool(overwrite_file) and old_code == ""
+
+
+def apply_change_with_explicit_overwrite_policy(
+    project_root: Path,
+    file_path: str,
+    old_code: str,
+    new_code: str,
+    overwrite_file: bool = False,
+):
+    """Apply a change using the repository-wide explicit-overwrite safety policy."""
+    return _safe_apply_change(
+        project_root,
+        file_path,
+        old_code,
+        new_code,
+        overwrite_file=overwrite_file,
+        allow_mismatch_overwrite=allow_mismatch_overwrite_for_change(old_code, overwrite_file),
+    )
+
+
+def mismatch_overwrite_block_log_details(error: object, file_path: str) -> dict:
+    """Return a consistent log payload for mismatch-overwrite policy blocks."""
+    return {
+        "error": str(error),
+        "file": file_path,
+        "policy": MISMATCH_OVERWRITE_BLOCK_POLICY,
+    }
+
 def find_historical_match(old_code: str, file_path: str, project_root: Path) -> Optional[str]:
     """Search the last 10 git commits for a version of *file_path* containing *old_code*.
 
@@ -258,7 +304,14 @@ def _aura_safe_loads(raw: str, ctx: str = "unknown"):
         cleaned = _aura_clean_json(cleaned_for_encoding)
         return json.loads(cleaned)
 
-def _safe_apply_change(project_root: Path, file_path: str, old_code: str, new_code: str, overwrite_file: bool = False):
+def _safe_apply_change(
+    project_root: Path,
+    file_path: str,
+    old_code: str,
+    new_code: str,
+    overwrite_file: bool = False,
+    allow_mismatch_overwrite: bool = True,
+):
     """Resilient wrapper around :func:`replace_code` with auto-create and mismatch handling.
 
     Handles three edge cases that would otherwise cause :func:`replace_code`
@@ -267,8 +320,8 @@ def _safe_apply_change(project_root: Path, file_path: str, old_code: str, new_co
     *   **Missing file** — creates the file with *new_code* as content.
     *   **Empty file** — overwrites the empty file with *new_code* directly.
     *   **Old-code mismatch** — when *old_code* is provided but cannot be found
-        in the existing file and *new_code* is non-empty, logs a ``WARN`` and
-        falls back to a full-file overwrite rather than raising.
+        in the existing file, optionally recovers from git history or (if
+        allowed) falls back to a full-file overwrite.
 
     Args:
         project_root: Absolute :class:`~pathlib.Path` of the project root.
@@ -281,6 +334,10 @@ def _safe_apply_change(project_root: Path, file_path: str, old_code: str, new_co
         overwrite_file: When ``True``, force a full-file overwrite regardless
             of *old_code*.  Defaults to ``False``; may be promoted to ``True``
             internally on mismatch.
+        allow_mismatch_overwrite: When ``True`` (default), an old-code mismatch
+            may fall back to full-file overwrite if *new_code* is present.
+            When ``False``, the helper will still attempt git-history recovery
+            but raises :class:`OldCodeNotFoundError` instead of overwriting.
 
     Raises:
         OldCodeNotFoundError: When *old_code* is non-empty, is not found in
@@ -318,12 +375,21 @@ def _safe_apply_change(project_root: Path, file_path: str, old_code: str, new_co
             return
 
         if new_code:
-            log_json("WARN", "file_tools_old_code_mismatch_overwrite", details={
-                "file": str(path_obj),
-                "old_code_preview": old_code[:120],
-            })
-            overwrite_file = True
-            old_code = ""  # trigger full-overwrite path in replace_code
+            if allow_mismatch_overwrite:
+                log_json("WARN", "file_tools_old_code_mismatch_overwrite", details={
+                    "file": str(path_obj),
+                    "old_code_preview": old_code[:120],
+                })
+                overwrite_file = True
+                old_code = ""  # trigger full-overwrite path in replace_code
+            else:
+                log_json("WARN", "file_tools_old_code_mismatch_blocked", details={
+                    "file": str(path_obj),
+                    "old_code_preview": old_code[:120],
+                })
+                raise MismatchOverwriteBlockedError(
+                    f"'{old_code}' not found in '{path_obj}' and mismatch overwrite fallback is disabled."
+                )
         else:
             # No new_code and no match → truly invalid
             raise OldCodeNotFoundError(f"'{old_code}' not found in '{path_obj}' and no new_code for overwrite.")
@@ -375,9 +441,17 @@ class AtomicChangeSet:
                 backups[key] = path_obj.read_text(encoding="utf-8", errors="ignore") if path_obj.exists() else None
 
             try:
-                _safe_apply_change(self.project_root, file_path, old_code, new_code, overwrite_file)
+                apply_change_with_explicit_overwrite_policy(
+                    self.project_root,
+                    file_path,
+                    old_code,
+                    new_code,
+                    overwrite_file=overwrite_file,
+                )
                 applied.append(file_path)
             except Exception as exc:
+                if isinstance(exc, MismatchOverwriteBlockedError):
+                    log_json("ERROR", MISMATCH_OVERWRITE_BLOCK_EVENT, details=mismatch_overwrite_block_log_details(exc, file_path))
                 log_json("ERROR", "atomic_change_set_failure", details={
                     "file": file_path, "error": str(exc),
                 })

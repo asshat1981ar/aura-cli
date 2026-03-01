@@ -1,0 +1,24 @@
+{
+  "artifacts": [
+    "core/vector_store.py",
+    "aura_cli/cli_main.py"
+  ],
+  "cli_warnings": [
+    {
+      "action": "evolve",
+      "category": "deprecation",
+      "code": "legacy_cli_flags_deprecated",
+      "legacy_flags": [
+        "--evolve"
+      ],
+      "message": "Legacy flags are deprecated; use `aura evolve` instead.",
+      "phase": "compatibility",
+      "replacement_command": "aura evolve"
+    }
+  ],
+  "meta": {
+    "score": 0.9
+  },
+  "mutations": 2,
+  "status": "ok"
+}

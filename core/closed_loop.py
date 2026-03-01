@@ -26,7 +26,7 @@ class ClosedDevelopmentLoop:
         Returns:
             str: A string representation of the system snapshot.
         """
-        memory_count = len(self.brain.recall_all())
+        memory_count = self.brain.count_memories()
         return f"Memory entries: {memory_count}"
 
     def run(self, goal):

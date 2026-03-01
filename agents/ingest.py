@@ -30,7 +30,7 @@ class IngestAgent(Agent):
     def run(self, input_data: Dict) -> Dict:
         goal = input_data.get("goal", "")
         project_root = Path(input_data.get("project_root", "."))
-        memory_entries = self.brain.recall_all(MemoryTier.SESSION)
+        memory_entries = self.brain.recall_recent(limit=50)
         
         # Use ContextManager if available, else fallback to basic logic
         if self.cm:

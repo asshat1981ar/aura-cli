@@ -43,7 +43,7 @@ class TesterAgent:
         {context}
 
         Previous memory:
-        {self.brain.recall_all()}
+        {chr(10).join(self.brain.recall_with_budget(max_tokens=1500))}
 
         Generate Python unit tests for the provided code. Ensure all functions and edge cases are covered. Use the 'unittest' or 'pytest' framework.
         """

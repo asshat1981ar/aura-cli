@@ -1,6 +1,12 @@
 import re
 from core.logging_utils import log_json
-from core.file_tools import _safe_apply_change, Path
+from core.file_tools import (
+    MISMATCH_OVERWRITE_BLOCK_EVENT,
+    MismatchOverwriteBlockedError,
+    Path,
+    apply_change_with_explicit_overwrite_policy,
+    mismatch_overwrite_block_log_details,
+)
 
 
 class MutatorAgent:
@@ -86,7 +92,7 @@ class MutatorAgent:
             content = "\n".join(content_lines)
 
             validated_file_path = self._validate_file_path(file_path)
-            _safe_apply_change(
+            apply_change_with_explicit_overwrite_policy(
                 self.project_root,
                 str(validated_file_path.relative_to(self.project_root)),
                 "",
@@ -139,7 +145,7 @@ class MutatorAgent:
             new_string = "\n".join(search_lines[new_start_idx + 1: new_end_idx])
 
             validated_file_path = self._validate_file_path(file_path)
-            _safe_apply_change(
+            apply_change_with_explicit_overwrite_policy(
                 self.project_root,
                 str(validated_file_path.relative_to(self.project_root)),
                 old_string,
@@ -148,5 +154,8 @@ class MutatorAgent:
             log_json("INFO", "mutator_replace_in_file_success", details={
                 "file_path": str(validated_file_path.relative_to(self.project_root)),
             })
+        except MismatchOverwriteBlockedError as e:
+            log_json("ERROR", MISMATCH_OVERWRITE_BLOCK_EVENT, details=mismatch_overwrite_block_log_details(e, file_path))
+            log_json("ERROR", "mutator_replace_in_file_failed", details={"error": str(e), "file": file_path})
         except Exception as e:
             log_json("ERROR", "mutator_replace_in_file_failed", details={"error": str(e), "file": file_path})

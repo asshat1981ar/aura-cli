@@ -325,11 +325,25 @@ class TestAtomicChangeSetPerf(unittest.TestCase):
             call_count = [0]
             real_safe_apply = _safe_apply_change
 
-            def patched_safe_apply(project_root, file_path, old_code, new_code, overwrite):
+            def patched_safe_apply(
+                project_root,
+                file_path,
+                old_code,
+                new_code,
+                overwrite_file=False,
+                allow_mismatch_overwrite=False,
+            ):
                 call_count[0] += 1
                 if call_count[0] == 2:
                     raise RuntimeError("Simulated failure on second file")
-                return real_safe_apply(project_root, file_path, old_code, new_code, overwrite)
+                return real_safe_apply(
+                    project_root,
+                    file_path,
+                    old_code,
+                    new_code,
+                    overwrite_file=overwrite_file,
+                    allow_mismatch_overwrite=allow_mismatch_overwrite,
+                )
 
             acs = AtomicChangeSet(changes, tmpdir)
             with patch("core.file_tools._safe_apply_change", side_effect=patched_safe_apply):

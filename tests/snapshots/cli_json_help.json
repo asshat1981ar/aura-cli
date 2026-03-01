@@ -1,0 +1,316 @@
+{
+  "commands": [
+    {
+      "action": "help",
+      "description": "Show top-level help or help for a specific command path.",
+      "examples": [
+        "python3 main.py help",
+        "python3 main.py help goal add"
+      ],
+      "legacy_flags": [],
+      "path": [
+        "help"
+      ],
+      "requires_runtime": false,
+      "summary": "Show CLI help"
+    },
+    {
+      "action": "doctor",
+      "description": "Run the AURA doctor checks for local environment health.",
+      "examples": [
+        "python3 main.py doctor"
+      ],
+      "legacy_flags": [],
+      "path": [
+        "doctor"
+      ],
+      "requires_runtime": false,
+      "summary": "Run system diagnostics"
+    },
+    {
+      "action": "bootstrap",
+      "description": "Bootstrap local configuration files for AURA.",
+      "examples": [
+        "python3 main.py bootstrap"
+      ],
+      "legacy_flags": [
+        "--bootstrap"
+      ],
+      "path": [
+        "bootstrap"
+      ],
+      "requires_runtime": false,
+      "summary": "Create default config"
+    },
+    {
+      "action": "diag",
+      "description": "Fetch MCP health, metrics, limits, and recent logs via HTTP.",
+      "examples": [
+        "python3 main.py diag"
+      ],
+      "legacy_flags": [
+        "--diag"
+      ],
+      "path": [
+        "diag"
+      ],
+      "requires_runtime": false,
+      "summary": "MCP diagnostics snapshot"
+    },
+    {
+      "action": "logs",
+      "description": "Tail or follow logs from stdin or a file.",
+      "examples": [
+        "python3 main.py logs --tail 50",
+        "python3 main.py logs --file memory/aura.log --follow"
+      ],
+      "legacy_flags": [],
+      "path": [
+        "logs"
+      ],
+      "requires_runtime": false,
+      "summary": "Stream AURA logs"
+    },
+    {
+      "action": "watch",
+      "description": "Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.",
+      "examples": [
+        "python3 main.py watch",
+        "python3 main.py watch --autonomous"
+      ],
+      "legacy_flags": [],
+      "path": [
+        "watch"
+      ],
+      "requires_runtime": true,
+      "summary": "Launch TUI monitor"
+    },
+    {
+      "action": "studio",
+      "description": "Launch the rich real-time dashboard. Use --autonomous to start the goal loop.",
+      "examples": [
+        "python3 main.py studio",
+        "python3 main.py studio --autonomous"
+      ],
+      "legacy_flags": [],
+      "path": [
+        "studio"
+      ],
+      "requires_runtime": true,
+      "summary": "Launch AURA Studio"
+    },
+    {
+      "action": null,
+      "description": "Manage queued goals and run one-off goals.",
+      "examples": [
+        "python3 main.py goal status",
+        "python3 main.py goal add \"Refactor queue\""
+      ],
+      "legacy_flags": [],
+      "path": [
+        "goal"
+      ],
+      "requires_runtime": null,
+      "summary": "Goal queue operations"
+    },
+    {
+      "action": "goal_add",
+      "description": "Add a goal, optionally running the queue immediately.",
+      "examples": [
+        "python3 main.py goal add \"Fix tests\"",
+        "python3 main.py goal add \"Fix tests\" --run"
+      ],
+      "legacy_flags": [
+        "--add-goal",
+        "--run-goals"
+      ],
+      "path": [
+        "goal",
+        "add"
+      ],
+      "requires_runtime": true,
+      "summary": "Add a goal to the queue"
+    },
+    {
+      "action": "goal_run",
+      "description": "Run the goal queue through the autonomous loop.",
+      "examples": [
+        "python3 main.py goal run --dry-run"
+      ],
+      "legacy_flags": [
+        "--run-goals"
+      ],
+      "path": [
+        "goal",
+        "run"
+      ],
+      "requires_runtime": true,
+      "summary": "Run queued goals"
+    },
+    {
+      "action": "goal_status",
+      "description": "Show queued and completed goals.",
+      "examples": [
+        "python3 main.py goal status --json"
+      ],
+      "legacy_flags": [
+        "--status"
+      ],
+      "path": [
+        "goal",
+        "status"
+      ],
+      "requires_runtime": true,
+      "summary": "Show queue status"
+    },
+    {
+      "action": "goal_once",
+      "description": "Run a single goal directly without queueing it.",
+      "examples": [
+        "python3 main.py goal once \"Summarize repo\" --dry-run"
+      ],
+      "legacy_flags": [
+        "--goal"
+      ],
+      "path": [
+        "goal",
+        "once"
+      ],
+      "requires_runtime": true,
+      "summary": "Run a one-off goal"
+    },
+    {
+      "action": null,
+      "description": "Run orchestrated workflow goals with explicit cycle limits.",
+      "examples": [
+        "python3 main.py workflow run \"Summarize repo\""
+      ],
+      "legacy_flags": [],
+      "path": [
+        "workflow"
+      ],
+      "requires_runtime": null,
+      "summary": "Workflow operations"
+    },
+    {
+      "action": "workflow_run",
+      "description": "Run the orchestrator loop for a single workflow goal.",
+      "examples": [
+        "python3 main.py workflow run \"Summarize repo\" --max-cycles 3"
+      ],
+      "legacy_flags": [
+        "--workflow-goal"
+      ],
+      "path": [
+        "workflow",
+        "run"
+      ],
+      "requires_runtime": true,
+      "summary": "Run a workflow goal"
+    },
+    {
+      "action": null,
+      "description": "Inspect and call MCP tools from the CLI.",
+      "examples": [
+        "python3 main.py mcp tools"
+      ],
+      "legacy_flags": [],
+      "path": [
+        "mcp"
+      ],
+      "requires_runtime": null,
+      "summary": "MCP HTTP client commands"
+    },
+    {
+      "action": "mcp_tools",
+      "description": "List tools exposed by the MCP HTTP server.",
+      "examples": [
+        "python3 main.py mcp tools"
+      ],
+      "legacy_flags": [
+        "--mcp-tools"
+      ],
+      "path": [
+        "mcp",
+        "tools"
+      ],
+      "requires_runtime": false,
+      "summary": "List MCP tools"
+    },
+    {
+      "action": "mcp_call",
+      "description": "Invoke an MCP tool with optional JSON args.",
+      "examples": [
+        "python3 main.py mcp call limits",
+        "python3 main.py mcp call tail_logs --args '{\"lines\": 10}'"
+      ],
+      "legacy_flags": [
+        "--mcp-call"
+      ],
+      "path": [
+        "mcp",
+        "call"
+      ],
+      "requires_runtime": false,
+      "summary": "Call an MCP tool"
+    },
+    {
+      "action": "scaffold",
+      "description": "Run the scaffolder agent for a named project type.",
+      "examples": [
+        "python3 main.py scaffold demo --desc \"small demo app\""
+      ],
+      "legacy_flags": [
+        "--scaffold"
+      ],
+      "path": [
+        "scaffold"
+      ],
+      "requires_runtime": true,
+      "summary": "Scaffold a project"
+    },
+    {
+      "action": "evolve",
+      "description": "Run the evolution loop to mutate and improve the system.",
+      "examples": [
+        "python3 main.py evolve"
+      ],
+      "legacy_flags": [
+        "--evolve"
+      ],
+      "path": [
+        "evolve"
+      ],
+      "requires_runtime": true,
+      "summary": "Run evolution loop"
+    }
+  ],
+  "deterministic": true,
+  "generated_by": "aura_cli.options.help_schema",
+  "json_contracts": {
+    "cli_warnings": {
+      "description": "Structured CLI warnings attached to JSON outputs when legacy flags are used.",
+      "field": "cli_warnings",
+      "inclusion_rule": "Present when a parsed invocation emits structured warning records and the command outputs JSON.",
+      "record_codes": [
+        {
+          "category": "deprecation",
+          "code": "legacy_cli_flags_deprecated",
+          "description": "Legacy flat CLI flags were used and mapped to a canonical command.",
+          "phase": "compatibility"
+        }
+      ],
+      "record_fields": [
+        "code",
+        "message",
+        "category",
+        "action",
+        "replacement_command",
+        "legacy_flags",
+        "phase"
+      ],
+      "version": 1
+    }
+  },
+  "version": 3
+}

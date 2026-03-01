@@ -44,6 +44,8 @@ def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
     from agents.skills.changelog_generator import ChangelogGeneratorSkill
     from agents.skills.database_query_analyzer import DatabaseQueryAnalyzerSkill
     from agents.skills.skill_failure_analyzer import SkillFailureAnalyzerSkill
+    from agents.skills.security_hardener import SecurityHardenerSkill
+    from agents.skills.structural_analyzer import StructuralAnalyzerSkill
 
     return {
         "dependency_analyzer": DependencyAnalyzerSkill(),
@@ -74,4 +76,6 @@ def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
         "changelog_generator": ChangelogGeneratorSkill(),
         "database_query_analyzer": DatabaseQueryAnalyzerSkill(),
         "skill_failure_analyzer": SkillFailureAnalyzerSkill(),
+        "security_hardener": SecurityHardenerSkill(),
+        "structural_analyzer": StructuralAnalyzerSkill(),
     }

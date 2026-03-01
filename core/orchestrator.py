@@ -24,7 +24,13 @@ from typing import Dict, List
 
 from core.logging_utils import log_json
 from core.policy import Policy
-from core.file_tools import _safe_apply_change, OldCodeNotFoundError
+from core.file_tools import (
+    MISMATCH_OVERWRITE_BLOCK_EVENT,
+    MismatchOverwriteBlockedError,
+    OldCodeNotFoundError,
+    apply_change_with_explicit_overwrite_policy,
+    mismatch_overwrite_block_log_details,
+)
 from core.schema import validate_phase_output
 from core.skill_dispatcher import classify_goal, dispatch_skills
 from core.human_gate import HumanGate
@@ -110,6 +116,21 @@ class LoopOrchestrator:
         self.propagation_engine = None  # PropagationEngine
         self.context_graph = None       # ContextGraph
         self._consecutive_fails: int = 0
+        self._ui_callbacks: list = []
+
+    def attach_ui_callback(self, callback) -> None:
+        """Register a UI callback (e.g., AuraStudio) to receive real-time updates."""
+        self._ui_callbacks.append(callback)
+
+    def _notify_ui(self, method_name: str, *args, **kwargs):
+        """Internal helper to safely trigger UI callbacks."""
+        for cb in self._ui_callbacks:
+            method = getattr(cb, method_name, None)
+            if method:
+                try:
+                    method(*args, **kwargs)
+                except Exception:
+                    pass
 
     def attach_improvement_loops(self, *loops) -> None:
         """Register one or more self-improvement loops to be called after each cycle.
@@ -290,11 +311,14 @@ class LoopOrchestrator:
                 continue
 
             try:
-                _safe_apply_change(
+                apply_change_with_explicit_overwrite_policy(
                     self.project_root, file_path, old_code, new_code,
                     overwrite_file=overwrite_file,
                 )
                 applied.append(file_path)
+            except MismatchOverwriteBlockedError as exc:
+                log_json("ERROR", MISMATCH_OVERWRITE_BLOCK_EVENT, details=mismatch_overwrite_block_log_details(exc, file_path))
+                failed.append({"file": file_path, "error": str(exc)})
             except OldCodeNotFoundError as exc:
                 log_json("ERROR", "old_code_not_found", details={"error": str(exc), "file": file_path})
                 failed.append({"file": file_path, "error": str(exc)})
@@ -344,33 +368,10 @@ class LoopOrchestrator:
         return "act"  # default: code-level fix is worth retrying
 
     def run_cycle(self, goal: str, dry_run: bool = False) -> Dict:
-        """Execute a single complete plan-act-verify cycle for *goal*.
-
-        Runs all pipeline phases (ingest → skill dispatch → plan → critique →
-        synthesize → act loop → sandbox → apply → verify → reflect) in order,
-        with adaptive retries.  The cycle result is appended to
-        :attr:`memory_store` and returned.
-
-        Args:
-            goal: Natural-language description of the coding task to complete.
-            dry_run: When ``True``, no files are written to disk.  All other
-                phases run normally so that the pipeline output can be inspected
-                without side-effects.
-
-        Returns:
-            A dict with the following keys:
-
-            * ``"cycle_id"`` (str) — unique hex identifier for this cycle.
-            * ``"goal_type"`` (str) — classified goal category from
-              :func:`~core.skill_dispatcher.classify_goal`.
-            * ``"phase_outputs"`` (dict) — keyed by phase name, each value is
-              the raw dict returned by that phase's agent.
-            * ``"stop_reason"`` (str | None) — ``None`` on a normal completion,
-              or ``"INVALID_OUTPUT"`` if :attr:`strict_schema` is ``True`` and a
-              phase violated its schema contract.
-        """
+        """Execute a single complete plan-act-verify cycle for *goal*."""
         cycle_id = f"cycle_{uuid.uuid4().hex[:12]}"
         phase_outputs = {}
+        self._notify_ui("on_cycle_start", goal)
 
         # ── 0. ADAPTIVE PIPELINE CONFIG ──────────────────────────────────────
         # Ask AdaptivePipeline for a context-aware configuration.
@@ -392,14 +393,23 @@ class LoopOrchestrator:
             "intensity": pipeline_cfg.intensity,
             "phases": pipeline_cfg.phases,
             "skills": pipeline_cfg.skill_set,
+            "confidence": pipeline_cfg.confidence,
         }
+        self._notify_ui("on_pipeline_configured", phase_outputs["pipeline_config"])
 
         # ── 1. INGEST ────────────────────────────────────────────────────────
+        self._notify_ui("on_phase_start", "ingest")
+        t0_ingest = time.time()
         context = self._run_phase("ingest", {
             "goal": goal,
             "project_root": str(self.project_root),
             "hints": self._retrieve_hints(goal),
         })
+        self._notify_ui("on_phase_complete", "ingest", (time.time() - t0_ingest) * 1000)
+        
+        if "bundle" in context:
+            self._notify_ui("on_context_assembled", context["bundle"])
+
         errors = validate_phase_output("context", context)
         if errors:
             log_json("ERROR", "phase_schema_invalid", details={"phase": "context", "errors": errors})
@@ -408,11 +418,14 @@ class LoopOrchestrator:
         phase_outputs["context"] = context
 
         # ── 2. SKILL DISPATCH (adaptive skill set) ───────────────────────────
+        self._notify_ui("on_phase_start", "skill_dispatch")
+        t0_skills = time.time()
         skill_context: Dict = {}
         if self.skills and pipeline_cfg.skill_set:
             active_skills = {k: self.skills[k] for k in pipeline_cfg.skill_set if k in self.skills}
             skill_context = dispatch_skills(goal_type, active_skills, str(self.project_root))
         phase_outputs["skill_context"] = skill_context
+        self._notify_ui("on_phase_complete", "skill_dispatch", (time.time() - t0_skills) * 1000)
 
         # ── 3. PLAN ──────────────────────────────────────────────────────────
         max_plan_retries = pipeline_cfg.plan_retries
@@ -425,6 +438,8 @@ class LoopOrchestrator:
             plan_attempt += 1
             failure_context = phase_outputs.get("_failure_context", {})
 
+            self._notify_ui("on_phase_start", "plan")
+            t0_plan = time.time()
             plan = self._run_phase("plan", {
                 "goal": goal,
                 "memory_snapshot": context.get("memory_summary", ""),
@@ -434,6 +449,8 @@ class LoopOrchestrator:
                 "failure_context": failure_context,
                 "extra_context": pipeline_cfg.extra_plan_ctx,
             })
+            self._notify_ui("on_phase_complete", "plan", (time.time() - t0_plan) * 1000)
+            
             errors = validate_phase_output("plan", plan)
             if errors:
                 log_json("ERROR", "phase_schema_invalid", details={"phase": "plan", "errors": errors})
@@ -442,10 +459,14 @@ class LoopOrchestrator:
             phase_outputs["plan"] = plan
 
             # ── 4. CRITIQUE ──────────────────────────────────────────────────
+            self._notify_ui("on_phase_start", "critique")
+            t0_crit = time.time()
             critique = self._run_phase("critique", {
                 "task": goal,
                 "plan": plan.get("steps", []),
             })
+            self._notify_ui("on_phase_complete", "critique", (time.time() - t0_crit) * 1000)
+            
             errors = validate_phase_output("critique", critique)
             if errors:
                 log_json("ERROR", "phase_schema_invalid", details={"phase": "critique", "errors": errors})
@@ -454,11 +475,15 @@ class LoopOrchestrator:
             phase_outputs["critique"] = critique
 
             # ── 5. SYNTHESIZE ────────────────────────────────────────────────
+            self._notify_ui("on_phase_start", "synthesize")
+            t0_synth = time.time()
             task_bundle = self._run_phase("synthesize", {
                 "goal": goal,
                 "plan": plan,
                 "critique": critique,
             })
+            self._notify_ui("on_phase_complete", "synthesize", (time.time() - t0_synth) * 1000)
+            
             errors = validate_phase_output("task_bundle", task_bundle)
             if errors:
                 log_json("ERROR", "phase_schema_invalid", details={"phase": "task_bundle", "errors": errors})
@@ -478,6 +503,8 @@ class LoopOrchestrator:
             while act_attempt < max_act_attempts:
                 act_attempt += 1
 
+                self._notify_ui("on_phase_start", "act")
+                t0_act = time.time()
                 act = self._run_phase("act", {
                     "task": goal,
                     "task_bundle": task_bundle,
@@ -485,6 +512,8 @@ class LoopOrchestrator:
                     "project_root": str(self.project_root),
                     "fix_hints": task_bundle.get("fix_hints", []),
                 })
+                self._notify_ui("on_phase_complete", "act", (time.time() - t0_act) * 1000)
+                
                 errors = validate_phase_output("change_set", act)
                 if errors:
                     log_json("ERROR", "phase_schema_invalid", details={"phase": "change_set", "errors": errors})
@@ -514,11 +543,15 @@ class LoopOrchestrator:
                 sandbox_passed = False
                 sandbox_result = {}
                 for _sandbox_try in range(MAX_SANDBOX_RETRIES):
+                    self._notify_ui("on_phase_start", "sandbox")
+                    t0_sandbox = time.time()
                     sandbox_result = self._run_phase("sandbox", {
                         "act": act,
                         "dry_run": dry_run,
                         "project_root": str(self.project_root),
                     }) or {}
+                    self._notify_ui("on_phase_complete", "sandbox", (time.time() - t0_sandbox) * 1000)
+                    
                     phase_outputs["sandbox"] = sandbox_result
                     sandbox_passed = sandbox_result.get("passed", True)
                     if sandbox_passed or dry_run:
@@ -547,7 +580,11 @@ class LoopOrchestrator:
                     ]
 
                 # Apply changes — partial failures are tolerated
+                self._notify_ui("on_phase_start", "apply")
+                t0_apply = time.time()
                 apply_result = self._apply_change_set(act, dry_run=dry_run)
+                self._notify_ui("on_phase_complete", "apply", (time.time() - t0_apply) * 1000)
+                
                 phase_outputs["apply_result"] = apply_result
 
                 nothing_applied = (
@@ -567,12 +604,16 @@ class LoopOrchestrator:
                         if tasks:
                             tests = tasks[0].get("tests", []) or []
 
+                    self._notify_ui("on_phase_start", "verify")
+                    t0_verify = time.time()
                     verification = self._run_phase("verify", {
                         "change_set": act,
                         "dry_run": dry_run,
                         "project_root": str(self.project_root),
                         "tests": tests,
                     })
+                    self._notify_ui("on_phase_complete", "verify", (time.time() - t0_verify) * 1000, success=(verification.get("status") in ("pass", "skip")))
+                    
                     if not verification:
                         verification = {"status": "skip", "failures": [], "logs": ""}
 
@@ -635,11 +676,14 @@ class LoopOrchestrator:
                 break  # done — exit plan retry loop
 
         # ── 7. REFLECT ───────────────────────────────────────────────────────
+        self._notify_ui("on_phase_start", "reflect")
+        t0_reflect = time.time()
         reflection = self._run_phase("reflect", {
             "verification": verification,
             "skill_context": skill_context,
             "goal_type": goal_type,
         })
+        self._notify_ui("on_phase_complete", "reflect", (time.time() - t0_reflect) * 1000)
         errors = validate_phase_output("reflection", reflection)
         if errors:
             log_json("ERROR", "phase_schema_invalid", details={"phase": "reflection", "errors": errors})
@@ -652,10 +696,19 @@ class LoopOrchestrator:
 
         # Track consecutive failures for AdaptivePipeline intensity tuning
         verify_status = phase_outputs.get("verification", {}).get("status", "skip")
-        if verify_status == "pass":
+        passed = verify_status in ("pass", "skip")
+        if passed:
             self._consecutive_fails = 0
         elif verify_status == "fail":
             self._consecutive_fails += 1
+
+        if self.adaptive_pipeline:
+            try:
+                # Record strategy success/failure for learning
+                strategy = phase_outputs.get("pipeline_config", {}).get("intensity", "normal")
+                self.adaptive_pipeline.record_outcome(goal_type, strategy, passed)
+            except Exception as exc:
+                log_json("WARN", "adaptive_pipeline_outcome_record_failed", details={"error": str(exc)})
 
         entry = {
             "cycle_id": cycle_id,

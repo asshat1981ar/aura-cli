@@ -1,0 +1,23 @@
+{
+  "cli_warnings": [
+    {
+      "action": "mcp_call",
+      "category": "deprecation",
+      "code": "legacy_cli_flags_deprecated",
+      "legacy_flags": [
+        "--mcp-call"
+      ],
+      "message": "Legacy flags are deprecated; use `aura mcp call` instead.",
+      "phase": "compatibility",
+      "replacement_command": "aura mcp call"
+    }
+  ],
+  "data": {
+    "args_json": "{\"x\":1}",
+    "result": {
+      "ok": true
+    },
+    "tool": "limits"
+  },
+  "status": 200
+}

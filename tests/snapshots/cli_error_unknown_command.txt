@@ -1,0 +1,10 @@
+Error: Unknown command 'goa'. Did you mean 'goal'?
+usage: aura [-h] [--json-help] [--json] [--dry-run] [--decompose]
+            [--model MODEL] [--explain] [--max-cycles MAX_CYCLES]
+            [--add-goal ADD_GOAL] [--run-goals] [--status] [--goal GOAL]
+            [--workflow-goal WORKFLOW_GOAL]
+            [--workflow-max-cycles WORKFLOW_MAX_CYCLES] [--mcp-tools]
+            [--mcp-call MCP_CALL] [--mcp-args MCP_ARGS] [--diag] [--bootstrap]
+            [--scaffold SCAFFOLD] [--scaffold-desc SCAFFOLD_DESC] [--evolve]
+            COMMAND ...
+

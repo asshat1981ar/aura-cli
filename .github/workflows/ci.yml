@@ -30,3 +30,31 @@ jobs:
     - name: Test with pytest
       run: |
         pytest -q --maxfail=1
+
+  cli_docs_and_help_contracts:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+    - name: Install minimal test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest
+    - name: Verify CLI docs are up to date
+      run: |
+        python scripts/generate_cli_reference.py --check
+    - name: Verify CLI docs generator tests
+      run: |
+        pytest -q tests/test_cli_docs_generator.py
+    - name: Verify CLI parser/dispatch contracts
+      run: |
+        pytest -q tests/test_cli_contract.py tests/test_cli_options.py
+    - name: Verify CLI help/error snapshots
+      run: |
+        pytest -q tests/test_cli_help_snapshots.py tests/test_cli_error_snapshots.py
+    - name: Verify CLI dispatch JSON snapshots
+      run: |
+        pytest -q tests/test_cli_main_dispatch.py -k snapshot

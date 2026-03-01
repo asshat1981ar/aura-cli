@@ -1,0 +1,14 @@
+{
+  "health": {
+    "data": {
+      "status": "ok"
+    },
+    "status": 200
+  },
+  "metrics": {
+    "data": {
+      "skill_metrics": {}
+    },
+    "status": 200
+  }
+}

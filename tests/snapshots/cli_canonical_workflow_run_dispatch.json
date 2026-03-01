@@ -1,0 +1,5 @@
+{
+  "cycles": 2,
+  "goal": "Summarize repo",
+  "stop_reason": "done"
+}

@@ -217,9 +217,9 @@ class RouterAgent:
         for name in self.enabled:
             self.stats[name] = ModelStats(name=name)
 
-        # Try to restore from brain memory
+        # Try to restore from brain memory — use recall_recent to avoid full scan
         try:
-            for entry in reversed(self.brain.recall_all()):
+            for entry in reversed(self.brain.recall_recent(limit=200)):
                 if entry.startswith("__router_stats__:"):
                     payload = json.loads(entry[len("__router_stats__:"):])
                     for name, d in payload.items():

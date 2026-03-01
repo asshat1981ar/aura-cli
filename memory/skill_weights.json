@@ -1,0 +1,68 @@
+{
+  "feature": {
+    "dependency_analyzer": {
+      "ema": 0.6400971874999999,
+      "runs": 5,
+      "suspended": false
+    },
+    "symbol_indexer": {
+      "ema": 0.6998464062499999,
+      "runs": 5,
+      "suspended": false
+    },
+    "complexity_scorer": {
+      "ema": 0.6998464062499999,
+      "runs": 5,
+      "suspended": false
+    },
+    "architecture_validator": {
+      "ema": 0.4304566812499999,
+      "runs": 5,
+      "suspended": false
+    },
+    "api_contract_validator": {
+      "ema": 0.60424765625,
+      "runs": 5,
+      "suspended": false
+    }
+  },
+  "bug_fix": {
+    "symbol_indexer": {
+      "ema": 0.575,
+      "runs": 1,
+      "suspended": false
+    },
+    "type_checker": {
+      "ema": 0.5,
+      "runs": 1,
+      "suspended": false
+    },
+    "git_history_analyzer": {
+      "ema": 0.575,
+      "runs": 1,
+      "suspended": false
+    },
+    "error_pattern_matcher": {
+      "ema": 0.515,
+      "runs": 1,
+      "suspended": false
+    },
+    "linter_enforcer": {
+      "ema": 0.5459,
+      "runs": 1,
+      "suspended": false
+    }
+  },
+  "default": {
+    "linter_enforcer": {
+      "ema": 0.5849150000000001,
+      "runs": 2,
+      "suspended": false
+    },
+    "symbol_indexer": {
+      "ema": 0.6387499999999999,
+      "runs": 2,
+      "suspended": false
+    }
+  }
+}

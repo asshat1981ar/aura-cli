@@ -84,7 +84,7 @@ Project Name: {project_name}
 Project Description: {description}
 
 Previous memory:
-{self.brain.recall_all()}
+{chr(10).join(self.brain.recall_with_budget(max_tokens=1500))}
 
 Generate a JSON object representing the project structure. Each key in the JSON should be a file or directory path relative to the project root.
 For directories, the value should be an empty dictionary. For files, the value should be the content of the file.

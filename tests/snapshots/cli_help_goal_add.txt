@@ -1,0 +1,11 @@
+aura goal add
+
+Add a goal, optionally running the queue immediately.
+
+Legacy flags:
+  --add-goal --run-goals
+
+Examples:
+  python3 main.py goal add "Fix tests"
+  python3 main.py goal add "Fix tests" --run
+

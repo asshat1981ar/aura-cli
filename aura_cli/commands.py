@@ -8,15 +8,20 @@ from core.task_handler import run_goals_loop # Import run_goals_loop from core.t
 from core.task_manager import TaskManager
 
 def _handle_help():
-    print("\n--- AURA CLI Commands ---")
-    print("add <goal_description> - Add a new goal to the queue.")
-    print("run                    - Run the AURA loop for goals in the queue.")
-    print("status                 - Show the current status of tasks and goals.")
-    print("doctor                 - Run system health checks.")
-    print("clear                  - Clear the screen.")
-    print("exit                   - Exit the AURA CLI.")
-    print("help                   - Show this help message.")
-    print("-------------------------\n")
+    try:
+        from aura_cli.cli_options import render_help
+        print(render_help().rstrip())
+    except Exception:
+        # Fallback to a minimal static help if parser help rendering fails.
+        print("\n--- AURA CLI Commands ---")
+        print("add <goal_description> - Add a new goal to the queue.")
+        print("run                    - Run the AURA loop for goals in the queue.")
+        print("status                 - Show the current status of tasks and goals.")
+        print("doctor                 - Run system health checks.")
+        print("clear                  - Clear the screen.")
+        print("exit                   - Exit the AURA CLI.")
+        print("help                   - Show this help message.")
+        print("-------------------------\n")
 
 def _handle_doctor():
     log_json("INFO", "aura_doctor_requested")

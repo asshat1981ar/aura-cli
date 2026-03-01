@@ -56,7 +56,7 @@ _DB_PATH = _ROOT / "memory" / "thinking_sessions.db"
 
 @contextmanager
 def _db():
-    conn = sqlite3.connect(str(_DB_PATH))
+    conn = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     try:

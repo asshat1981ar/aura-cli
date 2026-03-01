@@ -1,0 +1,27 @@
+{
+  "cli_warnings": [
+    {
+      "action": "diag",
+      "category": "deprecation",
+      "code": "legacy_cli_flags_deprecated",
+      "legacy_flags": [
+        "--diag"
+      ],
+      "message": "Legacy flags are deprecated; use `aura diag` instead.",
+      "phase": "compatibility",
+      "replacement_command": "aura diag"
+    }
+  ],
+  "health": {
+    "data": {
+      "status": "ok"
+    },
+    "status": 200
+  },
+  "metrics": {
+    "data": {
+      "skill_metrics": {}
+    },
+    "status": 200
+  }
+}

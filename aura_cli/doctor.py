@@ -9,6 +9,7 @@ from pathlib import Path
 from core.config_manager import DEFAULT_CONFIG
 from core.git_tools import GitTools, GitRepoError
 from core.runtime_auth import (
+    _clean_secret,
     resolve_config_api_key,
     runtime_provider_status,
     runtime_provider_summary,
@@ -49,7 +50,32 @@ def check_dependencies():
 
 def check_env_vars(openrouter_api_key_arg: str = None): # Add argument
     """Checks for required environment variables."""
-    status = runtime_provider_status(openrouter_api_key_arg=openrouter_api_key_arg)
+    gemini_cli = _clean_secret(os.getenv("GEMINI_CLI_PATH"))
+    gemini_ready = False
+    if gemini_cli:
+        path = Path(gemini_cli)
+        gemini_ready = path.is_file() and os.access(path, os.X_OK)
+
+    status = {
+        "openai": bool(_clean_secret(os.getenv("OPENAI_API_KEY"))),
+        "openrouter": bool(
+            _clean_secret(openrouter_api_key_arg)
+            or _clean_secret(os.getenv("OPENROUTER_API_KEY"))
+            or _clean_secret(os.getenv("AURA_API_KEY"))
+        ),
+        "local_model": bool(_clean_secret(os.getenv("AURA_LOCAL_MODEL_COMMAND"))),
+        "gemini_cli": gemini_ready,
+        "chat_ready": False,
+        "embedding_ready": bool(_clean_secret(os.getenv("OPENAI_API_KEY"))),
+    }
+    status["chat_ready"] = any(
+        [
+            status["openai"],
+            status["openrouter"],
+            status["local_model"],
+            status["gemini_cli"],
+        ]
+    )
     overall = "PASS" if status["chat_ready"] else "WARN"
     return overall, runtime_provider_summary(status)
 

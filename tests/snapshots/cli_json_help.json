@@ -310,6 +310,87 @@
       ],
       "requires_runtime": true,
       "summary": "Run evolution loop"
+    },
+    {
+      "action": null,
+      "description": "List, add, or clear goals in the autonomous queue.",
+      "examples": [
+        "python3 main.py queue list"
+      ],
+      "legacy_flags": [],
+      "path": [
+        "queue"
+      ],
+      "requires_runtime": null,
+      "summary": "Goal queue management"
+    },
+    {
+      "action": "queue_list",
+      "description": "Show all pending and completed goals.",
+      "examples": [
+        "python3 main.py queue list"
+      ],
+      "legacy_flags": [],
+      "path": [
+        "queue",
+        "list"
+      ],
+      "requires_runtime": true,
+      "summary": "List queued goals"
+    },
+    {
+      "action": "queue_clear",
+      "description": "Remove all pending goals from the queue.",
+      "examples": [
+        "python3 main.py queue clear"
+      ],
+      "legacy_flags": [],
+      "path": [
+        "queue",
+        "clear"
+      ],
+      "requires_runtime": true,
+      "summary": "Clear the goal queue"
+    },
+    {
+      "action": null,
+      "description": "Search or browse through the AURA brain.",
+      "examples": [
+        "python3 main.py memory search \"workflow engine\""
+      ],
+      "legacy_flags": [],
+      "path": [
+        "memory"
+      ],
+      "requires_runtime": null,
+      "summary": "Semantic memory operations"
+    },
+    {
+      "action": "memory_search",
+      "description": "Perform a semantic search over brain entries.",
+      "examples": [
+        "python3 main.py memory search \"workflow engine\""
+      ],
+      "legacy_flags": [],
+      "path": [
+        "memory",
+        "search"
+      ],
+      "requires_runtime": true,
+      "summary": "Search semantic memory"
+    },
+    {
+      "action": "metrics_show",
+      "description": "Display cycle success rates and timing stats.",
+      "examples": [
+        "python3 main.py metrics"
+      ],
+      "legacy_flags": [],
+      "path": [
+        "metrics"
+      ],
+      "requires_runtime": true,
+      "summary": "Show performance metrics"
     }
   ],
   "deterministic": true,

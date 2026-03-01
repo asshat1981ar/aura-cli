@@ -15,6 +15,9 @@ Commands:
   mcp          MCP HTTP client commands
   scaffold     Scaffold a project
   evolve       Run evolution loop
+  queue        Goal queue management
+  memory       Semantic memory operations
+  metrics      Show performance metrics
 
 Examples:
   python3 main.py goal add "Refactor queue" --run

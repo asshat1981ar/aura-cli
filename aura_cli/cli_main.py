@@ -134,7 +134,8 @@ def cli_interaction_loop(args, runtime):
                     print("Initializing full AURA runtime for execution...")
                     full_runtime = create_runtime(project_root, overrides={"runtime_mode": "full"})
                     runtime.update(full_runtime)
-                    _ensure_legacy_loop(runtime, project_root=project_root)
+                if runtime.get("loop") is None:
+                    runtime["loop"] = _ensure_legacy_loop(runtime, project_root=project_root)
                 
                 _handle_run(
                     args, 

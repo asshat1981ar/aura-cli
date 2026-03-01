@@ -1,5 +1,6 @@
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -46,9 +47,15 @@ class TestLoggingWorkflow(unittest.TestCase):
     def setUp(self):
         self.original_stdout = sys.stdout
         sys.stdout = io.StringIO()
+        self.original_log_stream = os.environ.get("AURA_LOG_STREAM")
+        os.environ["AURA_LOG_STREAM"] = "stdout"
 
     def tearDown(self):
         sys.stdout = self.original_stdout
+        if self.original_log_stream is None:
+            os.environ.pop("AURA_LOG_STREAM", None)
+        else:
+            os.environ["AURA_LOG_STREAM"] = self.original_log_stream
 
     def _get_log_entries(self):
         output = sys.stdout.getvalue()
@@ -118,9 +125,10 @@ class TestLoggingWorkflow(unittest.TestCase):
 
             entries = self._get_log_entries()
             events = [e.get("event") for e in entries]
+            self.assertIn("file_tools_old_code_mismatch_blocked", events)
             self.assertIn("old_code_mismatch_overwrite_blocked", events)
-            self.assertIn("verification_failed_routing", events)
-            self.assertIn("verification_failure_external_skip", events)
+            self.assertNotIn("verification_failed_routing", events)
+            self.assertNotIn("verification_failure_external_skip", events)
             self.assertEqual(result["stop_reason"], "MAX_CYCLES")
             self.assertEqual(target.read_text(encoding="utf-8"), "print('original')\n")
 

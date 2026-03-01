@@ -2,6 +2,7 @@ import unittest
 import json
 import sys
 import io
+import os
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 
@@ -18,10 +19,16 @@ class TestGitToolsEnhancements(unittest.TestCase):
         # Capture stdout
         self.original_stdout = sys.stdout
         sys.stdout = io.StringIO()
+        self.original_log_stream = os.environ.get("AURA_LOG_STREAM")
+        os.environ["AURA_LOG_STREAM"] = "stdout"
 
     def tearDown(self):
         # Restore stdout
         sys.stdout = self.original_stdout
+        if self.original_log_stream is None:
+            os.environ.pop("AURA_LOG_STREAM", None)
+        else:
+            os.environ["AURA_LOG_STREAM"] = self.original_log_stream
 
     def get_log_entries(self):
         output = sys.stdout.getvalue()

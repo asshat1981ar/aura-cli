@@ -540,7 +540,14 @@ class LoopOrchestrator:
         tests = task_bundle.get("tasks", [{}])[0].get("tests", []) if isinstance(task_bundle, dict) else []
         self._notify_ui("on_phase_start", "verify")
         t0_verify = time.time()
-        verification = self._run_phase("verify", {"change_set": act, "dry_run": dry_run, "project_root": str(self.project_root), "tests": tests})
+        if apply_result.get("failed"):
+            verification = {
+                "status": "fail",
+                "failures": [f"{item['file']}: {item['error']}" for item in apply_result["failed"]],
+                "logs": "\n".join(str(item.get("error", "")) for item in apply_result["failed"]),
+            }
+        else:
+            verification = self._run_phase("verify", {"change_set": act, "dry_run": dry_run, "project_root": str(self.project_root), "tests": tests})
         self._notify_ui("on_phase_complete", "verify", (time.time() - t0_verify) * 1000, success=(verification.get("status") in ("pass", "skip")))
         
         phase_outputs["verification"] = verification

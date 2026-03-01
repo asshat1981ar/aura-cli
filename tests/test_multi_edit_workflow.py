@@ -41,6 +41,8 @@ class TestMultiEditWorkflow(unittest.TestCase):
         # Mock sys.stdout for capturing log_json output
         self.original_stdout = sys.stdout
         sys.stdout = io.StringIO()
+        self.original_log_stream = os.environ.get("AURA_LOG_STREAM")
+        os.environ["AURA_LOG_STREAM"] = "stdout"
 
         # Mock sys.stdin for CLI input
         self.original_stdin = sys.stdin
@@ -67,6 +69,10 @@ class TestMultiEditWorkflow(unittest.TestCase):
         sys.stdout = self.original_stdout
         sys.stdin = self.original_stdin
         sys.argv = self.original_argv
+        if self.original_log_stream is None:
+            os.environ.pop("AURA_LOG_STREAM", None)
+        else:
+            os.environ["AURA_LOG_STREAM"] = self.original_log_stream
 
     def _get_captured_logs(self):
         output = sys.stdout.getvalue()

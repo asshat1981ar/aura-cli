@@ -10,100 +10,59 @@ from core.memory_types import MemoryRecord, RetrievalQuery, SearchHit
 
 class VectorStore:
     """
-    Manages semantic embeddings for content, allowing for similarity search.
-    Implements ASCM v2 VectorStoreV2 protocol while maintaining v1 compatibility.
+    Unified Control Plane: Centralized semantic memory store.
+    Implements ASCM v2 VectorStoreV2 protocol with multi-model embedding support.
     """
     def __init__(self, model_adapter, brain):
-        """
-        Initializes the VectorStore.
-
-        Args:
-            model_adapter: An instance of ModelAdapter for generating embeddings.
-            brain: An instance of Brain for database access.
-        """
         self.model_adapter = model_adapter
         self.brain = brain
-        
-        # In-memory cache for vector search (SQLite is storage, memory is index)
-        self._cache_records: Dict[str, MemoryRecord] = {}
-        self._cache_vectors: Dict[str, np.ndarray] = {}
-        
+        # ASCM v2: use Row factory for name-based access in search results
+        self.brain.db.row_factory = sqlite3.Row
         self._init_db()
-        self._load_from_db()
-        
         log_json("INFO", "vector_store_initialized", details={"backend": "sqlite_local_v2"})
 
     def _init_db(self):
-        """Initialize the database schema."""
+        """Initialize the multi-table schema."""
         try:
-            # V2 Schema
             self.brain.db.execute("""
                 CREATE TABLE IF NOT EXISTS memory_records (
                     id TEXT PRIMARY KEY,
-                    content TEXT,
-                    source_type TEXT,
+                    content TEXT NOT NULL,
+                    source_type TEXT NOT NULL,
                     source_ref TEXT,
-                    created_at REAL,
-                    updated_at REAL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
                     goal_id TEXT,
                     agent_name TEXT,
-                    tags TEXT,
-                    importance REAL,
-                    token_count INTEGER,
-                    embedding_model TEXT,
-                    embedding_dims INTEGER,
-                    content_hash TEXT,
-                    embedding BLOB
+                    tags TEXT NOT NULL DEFAULT '[]',
+                    importance REAL NOT NULL DEFAULT 1.0,
+                    token_count INTEGER NOT NULL DEFAULT 0,
+                    content_hash TEXT NOT NULL
                 )
             """)
-            self.brain.db.execute("CREATE INDEX IF NOT EXISTS idx_content_hash ON memory_records(content_hash)")
+            self.brain.db.execute("""
+                CREATE TABLE IF NOT EXISTS embeddings (
+                    record_id TEXT NOT NULL,
+                    model_id TEXT NOT NULL,
+                    dims INTEGER NOT NULL,
+                    data BLOB NOT NULL,
+                    PRIMARY KEY (record_id, model_id),
+                    FOREIGN KEY (record_id) REFERENCES memory_records(id) ON DELETE CASCADE
+                )
+            """)
+            self.brain.db.execute("CREATE INDEX IF NOT EXISTS idx_mr_content_hash ON memory_records(content_hash)")
+            self.brain.db.execute("CREATE INDEX IF NOT EXISTS idx_mr_source_type ON memory_records(source_type)")
             self.brain.db.commit()
+            
+            # Migration check for legacy v1 table
+            self._migrate_legacy_v1()
         except sqlite3.Error as e:
             log_json("ERROR", "vector_store_init_failed", details={"error": str(e)})
 
-    def _load_from_db(self):
-        """Load records from DB into memory cache."""
+    def _migrate_legacy_v1(self):
+        """Migrates data from legacy tables to the v2 schema."""
         try:
-            # 1. Load V2 records
-            rows = self.brain.db.execute("SELECT * FROM memory_records").fetchall()
-            for row in rows:
-                # row is a sqlite3.Row or tuple. Assuming tuple access by index or name if Row factory set.
-                # If Row factory is sqlite3.Row, we can use keys.
-                # Brain uses row_factory = sqlite3.Row usually, let's assume index to be safe or check keys.
-                # Schema order matches CREATE TABLE
-                rec = MemoryRecord(
-                    id=row[0],
-                    content=row[1],
-                    source_type=row[2],
-                    source_ref=row[3],
-                    created_at=row[4],
-                    updated_at=row[5],
-                    goal_id=row[6],
-                    agent_name=row[7],
-                    tags=json.loads(row[8]) if row[8] else [],
-                    importance=row[9],
-                    token_count=row[10],
-                    embedding_model=row[11],
-                    embedding_dims=row[12],
-                    content_hash=row[13],
-                    embedding=row[14]
-                )
-                self._cache_records[rec.id] = rec
-                if rec.embedding:
-                    self._cache_vectors[rec.id] = np.frombuffer(rec.embedding, dtype=np.float32)
-
-            # 2. Check for V1 legacy data and migrate if needed
-            self._migrate_v1_data()
-            
-            log_json("INFO", "vector_store_loaded", details={"count": len(self._cache_records)})
-            
-        except Exception as e:
-            log_json("WARN", "vector_store_load_error", details={"error": str(e)})
-
-    def _migrate_v1_data(self):
-        """Migrate data from legacy vector_store_data table to memory_records."""
-        try:
-            # Check if legacy table exists
+            # Check if old table exists
             cursor = self.brain.db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='vector_store_data'")
             if not cursor.fetchone():
                 return
@@ -113,229 +72,182 @@ class VectorStore:
             for content, embedding_blob in rows:
                 content_hash = hashlib.sha256(content.encode()).hexdigest()
                 
-                # Check if already exists in V2 via content_hash
-                exists = False
-                for r in self._cache_records.values():
-                    if r.content_hash == content_hash:
-                        exists = True
-                        break
-                
-                if not exists:
-                    # Create V2 record
-                    rec = MemoryRecord(
-                        id=uuid.uuid4().hex,
-                        content=content,
-                        source_type="legacy_migration",
-                        source_ref="v1_store",
-                        created_at=time.time(),
-                        updated_at=time.time(),
-                        embedding_model="unknown_v1", # Likely text-embedding-3-small but not guaranteed
-                        embedding_dims=len(np.frombuffer(embedding_blob, dtype=np.float32)),
-                        content_hash=content_hash,
-                        embedding=embedding_blob
-                    )
-                    self._upsert_single(rec)
+                # Check for existence
+                existing = self.brain.db.execute("SELECT id FROM memory_records WHERE content_hash=?", (content_hash,)).fetchone()
+                if not existing:
+                    rid = uuid.uuid4().hex
+                    now = time.time()
+                    self.brain.db.execute("""
+                        INSERT INTO memory_records (id, content, source_type, created_at, updated_at, content_hash)
+                        VALUES (?, ?, ?, ?, ?, ?)
+                    """, (rid, content, "legacy_v1", now, now, content_hash))
+                    
+                    vec = np.frombuffer(embedding_blob, dtype=np.float32)
+                    self.brain.db.execute("""
+                        INSERT INTO embeddings (record_id, model_id, dims, data)
+                        VALUES (?, ?, ?, ?)
+                    """, (rid, "unknown_v1", len(vec), embedding_blob))
                     migrated += 1
             
             if migrated > 0:
-                log_json("INFO", "vector_store_v1_migrated", details={"migrated_count": migrated})
-                # Optionally drop legacy table, but keeping for safety for now
-                
+                self.brain.db.commit()
+                log_json("INFO", "vector_store_legacy_migrated", details={"count": migrated})
         except Exception as e:
             log_json("WARN", "vector_store_migration_failed", details={"error": str(e)})
 
-    def _upsert_single(self, record: MemoryRecord):
-        """Internal helper to upsert a single record to DB and Cache."""
-        # Update Cache
-        self._cache_records[record.id] = record
-        if record.embedding:
-            self._cache_vectors[record.id] = np.frombuffer(record.embedding, dtype=np.float32)
-        
-        # Update DB
-        self.brain.db.execute("""
-            INSERT OR REPLACE INTO memory_records VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-            )
-        """, (
-            record.id,
-            record.content,
-            record.source_type,
-            record.source_ref,
-            record.created_at,
-            record.updated_at,
-            record.goal_id,
-            record.agent_name,
-            json.dumps(record.tags),
-            record.importance,
-            record.token_count,
-            record.embedding_model,
-            record.embedding_dims,
-            record.content_hash,
-            record.embedding
-        ))
-        self.brain.db.commit()
-
     def upsert(self, records: List[MemoryRecord]) -> Dict[str, int]:
-        """Insert or update memory records using batched embeddings."""
-        # 1. Identify records needing embeddings
-        missing = [r for r in records if r.embedding is None]
+        """Unified upsert: handles content and model-specific embeddings."""
+        count = 0
+        current_model = self.model_adapter.model_id()
         
-        if missing:
+        # 1. Identify records needing embeddings for the current model
+        to_embed = []
+        for rec in records:
+            if not rec.content_hash:
+                rec.content_hash = hashlib.sha256(rec.content.encode()).hexdigest()
+            
+            # Check if this record+model combo already has an embedding in DB
+            existing = self.brain.db.execute(
+                "SELECT record_id FROM embeddings WHERE record_id=? AND model_id=?",
+                (rec.id, current_model)
+            ).fetchone()
+            
+            if not existing and rec.embedding is None:
+                to_embed.append(rec)
+
+        # 2. Batch embed if needed
+        if to_embed:
             try:
-                # 2. Batch embed
-                contents = [r.content for r in missing]
-                vectors = self.model_adapter.embed(contents)
-                
-                # 3. Associate vectors back to records
-                for rec, vec in zip(missing, vectors):
+                vectors = self.model_adapter.embed([r.content for r in to_embed])
+                for rec, vec in zip(to_embed, vectors):
                     rec.embedding = vec.tobytes()
                     rec.embedding_dims = len(vec)
-                    rec.embedding_model = self.model_adapter.model_id()
+                    rec.embedding_model = current_model
             except Exception as e:
-                log_json("ERROR", "batched_embedding_failed", details={"error": str(e)})
-                # Fallback: try individual if batch failed? No, better to let adapter handle retries.
-        
-        # 4. Upsert all to DB/Cache
-        count = 0
+                log_json("ERROR", "vector_store_batch_embed_failed", details={"error": str(e)})
+
+        # 3. Insert/Update records and embeddings
         for rec in records:
-            if rec.embedding is not None:
-                self._upsert_single(rec)
+            try:
+                self.brain.db.execute("""
+                    INSERT OR REPLACE INTO memory_records VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                """, (
+                    rec.id, rec.content, rec.source_type, rec.source_ref,
+                    rec.created_at, rec.updated_at, rec.goal_id, rec.agent_name,
+                    json.dumps(rec.tags), rec.importance, rec.token_count, rec.content_hash
+                ))
+                
+                if rec.embedding:
+                    self.brain.db.execute("""
+                        INSERT OR REPLACE INTO embeddings (record_id, model_id, dims, data)
+                        VALUES (?, ?, ?, ?)
+                    """, (rec.id, current_model, rec.embedding_dims, rec.embedding))
                 count += 1
-            
+            except sqlite3.Error as e:
+                log_json("ERROR", "vector_store_upsert_failed", details={"id": rec.id, "error": str(e)})
+
+        self.brain.db.commit()
         return {"upserted": count}
 
-    def delete(self, ids: List[str]) -> int:
-        """Delete records by ID."""
-        count = 0
-        for rid in ids:
-            if rid in self._cache_records:
-                del self._cache_records[rid]
-                if rid in self._cache_vectors:
-                    del self._cache_vectors[rid]
-                
-                self.brain.db.execute("DELETE FROM memory_records WHERE id=?", (rid,))
-                count += 1
-        self.brain.db.commit()
-        return count
-
-    def stats(self) -> Dict[str, Any]:
-        """Return store statistics."""
-        return {
-            "record_count": len(self._cache_records),
-            "vector_count": len(self._cache_vectors)
-        }
-
     def search(self, query: Union[str, RetrievalQuery], k: int = 5) -> Union[List[str], List[SearchHit]]:
-        """
-        Search the store.
-        Args:
-            query: Query string (legacy) or RetrievalQuery object (v2).
-            k: Number of results (legacy).
-        Returns:
-            List of content strings (legacy) or List of SearchHit (v2).
-        """
-        # 1. Handle Legacy Call
+        """ASCM v2 Search: semantic similarity with filters and metadata."""
         if isinstance(query, str):
             q_obj = RetrievalQuery(query_text=query, k=k)
-            hits = self._execute_search(q_obj)
-            return [h.content for h in hits]
-        
-        # 2. Handle V2 Call
-        if isinstance(query, RetrievalQuery):
-            return self._execute_search(query)
-            
-        raise ValueError("Invalid query type")
+        else:
+            q_obj = query
 
-    def _execute_search(self, query: RetrievalQuery) -> List[SearchHit]:
-        """Internal search execution logic."""
-        if not self._cache_vectors:
-            return []
-
+        current_model = self.model_adapter.model_id()
         try:
-            query_vec = self.model_adapter.get_embedding(query.query_text)
+            query_vec = self.model_adapter.get_embedding(q_obj.query_text)
         except Exception as e:
-            log_json("WARN", "search_embedding_failed", details={"error": str(e)})
+            log_json("WARN", "vector_store_search_embed_failed", details={"error": str(e)})
             return []
 
+        # 1. Fetch candidates from DB (constrained by filters)
+        # For efficiency, we only load vectors for the active model
+        sql = """
+            SELECT mr.*, e.data as embedding_blob 
+            FROM memory_records mr
+            JOIN embeddings e ON mr.id = e.record_id
+            WHERE e.model_id = ?
+        """
+        params = [current_model]
+        
+        if q_obj.filters:
+            for key, val in q_obj.filters.items():
+                if key in ["source_type", "goal_id", "agent_name"]:
+                    sql += f" AND mr.{key} = ?"
+                    params.append(val)
+
+        candidates = self.brain.db.execute(sql, params).fetchall()
         hits = []
         
-        # Normalize query vector
-        query_norm = np.linalg.norm(query_vec)
-        if query_norm == 0:
-            return []
-            
-        for rid, vec in self._cache_vectors.items():
-            rec = self._cache_records.get(rid)
-            if not rec:
-                continue
-                
-            # Apply Filters
-            if query.filters:
-                match = True
-                for key, val in query.filters.items():
-                    # Simple attribute check
-                    if getattr(rec, key, None) != val:
-                        match = False
-                        break
-                if not match:
-                    continue
+        # 2. Rank candidates using cosine similarity in Python (sufficient for repo-scale)
+        q_norm = np.linalg.norm(query_vec)
+        if q_norm == 0: return []
 
-            # Calculate Cosine Similarity
-            vec_norm = np.linalg.norm(vec)
-            if vec_norm == 0:
-                score = 0.0
-            else:
-                score = float(np.dot(query_vec, vec) / (query_norm * vec_norm))
+        for row in candidates:
+            vec = np.frombuffer(row["embedding_blob"], dtype=np.float32)
+            v_norm = np.linalg.norm(vec)
+            if v_norm == 0: continue
             
-            # Recency Bias
-            # Simple implementation: boost score slightly for newer items
-            if query.recency_bias > 0:
-                age = time.time() - rec.created_at
-                # decay factor? For now, just a linear boost for recent items (e.g., last 24h)
-                # This is a placeholder for more complex decay
-                if age < 86400:
-                    score += query.recency_bias * 0.1
+            score = float(np.dot(query_vec, vec) / (q_norm * v_norm))
+            
+            # Recency bias (PRD: simple linear decay placeholder)
+            if q_obj.recency_bias > 0:
+                age = time.time() - row["created_at"]
+                if age < 86400: # Boost items from last 24h
+                    score += q_obj.recency_bias * 0.1
 
-            if score >= query.min_score:
+            if score >= q_obj.min_score:
                 hits.append(SearchHit(
-                    record_id=rec.id,
-                    content=rec.content,
+                    record_id=row["id"],
+                    content=row["content"],
                     score=score,
-                    source_ref=rec.source_ref,
-                    metadata={"source_type": rec.source_type, "tags": rec.tags},
+                    source_ref=row["source_ref"],
+                    metadata={"source_type": row["source_type"], "tags": json.loads(row["tags"])},
                     explanation=f"Similarity: {score:.3f}"
                 ))
 
-        # Sort by score
         hits.sort(key=lambda h: h.score, reverse=True)
         
-        # Deduplication (if dedupe_key provided)
-        # Assuming dedupe_key is a field in MemoryRecord, need to look up record from hit
-        # But SearchHit doesn't have the full record content hash readily available in its struct unless in metadata
-        # Let's trust the raw hits for now or implement if needed. 
-        # The PRD mentions dedupe_key="content_hash".
-        if query.dedupe_key == "content_hash":
-            unique_hits = []
-            seen_hashes = set()
-            for hit in hits:
-                rec = self._cache_records[hit.record_id]
-                if rec.content_hash not in seen_hashes:
-                    unique_hits.append(hit)
-                    seen_hashes.add(rec.content_hash)
-            hits = unique_hits
+        # Deduplication by content_hash
+        if q_obj.dedupe_key == "content_hash":
+            unique = []
+            seen = set()
+            for h in hits:
+                # We need the hash from the candidate row
+                cand = next(c for c in candidates if c["id"] == h.record_id)
+                if cand["content_hash"] not in seen:
+                    unique.append(h)
+                    seen.add(cand["content_hash"])
+            hits = unique
 
-        return hits[:query.k]
+        results = hits[:q_obj.k]
+        if isinstance(query, str):
+            return [h.content for h in results]
+        return results
+
+    def stats(self) -> Dict[str, Any]:
+        rec_count = self.brain.db.execute("SELECT COUNT(*) FROM memory_records").fetchone()[0]
+        emb_count = self.brain.db.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
+        return {"records": rec_count, "record_count": rec_count, "embeddings": emb_count}
+
+    def delete(self, ids: List[str]) -> int:
+        cur = self.brain.db.execute("DELETE FROM memory_records WHERE id IN ({})".format(
+            ",".join(["?"] * len(ids))
+        ), ids)
+        self.brain.db.commit()
+        return cur.rowcount
 
     # Legacy method compatibility
     def add(self, content: str):
-        """Legacy add method."""
         rec = MemoryRecord(
             id=uuid.uuid4().hex,
             content=content,
-            source_type="legacy_add",
-            source_ref="unknown",
+            source_type="manual_add",
+            source_ref="legacy_api",
             created_at=time.time(),
-            updated_at=time.time(),
-            content_hash=hashlib.sha256(content.encode()).hexdigest()
+            updated_at=time.time()
         )
         self.upsert([rec])

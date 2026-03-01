@@ -62,20 +62,21 @@ Known record codes:
 - [`doctor`](#doctor)
 - [`bootstrap`](#bootstrap)
 - [`config`](#config)
+- [`contract-report`](#contract-report)
 - [`diag`](#diag)
 - [`logs`](#logs)
 - [`watch`](#watch)
 - [`studio`](#studio)
 - [`goal`](#goal)
-- [`aura goal add`](#aura-goal-add)
-- [`aura goal run`](#aura-goal-run)
-- [`aura goal status`](#aura-goal-status)
-- [`aura goal once`](#aura-goal-once)
+  - [`aura goal add`](#aura-goal-add)
+  - [`aura goal run`](#aura-goal-run)
+  - [`aura goal status`](#aura-goal-status)
+  - [`aura goal once`](#aura-goal-once)
 - [`workflow`](#workflow)
-- [`aura workflow run`](#aura-workflow-run)
+  - [`aura workflow run`](#aura-workflow-run)
 - [`mcp`](#mcp)
-- [`aura mcp tools`](#aura-mcp-tools)
-- [`aura mcp call`](#aura-mcp-call)
+  - [`aura mcp tools`](#aura-mcp-tools)
+  - [`aura mcp call`](#aura-mcp-call)
 - [`scaffold`](#scaffold)
 - [`evolve`](#evolve)
 
@@ -134,6 +135,20 @@ Print the resolved effective runtime configuration.
 
 Examples:
 - `python3 main.py config`
+
+## `contract-report`
+
+### `aura contract-report`
+
+Print CLI contract report
+
+Print aggregated parser/help/schema/dispatch contract checks as JSON.
+
+`action`: `contract_report` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py contract-report --check`
+- `python3 main.py contract-report --compact`
 
 ## `diag`
 

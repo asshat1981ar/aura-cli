@@ -66,3 +66,23 @@ AURA is currently suffering from "Agent Drift": architectural redundancy, scatte
 ## Stakeholders / Owners
 - **Pickle Rick**: Architect / Implementation God.
 - **The User**: Stakeholder / Primary Engineer.
+
+## Implementation Status (Completed 2026-03-01)
+
+### Phase 1: Unified Config Manager (✅ Completed)
+- [x] **Consolidate Defaults**: Moved all default constants to `core/config_manager.py`.
+- [x] **Tiered Loading**: Implemented `Defaults < JSON < ENV < Runtime` logic.
+- [x] **Interactive Bootstrap**: `aura bootstrap` now interactively prompts for keys.
+- [x] **Refactor**: Updated `model_adapter`, `doctor`, and `runtime_auth` to use `config.get()`.
+
+### Phase 2: Memory Controller (✅ Completed)
+- [x] **Unify Authority**: Wrapped `MemoryStore` inside `MemoryController`.
+- [x] **Explicit Tiers**: Implemented `WORKING`, `SESSION`, `PROJECT` logic.
+- [x] **Context Injection**: Auto-injected volatile memory into `ingest` phase.
+- [x] **Persistence**: `TaskManager` and `LoopOrchestrator` now use the Controller.
+
+### Phase 3: Security & Sanitization (✅ Completed)
+- [x] **Centralize Sanitizer**: Enforced `sanitize_path` and `sanitize_command` in `core/sanitizer.py`.
+- [x] **Log Masking**: Auto-masking of secrets implemented in `logging_utils.py`.
+- [x] **Sandbox Gating**: Enforced command allowlist in `SandboxAgent`.
+- [x] **Path Jailing**: Updated `file_tools.py` to prevent traversal attacks.

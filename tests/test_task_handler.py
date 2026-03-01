@@ -218,6 +218,111 @@ class TestTaskHandlerLoopControls(unittest.TestCase):
         self.assertEqual(loop.run.call_count, 1)
         self.assertEqual(archive.records, [("Valid path should skip candidate scan", 0.0)])
 
+    def test_candidate_existing_files_prefers_exact_basename_match(self):
+        with tempfile.TemporaryDirectory() as td:
+            project_root = Path(td)
+            (project_root / "run_aura.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
+            (project_root / "tests").mkdir(parents=True, exist_ok=True)
+            (project_root / "tests" / "test_run_aura_wrapper.py").write_text("# test\n", encoding="utf-8")
+
+            candidates = task_handler._candidate_existing_files(
+                project_root,
+                "scripts/run_aura.sh",
+                "Update run_aura.sh wrapper help",
+                limit=4,
+            )
+
+        self.assertGreaterEqual(len(candidates), 1)
+        self.assertEqual(candidates[0], "run_aura.sh")
+
+    def test_invalid_path_grounding_hint_surfaces_closest_exact_match(self):
+        hint = task_handler._invalid_path_grounding_hint(
+            "scripts/run_aura.sh",
+            "file_not_found",
+            ["run_aura.sh", "tests/test_run_aura_wrapper.py"],
+        )
+
+        self.assertIn("Closest existing match: run_aura.sh", hint)
+        self.assertIn("Do not invent a new top-level directory", hint)
+
+    def test_candidate_existing_files_prefers_exact_python_basename_match(self):
+        with tempfile.TemporaryDirectory() as td:
+            project_root = Path(td)
+            (project_root / "agents" / "skills").mkdir(parents=True, exist_ok=True)
+            (project_root / "agents" / "skills" / "structural_analyzer.py").write_text(
+                "# analyzer\n",
+                encoding="utf-8",
+            )
+            (project_root / "agents" / "skills" / "dependency_analyzer.py").write_text(
+                "# dependency\n",
+                encoding="utf-8",
+            )
+
+            candidates = task_handler._candidate_existing_files(
+                project_root,
+                "analysis/structural_analyzer.py",
+                "Run architecture validation after refactor",
+                limit=4,
+            )
+
+        self.assertGreaterEqual(len(candidates), 1)
+        self.assertEqual(candidates[0], "agents/skills/structural_analyzer.py")
+
+    def test_allow_new_test_file_target_for_regression_goal(self):
+        with tempfile.TemporaryDirectory() as td:
+            project_root = Path(td)
+            (project_root / "tests").mkdir(parents=True, exist_ok=True)
+
+            result = task_handler._allow_new_test_file_target(
+                project_root,
+                "tests/test_cli_loop.py",
+                "Add interactive CLI loop regression tests",
+                "",
+                False,
+            )
+
+        self.assertIsNotNone(result)
+        self.assertEqual(result.name, "test_cli_loop.py")
+
+    def test_run_goals_loop_allows_new_test_file_target_without_retry(self):
+        args = SimpleNamespace(dry_run=True, max_cycles=1)
+        queue = _FakeGoalQueue(["Add interactive CLI loop regression tests"])
+        archive = _FakeGoalArchive()
+        loop = MagicMock()
+        loop.run.return_value = json.dumps(
+            {
+                "IMPLEMENT": {
+                    "file_path": "tests/test_cli_loop.py",
+                    "old_code": "",
+                    "new_code": "def test_placeholder():\n    assert True\n",
+                    "overwrite_file": False,
+                }
+            }
+        )
+        loop.current_score = 0.0
+
+        with tempfile.TemporaryDirectory() as td, \
+             patch("core.task_handler.TaskManager", _FakeTaskManager), \
+             patch("core.task_handler.log_json") as mock_log:
+            project_root = Path(td)
+            (project_root / "tests").mkdir(parents=True, exist_ok=True)
+            task_handler.run_goals_loop(
+                args,
+                queue,
+                loop,
+                debugger_instance=None,
+                planner_instance=None,
+                goal_archive=archive,
+                project_root=project_root,
+                decompose=False,
+            )
+
+        self.assertEqual(loop.run.call_count, 1)
+        events = [c.args[1] for c in mock_log.call_args_list if len(c.args) >= 2]
+        self.assertIn("allowed_new_test_target", events)
+        self.assertIn("replace_code_skipped", events)
+        self.assertNotIn("invalid_implement_target_path", events)
+
     def test_symbol_index_cache_candidates_filter_invalid_and_stale_paths(self):
         with tempfile.TemporaryDirectory() as td:
             project_root = Path(td)

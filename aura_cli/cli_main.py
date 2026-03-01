@@ -7,13 +7,14 @@ import urllib.error
 from contextlib import redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
+from types import SimpleNamespace
 
 try:
     import readline
 except ImportError:
     readline = None
 
-from core.config_manager import config
+from core.config_manager import DEFAULT_CONFIG, config
 from core.goal_queue import GoalQueue
 from core.goal_archive import GoalArchive
 from memory.brain import Brain
@@ -28,6 +29,12 @@ from agents.debugger import DebuggerAgent
 from agents.planner import PlannerAgent
 from agents.router import RouterAgent
 from core.vector_store import VectorStore
+from core.runtime_paths import resolve_project_path
+from core.runtime_auth import (
+    resolve_config_api_key,
+    runtime_provider_status,
+    runtime_provider_summary,
+)
 
 from core.task_handler import _check_project_writability, run_goals_loop
 from aura_cli.commands import _handle_add, _handle_run, _handle_status, _handle_exit, _handle_help, _handle_doctor, _handle_clear
@@ -104,7 +111,12 @@ def cmd_diag():
         "tail_logs": {"status": tail[0], "data": tail[1]},
     }, indent=2))
 
-def cli_interaction_loop(args, goal_queue, goal_archive, loop, debugger_instance, planner_instance, project_root):
+def cli_interaction_loop(args, runtime):
+    def _get_runtime_part(key):
+        return runtime.get(key)
+
+    project_root = runtime["project_root"]
+
     while True:
         try:
             command_line = input("\nCommand (add/run/exit/status/help) > ").strip()
@@ -114,13 +126,35 @@ def cli_interaction_loop(args, goal_queue, goal_archive, loop, debugger_instance
             cmd_name = command_parts[0]
             
             if cmd_name == "add":
-                _handle_add(goal_queue, command_line)
+                _handle_add(runtime["goal_queue"], command_line)
             elif cmd_name == "run":
-                _handle_run(args, goal_queue, goal_archive, loop, debugger_instance, planner_instance, project_root)
+                # Upgrade runtime if it's currently a queue-only runtime
+                orchestrator = runtime.get("orchestrator")
+                if isinstance(orchestrator, SimpleNamespace):
+                    print("Initializing full AURA runtime for execution...")
+                    full_runtime = create_runtime(project_root, overrides={"runtime_mode": "full"})
+                    runtime.update(full_runtime)
+                    _ensure_legacy_loop(runtime, project_root=project_root)
+                
+                _handle_run(
+                    args, 
+                    runtime["goal_queue"], 
+                    runtime["goal_archive"], 
+                    runtime["loop"], 
+                    runtime["debugger"], 
+                    runtime["planner"], 
+                    project_root
+                )
             elif cmd_name == "status":
-                _handle_status(goal_queue, goal_archive, loop)
+                _handle_status(
+                    runtime["goal_queue"], 
+                    runtime["goal_archive"], 
+                    runtime.get("loop"), 
+                    project_root=project_root, 
+                    memory_persistence_path=runtime.get("memory_persistence_path")
+                )
             elif cmd_name == "doctor":
-                _handle_doctor()
+                _handle_doctor(project_root)
             elif cmd_name == "clear":
                 _handle_clear()
             elif cmd_name == "help":
@@ -175,23 +209,73 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
+    runtime_overrides = dict(overrides or {})
+    runtime_mode = runtime_overrides.pop("runtime_mode", "full")
+
     # Apply optional config overrides
-    if overrides:
-        for k, v in overrides.items():
+    if runtime_overrides:
+        for k, v in runtime_overrides.items():
             config.set_runtime_override(k, v)
 
-    goal_queue = GoalQueue(config.get("goal_queue_path", "memory/goal_queue.json"))
-    goal_archive = GoalArchive()
+    goal_queue_path = resolve_project_path(
+        project_root,
+        config.get("goal_queue_path", DEFAULT_CONFIG["goal_queue_path"]),
+        DEFAULT_CONFIG["goal_queue_path"],
+    )
+    goal_archive_path = resolve_project_path(
+        project_root,
+        config.get("goal_archive_path", DEFAULT_CONFIG["goal_archive_path"]),
+        DEFAULT_CONFIG["goal_archive_path"],
+    )
+    brain_db_path = resolve_project_path(
+        project_root,
+        config.get("brain_db_path", DEFAULT_CONFIG["brain_db_path"]),
+        DEFAULT_CONFIG["brain_db_path"],
+    )
+    memory_store_path = resolve_project_path(
+        project_root,
+        config.get("memory_store_path", DEFAULT_CONFIG["memory_store_path"]),
+        DEFAULT_CONFIG["memory_store_path"],
+    )
+    memory_persistence_path = resolve_project_path(
+        project_root,
+        config.get("memory_persistence_path", DEFAULT_CONFIG["memory_persistence_path"]),
+        DEFAULT_CONFIG["memory_persistence_path"],
+    )
+
+    goal_queue = GoalQueue(str(goal_queue_path))
+    goal_archive = GoalArchive(str(goal_archive_path))
+    config_api_key = resolve_config_api_key(config.get("api_key", ""))
+    provider_status = runtime_provider_status(config_api_key=config_api_key)
 
     # Early API key check — warn clearly so users know what to fix
-    _api_key = config.get("api_key", "") or ""
-    if not _api_key or _api_key in ("YOUR_OPENROUTER_API_KEY", "YOUR_API_KEY_HERE", "placeholder"):
+    if not provider_status["chat_ready"]:
         log_json("WARN", "aura_api_key_missing",
-                 details={"message": "api_key is not set. LLM calls will fail. "
-                          "Set AURA_API_KEY env var or add api_key to aura.config.json."})
+                 details={"message": "No chat provider is configured. LLM calls will fail.",
+                          "providers": runtime_provider_summary(provider_status)})
         import sys as _sys
-        print("⚠️  AURA: No API key configured. Set AURA_API_KEY or edit aura.config.json.",
+        print("⚠️  AURA: No chat provider configured. Set OPENAI_API_KEY, OPENROUTER_API_KEY, AURA_API_KEY, or AURA_LOCAL_MODEL_COMMAND.",
               file=_sys.stderr)
+
+    if runtime_mode == "queue":
+        return {
+            "goal_queue": goal_queue,
+            "goal_archive": goal_archive,
+            "orchestrator": SimpleNamespace(),
+            "debugger": None,
+            "planner": None,
+            "loop": None,
+            "git_tools": None,
+            "project_root": project_root,
+            "model_adapter": None,
+            "memory_store": None,
+            "brain": None,
+            "vector_store": None,
+            "router": None,
+            "config_api_key": config_api_key,
+            "provider_status": provider_status,
+            "memory_persistence_path": memory_persistence_path,
+        }
 
     # ── Cache adapter: Momento (cloud) when API key set, else local in-process ─
     try:
@@ -199,14 +283,14 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         from memory.momento_brain import MomentoBrain
         _momento = create_cache_adapter()
         # MomentoBrain works with both MomentoAdapter and LocalCacheAdapter
-        brain_instance = MomentoBrain(_momento)
+        brain_instance = MomentoBrain(_momento, db_path=str(brain_db_path))
         _adapter_name = type(_momento).__name__
         log_json("INFO", "runtime_cache_adapter_active",
                  details={"adapter": _adapter_name})
     except Exception as _exc:
         log_json("WARN", "cache_adapter_init_failed", details={"error": str(_exc)})
         _momento = None
-        brain_instance = Brain()
+        brain_instance = Brain(db_path=str(brain_db_path))
 
     model_adapter = ModelAdapter()
     # Enable prompt-response cache (1hr TTL) — L1 via cache adapter
@@ -234,41 +318,44 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         log_json("INFO", "context_manager_initialized")
         
         # ── Background Project Sync ─────────────────────────────────────────
-        syncer = ProjectKnowledgeSyncer(
-            vector_store=vector_store,
-            context_graph=_context_graph if "_context_graph" in dir() else None,
-            project_root=project_root
-        )
-        # Run sync in background thread to not block CLI startup.
-        # Register atexit to signal the syncer to stop before process exit
-        # so it doesn't corrupt the DB mid-write.
-        import threading
-        import atexit
+        if runtime_mode != "lean":
+            syncer = ProjectKnowledgeSyncer(
+                vector_store=vector_store,
+                context_graph=_context_graph if "_context_graph" in dir() else None,
+                project_root=project_root
+            )
+            # Run sync in background thread to not block CLI startup.
+            # Register atexit to signal the syncer to stop before process exit
+            # so it doesn't corrupt the DB mid-write.
+            import threading
+            import atexit
 
-        _stop_event = threading.Event()
+            _stop_event = threading.Event()
 
-        def _bg_sync():
-            try:
-                syncer.sync_all()
-            except Exception as e:
-                log_json("WARN", "background_sync_failed", details={"error": str(e)})
+            def _bg_sync():
+                try:
+                    syncer.sync_all()
+                except Exception as e:
+                    log_json("WARN", "background_sync_failed", details={"error": str(e)})
 
-        _sync_thread = threading.Thread(target=_bg_sync, daemon=True, name="aura-bg-sync")
-        _sync_thread.start()
+            _sync_thread = threading.Thread(target=_bg_sync, daemon=True, name="aura-bg-sync")
+            _sync_thread.start()
 
-        def _on_exit():
-            _stop_event.set()
-            _sync_thread.join(timeout=5)
+            def _on_exit():
+                _stop_event.set()
+                _sync_thread.join(timeout=5)
 
-        atexit.register(_on_exit)
-        log_json("INFO", "background_sync_started")
+            atexit.register(_on_exit)
+            log_json("INFO", "background_sync_started")
+        else:
+            log_json("INFO", "background_sync_skipped", details={"reason": "lean_runtime"})
 
     except Exception as _exc:
         log_json("WARN", "context_manager_init_failed", details={"error": str(_exc)})
         context_manager = None
 
     # MemoryStore: use cache-adapter-backed version
-    _mem_root = Path(config.get("memory_store_path", "memory/store"))
+    _mem_root = memory_store_path
     if _momento is not None:
         try:
             from memory.momento_memory_store import MomentoMemoryStore
@@ -281,6 +368,10 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     else:
         memory_store = MemoryStore(_mem_root)
 
+    # R2: Unified Control Plane - Memory Controller attachment
+    from memory.controller import memory_controller
+    memory_controller.set_store(memory_store)
+
     policy_config = config.effective_config.copy()
     policy = Policy.from_config(policy_config)
     orchestrator = LoopOrchestrator(
@@ -290,64 +381,71 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         project_root=project_root,
         strict_schema=config.get("strict_schema", False),
         debugger=debugger_instance,
+        auto_add_capabilities=config.get("auto_add_capabilities", True),
+        auto_queue_missing_capabilities=config.get("auto_queue_missing_capabilities", True),
+        auto_provision_mcp=config.get("auto_provision_mcp", False),
+        auto_start_mcp_servers=config.get("auto_start_mcp_servers", False),
+        goal_queue=goal_queue,
     )
     git_tools_instance = GitTools(repo_path=str(project_root))
 
     # ── Self-improvement loops ────────────────────────────────────────────────
-    try:
-        from core.reflection_loop import DeepReflectionLoop
-        from core.health_monitor import HealthMonitor
-        from core.weakness_remediator import WeaknessRemediator
-        from core.skill_weight_adapter import SkillWeightAdapter
-        from core.convergence_escape import ConvergenceEscapeLoop
-        from core.memory_compaction import MemoryCompactionLoop
+    if runtime_mode not in ("lean", "queue"):
+        try:
+            from core.reflection_loop import DeepReflectionLoop
+            from core.health_monitor import HealthMonitor
+            from core.weakness_remediator import WeaknessRemediator
+            from core.skill_weight_adapter import SkillWeightAdapter
+            from core.convergence_escape import ConvergenceEscapeLoop
+            from core.memory_compaction import MemoryCompactionLoop
 
-        _reflection   = DeepReflectionLoop(memory_store, brain_instance)
-        _health       = HealthMonitor(orchestrator.skills, goal_queue, memory_store, project_root)
-        _remediator   = _WeaknessRemediatorLoop(WeaknessRemediator(), brain_instance, goal_queue)
-        _skill_adapt  = SkillWeightAdapter(
-            memory_root=str(Path(config.get("memory_store_path", "memory/store")).parent),
-            momento=_momento,
-        )
-        _conv_escape  = _ConvergenceEscapeLoop(ConvergenceEscapeLoop(memory_store, goal_queue))
-        _compaction   = MemoryCompactionLoop(memory_store)
+            _reflection   = DeepReflectionLoop(memory_store, brain_instance)
+            _health       = HealthMonitor(orchestrator.skills, goal_queue, memory_store, project_root)
+            _remediator   = _WeaknessRemediatorLoop(WeaknessRemediator(), brain_instance, goal_queue)
+            _skill_adapt  = SkillWeightAdapter(
+                memory_root=str(memory_store_path.parent),
+                momento=_momento,
+            )
+            _conv_escape  = _ConvergenceEscapeLoop(ConvergenceEscapeLoop(memory_store, goal_queue))
+            _compaction   = MemoryCompactionLoop(memory_store)
 
-        orchestrator.attach_improvement_loops(
-            _reflection,
-            _health,
-            _remediator,
-            _skill_adapt,
-            _conv_escape,
-            _compaction,
-        )
-    except Exception as _exc:
-        log_json("WARN", "improvement_loops_setup_failed", details={"error": str(_exc)})
+            orchestrator.attach_improvement_loops(
+                _reflection,
+                _health,
+                _remediator,
+                _skill_adapt,
+                _conv_escape,
+                _compaction,
+            )
+        except Exception as _exc:
+            log_json("WARN", "improvement_loops_setup_failed", details={"error": str(_exc)})
 
     # ── CASPA-W: Contextually Adaptive Self-Propagating Workflow ─────────────
-    try:
-        from core.context_graph import ContextGraph
-        from core.adaptive_pipeline import AdaptivePipeline
-        from core.propagation_engine import PropagationEngine
-        from core.autonomous_discovery import AutonomousDiscovery
+    if runtime_mode not in ("lean", "queue"):
+        try:
+            from core.context_graph import ContextGraph
+            from core.adaptive_pipeline import AdaptivePipeline
+            from core.propagation_engine import PropagationEngine
+            from core.autonomous_discovery import AutonomousDiscovery
 
-        _context_graph = ContextGraph()
-        _adaptive_pipeline = AdaptivePipeline(
-            context_graph=_context_graph,
-            skill_weight_adapter=_skill_adapt if "_skill_adapt" in dir() else None,
-            memory_store=memory_store,
-        )
-        _propagation = PropagationEngine(goal_queue, _context_graph, memory_store)
-        _discovery = AutonomousDiscovery(goal_queue, memory_store, project_root=str(project_root))
+            _context_graph = ContextGraph()
+            _adaptive_pipeline = AdaptivePipeline(
+                context_graph=_context_graph,
+                skill_weight_adapter=_skill_adapt if "_skill_adapt" in dir() else None,
+                memory_store=memory_store,
+            )
+            _propagation = PropagationEngine(goal_queue, _context_graph, memory_store)
+            _discovery = AutonomousDiscovery(goal_queue, memory_store, project_root=str(project_root))
 
-        orchestrator.attach_caspa(
-            adaptive_pipeline=_adaptive_pipeline,
-            propagation_engine=_propagation,
-            context_graph=_context_graph,
-        )
-        # Discovery runs on its own cycle counter via improvement loop interface
-        orchestrator.attach_improvement_loops(_discovery)
-    except Exception as _exc:
-        log_json("WARN", "caspa_setup_failed", details={"error": str(_exc)})
+            orchestrator.attach_caspa(
+                adaptive_pipeline=_adaptive_pipeline,
+                propagation_engine=_propagation,
+                context_graph=_context_graph,
+            )
+            # Discovery runs on its own cycle counter via improvement loop interface
+            orchestrator.attach_improvement_loops(_discovery)
+        except Exception as _exc:
+            log_json("WARN", "caspa_setup_failed", details={"error": str(_exc)})
     # ─────────────────────────────────────────────────────────────────────────
 
     return {
@@ -366,6 +464,9 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         "brain": brain_instance,
         "vector_store": vector_store,
         "router": router,
+        "config_api_key": config_api_key,
+        "provider_status": provider_status,
+        "memory_persistence_path": memory_persistence_path,
     }
 
 
@@ -417,14 +518,19 @@ def _prepare_runtime_context(ctx: DispatchContext) -> int | None:
         return None
 
     args = ctx.args
+    overrides: dict[str, object] = {}
     if getattr(args, "dry_run", False):
-        config.set_runtime_override("dry_run", True)
+        overrides["dry_run"] = True
     if getattr(args, "decompose", False):
-        config.set_runtime_override("decompose", True)
+        overrides["decompose"] = True
     if getattr(args, "model", None):
-        config.set_runtime_override("model_name", args.model)
+        overrides["model_name"] = args.model
+    if _resolve_dispatch_action(ctx.parsed) in {"goal_status", "goal_add", "interactive"}:
+        overrides["runtime_mode"] = "queue"
+    elif _resolve_dispatch_action(ctx.parsed) == "goal_once" and getattr(args, "dry_run", False):
+        overrides["runtime_mode"] = "lean"
 
-    ctx.runtime = ctx.runtime_factory(ctx.project_root, overrides=None)
+    ctx.runtime = ctx.runtime_factory(ctx.project_root, overrides=overrides or None)
     log_json("INFO", "aura_cli_online", details={"dry_run_mode": getattr(args, 'dry_run', False)})
 
     if not _check_project_writability(ctx.project_root):
@@ -451,13 +557,12 @@ def _handle_json_help_dispatch(_ctx: DispatchContext) -> int:
 
 
 def _handle_doctor_dispatch(_ctx: DispatchContext) -> int:
-    _handle_doctor()
+    _handle_doctor(_ctx.project_root)
     return 0
 
 
 def _handle_bootstrap_dispatch(_ctx: DispatchContext) -> int:
-    config.bootstrap()
-    print("AURA bootstrapped! Edit aura.config.json and add your API key.")
+    config.interactive_bootstrap()
     return 0
 
 
@@ -465,6 +570,26 @@ def _handle_show_config_dispatch(_ctx: DispatchContext) -> int:
     """Print the resolved effective configuration as JSON."""
     print(json.dumps(config.show_config(), indent=2, default=str))
     return 0
+
+
+def _handle_contract_report_dispatch(ctx: DispatchContext) -> int:
+    from aura_cli.contract_report import (
+        build_cli_contract_report,
+        cli_contract_report_exit_code,
+        cli_contract_report_failure_message,
+        render_cli_contract_report,
+    )
+
+    report = build_cli_contract_report(
+        include_dispatch=not getattr(ctx.args, "no_dispatch", False),
+        dispatch_registry=COMMAND_DISPATCH_REGISTRY,
+    )
+    print(render_cli_contract_report(report, compact=getattr(ctx.args, "compact", False)), end="")
+
+    exit_code = cli_contract_report_exit_code(report, check=getattr(ctx.args, "check", False))
+    if exit_code:
+        print(cli_contract_report_failure_message(report), file=sys.stderr)
+    return exit_code
 
 
 def _print_json_payload(payload: dict, *, parsed=None, **json_kwargs) -> None:
@@ -590,9 +715,18 @@ def _handle_goal_status_dispatch(ctx: DispatchContext) -> int:
             runtime["goal_archive"],
             runtime["orchestrator"],
             as_json=True,
+            project_root=ctx.project_root,
+            memory_persistence_path=runtime.get("memory_persistence_path"),
         )
     else:
-        _handle_status(runtime["goal_queue"], runtime["goal_archive"], runtime["orchestrator"], as_json=False)
+        _handle_status(
+            runtime["goal_queue"],
+            runtime["goal_archive"],
+            runtime["orchestrator"],
+            as_json=False,
+            project_root=ctx.project_root,
+            memory_persistence_path=runtime.get("memory_persistence_path"),
+        )
     return 0
 
 
@@ -602,6 +736,9 @@ def _maybe_add_goal(ctx: DispatchContext) -> None:
     goal_queue = ctx.runtime["goal_queue"]
     goal_queue.add(ctx.args.add_goal)
     log_json("INFO", "goal_added_from_cli", goal=ctx.args.add_goal)
+    if not getattr(ctx.args, "json", False):
+        print(f"Added goal: {ctx.args.add_goal}")
+        print(f"Queue length: {len(goal_queue.queue)}")
 
 
 def _handle_goal_once_dispatch(ctx: DispatchContext) -> int:
@@ -617,6 +754,21 @@ def _handle_goal_once_dispatch(ctx: DispatchContext) -> int:
     history = result.get("history", [])
     if args.explain:
         print(format_decision_log(history))
+    
+    if getattr(args, "json", False):
+        _print_json_payload(
+            {"goal": args.goal, "stop_reason": result.get("stop_reason"), "cycles": len(history), "dry_run": args.dry_run},
+            parsed=ctx.parsed,
+            indent=2,
+        )
+    else:
+        print(f"\n--- Goal Result Summary ---")
+        print(f"Goal: {args.goal}")
+        print(f"Stop Reason: {result.get('stop_reason')}")
+        print(f"Cycles Completed: {len(history)}")
+        if args.dry_run:
+            print("Mode: Dry-run (read-only)")
+        print("---------------------------\n")
     return 0
 
 
@@ -649,16 +801,7 @@ def _handle_goal_add_run_dispatch(ctx: DispatchContext) -> int:
 
 def _handle_interactive_dispatch(ctx: DispatchContext) -> int:
     runtime = ctx.runtime
-    loop = _ensure_legacy_loop(runtime, project_root=ctx.project_root)
-    cli_interaction_loop(
-        ctx.args,
-        runtime["goal_queue"],
-        runtime["goal_archive"],
-        loop,
-        runtime["debugger"],
-        runtime["planner"],
-        ctx.project_root,
-    )
+    cli_interaction_loop(ctx.args, runtime)
     return 0
 
 
@@ -672,6 +815,7 @@ COMMAND_DISPATCH_REGISTRY = {
     "doctor": _dispatch_rule("doctor", _handle_doctor_dispatch),
     "bootstrap": _dispatch_rule("bootstrap", _handle_bootstrap_dispatch),
     "show_config": _dispatch_rule("show_config", _handle_show_config_dispatch),
+    "contract_report": _dispatch_rule("contract_report", _handle_contract_report_dispatch),
     "mcp_tools": _dispatch_rule("mcp_tools", _handle_mcp_tools_dispatch),
     "mcp_call": _dispatch_rule("mcp_call", _handle_mcp_call_dispatch),
     "diag": _dispatch_rule("diag", _handle_diag_dispatch),

@@ -9,13 +9,16 @@ from typing import Any, Mapping, Sequence
 from aura_cli.options import (
     CLI_PARSE_ERROR_CODE,
     CLI_WARNINGS_CODE_LEGACY_FLAGS_DEPRECATED,
+    CLI_ACTION_SPECS_BY_ACTION,
     COMMAND_SPECS,
     COMMAND_SPECS_BY_PATH,
     UNKNOWN_COMMAND_HELP_TOPIC_CODE,
     action_default_canonical_path,
     action_display_command,
     action_display_subcommand,
+    action_smoke_argv,
     help_schema,
+    legacy_auxiliary_flag_names,
     legacy_allowed_multi_primary_flag_sets,
     legacy_primary_flag_names,
     match_action_from_rules,
@@ -289,6 +292,25 @@ def _customize_bootstrap(parser: argparse.ArgumentParser) -> None:
 
 
 
+def _customize_contract_report(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Exit non-zero when the report contains contract failures.",
+    )
+    parser.add_argument(
+        "--compact",
+        action="store_true",
+        help="Emit compact single-line JSON instead of pretty-printed output.",
+    )
+    parser.add_argument(
+        "--no-dispatch",
+        action="store_true",
+        help="Skip dispatch-registry parity checks.",
+    )
+
+
+
 def _customize_scaffold(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("scaffold", help="Scaffold template name.")
     parser.add_argument("--desc", dest="scaffold_desc", help="Scaffold description.")
@@ -317,6 +339,7 @@ _PARSER_CUSTOMIZERS.update(
     {
         ("help",): _customize_help,
         ("bootstrap",): _customize_bootstrap,
+        ("contract-report",): _customize_contract_report,
         ("diag",): _customize_diag,
         ("watch",): _customize_studio,
         ("studio",): _customize_studio,
@@ -584,10 +607,117 @@ def iter_parser_command_paths() -> list[tuple[str, ...]]:
     return [spec.path for spec in COMMAND_SPECS]
 
 
+_CLI_CONTRACT_FAILURE_KEYS: tuple[str, ...] = (
+    "missing_in_specs",
+    "missing_in_parser",
+    "unknown_spec_lookups",
+    "missing_in_help_schema",
+    "extra_in_help_schema",
+    "duplicate_help_paths",
+    "customizers_on_non_leaf_paths",
+    "missing_required_parent_paths",
+    "extra_required_parent_paths",
+    "unknown_help_actions",
+    "undocumented_actions",
+    "runtime_requirement_mismatches",
+    "help_actions_with_runtime_mismatches",
+    "actions_missing_command_specs",
+    "actions_with_positional_smoke_args_missing_customizers",
+    "command_specs_with_unknown_legacy_flags",
+    "actions_with_undocumented_legacy_flags",
+    "smoke_invocation_failures",
+    "missing_in_dispatch",
+    "extra_in_dispatch",
+    "smoke_dispatch_mismatches",
+)
 
-def cli_contract_report() -> dict[str, Any]:
+
+def _report_failures(report: Mapping[str, Any]) -> list[str]:
+    failures: list[str] = []
+    for key in _CLI_CONTRACT_FAILURE_KEYS:
+        value = report.get(key)
+        if isinstance(value, list) and value:
+            failures.append(key)
+    return failures
+
+
+def _documented_default_actions() -> set[str]:
+    documented: set[str] = set()
+    for item in help_schema().get("commands", []):
+        action = item.get("action")
+        if action:
+            documented.add(action)
+    return documented
+
+
+def _smoke_invocation_and_dispatch_failures(
+    dispatch_registry: Mapping[str, Any] | None,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    invocation_failures: list[dict[str, Any]] = []
+    dispatch_mismatches: list[dict[str, Any]] = []
+
+    for action in sorted(CLI_ACTION_SPECS_BY_ACTION):
+        try:
+            argv = list(action_smoke_argv(action))
+            parsed = parse_cli_args(argv)
+        except Exception as exc:
+            invocation_failures.append({"action": action, "error": str(exc)})
+            continue
+
+        resolved = parsed.action
+        if resolved != action:
+            dispatch_mismatches.append({"action": action, "resolved_action": resolved, "argv": argv})
+            continue
+
+        if dispatch_registry is not None and resolved not in dispatch_registry:
+            dispatch_mismatches.append({"action": action, "resolved_action": resolved, "argv": argv})
+
+    return invocation_failures, dispatch_mismatches
+
+
+def _legacy_flag_contracts() -> tuple[list[tuple[str, ...]], list[dict[str, Any]]]:
+    known_flags = {
+        *{f"--{name.replace('_', '-')}" for name in legacy_primary_flag_names()},
+        *{f"--{name.replace('_', '-')}" for name in legacy_auxiliary_flag_names()},
+    }
+    unknown_legacy_flags: list[tuple[str, ...]] = []
+    undocumented_action_flags: list[dict[str, Any]] = []
+
+    for spec in COMMAND_SPECS:
+        if any(flag not in known_flags for flag in spec.legacy_flags):
+            unknown_legacy_flags.append(spec.path)
+
+    for action, action_spec in CLI_ACTION_SPECS_BY_ACTION.items():
+        if action_spec.canonical_path is None or not action_spec.legacy_primary_flags:
+            continue
+
+        command_spec = COMMAND_SPECS_BY_PATH.get(action_spec.canonical_path)
+        if command_spec is None:
+            continue
+
+        documented_flags = set(command_spec.legacy_flags)
+        expected_flags = {f"--{name.replace('_', '-')}" for name in action_spec.legacy_primary_flags}
+        if not expected_flags.issubset(documented_flags):
+            undocumented_action_flags.append(
+                {"action": action, "missing_flags": sorted(expected_flags - documented_flags)}
+            )
+
+    return sorted(unknown_legacy_flags), undocumented_action_flags
+
+
+def cli_contract_report(dispatch_registry: Mapping[str, Any] | None = None) -> dict[str, Any]:
     parser_paths = set(iter_parser_command_paths())
     spec_paths = set(spec.path for spec in COMMAND_SPECS)
+    leaf_paths = parser_leaf_command_paths()
+    parent_paths = parser_parent_command_paths()
+    required_parent_paths = parser_required_subcommand_parent_paths()
+    customizer_paths = parser_customizer_paths()
+
+    help_items = help_schema().get("commands", [])
+    help_paths_list = [tuple(item.get("path", ())) for item in help_items]
+    help_paths = set(help_paths_list)
+    duplicate_help_paths = sorted(path for path in set(help_paths_list) if help_paths_list.count(path) > 1)
+    help_actions = sorted({item["action"] for item in help_items if item.get("action")})
 
     unknown_spec_lookups: list[tuple[str, ...]] = []
     for path in sorted(parser_paths):
@@ -596,13 +726,85 @@ def cli_contract_report() -> dict[str, Any]:
         except Exception:
             unknown_spec_lookups.append(path)
 
-    return {
+    runtime_requirement_mismatches: list[dict[str, Any]] = []
+    for item in help_items:
+        action = item.get("action")
+        if not action or action not in CLI_ACTION_SPECS_BY_ACTION:
+            continue
+        expected = CLI_ACTION_SPECS_BY_ACTION[action].requires_runtime
+        actual = item.get("requires_runtime")
+        if actual != expected:
+            runtime_requirement_mismatches.append(
+                {"action": action, "expected_requires_runtime": expected, "actual_requires_runtime": actual}
+            )
+
+    actions_missing_command_specs = sorted(
+        action
+        for action, spec in CLI_ACTION_SPECS_BY_ACTION.items()
+        if spec.canonical_path is not None and spec.canonical_path not in COMMAND_SPECS_BY_PATH
+    )
+
+    actions_with_positional_smoke_args_missing_customizers = sorted(
+        action
+        for action, spec in CLI_ACTION_SPECS_BY_ACTION.items()
+        if spec.canonical_path is not None
+        and any(token and not token.startswith("-") for token in action_smoke_argv(action)[len(spec.canonical_path):])
+        and spec.canonical_path not in customizer_paths
+    )
+
+    unknown_legacy_flags, undocumented_action_flags = _legacy_flag_contracts()
+    action_spec_actions = sorted(CLI_ACTION_SPECS_BY_ACTION)
+    unknown_help_actions = sorted(set(help_actions) - set(action_spec_actions))
+
+    documented_default_actions = _documented_default_actions()
+    undocumented_actions = sorted(
+        action
+        for action, spec in CLI_ACTION_SPECS_BY_ACTION.items()
+        if spec.canonical_path is not None and action in documented_default_actions and action not in help_actions
+    )
+
+    smoke_invocation_failures, smoke_dispatch_mismatches = _smoke_invocation_and_dispatch_failures(dispatch_registry)
+
+    report: dict[str, Any] = {
         "parser_paths": sorted(parser_paths),
         "spec_paths": sorted(spec_paths),
+        "help_paths": sorted(help_paths),
+        "leaf_paths": sorted(leaf_paths),
+        "parent_paths": sorted(parent_paths),
+        "required_parent_paths": sorted(required_parent_paths),
+        "customizer_paths": sorted(customizer_paths),
+        "unknown_spec_lookups": unknown_spec_lookups,
         "missing_in_specs": sorted(parser_paths - spec_paths),
         "missing_in_parser": sorted(spec_paths - parser_paths),
-        "unknown_spec_lookups": unknown_spec_lookups,
+        "missing_in_help_schema": sorted(spec_paths - help_paths),
+        "extra_in_help_schema": sorted(help_paths - spec_paths),
+        "duplicate_help_paths": duplicate_help_paths,
+        "customizers_on_non_leaf_paths": sorted(customizer_paths - leaf_paths),
+        "missing_required_parent_paths": sorted(parent_paths - required_parent_paths),
+        "extra_required_parent_paths": sorted(required_parent_paths - parent_paths),
+        "action_spec_actions": action_spec_actions,
+        "help_actions": help_actions,
+        "unknown_help_actions": unknown_help_actions,
+        "undocumented_actions": undocumented_actions,
+        "runtime_requirement_mismatches": runtime_requirement_mismatches,
+        "help_actions_with_runtime_mismatches": list(runtime_requirement_mismatches),
+        "actions_missing_command_specs": actions_missing_command_specs,
+        "actions_with_positional_smoke_args_missing_customizers": actions_with_positional_smoke_args_missing_customizers,
+        "command_specs_with_unknown_legacy_flags": unknown_legacy_flags,
+        "actions_with_undocumented_legacy_flags": undocumented_action_flags,
+        "smoke_invocation_failures": smoke_invocation_failures,
     }
+
+    if dispatch_registry is not None:
+        dispatch_actions = sorted(dispatch_registry)
+        report["dispatch_actions"] = dispatch_actions
+        report["missing_in_dispatch"] = sorted(set(action_spec_actions) - set(dispatch_actions))
+        report["extra_in_dispatch"] = sorted(set(dispatch_actions) - set(action_spec_actions))
+        report["smoke_dispatch_mismatches"] = smoke_dispatch_mismatches
+
+    report["failure_keys"] = _report_failures(report)
+    report["ok"] = not report["failure_keys"]
+    return report
 
 
 __all__ = [

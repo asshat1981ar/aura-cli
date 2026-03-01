@@ -315,6 +315,38 @@ class TestProjectStatus:
         assert "server_time" in result
 
 
+class TestRuntimeStoragePaths:
+    def test_lazy_singletons_use_project_configured_paths(self, tmp_path):
+        import tools.aura_control_mcp as mod
+
+        original_root = mod._ROOT
+        mod._ROOT = tmp_path
+        fake_config = MagicMock()
+        fake_config.get.side_effect = lambda key, default=None: {
+            "goal_queue_path": "state/custom_queue.json",
+            "goal_archive_path": "state/custom_archive.json",
+            "brain_db_path": "state/custom_brain.db",
+        }.get(key, default)
+
+        try:
+            with patch.object(mod, "ConfigManager", return_value=fake_config), \
+                 patch.object(mod, "GoalQueue") as mock_goal_queue, \
+                 patch.object(mod, "GoalArchive") as mock_goal_archive, \
+                 patch.object(mod, "Brain") as mock_brain:
+                mod._get_goal_queue()
+                mod._get_goal_archive()
+                mod._get_brain()
+
+            assert mock_goal_queue.call_args.kwargs["queue_path"] == str(tmp_path / "state" / "custom_queue.json")
+            assert mock_goal_archive.call_args.kwargs["archive_path"] == str(tmp_path / "state" / "custom_archive.json")
+            assert mock_brain.call_args.kwargs["db_path"] == str(tmp_path / "state" / "custom_brain.db")
+        finally:
+            mod._ROOT = original_root
+            mod._goal_queue = None
+            mod._goal_archive = None
+            mod._brain = None
+
+
 # ---------------------------------------------------------------------------
 # Error cases
 # ---------------------------------------------------------------------------

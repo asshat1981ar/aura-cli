@@ -38,12 +38,18 @@ class Task:
             result=data.get("result")
         )
 
+    def display(self, indent: int = 0) -> str:
+        status = self.status.replace("_", " ")
+        lines = [f"{'  ' * indent}- [{status}] {self.title}"]
+        for subtask in self.subtasks:
+            lines.append(subtask.display(indent + 1))
+        return "\n".join(lines)
+
 class TaskManager:
     """
     Unified Control Plane: Manages task hierarchies via MemoryController.
     """
     def __init__(self, persistence_path=None):
-        self.persistence_path = Path(persistence_path or config.get("memory_persistence_path", "memory/task_hierarchy_v2.json"))
         self.root_tasks: List[Task] = []
         self.load()
 
@@ -53,20 +59,25 @@ class TaskManager:
         self.save()
 
     def save(self):
-        self.persistence_path.parent.mkdir(parents=True, exist_ok=True)
         data = [t.to_dict() for t in self.root_tasks]
-        with open(self.persistence_path, 'w') as f:
-            json.dump(data, f, indent=4)
-        log_json("INFO", "task_hierarchy_saved", details={"root_count": len(self.root_tasks)})
+        memory_controller.store(MemoryTier.PROJECT, {"type": "task_hierarchy", "data": data}, metadata={"authority": "task_manager"})
+        log_json("INFO", "task_hierarchy_persisted_to_controller", details={"root_count": len(self.root_tasks)})
 
     def load(self):
-        if self.persistence_path.exists():
+        # Retrieve the hierarchy from the project memory tier
+        records = memory_controller.retrieve(MemoryTier.PROJECT, limit=500)
+        # Look for the most recent task_hierarchy record
+        hierarchy_record = next((r for r in reversed(records) if isinstance(r, dict) and r.get("type") == "task_hierarchy"), None)
+        
+        if hierarchy_record:
             try:
-                with open(self.persistence_path, 'r') as f:
-                    data = json.load(f)
-                    self.root_tasks = [Task.from_dict(t) for t in data]
+                data = hierarchy_record.get("data", [])
+                self.root_tasks = [Task.from_dict(t) for t in data]
+                log_json("INFO", "task_hierarchy_loaded_from_controller", details={"root_count": len(self.root_tasks)})
             except Exception as e:
                 log_json("WARN", "task_hierarchy_load_failed", details={"error": str(e)})
+        else:
+            log_json("INFO", "task_hierarchy_not_found_in_controller")
 
     def find_task(self, task_id: str, tasks: Optional[List[Task]] = None) -> Optional[Task]:
         if tasks is None:

@@ -251,9 +251,9 @@ class Brain:
         return [r[0] for r in rows]
 
     def reflect(self):
-        memory_entries = self.recall_all()
+        memory_count = self.count_memories()
         weakness_entries = self.recall_weaknesses()
-        return f"System has {len(memory_entries)} memory entries and {len(weakness_entries)} identified weaknesses."
+        return f"System has {memory_count} memory entries and {len(weakness_entries)} identified weaknesses."
 
     def relate(self, a: str, b: str):
         self.graph.add_edge(a, b)

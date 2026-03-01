@@ -39,9 +39,11 @@ os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
+from core.config_manager import ConfigManager, DEFAULT_CONFIG
 from core.logging_utils import log_json
 from core.goal_queue import GoalQueue
 from core.goal_archive import GoalArchive
+from core.runtime_paths import resolve_project_path
 from memory.brain import Brain
 
 # ---------------------------------------------------------------------------
@@ -71,24 +73,45 @@ _goal_archive: Optional[GoalArchive] = None
 _brain: Optional[Brain] = None
 
 
+def _project_config() -> ConfigManager:
+    return ConfigManager(config_file=_ROOT / "aura.config.json")
+
+
+def _resolve_storage_path(key: str, default: str) -> Path:
+    cfg = _project_config()
+    return resolve_project_path(_ROOT, cfg.get(key, default), default)
+
+
 def _get_goal_queue() -> GoalQueue:
     global _goal_queue
     if _goal_queue is None:
-        _goal_queue = GoalQueue(queue_path=str(_ROOT / "memory" / "goal_queue_v2.json"))
+        _goal_queue = GoalQueue(
+            queue_path=str(
+                _resolve_storage_path("goal_queue_path", DEFAULT_CONFIG["goal_queue_path"])
+            )
+        )
     return _goal_queue
 
 
 def _get_goal_archive() -> GoalArchive:
     global _goal_archive
     if _goal_archive is None:
-        _goal_archive = GoalArchive(archive_path=str(_ROOT / "memory" / "goal_archive_v2.json"))
+        _goal_archive = GoalArchive(
+            archive_path=str(
+                _resolve_storage_path("goal_archive_path", DEFAULT_CONFIG["goal_archive_path"])
+            )
+        )
     return _goal_archive
 
 
 def _get_brain() -> Brain:
     global _brain
     if _brain is None:
-        _brain = Brain(db_path=str(_ROOT / "memory" / "brain_v2.db"))
+        _brain = Brain(
+            db_path=str(
+                _resolve_storage_path("brain_db_path", DEFAULT_CONFIG["brain_db_path"])
+            )
+        )
     return _brain
 
 

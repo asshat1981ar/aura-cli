@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from core.capability_manager import build_capability_status_report, capability_doctor_check
 from core.goal_queue import GoalQueue
 from core.goal_archive import GoalArchive
 from core.logging_utils import log_json
@@ -23,18 +24,19 @@ def _handle_help():
         print("help                   - Show this help message.")
         print("-------------------------\n")
 
-def _handle_doctor():
+def _handle_doctor(project_root: Path | None = None):
     log_json("INFO", "aura_doctor_requested")
     from aura_cli.doctor import check_python_version, check_env_vars, check_sqlite_write_access, check_git_status, check_pytest_and_run_tests
-    from pathlib import Path
-    
-    repo_root = Path.cwd()
+
+    repo_root = Path(project_root or Path.cwd())
+    capability_status, capability_detail = capability_doctor_check(repo_root)
     results = [
         f"Python Version: {check_python_version()[0]} - {check_python_version()[1]}",
         f"Environment Variables: {check_env_vars()[0]} - {check_env_vars()[1]}",
         f"SQLite Write Access: {check_sqlite_write_access(repo_root)[0]} - {check_sqlite_write_access(repo_root)[1]}",
         f"Git Status: {check_git_status(repo_root)[0]} - {check_git_status(repo_root)[1]}",
-        f"Pytest Tests: {check_pytest_and_run_tests(repo_root, False)[0]} - {check_pytest_and_run_tests(repo_root, False)[1]}"
+        f"Pytest Tests: {check_pytest_and_run_tests(repo_root, False)[0]} - {check_pytest_and_run_tests(repo_root, False)[1]}",
+        f"Capability Bootstrap: {capability_status} - {capability_detail}",
     ]
     
     print("\n--- AURA Doctor Report ---")
@@ -69,6 +71,8 @@ def _handle_add(goal_queue: GoalQueue, command: str):
 
     goal_queue.add(goal)
     log_json("INFO", "goal_added", goal=goal)
+    print(f"Added goal: {goal}")
+    print(f"Queue length: {len(goal_queue.queue)}")
 
 def _handle_run(args, goal_queue: GoalQueue, goal_archive: GoalArchive, loop, debugger_instance, planner_instance, project_root: Path):
     if not goal_queue.has_goals():
@@ -76,14 +80,28 @@ def _handle_run(args, goal_queue: GoalQueue, goal_archive: GoalArchive, loop, de
         return
     run_goals_loop(args, goal_queue, loop, debugger_instance, planner_instance, goal_archive, project_root, decompose=getattr(args, 'decompose', False))
 
-def _handle_status(goal_queue: GoalQueue, goal_archive: GoalArchive, loop, as_json: bool = False):
+def _handle_status(
+    goal_queue: GoalQueue,
+    goal_archive: GoalArchive,
+    loop,
+    *,
+    as_json: bool = False,
+    project_root: Path | None = None,
+    memory_persistence_path: Path | str | None = None,
+):
     log_json("INFO", "aura_status_requested")
+    capability_status = build_capability_status_report(
+        Path(project_root or Path.cwd()),
+        goal_queue=goal_queue,
+        last_status=getattr(loop, "last_capability_status", None),
+    )
     if as_json:
         data = {
             "queue_length": len(goal_queue.queue),
             "queue": list(goal_queue.queue),
             "completed_count": len(goal_archive.completed),
             "completed": [{"goal": g, "score": s} for g, s in goal_archive.completed],
+            "capabilities": capability_status,
         }
         print(json.dumps(data))
         return
@@ -96,8 +114,22 @@ def _handle_status(goal_queue: GoalQueue, goal_archive: GoalArchive, loop, as_js
     for goal, score in goal_archive.completed:
         print(f"  - '{goal}' (Score: {score:.2f})")
 
+    print("\n--- Capability Bootstrap ---")
+    print(f"Last analyzed goal: {capability_status['last_goal'] or 'None'}")
+    matched = capability_status["matched_capability_ids"]
+    print(f"Matched capability rules: {', '.join(matched) if matched else 'None'}")
+    print(f"Pending self-development goals: {len(capability_status['pending_self_development_goals'])}")
+    print(
+        "MCP bootstrap pending: "
+        + (", ".join(capability_status["pending_bootstrap_actions"]) if capability_status["pending_bootstrap_actions"] else "None")
+    )
+    print(
+        "MCP bootstrap running: "
+        + (", ".join(capability_status["running_bootstrap_actions"]) if capability_status["running_bootstrap_actions"] else "None")
+    )
+
     # Task Hierarchy
-    task_manager = TaskManager()
+    task_manager = TaskManager(persistence_path=memory_persistence_path)
     if task_manager.root_tasks:
         print("\n--- Task Hierarchy ---")
         for task in task_manager.root_tasks:

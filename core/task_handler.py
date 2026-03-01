@@ -12,7 +12,7 @@ from core.file_tools import (
     mismatch_overwrite_block_log_details,
 )
 from core.logging_utils import log_json
-from task_manager import TaskManager, Task
+from core.task_manager import TaskManager, Task
 
 
 _REPO_SCAN_SKIP_PARTS = {".git", "__pycache__", "node_modules", ".pytest_cache", "venv", ".venv"}
@@ -48,6 +48,19 @@ _SYMBOL_INDEX_CACHE_CANDIDATES = (
     "memory/symbol_indexer.json",
     "memory/symbol_map.json",
 )
+_TEXT_LIKE_CANDIDATE_SUFFIXES = {
+    "",
+    ".py",
+    ".sh",
+    ".md",
+    ".txt",
+    ".json",
+    ".yml",
+    ".yaml",
+    ".toml",
+    ".ini",
+    ".cfg",
+}
 
 
 def _check_project_writability(project_root: Path) -> bool:
@@ -89,6 +102,42 @@ def _validate_change_target_path(project_root: Path, file_path: str) -> tuple[Pa
     if not target.is_file():
         return None, "file_not_found"
     return target, None
+
+
+def _allow_new_test_file_target(
+    project_root: Path,
+    file_path: str,
+    goal_text: str,
+    old_code: object,
+    overwrite_file: object,
+) -> Path | None:
+    """Allow safe creation of clearly test-focused new files under ``tests/``."""
+    lower_goal = (goal_text or "").lower()
+    if not any(token in lower_goal for token in ("test", "regression", "snapshot", "coverage")):
+        return None
+
+    if old_code not in ("", None) and not overwrite_file:
+        return None
+
+    try:
+        repo_root = project_root.resolve()
+        target = (repo_root / file_path).resolve()
+        target.relative_to(repo_root)
+    except Exception:
+        return None
+
+    relative = target.relative_to(repo_root)
+    if not relative.parts or relative.parts[0] != "tests":
+        return None
+    if target.suffix.lower() != ".py":
+        return None
+    if not target.name.startswith("test_"):
+        return None
+    if target.exists():
+        return target
+    if not target.parent.is_dir():
+        return None
+    return target
 
 
 def _tokenize_for_path_matching(text: str) -> list[str]:
@@ -159,33 +208,67 @@ def _candidate_files_from_symbol_index_cache(project_root: Path, query_tokens: l
     return []
 
 
-def _candidate_files_from_repo_scan(project_root: Path, invalid_file_path: str, query_tokens: list[str], limit: int = 6) -> list[str]:
-    token_set = set(query_tokens)
-    scored: list[tuple[int, str]] = []
-
-    for path in project_root.rglob("*.py"):
+def _iter_repo_candidate_paths(project_root: Path):
+    for path in project_root.rglob("*"):
+        if not path.is_file():
+            continue
         rel = path.relative_to(project_root)
         rel_parts = set(rel.parts)
         if rel_parts & _REPO_SCAN_SKIP_PARTS:
             continue
+        if path.suffix.lower() not in _TEXT_LIKE_CANDIDATE_SUFFIXES:
+            continue
+        yield rel
+
+
+def _candidate_files_by_exact_name(project_root: Path, invalid_file_path: str, limit: int = 6) -> list[str]:
+    target_name = Path(invalid_file_path or "").name
+    if not target_name:
+        return []
+
+    matches: list[str] = []
+    for rel in _iter_repo_candidate_paths(project_root):
+        if rel.name != target_name:
+            continue
+        matches.append(str(rel))
+
+    matches.sort(key=lambda item: (len(Path(item).parts), item))
+    return matches[:limit]
+
+
+def _candidate_files_from_repo_scan(project_root: Path, invalid_file_path: str, query_tokens: list[str], limit: int = 6) -> list[str]:
+    token_set = set(query_tokens)
+    target = Path(invalid_file_path or "")
+    target_name = target.name
+    target_stem = target.stem
+    target_suffix = target.suffix.lower()
+    scored: list[tuple[int, str]] = []
+    all_paths: list[str] = []
+
+    for rel in _iter_repo_candidate_paths(project_root):
         rel_str = str(rel)
+        all_paths.append(rel_str)
         haystack_tokens = set(_tokenize_for_path_matching(rel_str))
-        score = len(token_set & haystack_tokens) if token_set else 0
+
+        score = 0
+        if token_set:
+            score += len(token_set & haystack_tokens)
+        if target_name and rel.name == target_name:
+            score += 12
+        if target_stem and rel.stem == target_stem:
+            score += 6
+        if target_suffix and rel.suffix.lower() == target_suffix:
+            score += 2
+        if target.parent.parts and rel.parts[: len(target.parent.parts)] == target.parent.parts:
+            score += 1
+
         if score > 0:
             scored.append((score, rel_str))
 
-    scored.sort(key=lambda item: (-item[0], item[1]))
+    scored.sort(key=lambda item: (-item[0], len(Path(item[1]).parts), item[1]))
     ordered = [path for _, path in scored]
 
-    if len(ordered) < limit:
-        all_paths = []
-        for path in project_root.rglob("*.py"):
-            rel = path.relative_to(project_root)
-            rel_parts = set(rel.parts)
-            if rel_parts & _REPO_SCAN_SKIP_PARTS:
-                continue
-            all_paths.append(str(rel))
-        target_name = str(Path(invalid_file_path or "").name)
+    if len(ordered) < limit and target_name:
         fuzzy = difflib.get_close_matches(target_name, all_paths, n=limit, cutoff=0.2)
         for path in fuzzy:
             if path not in ordered:
@@ -218,6 +301,13 @@ def _candidate_existing_files(project_root: Path, invalid_file_path: str, goal_t
     seen: set[str] = set()
     results: list[str] = []
 
+    for path in _candidate_files_by_exact_name(project_root, invalid_file_path, limit=limit):
+        if path not in seen:
+            seen.add(path)
+            results.append(path)
+            if len(results) >= limit:
+                return results
+
     for path in _candidate_files_from_symbol_index_cache(project_root, query_tokens, limit=limit):
         if path not in seen:
             seen.add(path)
@@ -248,7 +338,12 @@ def _invalid_path_grounding_hint(file_path: str, reason: str, candidate_files: l
         "Use an existing repository file path for the next IMPLEMENT and keep edits targeted."
     )
     if candidate_files:
-        return f"{base}\nCandidate existing files (choose one if relevant):\n- " + "\n- ".join(candidate_files)
+        primary = candidate_files[0]
+        return (
+            f"{base}\nClosest existing match: {primary}\n"
+            "Do not invent a new top-level directory when an exact filename match already exists.\n"
+            "Candidate existing files (choose one if relevant):\n- " + "\n- ".join(candidate_files)
+        )
     return base
 
 
@@ -331,6 +426,23 @@ def run_goals_loop(args, goal_queue, loop, debugger_instance, planner_instance, 
 
                         if all([file_path is not None, old_code is not None, new_code is not None]):
                             full_target_path, invalid_reason = _validate_change_target_path(project_root, str(file_path))
+                            if invalid_reason == "file_not_found":
+                                allowed_new_test_target = _allow_new_test_file_target(
+                                    project_root,
+                                    str(file_path),
+                                    task.title,
+                                    old_code,
+                                    overwrite_file,
+                                )
+                                if allowed_new_test_target is not None:
+                                    full_target_path = allowed_new_test_target
+                                    invalid_reason = None
+                                    log_json(
+                                        "INFO",
+                                        "allowed_new_test_target",
+                                        goal=task.title,
+                                        details={"file": str(file_path)},
+                                    )
                             if invalid_reason:
                                 candidate_files = _candidate_existing_files(project_root, str(file_path), task.title, limit=6)
                                 grounding_hint = _invalid_path_grounding_hint(str(file_path), invalid_reason, candidate_files)

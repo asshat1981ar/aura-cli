@@ -20,11 +20,12 @@ from rich.table import Table
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.config_manager import config
+from core.config_manager import DEFAULT_CONFIG, config
 from core.model_adapter import ModelAdapter
 from memory.brain import Brain
 from core.vector_store import VectorStore
 from core.memory_types import RetrievalQuery
+from core.runtime_paths import resolve_project_path
 
 console = Console()
 
@@ -57,11 +58,15 @@ def main():
     
     # 1. Init Runtime
     try:
-        project_root = Path(".")
-        brain_db_path = project_root / config.get("brain_db_path", "memory/brain_v2.db")
+        project_root = Path(".").resolve()
+        brain_db_path = resolve_project_path(
+            project_root,
+            config.get("brain_db_path", DEFAULT_CONFIG["brain_db_path"]),
+            DEFAULT_CONFIG["brain_db_path"],
+        )
         
         console.print(f"Connecting to Brain: [cyan]{brain_db_path}[/cyan]")
-        brain = Brain(db_path=brain_db_path)
+        brain = Brain(db_path=str(brain_db_path))
         
         adapter = ModelAdapter()
         # Ensure we can embed

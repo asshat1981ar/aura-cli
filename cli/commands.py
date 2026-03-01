@@ -5,7 +5,7 @@ from core.goal_queue import GoalQueue
 from core.goal_archive import GoalArchive
 from core.logging_utils import log_json
 from core.task_handler import run_goals_loop # Import run_goals_loop from core.task_handler
-from task_manager import TaskManager
+from core.task_manager import TaskManager
 
 def _handle_help():
     print("\n--- AURA CLI Commands ---")

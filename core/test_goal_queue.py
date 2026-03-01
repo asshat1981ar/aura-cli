@@ -71,5 +71,18 @@ class TestGoalQueue(unittest.TestCase):
         self.assertEqual(len(final_queue.queue), 1)
         self.assertEqual(final_queue.queue[0], "Goal 2 for persistence")
 
+    def test_prepend_batch_preserves_order(self):
+        self.goal_queue.add("Existing goal")
+        self.goal_queue.prepend_batch(["First priority", "Second priority"])
+
+        self.assertEqual(
+            list(self.goal_queue.queue),
+            ["First priority", "Second priority", "Existing goal"],
+        )
+
+        with open(self.test_queue_path, 'r') as f:
+            content = json.load(f)
+        self.assertEqual(content, ["First priority", "Second priority", "Existing goal"])
+
 if __name__ == '__main__':
     unittest.main()

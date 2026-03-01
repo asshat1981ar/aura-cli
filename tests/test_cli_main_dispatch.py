@@ -1,5 +1,6 @@
 import json
 import io
+import os
 import tempfile
 import unittest
 import builtins
@@ -10,6 +11,8 @@ from unittest.mock import MagicMock, patch, call
 from aura_cli.cli_options import parse_cli_args
 import aura_cli.cli_main as cli_main
 import aura_cli.options as cli_options_meta
+from tests.cli_entrypoint_test_utils import run_main_subprocess
+from tests.cli_snapshot_utils import normalized_json_text, read_snapshot_text
 
 
 class TestCLIMainDispatch(unittest.TestCase):
@@ -24,14 +27,8 @@ class TestCLIMainDispatch(unittest.TestCase):
             code = cli_main.dispatch_command(parsed, project_root=Path("."), runtime_factory=rf)
         return code, out.getvalue(), err.getvalue(), rf
 
-    def _snapshot_text(self, name: str) -> str:
-        return (self._SNAPSHOT_DIR / name).read_text(encoding="utf-8")
-
-    def _normalized_json_text(self, raw_json: str) -> str:
-        return json.dumps(json.loads(raw_json), indent=2, sort_keys=True) + "\n"
-
     def _assert_json_snapshot(self, raw_json: str, snapshot_name: str) -> None:
-        self.assertEqual(self._normalized_json_text(raw_json), self._snapshot_text(snapshot_name))
+        self.assertEqual(normalized_json_text(raw_json), read_snapshot_text(self._SNAPSHOT_DIR, snapshot_name))
 
     def _without_cli_warnings(self, payload: dict) -> dict:
         base = dict(payload)
@@ -96,7 +93,7 @@ class TestCLIMainDispatch(unittest.TestCase):
             code = cli_main.dispatch_command(parsed, project_root=Path("."), runtime_factory=runtime_factory)
 
         self.assertEqual(code, 0)
-        mock_doctor.assert_called_once()
+        mock_doctor.assert_called_once_with(Path("."))
         runtime_factory.assert_not_called()
 
     def test_dispatch_config_does_not_create_runtime(self):
@@ -109,6 +106,68 @@ class TestCLIMainDispatch(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out.getvalue()), {"model_name": "gpt-5"})
+        runtime_factory.assert_not_called()
+
+    def test_dispatch_contract_report_does_not_create_runtime(self):
+        parsed = parse_cli_args(["contract-report", "--check"])
+        runtime_factory = MagicMock()
+
+        report = {"ok": True, "failure_keys": [], "missing_in_help_schema": [], "smoke_dispatch_mismatches": []}
+        with patch("aura_cli.contract_report.build_cli_contract_report", return_value=report) as mock_build, \
+             patch("aura_cli.contract_report.render_cli_contract_report", return_value='{"ok":true}\n') as mock_render, \
+             patch("aura_cli.contract_report.cli_contract_report_exit_code", return_value=0) as mock_exit:
+            code, out, err, _ = self._dispatch(["contract-report", "--check"], runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(out, '{"ok":true}\n')
+        self.assertEqual(err, "")
+        runtime_factory.assert_not_called()
+        mock_build.assert_called_once_with(include_dispatch=True, dispatch_registry=cli_main.COMMAND_DISPATCH_REGISTRY)
+        mock_render.assert_called_once_with(report, compact=False)
+        mock_exit.assert_called_once_with(report, check=True)
+
+    def test_dispatch_contract_report_no_dispatch_compact_uses_flags(self):
+        report = {"ok": True, "failure_keys": []}
+
+        with patch("aura_cli.contract_report.build_cli_contract_report", return_value=report) as mock_build, \
+             patch("aura_cli.contract_report.render_cli_contract_report", return_value='{"ok":true}\n') as mock_render, \
+             patch("aura_cli.contract_report.cli_contract_report_exit_code", return_value=0):
+            code, out, err, runtime_factory = self._dispatch(["contract-report", "--no-dispatch", "--compact"])
+
+        self.assertEqual(code, 0)
+        self.assertEqual(out, '{"ok":true}\n')
+        self.assertEqual(err, "")
+        runtime_factory.assert_not_called()
+        mock_build.assert_called_once_with(include_dispatch=False, dispatch_registry=cli_main.COMMAND_DISPATCH_REGISTRY)
+        mock_render.assert_called_once_with(report, compact=True)
+
+    def test_canonical_contract_report_json_output_matches_snapshot(self):
+        runtime_factory = MagicMock()
+
+        code, out, err, _ = self._dispatch(["contract-report", "--check"], runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self._assert_json_snapshot(out, "cli_contract_report.json")
+        runtime_factory.assert_not_called()
+
+    def test_dispatch_contract_report_check_returns_nonzero_for_dirty_report(self):
+        runtime_factory = MagicMock()
+        dirty_report = {
+            "ok": False,
+            "failure_keys": ["missing_in_help_schema"],
+            "missing_in_help_schema": [["contract-report"]],
+        }
+
+        with patch("aura_cli.contract_report.build_cli_contract_report", return_value=dirty_report):
+            code, out, err, _ = self._dispatch(["contract-report", "--check"], runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 1)
+        self._assert_json_snapshot(out, "cli_contract_report_dirty.json")
+        self.assertEqual(
+            err,
+            "CLI contract failures: missing_in_help_schema\n",
+        )
         runtime_factory.assert_not_called()
 
     def test_canonical_config_json_output_matches_snapshot(self):
@@ -146,12 +205,98 @@ class TestCLIMainDispatch(unittest.TestCase):
 
         self.assertEqual(code, 0)
         runtime_factory.assert_called_once()
+        self.assertEqual(runtime_factory.call_args.kwargs["overrides"], {"runtime_mode": "queue"})
         mock_status.assert_called_once_with(
             fake_runtime["goal_queue"],
             fake_runtime["goal_archive"],
             fake_runtime["orchestrator"],
             as_json=True,
+            project_root=Path("."),
+            memory_persistence_path=None,
         )
+
+    def test_create_runtime_queue_mode_skips_heavy_components(self):
+        fake_goal_queue = MagicMock()
+        fake_goal_archive = MagicMock()
+
+        with tempfile.TemporaryDirectory() as d, \
+             patch("aura_cli.cli_main.GoalQueue", return_value=fake_goal_queue), \
+             patch("aura_cli.cli_main.GoalArchive", return_value=fake_goal_archive), \
+             patch("aura_cli.cli_main.ModelAdapter") as mock_model_adapter, \
+             patch("aura_cli.cli_main.VectorStore") as mock_vector_store, \
+             patch("aura_cli.cli_main.LoopOrchestrator") as mock_orchestrator, \
+             patch("aura_cli.cli_main.GitTools") as mock_git_tools, \
+             patch("aura_cli.cli_main.log_json"):
+            runtime = cli_main.create_runtime(Path(d), overrides={"runtime_mode": "queue"})
+
+        self.assertIs(runtime["goal_queue"], fake_goal_queue)
+        self.assertIs(runtime["goal_archive"], fake_goal_archive)
+        self.assertIsNone(runtime["model_adapter"])
+        self.assertIsNone(runtime["memory_store"])
+        self.assertIsNone(runtime["brain"])
+        self.assertIsNone(runtime["vector_store"])
+        self.assertFalse(hasattr(runtime["orchestrator"], "run_loop"))
+        mock_model_adapter.assert_not_called()
+        mock_vector_store.assert_not_called()
+        mock_orchestrator.assert_not_called()
+        mock_git_tools.assert_not_called()
+
+    def test_create_runtime_queue_mode_resolves_storage_paths_against_project_root(self):
+        fake_goal_queue = MagicMock()
+        fake_goal_archive = MagicMock()
+
+        def _config_get(key, default=None):
+            mapping = {
+                "goal_queue_path": "state/custom_queue.json",
+                "goal_archive_path": "state/custom_archive.json",
+                "api_key": None,
+            }
+            return mapping.get(key, default)
+
+        with tempfile.TemporaryDirectory() as d, \
+             patch("aura_cli.cli_main.GoalQueue", return_value=fake_goal_queue) as mock_goal_queue, \
+             patch("aura_cli.cli_main.GoalArchive", return_value=fake_goal_archive) as mock_goal_archive, \
+             patch.object(cli_main.config, "get", side_effect=_config_get), \
+             patch("aura_cli.cli_main.log_json"):
+            cli_main.create_runtime(Path(d), overrides={"runtime_mode": "queue"})
+
+        self.assertEqual(mock_goal_queue.call_args.args[0], str(Path(d) / "state" / "custom_queue.json"))
+        self.assertEqual(mock_goal_archive.call_args.args[0], str(Path(d) / "state" / "custom_archive.json"))
+
+    def test_dispatch_goal_add_uses_queue_runtime_mode(self):
+        parsed = parse_cli_args(["goal", "add", "Fix tests"])
+        goal_queue = MagicMock()
+        fake_runtime = {
+            "goal_queue": goal_queue,
+            "goal_archive": MagicMock(),
+            "orchestrator": MagicMock(),
+            "debugger": None,
+            "planner": None,
+            "loop": None,
+            "model_adapter": None,
+            "brain": None,
+        }
+        runtime_factory = MagicMock(return_value=fake_runtime)
+
+        with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"):
+            code = cli_main.dispatch_command(parsed, project_root=Path("."), runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(runtime_factory.call_args.kwargs["overrides"], {"runtime_mode": "queue"})
+        goal_queue.add.assert_called_once_with("Fix tests")
+
+    def test_goal_status_json_subprocess_stdout_is_clean_json_and_skips_heavy_runtime_logs(self):
+        proc = run_main_subprocess("goal", "status", "--json")
+
+        self.assertEqual(proc.returncode, 0)
+        payload = json.loads(proc.stdout)
+        self.assertIn("queue_length", payload)
+        self.assertIn("queue", payload)
+        self.assertIn("completed_count", payload)
+        self.assertIn("completed", payload)
+        self.assertNotIn("vector_store_initialized", proc.stderr)
+        self.assertNotIn("background_sync_started", proc.stderr)
 
     def test_create_runtime_contract_starts_without_legacy_loop(self):
         fake_goal_queue = MagicMock()
@@ -205,10 +350,10 @@ class TestCLIMainDispatch(unittest.TestCase):
              patch("aura_cli.cli_main.default_agents", return_value={}), \
              patch("aura_cli.cli_main.Policy.from_config", return_value=fake_policy), \
              patch("aura_cli.cli_main.LoopOrchestrator", return_value=fake_orchestrator), \
-             patch("aura_cli.cli_main.GitTools", return_value=fake_git_tools), \
-             patch("core.hybrid_loop.HybridClosedLoop") as mock_hybrid_loop, \
-             patch("aura_cli.cli_main.log_json"), \
-             patch("builtins.__import__", side_effect=_guarded_import):
+            patch("aura_cli.cli_main.GitTools", return_value=fake_git_tools), \
+            patch("core.hybrid_loop.HybridClosedLoop") as mock_hybrid_loop, \
+            patch("aura_cli.cli_main.log_json"), \
+            patch("builtins.__import__", side_effect=_guarded_import):
             runtime = cli_main.create_runtime(Path(d), overrides=None)
 
         self.assertIs(runtime["goal_queue"], fake_goal_queue)
@@ -219,6 +364,156 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertIs(runtime["git_tools"], fake_git_tools)
         self.assertIs(runtime["loop"], None)
         mock_hybrid_loop.assert_not_called()
+
+    def test_create_runtime_full_mode_resolves_brain_and_memory_paths_against_project_root(self):
+        fake_goal_queue = MagicMock()
+        fake_goal_archive = MagicMock()
+        fake_brain = MagicMock()
+        fake_brain.db = object()
+        fake_model_adapter = MagicMock()
+        fake_vector_store = MagicMock()
+        fake_router = MagicMock()
+        fake_debugger = MagicMock()
+        fake_planner = MagicMock()
+        fake_memory_store = MagicMock()
+        fake_policy = MagicMock()
+        fake_orchestrator = MagicMock()
+        fake_git_tools = MagicMock()
+
+        blocked_optional_imports = {
+            "memory.cache_adapter_factory",
+            "memory.momento_brain",
+            "memory.momento_memory_store",
+            "core.context_manager",
+            "core.project_syncer",
+            "core.reflection_loop",
+            "core.health_monitor",
+            "core.weakness_remediator",
+            "core.skill_weight_adapter",
+            "core.convergence_escape",
+            "core.memory_compaction",
+            "core.context_graph",
+            "core.adaptive_pipeline",
+            "core.propagation_engine",
+            "core.autonomous_discovery",
+        }
+        real_import = builtins.__import__
+
+        def _guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name in blocked_optional_imports:
+                raise ImportError(f"blocked optional import for test: {name}")
+            return real_import(name, globals, locals, fromlist, level)
+
+        def _config_get(key, default=None):
+            mapping = {
+                "goal_queue_path": "state/custom_queue.json",
+                "goal_archive_path": "state/custom_archive.json",
+                "brain_db_path": "state/custom_brain.db",
+                "memory_store_path": "state/store",
+                "api_key": None,
+                "strict_schema": False,
+            }
+            return mapping.get(key, default)
+
+        with tempfile.TemporaryDirectory() as d, \
+             patch("aura_cli.cli_main.GoalQueue", return_value=fake_goal_queue), \
+             patch("aura_cli.cli_main.GoalArchive", return_value=fake_goal_archive), \
+             patch("aura_cli.cli_main.Brain", return_value=fake_brain) as mock_brain_cls, \
+             patch("aura_cli.cli_main.ModelAdapter", return_value=fake_model_adapter), \
+             patch("aura_cli.cli_main.VectorStore", return_value=fake_vector_store), \
+             patch("aura_cli.cli_main.RouterAgent", return_value=fake_router), \
+             patch("aura_cli.cli_main.DebuggerAgent", return_value=fake_debugger), \
+             patch("aura_cli.cli_main.PlannerAgent", return_value=fake_planner), \
+             patch("aura_cli.cli_main.MemoryStore", return_value=fake_memory_store) as mock_memory_store_cls, \
+             patch("aura_cli.cli_main.default_agents", return_value={}), \
+             patch("aura_cli.cli_main.Policy.from_config", return_value=fake_policy), \
+             patch("aura_cli.cli_main.LoopOrchestrator", return_value=fake_orchestrator), \
+             patch("aura_cli.cli_main.GitTools", return_value=fake_git_tools), \
+             patch("core.hybrid_loop.HybridClosedLoop"), \
+             patch.object(cli_main.config, "get", side_effect=_config_get), \
+             patch("aura_cli.cli_main.log_json"), \
+             patch("builtins.__import__", side_effect=_guarded_import):
+            cli_main.create_runtime(Path(d), overrides=None)
+
+        mock_brain_cls.assert_called_once_with(db_path=str(Path(d) / "state" / "custom_brain.db"))
+        mock_memory_store_cls.assert_called_once_with(Path(d) / "state" / "store")
+
+    def test_create_runtime_full_mode_honors_env_var_storage_paths_end_to_end(self):
+        fake_goal_queue = MagicMock()
+        fake_goal_archive = MagicMock()
+        fake_brain = MagicMock()
+        fake_brain.db = object()
+        fake_model_adapter = MagicMock()
+        fake_vector_store = MagicMock()
+        fake_router = MagicMock()
+        fake_debugger = MagicMock()
+        fake_planner = MagicMock()
+        fake_memory_store = MagicMock()
+        fake_policy = MagicMock()
+        fake_orchestrator = MagicMock()
+        fake_git_tools = MagicMock()
+
+        blocked_optional_imports = {
+            "memory.cache_adapter_factory",
+            "memory.momento_brain",
+            "memory.momento_memory_store",
+            "core.context_manager",
+            "core.project_syncer",
+            "core.reflection_loop",
+            "core.health_monitor",
+            "core.weakness_remediator",
+            "core.skill_weight_adapter",
+            "core.convergence_escape",
+            "core.memory_compaction",
+            "core.context_graph",
+            "core.adaptive_pipeline",
+            "core.propagation_engine",
+            "core.autonomous_discovery",
+        }
+        real_import = builtins.__import__
+
+        def _guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name in blocked_optional_imports:
+                raise ImportError(f"blocked optional import for test: {name}")
+            return real_import(name, globals, locals, fromlist, level)
+
+        original_runtime_overrides = dict(cli_main.config.runtime_overrides)
+        try:
+            with patch.dict(
+                os.environ,
+                {
+                    "AURA_BRAIN_DB_PATH": "env_state/runtime_brain.db",
+                    "AURA_MEMORY_STORE_PATH": "env_state/runtime_store",
+                    "AURA_LOCAL_MODEL_COMMAND": "echo local-model",
+                },
+                clear=False,
+            ):
+                cli_main.config.refresh()
+                with tempfile.TemporaryDirectory() as d, \
+                     patch("aura_cli.cli_main.GoalQueue", return_value=fake_goal_queue), \
+                     patch("aura_cli.cli_main.GoalArchive", return_value=fake_goal_archive), \
+                     patch("aura_cli.cli_main.Brain", return_value=fake_brain) as mock_brain_cls, \
+                     patch("aura_cli.cli_main.ModelAdapter", return_value=fake_model_adapter), \
+                     patch("aura_cli.cli_main.VectorStore", return_value=fake_vector_store), \
+                     patch("aura_cli.cli_main.RouterAgent", return_value=fake_router), \
+                     patch("aura_cli.cli_main.DebuggerAgent", return_value=fake_debugger), \
+                     patch("aura_cli.cli_main.PlannerAgent", return_value=fake_planner), \
+                     patch("aura_cli.cli_main.MemoryStore", return_value=fake_memory_store) as mock_memory_store_cls, \
+                     patch("aura_cli.cli_main.default_agents", return_value={}), \
+                     patch("aura_cli.cli_main.Policy.from_config", return_value=fake_policy), \
+                     patch("aura_cli.cli_main.LoopOrchestrator", return_value=fake_orchestrator), \
+                     patch("aura_cli.cli_main.GitTools", return_value=fake_git_tools), \
+                     patch("core.hybrid_loop.HybridClosedLoop"), \
+                     patch("aura_cli.cli_main.log_json"), \
+                     patch("builtins.__import__", side_effect=_guarded_import):
+                    cli_main.create_runtime(Path(d), overrides=None)
+        finally:
+            cli_main.config.runtime_overrides = original_runtime_overrides
+            cli_main.config.refresh()
+
+        mock_brain_cls.assert_called_once_with(db_path=str(Path(d) / "env_state" / "runtime_brain.db"))
+        mock_memory_store_cls.assert_called_once_with(Path(d) / "env_state" / "runtime_store")
+
 
     def test_main_returns_json_parse_error(self):
         with tempfile.TemporaryDirectory() as d:
@@ -253,8 +548,22 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertEqual(code1, 0)
         self.assertEqual(code2, 0)
         self.assertEqual(mock_status.call_args_list, [
-            call(fake_runtime["goal_queue"], fake_runtime["goal_archive"], fake_runtime["orchestrator"], as_json=True),
-            call(fake_runtime["goal_queue"], fake_runtime["goal_archive"], fake_runtime["orchestrator"], as_json=True),
+            call(
+                fake_runtime["goal_queue"],
+                fake_runtime["goal_archive"],
+                fake_runtime["orchestrator"],
+                as_json=True,
+                project_root=Path("."),
+                memory_persistence_path=None,
+            ),
+            call(
+                fake_runtime["goal_queue"],
+                fake_runtime["goal_archive"],
+                fake_runtime["orchestrator"],
+                as_json=True,
+                project_root=Path("."),
+                memory_persistence_path=None,
+            ),
         ])
 
     def test_legacy_and_canonical_mcp_tools_use_same_handler_without_runtime(self):

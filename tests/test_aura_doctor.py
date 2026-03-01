@@ -2,7 +2,8 @@ import unittest
 import sys
 import io
 from unittest.mock import patch
-from aura_cli.doctor import main as aura_doctor_main
+from aura_cli.doctor import check_env_vars, main as aura_doctor_main
+from aura_cli.commands import _handle_doctor
 
 class TestAuraDoctorOutputParsing(unittest.TestCase):
 
@@ -142,6 +143,44 @@ class TestAuraDoctorOutputParsing(unittest.TestCase):
             self.assertEqual(parsed_output["Overall Health"]["status"], "PASS")
         finally:
             sys.argv = original_argv # Restore original argv
+
+    @patch.dict("os.environ", {"OPENAI_API_KEY": "openai-key"}, clear=True)
+    def test_check_env_vars_reports_openai_only_as_pass(self):
+        status, message = check_env_vars()
+
+        self.assertEqual(status, "PASS")
+        self.assertIn("OPENAI_API_KEY", message)
+        self.assertIn("embeddings: OPENAI_API_KEY", message)
+
+    @patch.dict("os.environ", {"AURA_LOCAL_MODEL_COMMAND": "ollama run llama2"}, clear=True)
+    def test_check_env_vars_reports_local_only_as_warn_for_embeddings(self):
+        status, message = check_env_vars()
+
+        self.assertEqual(status, "PASS")
+        self.assertIn("AURA_LOCAL_MODEL_COMMAND", message)
+        self.assertIn("embeddings: disabled", message)
+
+    @patch("aura_cli.commands.capability_doctor_check", return_value=("PASS", "matched: docker_analysis"))
+    @patch("aura_cli.doctor.check_pytest_and_run_tests", return_value=("WARN", "tests skipped"))
+    @patch("aura_cli.doctor.check_git_status", return_value=("PASS", "git ok"))
+    @patch("aura_cli.doctor.check_sqlite_write_access", return_value=("PASS", "sqlite ok"))
+    @patch("aura_cli.doctor.check_env_vars", return_value=("PASS", "env ok"))
+    @patch("aura_cli.doctor.check_python_version", return_value=("PASS", "python ok"))
+    def test_handle_doctor_includes_capability_bootstrap_line(
+        self,
+        _mock_python,
+        _mock_env,
+        _mock_sqlite,
+        _mock_git,
+        _mock_pytest,
+        _mock_capability,
+    ):
+        out = io.StringIO()
+        with patch("sys.stdout", out):
+            _handle_doctor()
+
+        output = out.getvalue()
+        self.assertIn("Capability Bootstrap: PASS - matched: docker_analysis", output)
 
 if __name__ == '__main__':
     unittest.main()

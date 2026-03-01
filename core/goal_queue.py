@@ -48,6 +48,12 @@ class GoalQueue:
             self.queue.append(goal)
         self._save_queue()
 
+    def prepend_batch(self, goals):
+        """Add multiple goals to the front of the queue while preserving order."""
+        for goal in reversed(list(goals)):
+            self.queue.appendleft(goal)
+        self._save_queue()
+
     def next(self):
         """
         Retrieves and removes the next goal from the front of the queue.
@@ -95,4 +101,3 @@ class GoalQueue:
                     log_json("WARN", "goal_queue_corrupted", details={"path": str(self.queue_path), "message": "Starting with empty queue."})
                     return deque()
         return deque()
-

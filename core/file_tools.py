@@ -142,36 +142,17 @@ def recover_old_code_from_git(old_code: str, file_path: str, project_root: Path)
     return find_historical_match(old_code, file_path, project_root)
 
 
-def replace_code(file_path: str, old_code: str, new_code: str, dry_run: bool = False, overwrite_file: bool = False):
+def replace_code(file_path: str, old_code: str, new_code: str, dry_run: bool = False, overwrite_file: bool = False, project_root: Optional[Path] = None):
     """Replace a block of code inside a file, or overwrite the entire file.
-
-    Performs an atomic write by staging the new content in a sibling temp file
-    and then calling :func:`os.replace` to rename it over the target.  On
-    POSIX systems ``os.replace`` is guaranteed to be atomic.
-
-    Args:
-        file_path: Path to the file to modify.  The file must exist.
-        old_code: The exact substring to find and replace.  Pass an empty
-            string (``""``) only when *overwrite_file* is ``True``.
-        new_code: The replacement content.  When *overwrite_file* is ``True``
-            this becomes the entire file content.
-        dry_run: When ``True``, print a diff-style preview to stdout without
-            modifying the file.  Defaults to ``False``.
-        overwrite_file: When ``True`` the entire file is replaced with
-            *new_code* regardless of the existing content.  *old_code* must
-            be an empty string when this flag is set.  Defaults to ``False``.
-
-    Raises:
-        FileNotFoundError: If *file_path* does not exist.
-        ValueError: If *overwrite_file* is ``True`` but *old_code* is not
-            empty.
-        OldCodeNotFoundError: If *old_code* is non-empty and cannot be found
-            in the file content.
-        FileToolsError: On any filesystem error during the atomic write.
+    Enforces path jailing if project_root is provided.
     """
+    from core.sanitizer import sanitize_path
     path = Path(file_path)
+    if project_root:
+        path = sanitize_path(file_path, project_root)
+    
     if not path.is_file():
-        raise FileNotFoundError(f"File not found at '{file_path}'")
+        raise FileNotFoundError(f"File not found at '{path}'")
 
     try:
         current_content = path.read_text()
@@ -344,7 +325,8 @@ def _safe_apply_change(
             the existing file, *and* *new_code* is also empty (no safe
             fallback exists).
     """
-    path_obj = project_root / file_path
+    from core.sanitizer import sanitize_path
+    path_obj = sanitize_path(file_path, project_root)
     path_obj.parent.mkdir(parents=True, exist_ok=True)
 
 
@@ -394,7 +376,7 @@ def _safe_apply_change(
             # No new_code and no match → truly invalid
             raise OldCodeNotFoundError(f"'{old_code}' not found in '{path_obj}' and no new_code for overwrite.")
 
-    replace_code(str(path_obj), old_code, new_code, overwrite_file=overwrite_file)
+    replace_code(str(path_obj), old_code, new_code, overwrite_file=overwrite_file, project_root=project_root)
 
 
 class AtomicChangeSet:
@@ -428,12 +410,13 @@ class AtomicChangeSet:
         applied: list = []
 
         for change in self.changes:
+            from core.sanitizer import sanitize_path
             file_path = change["file_path"]
             old_code = change.get("old_code", "")
             new_code = change.get("new_code", "")
             overwrite_file = change.get("overwrite_file", False)
 
-            path_obj = self.project_root / file_path
+            path_obj = sanitize_path(file_path, self.project_root)
             key = str(path_obj)
 
             # Capture backup before first touch

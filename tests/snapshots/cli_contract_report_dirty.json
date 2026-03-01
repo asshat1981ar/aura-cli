@@ -1,0 +1,11 @@
+{
+  "failure_keys": [
+    "missing_in_help_schema"
+  ],
+  "missing_in_help_schema": [
+    [
+      "contract-report"
+    ]
+  ],
+  "ok": false
+}

@@ -17,12 +17,19 @@ Typical usage::
                                    max_cycles=3)
     print(result["stop_reason"])
 """
+import os
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Any, Optional
 
 from core.logging_utils import log_json
+from core.capability_manager import (
+    analyze_capability_needs,
+    provision_capability_actions,
+    queue_missing_capability_goals,
+    record_capability_status,
+)
 from core.policy import Policy
 from core.file_tools import (
     MISMATCH_OVERWRITE_BLOCK_EVENT,
@@ -34,7 +41,7 @@ from core.file_tools import (
 from core.schema import validate_phase_output
 from core.skill_dispatcher import classify_goal, dispatch_skills
 from core.human_gate import HumanGate
-from memory.store import MemoryStore
+from memory.controller import memory_controller, MemoryTier
 
 MAX_SANDBOX_RETRIES = 3
 
@@ -61,7 +68,7 @@ class LoopOrchestrator:
 
     Attributes:
         agents: Mapping of phase-name → agent instance used for each pipeline step.
-        memory_store: Persistent log store for cycle history and summaries.
+        memory_controller: Centralized memory authority.
         policy: Stopping-condition evaluator; defaults to :class:`~core.policy.Policy`
             with an empty config.
         project_root: Filesystem root against which all relative file paths are
@@ -74,13 +81,26 @@ class LoopOrchestrator:
             :mod:`agents.skills.registry`.
     """
 
-    def __init__(self, agents: Dict[str, object], memory_store: MemoryStore, policy: Policy = None, project_root: Path = None, strict_schema: bool = False, debugger=None):
+    def __init__(
+        self,
+        agents: Dict[str, object],
+        memory_store: Any = None, # Deprecated in favor of global memory_controller
+        policy: Policy = None,
+        project_root: Path = None,
+        strict_schema: bool = False,
+        debugger=None,
+        auto_add_capabilities: bool = True,
+        auto_queue_missing_capabilities: bool = True,
+        auto_provision_mcp: bool = False,
+        auto_start_mcp_servers: bool = False,
+        goal_queue=None,
+    ):
         """Initialise the orchestrator with its agents and supporting services.
 
         Args:
             agents: Dict mapping phase names (``"ingest"``, ``"plan"``, ``"act"``,
                 etc.) to agent instances that implement a ``run(input_data)`` method.
-            memory_store: Persistent store for cycle logs and summaries.
+            memory_store: [Deprecated] Now uses the global memory_controller.
             policy: Optional policy evaluator used to decide when to stop the
                 :meth:`run_loop`.  Defaults to a permissive :class:`~core.policy.Policy`.
             project_root: Root directory of the target project.  All relative
@@ -93,12 +113,21 @@ class LoopOrchestrator:
                 when the coder produces an invalid change-set.
         """
         self.agents = agents
-        self.memory_store = memory_store
+        self.memory_controller = memory_controller
         self.policy = policy or Policy.from_config({})
         self.project_root = Path(project_root or ".")
         self.strict_schema = strict_schema
         self.debugger = debugger  # Optional DebuggerAgent for auto-recovery
         self.human_gate = HumanGate()
+        self.auto_add_capabilities = auto_add_capabilities
+        self.auto_queue_missing_capabilities = auto_queue_missing_capabilities
+        self.auto_provision_mcp = auto_provision_mcp
+        self.auto_start_mcp_servers = auto_start_mcp_servers
+        self.goal_queue = goal_queue
+        self.last_capability_plan: dict = {}
+        self.last_capability_goal_queue: dict = {}
+        self.last_capability_provisioning: dict = {}
+        self.last_capability_status: dict = {}
 
         # Lazy-load skills so missing optional deps don't break startup
         try:
@@ -203,13 +232,13 @@ class LoopOrchestrator:
 
         Returns:
             A list of up to *limit* cycle-summary dicts from
-            :attr:`memory_store`, ordered from most to least relevant.
+            the memory controller, ordered from most to least relevant.
             Returns ``[]`` when the memory store is unavailable or empty.
         """
-        if not self.memory_store:
+        if not self.memory_controller or not self.memory_controller.persistent_store:
             return []
         try:
-            summaries = self.memory_store.query("cycle_summaries", limit=200)
+            summaries = self.memory_controller.persistent_store.query("cycle_summaries", limit=200)
         except Exception:
             return []
         if not summaries:
@@ -254,6 +283,49 @@ class LoopOrchestrator:
             return {}
         return agent.run(input_data)
 
+    def _snapshot_file_state(self, file_path: str) -> Dict:
+        """Capture a restorable snapshot of a target file before mutation."""
+        target = (self.project_root / file_path).resolve()
+        snapshot = {
+            "file": file_path,
+            "target": str(target),
+            "existed": target.exists(),
+            "content": None,
+            "mode": None,
+        }
+        if target.exists():
+            snapshot["content"] = target.read_text(encoding="utf-8", errors="ignore")
+            snapshot["mode"] = target.stat().st_mode & 0o777
+        return snapshot
+
+    def _restore_applied_changes(self, snapshots: List[Dict]) -> None:
+        """Restore only the files mutated by the current loop attempt.
+
+        This avoids touching unrelated user changes elsewhere in the repo.
+        """
+        restored: list[str] = []
+        failed: list[Dict[str, str]] = []
+
+        for snapshot in reversed(snapshots):
+            target = Path(snapshot["target"])
+            try:
+                if snapshot.get("existed"):
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(snapshot.get("content") or "", encoding="utf-8")
+                    if snapshot.get("mode") is not None:
+                        os.chmod(target, int(snapshot["mode"]))
+                else:
+                    if target.exists():
+                        target.unlink()
+                restored.append(snapshot["file"])
+            except Exception as exc:
+                failed.append({"file": snapshot["file"], "error": str(exc)})
+
+        if restored:
+            log_json("INFO", "verify_fail_restore_ok", details={"files": restored})
+        if failed:
+            log_json("WARN", "verify_fail_restore_failed", details={"failures": failed})
+
     def _apply_change_set(
         self, change_set: Dict, dry_run: bool
     ) -> Dict[str, List]:
@@ -284,6 +356,8 @@ class LoopOrchestrator:
             * ``"applied"`` (``List[str]``) — file paths successfully written.
             * ``"failed"``  (``List[dict]``) — dicts with ``"file"`` and
               ``"error"`` keys for each path that could not be written.
+            * ``"snapshots"`` (``List[dict]``) — pre-apply file snapshots for
+              restoring loop-owned writes when verification fails.
         """
         changes: List[Dict] = []
         if isinstance(change_set, dict):
@@ -294,6 +368,8 @@ class LoopOrchestrator:
 
         applied: List[str] = []
         failed: List[Dict] = []
+        snapshots: List[Dict] = []
+        snapshotted_files: set[str] = set()
 
         for change in changes:
             file_path = change.get("file_path")
@@ -311,6 +387,9 @@ class LoopOrchestrator:
                 continue
 
             try:
+                if file_path not in snapshotted_files:
+                    snapshots.append(self._snapshot_file_state(file_path))
+                    snapshotted_files.add(file_path)
                 apply_change_with_explicit_overwrite_policy(
                     self.project_root, file_path, old_code, new_code,
                     overwrite_file=overwrite_file,
@@ -326,7 +405,7 @@ class LoopOrchestrator:
                 log_json("ERROR", "apply_change_failed", details={"error": str(exc), "file": file_path})
                 failed.append({"file": file_path, "error": str(exc)})
 
-        return {"applied": applied, "failed": failed}
+        return {"applied": applied, "failed": failed, "snapshots": snapshots}
 
     def _route_failure(self, verification: Dict) -> str:
         """Classify a verification failure and return the recommended re-entry point.
@@ -594,9 +673,9 @@ class LoopOrchestrator:
                 break  # success — exit act loop
 
             # ── Failure routing ───────────────────────────────────────────────
-            # On verify fail, stash applied changes so the project is restored.
+            # On verify fail, restore only the files mutated by this loop attempt.
             if apply_result.get("applied") and not dry_run:
-                self._git_stash_changes(apply_result["applied"])
+                self._restore_applied_changes(apply_result.get("snapshots", []))
 
             route = self._route_failure(verification)
             log_json("INFO", "verification_failed_routing",
@@ -736,31 +815,6 @@ class LoopOrchestrator:
 
         return verification, None
 
-    def _git_stash_changes(self, applied_paths: List[str]) -> None:
-        """Stash applied changes via ``git stash`` to restore project state.
-
-        Called when verify fails after changes were already written to disk.
-        Failure is non-fatal — logs a warning and continues.
-
-        Args:
-            applied_paths: File paths that were written (for log context only).
-        """
-        try:
-            import subprocess as _sp
-            result = _sp.run(
-                ["git", "-C", str(self.project_root), "stash", "--include-untracked"],
-                capture_output=True, text=True, timeout=30,
-            )
-            if result.returncode == 0:
-                log_json("INFO", "verify_fail_git_stash_ok",
-                         details={"files": applied_paths,
-                                  "stash_out": result.stdout.strip()})
-            else:
-                log_json("WARN", "verify_fail_git_stash_failed",
-                         details={"stderr": result.stderr.strip()})
-        except Exception as exc:
-            log_json("WARN", "verify_fail_git_stash_error", details={"error": str(exc)})
-
     def run_cycle(self, goal: str, dry_run: bool = False) -> Dict:
         """Execute a single complete plan-act-verify cycle for *goal*."""
         cycle_id = f"cycle_{uuid.uuid4().hex[:12]}"
@@ -788,13 +842,73 @@ class LoopOrchestrator:
         }
         self._notify_ui("on_pipeline_configured", phase_outputs["pipeline_config"])
 
+        capability_plan = {
+            "matched_capabilities": [],
+            "recommended_skills": [],
+            "missing_skills": [],
+            "mcp_tools": [],
+            "provisioning_actions": [],
+        }
+        capability_goal_queue = {"attempted": False, "queued": [], "skipped": [], "queue_strategy": None}
+        capability_provisioning = {"attempted": False, "results": []}
+
+        if self.auto_add_capabilities:
+            capability_plan = analyze_capability_needs(
+                goal,
+                available_skills=self.skills.keys(),
+                active_skills=pipeline_cfg.skill_set,
+            )
+            if capability_plan["recommended_skills"]:
+                pipeline_cfg.skill_set = list(
+                    dict.fromkeys(list(pipeline_cfg.skill_set) + list(capability_plan["recommended_skills"]))
+                )
+                phase_outputs["pipeline_config"]["skills"] = pipeline_cfg.skill_set
+            phase_outputs["capability_plan"] = capability_plan
+            capability_goal_queue = queue_missing_capability_goals(
+                goal_queue=self.goal_queue,
+                missing_skills=capability_plan["missing_skills"],
+                goal=goal,
+                enabled=self.auto_queue_missing_capabilities,
+                dry_run=dry_run,
+            )
+            if capability_goal_queue["queued"] or capability_goal_queue["skipped"]:
+                phase_outputs["capability_goal_queue"] = capability_goal_queue
+            if capability_plan["provisioning_actions"]:
+                capability_provisioning = provision_capability_actions(
+                    project_root=self.project_root,
+                    provisioning_actions=capability_plan["provisioning_actions"],
+                    auto_provision=self.auto_provision_mcp,
+                    start_servers=self.auto_start_mcp_servers,
+                    dry_run=dry_run,
+                )
+                phase_outputs["capability_provisioning"] = capability_provisioning
+
+        self.last_capability_plan = capability_plan
+        self.last_capability_goal_queue = capability_goal_queue
+        self.last_capability_provisioning = capability_provisioning
+        self.last_capability_status = record_capability_status(
+            project_root=self.project_root,
+            goal=goal,
+            capability_plan=capability_plan,
+            capability_goal_queue=capability_goal_queue,
+            capability_provisioning=capability_provisioning,
+            goal_queue=self.goal_queue,
+        )
+
         # ── 1. INGEST ────────────────────────────────────────────────────────
         self._notify_ui("on_phase_start", "ingest")
         t0_ingest = time.time()
+        
+        # Retrieve context from memory tiers
+        working_memory = self.memory_controller.retrieve(MemoryTier.WORKING)
+        session_memory = self.memory_controller.retrieve(MemoryTier.SESSION)
+        
         context = self._run_phase("ingest", {
             "goal": goal,
             "project_root": str(self.project_root),
             "hints": self._retrieve_hints(goal),
+            "working_memory": working_memory,
+            "session_memory": session_memory,
         })
         self._notify_ui("on_phase_complete", "ingest", (time.time() - t0_ingest) * 1000)
 
@@ -854,6 +968,14 @@ class LoopOrchestrator:
             if self.strict_schema:
                 return {"cycle_id": cycle_id, "phase_outputs": phase_outputs, "stop_reason": "INVALID_OUTPUT"}
         phase_outputs["reflection"] = reflection
+        
+        # R2: Unified Control Plane - Store reflection in SESSION memory for cross-cycle context
+        if reflection.get("summary"):
+            self.memory_controller.store(
+                MemoryTier.SESSION, 
+                reflection["summary"], 
+                metadata={"cycle_id": cycle_id, "type": "reflection"}
+            )
 
         # Remove internal scratchpad key before persisting
         phase_outputs.pop("_failure_context", None)
@@ -880,7 +1002,8 @@ class LoopOrchestrator:
             "phase_outputs": phase_outputs,
             "stop_reason": None,
         }
-        self.memory_store.append_log(entry)
+        if self.memory_controller.persistent_store:
+            self.memory_controller.persistent_store.append_log(entry)
 
         # ── CASPA-W: Update context graph ───────────────────────────────────
         if self.context_graph is not None:

@@ -6,7 +6,14 @@ import subprocess
 import argparse
 from pathlib import Path
 
+from core.config_manager import DEFAULT_CONFIG
 from core.git_tools import GitTools, GitRepoError
+from core.runtime_auth import (
+    resolve_config_api_key,
+    runtime_provider_status,
+    runtime_provider_summary,
+)
+from core.capability_manager import capability_doctor_check
 
 def check_python_version():
     """Checks if the Python version is 3.9 or higher."""
@@ -42,17 +49,9 @@ def check_dependencies():
 
 def check_env_vars(openrouter_api_key_arg: str = None): # Add argument
     """Checks for required environment variables."""
-    status = "PASS"
-    messages = []
-
-    # Check for OPENROUTER_API_KEY, prioritizing command-line argument
-    if openrouter_api_key_arg or os.getenv("OPENROUTER_API_KEY"):
-        messages.append("OPENROUTER_API_KEY: Present")
-    else:
-        status = "WARN"
-        messages.append("OPENROUTER_API_KEY: Not found (API functionality might be limited)")
-    
-    return status, "; ".join(messages)
+    status = runtime_provider_status(openrouter_api_key_arg=openrouter_api_key_arg)
+    overall = "PASS" if status["chat_ready"] else "WARN"
+    return overall, runtime_provider_summary(status)
 
 def check_sqlite_write_access(repo_root: Path):
     """Checks for SQLite write access in the repository directory."""
@@ -222,25 +221,32 @@ def run_doctor_v2(project_root: Path = None, rich_output: bool = True) -> list:
         _add("Python version", "FAIL", f"{v.major}.{v.minor}.{v.micro} (need ≥3.9)")
 
     # 2. Config file
-    cfg_path = project_root / "aura.config.json"
-    if cfg_path.exists():
-        try:
-            cfg = json.loads(cfg_path.read_text())
-            _add("Config file", "PASS", f"aura.config.json ({len(cfg)} keys)")
-        except json.JSONDecodeError as e:
-            _add("Config file", "FAIL", f"Invalid JSON: {e}")
+    from core.config_manager import config
+    cfg = config.effective_config
+    if config.config_file.exists():
+        _add("Config file", "PASS", f"aura.config.json ({len(cfg)} keys)")
     else:
-        _add("Config file", "WARN", "aura.config.json not found")
+        _add("Config file", "WARN", "aura.config.json not found (using defaults)")
 
-    # 3. API key
-    key = os.getenv("AURA_API_KEY") or os.getenv("OPENROUTER_API_KEY")
-    if key and len(key) > 10:
-        _add("API key", "PASS", "AURA_API_KEY / OPENROUTER_API_KEY set")
-    else:
-        _add("API key", "WARN", "No API key found (set AURA_API_KEY)")
+    # 3. Chat providers
+    config_api_key = resolve_config_api_key(cfg.get("api_key"))
+    provider_status = runtime_provider_status(config_api_key=config_api_key)
+    _add(
+        "API key",
+        "PASS" if provider_status["chat_ready"] else "WARN",
+        runtime_provider_summary(provider_status),
+    )
 
-    # 4. Brain DB
-    brain_db = project_root / "memory" / "brain.db"
+    # 4. Embeddings
+    _add(
+        "Embeddings",
+        "PASS" if provider_status["embedding_ready"] else "WARN",
+        "OPENAI_API_KEY available" if provider_status["embedding_ready"] else "OPENAI_API_KEY not set; semantic search will fall back",
+    )
+
+    # 5. Brain DB
+    brain_db_rel = cfg.get("brain_db_path", DEFAULT_CONFIG["brain_db_path"])
+    brain_db = project_root / brain_db_rel
     if brain_db.exists():
         try:
             conn = sqlite3.connect(str(brain_db), check_same_thread=False)
@@ -250,26 +256,29 @@ def run_doctor_v2(project_root: Path = None, rich_output: bool = True) -> list:
             mode = wal[0] if wal else "unknown"
             conn.close()
             status = "PASS" if mode == "wal" else "WARN"
-            _add("Brain DB", status, f"{count:,} entries, journal={mode}")
+            _add("Brain DB", status, f"{brain_db_rel} ({count:,} entries, journal={mode})")
         except Exception as e:
             _add("Brain DB", "FAIL", str(e))
     else:
-        _add("Brain DB", "WARN", "memory/brain.db not found")
+        _add("Brain DB", "WARN", f"{brain_db_rel} not found")
 
-    # 5. Goal queue
-    for qpath in ["memory/goal_queue.json", "memory/goal_queue_v2.json"]:
-        fpath = project_root / qpath
-        if fpath.exists():
-            try:
-                goals = json.loads(fpath.read_text())
-                _add("Goal queue", "PASS", f"{qpath} ({len(goals)} goals)")
-            except Exception as e:
-                _add("Goal queue", "FAIL", f"{qpath}: {e}")
-            break
+    # 6. Goal queue
+    goal_queue_rel = cfg.get("goal_queue_path", DEFAULT_CONFIG["goal_queue_path"])
+    goal_queue_path = project_root / goal_queue_rel
+    if goal_queue_path.exists():
+        try:
+            goals = json.loads(goal_queue_path.read_text())
+            _add("Goal queue", "PASS", f"{goal_queue_rel} ({len(goals)} goals)")
+        except Exception as e:
+            _add("Goal queue", "FAIL", f"{goal_queue_rel}: {e}")
     else:
-        _add("Goal queue", "WARN", "No goal queue file found")
+        _add("Goal queue", "WARN", f"{goal_queue_rel} not found")
 
-    # 6. Dependencies
+    # 6b. Capability bootstrap
+    capability_status, capability_detail = capability_doctor_check(project_root, config=cfg)
+    _add("Capability bootstrap", capability_status, capability_detail)
+
+    # 7. Dependencies
     required = {
         "fastapi": "fastapi",
         "uvicorn": "uvicorn",
@@ -284,13 +293,13 @@ def run_doctor_v2(project_root: Path = None, rich_output: bool = True) -> list:
     else:
         _add("Dependencies", "PASS", "All core packages present")
 
-    # 7. rich available (for TUI)
+    # 8. rich available (for TUI)
     if importlib.util.find_spec("rich") is not None:
         _add("TUI (rich)", "PASS", f"rich available — run: aura watch")
     else:
         _add("TUI (rich)", "WARN", "pip install rich (for TUI dashboard)")
 
-    # 8. Git repo
+    # 9. Git repo
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],
@@ -303,7 +312,7 @@ def run_doctor_v2(project_root: Path = None, rich_output: bool = True) -> list:
     except Exception:
         _add("Git repo", "WARN", "git not available")
 
-    # 9. OpenRouter reachable (quick DNS check only)
+    # 10. OpenRouter reachable (quick DNS check only)
     try:
         import socket
         socket.setdefaulttimeout(2)
@@ -337,4 +346,3 @@ def run_doctor_v2(project_root: Path = None, rich_output: bool = True) -> list:
                 print(f"  [{icon}] {r['check']:<20} {r['detail']}")
 
     return results
-

@@ -1,7 +1,9 @@
 # R1: Shim — canonical entry point lives in aura_cli/cli_main.py.
 # Keep this wrapper lazy so lightweight/help paths do not trigger full runtime imports.
+import io
 import json
 import sys
+from contextlib import redirect_stdout
 
 from aura_cli.cli_options import CLIParseError, attach_cli_warnings, parse_cli_args, render_help
 from aura_cli.cli_options import cli_parse_error_payload, unknown_command_help_topic_payload
@@ -9,7 +11,8 @@ from aura_cli.cli_options import cli_parse_error_payload, unknown_command_help_t
 
 def main(*args, **kwargs):  # noqa: D401
     """Proxy to the canonical CLI entry point."""
-    from aura_cli.cli_main import main as _main
+    with redirect_stdout(io.StringIO()):
+        from aura_cli.cli_main import main as _main
     return _main(*args, **kwargs)
 
 if __name__ == "__main__":

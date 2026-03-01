@@ -1,5 +1,6 @@
 """Tests for orchestrator failure routing and act-loop retry/replan/stash."""
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch, call
@@ -50,34 +51,53 @@ class TestRouteFailure(unittest.TestCase):
         self.assertEqual(result, "act")
 
 
-# ── _git_stash_changes ────────────────────────────────────────────────────────
+# ── _restore_applied_changes ──────────────────────────────────────────────────
 
-class TestGitStashChanges(unittest.TestCase):
+class TestRestoreAppliedChanges(unittest.TestCase):
     def setUp(self):
         self.orc = _make_orchestrator()
 
-    def test_calls_git_stash(self):
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=0, stdout="stash ok", stderr="")
-            self.orc._git_stash_changes(["file.py"])
-        mock_run.assert_called_once()
-        cmd = mock_run.call_args[0][0]
-        self.assertIn("stash", cmd)
-        self.assertIn("--include-untracked", cmd)
+    def test_restores_existing_file_content_and_mode(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            file_path = root / "script.sh"
+            file_path.write_text("echo old\n", encoding="utf-8")
+            file_path.chmod(0o755)
 
-    def test_does_not_raise_on_git_failure(self):
-        with patch("subprocess.run") as mock_run:
-            mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
-            # Should not raise
-            self.orc._git_stash_changes(["file.py"])
+            snapshot = {
+                "file": "script.sh",
+                "target": str(file_path),
+                "existed": True,
+                "content": "echo old\n",
+                "mode": 0o755,
+            }
 
-    def test_does_not_raise_on_subprocess_exception(self):
-        with patch("subprocess.run", side_effect=FileNotFoundError("git not found")):
-            self.orc._git_stash_changes(["file.py"])
+            file_path.write_text("echo new\n", encoding="utf-8")
+            file_path.chmod(0o644)
 
-    def test_does_not_raise_on_timeout(self):
-        with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(["git"], 30)):
-            self.orc._git_stash_changes(["file.py"])
+            self.orc._restore_applied_changes([snapshot])
+
+            self.assertEqual(file_path.read_text(encoding="utf-8"), "echo old\n")
+            self.assertEqual(file_path.stat().st_mode & 0o777, 0o755)
+
+    def test_removes_new_file_created_by_loop(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            file_path = root / "tests" / "test_generated.py"
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text("assert True\n", encoding="utf-8")
+
+            snapshot = {
+                "file": "tests/test_generated.py",
+                "target": str(file_path),
+                "existed": False,
+                "content": None,
+                "mode": None,
+            }
+
+            self.orc._restore_applied_changes([snapshot])
+
+            self.assertFalse(file_path.exists())
 
 
 # ── _run_act_loop retry backoff ───────────────────────────────────────────────

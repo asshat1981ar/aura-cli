@@ -56,6 +56,20 @@
       "summary": "Show effective config"
     },
     {
+      "action": "contract_report",
+      "description": "Print aggregated parser/help/schema/dispatch contract checks as JSON.",
+      "examples": [
+        "python3 main.py contract-report --check",
+        "python3 main.py contract-report --compact"
+      ],
+      "legacy_flags": [],
+      "path": [
+        "contract-report"
+      ],
+      "requires_runtime": false,
+      "summary": "Print CLI contract report"
+    },
+    {
       "action": "diag",
       "description": "Fetch MCP health, metrics, limits, and recent logs via HTTP.",
       "examples": [

@@ -315,6 +315,7 @@ class TestAgenticLoop:
         import core.workflow_engine as wfe
 
         expected_root = Path(wfe.__file__).resolve().parent.parent
+        expected_brain_db = expected_root / "memory" / "brain_v2.db"
         expected_memory_root = expected_root / "memory" / "store"
         fake_memory_store = object()
         fake_orchestrator = object()
@@ -324,19 +325,49 @@ class TestAgenticLoop:
 
         with patch("aura_cli.cli_main.create_runtime", side_effect=TypeError("missing project_root")), \
              patch("memory.store.MemoryStore", return_value=fake_memory_store) as mock_store, \
-             patch("memory.brain.Brain", return_value=fake_brain), \
+             patch("memory.brain.Brain", return_value=fake_brain) as mock_brain_cls, \
              patch("core.model_adapter.ModelAdapter", return_value=fake_model), \
              patch("agents.registry.default_agents", return_value=fake_agents), \
              patch("core.orchestrator.LoopOrchestrator", return_value=fake_orchestrator) as mock_orch:
             orchestrator = fresh_engine._get_orchestrator()
 
         assert orchestrator is fake_orchestrator
+        mock_brain_cls.assert_called_once_with(db_path=str(expected_brain_db))
         mock_store.assert_called_once_with(expected_memory_root)
         mock_orch.assert_called_once_with(
             agents=fake_agents,
             memory_store=fake_memory_store,
             project_root=expected_root,
         )
+
+    def test_get_orchestrator_fallback_uses_project_configured_paths(self, fresh_engine):
+        import core.workflow_engine as wfe
+
+        expected_root = Path(wfe.__file__).resolve().parent.parent
+        fake_memory_store = object()
+        fake_orchestrator = object()
+        fake_brain = MagicMock()
+        fake_model = MagicMock()
+        fake_agents = {"ingest": MagicMock()}
+        fake_config = MagicMock()
+        fake_config.get.side_effect = lambda key, default=None: {
+            "brain_db_path": "state/workflow_brain.db",
+            "memory_store_path": "state/workflow_store",
+        }.get(key, default)
+
+        with patch("aura_cli.cli_main.create_runtime", side_effect=TypeError("missing project_root")), \
+             patch("core.workflow_engine.ConfigManager", return_value=fake_config), \
+             patch("memory.store.MemoryStore", return_value=fake_memory_store) as mock_store, \
+             patch("memory.brain.Brain", return_value=fake_brain) as mock_brain_cls, \
+             patch("core.model_adapter.ModelAdapter", return_value=fake_model), \
+             patch("agents.registry.default_agents", return_value=fake_agents), \
+             patch("core.orchestrator.LoopOrchestrator", return_value=fake_orchestrator):
+            fresh_engine._get_orchestrator()
+
+        mock_brain_cls.assert_called_once_with(
+            db_path=str(expected_root / "state" / "workflow_brain.db")
+        )
+        mock_store.assert_called_once_with(expected_root / "state" / "workflow_store")
 
     def test_create_loop(self, fresh_engine):
         loop_id = fresh_engine.create_loop("Fix the bug", max_cycles=3)

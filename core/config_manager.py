@@ -54,14 +54,25 @@ _KEY_VALIDATORS = {
     "strict_schema":    lambda k, v: _validate_bool(k, v),
     "model_name":       lambda k, v: _validate_string(k, v),
     "api_key":          lambda k, v: _validate_string(k, v),
+    "openai_api_key":   lambda k, v: _validate_string(k, v),
     "memory_store_path": lambda k, v: _validate_string(k, v),
     "brain_db_path":    lambda k, v: _validate_string(k, v),
     "goal_queue_path":  lambda k, v: _validate_string(k, v),
+    "memory_persistence_path": lambda k, v: _validate_string(k, v),
+    "auto_add_capabilities": lambda k, v: _validate_bool(k, v),
+    "auto_queue_missing_capabilities": lambda k, v: _validate_bool(k, v),
+    "auto_provision_mcp": lambda k, v: _validate_bool(k, v),
+    "auto_start_mcp_servers": lambda k, v: _validate_bool(k, v),
+    "gemini_cli_path":  lambda k, v: _validate_string(k, v),
+    "mcp_server_url":   lambda k, v: _validate_string(k, v),
+    "local_model_command": lambda k, v: _validate_string(k, v),
+    "llm_timeout":      lambda k, v: _validate_positive_int(k, v),
 }
 
 DEFAULT_CONFIG = {
     "model_name": "google/gemini-2.0-flash-exp:free",
     "api_key": None,
+    "openai_api_key": None,
     "dry_run": False,
     "decompose": False,
     "max_iterations": 10,
@@ -76,6 +87,14 @@ DEFAULT_CONFIG = {
     "goal_queue_path": "memory/goal_queue.json",
     "goal_archive_path": "memory/goal_archive_v2.json",
     "brain_db_path": "memory/brain_v2.db",
+    "auto_add_capabilities": True,
+    "auto_queue_missing_capabilities": True,
+    "auto_provision_mcp": False,
+    "auto_start_mcp_servers": False,
+    "gemini_cli_path": "/data/data/com.termux/files/usr/bin/gemini",
+    "mcp_server_url": "http://localhost:8000",
+    "local_model_command": None,
+    "llm_timeout": 60,
     "model_routing": {
         "code_generation": "google/gemini-2.0-flash-exp:free",
         "planning": "google/gemini-2.0-flash-exp:free",
@@ -133,17 +152,39 @@ class ConfigManager:
 
     def _load_from_env(self) -> Dict[str, Any]:
         env_config = {}
+        
+        # Legacy mappings and direct ENV overrides
+        env_mappings = {
+            "OPENROUTER_API_KEY": "api_key",
+            "AURA_API_KEY": "api_key",
+            "OPENAI_API_KEY": "openai_api_key",
+            "GEMINI_CLI_PATH": "gemini_cli_path",
+            "MCP_SERVER_URL": "mcp_server_url",
+            "AURA_LOCAL_MODEL_COMMAND": "local_model_command",
+            "AURA_LLM_TIMEOUT": "llm_timeout",
+        }
+        
+        for env_key, config_key in env_mappings.items():
+            if env_key in os.environ:
+                env_config[config_key] = os.environ[env_key]
+
+        # Standard AURA_* overrides for all keys in DEFAULT_CONFIG
         for key in DEFAULT_CONFIG:
             env_key = f"AURA_{key.upper()}"
             if env_key in os.environ:
                 val = os.environ[env_key]
-                # Type coercion
-                if isinstance(DEFAULT_CONFIG[key], bool):
-                    env_config[key] = val.lower() in ("true", "1", "yes")
-                elif isinstance(DEFAULT_CONFIG[key], int):
-                    env_config[key] = int(val)
-                else:
-                    env_config[key] = val
+                # Type coercion with error handling
+                try:
+                    if isinstance(DEFAULT_CONFIG[key], bool):
+                        env_config[key] = val.lower() in ("true", "1", "yes")
+                    elif isinstance(DEFAULT_CONFIG[key], int):
+                        env_config[key] = int(val)
+                    else:
+                        env_config[key] = val
+                except (ValueError, TypeError):
+                    log_json("WARN", "config_env_coercion_failed", details={"key": key, "val": val})
+                    # Skip this key, let it fall back to JSON/Default
+                    continue
         
         # Handle nested model_routing overrides
         routing_overrides = {}
@@ -193,9 +234,6 @@ class ConfigManager:
                 merged[k] = v
         
         # Merge ENV (env_config already has merged sub-dicts)
-        # But we need to be careful not to overwrite file_config partials with defaults if env is empty
-        # Actually _load_from_env returns only set keys + merged sub-dicts if env vars exist.
-        
         if "model_routing" in env_config:
             merged["model_routing"].update(env_config["model_routing"])
         if "semantic_memory" in env_config:
@@ -288,6 +326,54 @@ class ConfigManager:
         with open(self.config_file, 'w') as f:
             json.dump(bootstrap_data, f, indent=4)
         log_json("INFO", "config_bootstrapped", details={"path": str(self.config_file)})
+
+    def interactive_bootstrap(self):
+        """Interactively guides the user through setting up AURA configuration."""
+        print("\n--- AURA Interactive Bootstrap ---")
+        print("This will create or update your aura.config.json file.")
+        
+        try:
+            # 1. API Key
+            current_key = self.get("api_key")
+            if current_key and current_key not in ["YOUR_API_KEY_HERE", "YOUR_OPENROUTER_API_KEY_HERE"]:
+                key_hint = f" [{current_key[:4]}...{current_key[-4:]}]"
+            else:
+                key_hint = ""
+            
+            new_key = input(f"OpenRouter API Key{key_hint} (leave blank to keep): ").strip()
+            if new_key:
+                self.file_config["api_key"] = new_key
+            
+            # 2. OpenAI API Key (optional)
+            current_openai = self.get("openai_api_key")
+            if current_openai:
+                openai_hint = f" [{current_openai[:4]}...{current_openai[-4:]}]"
+            else:
+                openai_hint = ""
+            
+            new_openai = input(f"OpenAI API Key (optional){openai_hint} (leave blank to skip): ").strip()
+            if new_openai:
+                self.file_config["openai_api_key"] = new_openai
+
+            # 3. Default Model
+            current_model = self.get("model_name")
+            new_model = input(f"Default Model [{current_model}]: ").strip()
+            if new_model:
+                self.file_config["model_name"] = new_model
+
+            # Save
+            with open(self.config_file, 'w') as f:
+                json.dump(self.file_config, f, indent=4)
+            
+            self.refresh()
+            print("\n✅ Configuration saved to aura.config.json")
+            log_json("INFO", "config_interactive_bootstrap_complete")
+            
+        except EOFError:
+            print("\nBootstrap cancelled.")
+        except Exception as e:
+            print(f"\n❌ Bootstrap failed: {e}")
+            log_json("ERROR", "config_interactive_bootstrap_failed", details={"error": str(e)})
 
 # Global instance initialized with defaults
 config = ConfigManager()

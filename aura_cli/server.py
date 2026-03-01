@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from aura_cli.cli_main import create_runtime
 from core.sanitizer import sanitize_command
 from core.logging_utils import log_json
+from core.runtime_auth import resolve_openai_api_key, resolve_openrouter_api_key, resolve_gemini_cli_path
 from core.skill_dispatcher import SKILL_METRICS
 from memory.store import MemoryStore
 
@@ -28,6 +29,15 @@ memory_store: MemoryStore = runtime.get("memory_store")
 
 def _agent_run_enabled() -> bool:
     return os.getenv("AGENT_API_ENABLE_RUN") == "1"
+
+
+def _provider_snapshot() -> dict[str, bool]:
+    config_api_key = runtime.get("config_api_key")
+    return {
+        "openai": bool(resolve_openai_api_key()),
+        "openrouter": bool(resolve_openrouter_api_key(config_api_key=config_api_key)),
+        "gemini": bool(resolve_gemini_cli_path() or os.getenv("GEMINI_API_KEY")),
+    }
 
 def require_auth(authorization: str | None = Header(default=None)):
     """Simple bearer-token auth; disabled if AGENT_API_TOKEN is unset."""
@@ -59,11 +69,7 @@ TOOLS = [
 async def health(auth=Depends(require_auth)):
     return {
         "status": "ok",
-        "providers": {
-            "openai": bool(os.getenv("OPENAI_API_KEY")),
-            "openrouter": bool(os.getenv("OPENROUTER_API_KEY") or runtime.get("config_api_key")),
-            "gemini": bool(os.getenv("GEMINI_API_KEY")),
-        },
+        "providers": _provider_snapshot(),
         "run_enabled": _agent_run_enabled(),
     }
 
@@ -174,11 +180,7 @@ async def execute(req: ExecuteRequest, auth=Depends(require_auth)):
 
             async def goal_stream():
                 yield "data: {\"type\":\"start\"}\n\n"
-                providers = {
-                    "openai": bool(os.getenv("OPENAI_API_KEY")),
-                    "openrouter": bool(os.getenv("OPENROUTER_API_KEY") or runtime.get("config_api_key")),
-                    "gemini": bool(os.getenv("GEMINI_API_KEY")),
-                }
+                providers = _provider_snapshot()
                 yield f"data: {json.dumps({'type': 'health', 'status': 'ok', 'providers': providers, 'ts': time.time()})}\n\n"
                 goal = args[0]
                 max_cycles = 5

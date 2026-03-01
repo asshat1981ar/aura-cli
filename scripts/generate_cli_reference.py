@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import datetime
 from collections import OrderedDict
 from pathlib import Path
 
@@ -22,6 +23,7 @@ def _group_commands_by_top_level(commands: list[dict]) -> "OrderedDict[str, list
         path = command.get("path") or []
         if not path:
             continue
+        # Use first token as group name
         top_level = str(path[0])
         grouped.setdefault(top_level, []).append(command)
     return grouped
@@ -30,14 +32,17 @@ def _group_commands_by_top_level(commands: list[dict]) -> "OrderedDict[str, list
 def _render_toc(grouped: "OrderedDict[str, list[dict]]") -> list[str]:
     lines = ["## Table of Contents", ""]
     for top_level, commands in grouped.items():
-        lines.append(f"- [`{top_level}`](#{top_level})")
+        # Markdown auto-anchors usually lowercase and replace spaces with hyphens
+        group_anchor = top_level.lower().replace(" ", "-")
+        lines.append(f"- [`{top_level}`](#{group_anchor})")
         for command in commands:
             path = command.get("path") or []
             if len(path) < 2:
                 continue
             label = " ".join(path)
-            anchor = "aura-" + "-".join(path)
-            lines.append(f"- [`aura {label}`](#{anchor})")
+            # Match GitHub style anchors for subcommands: ### `aura goal add` -> #aura-goal-add
+            anchor = "aura-" + "-".join(p.lower().replace(" ", "-") for p in path)
+            lines.append(f"  - [`aura {label}`](#{anchor})")
     lines.append("")
     return lines
 

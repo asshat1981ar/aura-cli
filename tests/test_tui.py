@@ -361,6 +361,92 @@ class TestDoctorV2(unittest.TestCase):
             if brain_check:
                 self.assertIn(brain_check["status"], ("WARN", "FAIL"))
 
+    def test_run_uses_configured_storage_paths(self):
+        import tempfile
+        from aura_cli.doctor import run_doctor_v2
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "memory").mkdir()
+            (root / "aura.config.json").write_text(
+                json.dumps(
+                    {
+                        "brain_db_path": "memory/custom_brain.db",
+                        "goal_queue_path": "memory/custom_queue.json",
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "memory" / "custom_queue.json").write_text("[]", encoding="utf-8")
+
+            results = run_doctor_v2(project_root=root, rich_output=False)
+
+            brain_check = next(r for r in results if r["check"] == "Brain DB")
+            queue_check = next(r for r in results if r["check"] == "Goal queue")
+            self.assertIn("memory/custom_brain.db", brain_check["detail"])
+            self.assertIn("memory/custom_queue.json", queue_check["detail"])
+
+    def test_run_uses_project_config_api_key_for_provider_status(self):
+        import tempfile
+        from aura_cli.doctor import run_doctor_v2
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "aura.config.json").write_text(
+                json.dumps({"api_key": "config-api-key"}),
+                encoding="utf-8",
+            )
+
+            with patch.dict(os.environ, {}, clear=True):
+                results = run_doctor_v2(project_root=root, rich_output=False)
+
+            api_check = next(r for r in results if r["check"] == "API key")
+            self.assertEqual(api_check["status"], "PASS")
+            self.assertIn("OPENROUTER_API_KEY/AURA_API_KEY/api_key", api_check["detail"])
+
+    def test_run_reports_capability_bootstrap_state(self):
+        import tempfile
+        from aura_cli.doctor import run_doctor_v2
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "memory").mkdir()
+            (root / "aura.config.json").write_text(
+                json.dumps(
+                    {
+                        "goal_queue_path": "memory/custom_queue.json",
+                        "auto_provision_mcp": False,
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (root / "memory" / "custom_queue.json").write_text(
+                json.dumps(
+                    [
+                        "Add AURA skill 'dockerfile_analyzer' so AURA can better handle goal: Harden Docker workflows"
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            (root / "memory" / "capability_status.json").write_text(
+                json.dumps(
+                    {
+                        "last_goal": "Harden Docker workflows",
+                        "matched_capabilities": [{"capability_id": "docker_analysis"}],
+                        "provisioning_results": [{"action": "ensure_mcp_servers", "status": "planned"}],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            results = run_doctor_v2(project_root=root, rich_output=False)
+
+            capability_check = next(r for r in results if r["check"] == "Capability bootstrap")
+            self.assertEqual(capability_check["status"], "PASS")
+            self.assertIn("matched: docker_analysis", capability_check["detail"])
+            self.assertIn("pending skill goals: 1", capability_check["detail"])
+            self.assertIn("bootstrap pending: ensure_mcp_servers", capability_check["detail"])
+
 
 if __name__ == "__main__":
     unittest.main()

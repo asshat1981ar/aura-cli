@@ -53,6 +53,15 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         examples=("python3 main.py config",),
     ),
     CommandSpec(
+        path=("contract-report",),
+        summary="Print CLI contract report",
+        description="Print aggregated parser/help/schema/dispatch contract checks as JSON.",
+        examples=(
+            "python3 main.py contract-report --check",
+            "python3 main.py contract-report --compact",
+        ),
+    ),
+    CommandSpec(
         path=("diag",),
         summary="MCP diagnostics snapshot",
         description="Fetch MCP health, metrics, limits, and recent logs via HTTP.",
@@ -187,6 +196,7 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("doctor", False, ("doctor",)),
     CLIActionSpec("bootstrap", False, ("bootstrap",), legacy_primary_flags=("bootstrap",)),
     CLIActionSpec("show_config", False, ("config",)),
+    CLIActionSpec("contract_report", False, ("contract-report",)),
     CLIActionSpec("mcp_tools", False, ("mcp", "tools"), legacy_primary_flags=("mcp_tools",)),
     CLIActionSpec("mcp_call", False, ("mcp", "call"), legacy_primary_flags=("mcp_call",)),
     CLIActionSpec("diag", False, ("diag",), legacy_primary_flags=("diag",)),
@@ -280,6 +290,7 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("doctor",): "doctor",
     ("bootstrap",): "bootstrap",
     ("config",): "show_config",
+    ("contract-report",): "contract_report",
     ("diag",): "diag",
     ("logs",): "logs",
     ("watch",): "watch",

@@ -5,6 +5,17 @@ Developer entry points:
 - CLI reference (generated): `docs/CLI_REFERENCE.md`
 - Integration map: `docs/INTEGRATION_MAP.md`
 - Primary entrypoint: `main.py`
+- Shell wrapper: `run_aura.sh`
+
+## Wrapper Usage
+
+`run_aura.sh` is a convenience wrapper around `python3 main.py`.
+
+- `./run_aura.sh` starts the interactive CLI.
+- `./run_aura.sh run --dry-run` forwards to `python3 main.py goal run --dry-run`.
+- `./run_aura.sh once "Summarize repo" --max-cycles 1` forwards to `python3 main.py goal once ...`.
+- `./run_aura.sh goal status` passes canonical commands through unchanged.
+- `./run_aura.sh --help` shows wrapper-specific usage and alias help.
 
 ## CLI Maintenance
 
@@ -31,3 +42,16 @@ Autonomous code-apply paths (queue loop, orchestrator, hybrid loop, mutator, and
 - Policy-block failures are logged as `old_code_mismatch_overwrite_blocked` with policy `explicit_overwrite_file_required`.
 
 This policy is centralized in `core/file_tools.py` via `allow_mismatch_overwrite_for_change(...)` and `apply_change_with_explicit_overwrite_policy(...)`.
+
+## Capability Bootstrap
+
+AURA can now expand its skill set for a cycle when a goal clearly implies extra tooling, and it can optionally provision known MCP server config using the existing setup script.
+
+- Skill augmentation is enabled by default via `auto_add_capabilities=true`.
+- Missing skills can be turned into queued self-development goals via `auto_queue_missing_capabilities=true`.
+- Those self-development goals are now pushed to the front of the remaining queue so AURA can close capability gaps right after the current goal completes.
+- MCP provisioning is opt-in via `AURA_AUTO_PROVISION_MCP=true`.
+- Starting MCP servers as part of that provisioning is separately opt-in via `AURA_AUTO_START_MCP_SERVERS=true`.
+- Provisioning decisions are recorded in cycle `phase_outputs` as `capability_plan` and `capability_provisioning`.
+- Queued self-development follow-ups are recorded as `capability_goal_queue`.
+- `goal status` and `doctor` now surface the last matched capability rules plus pending/running MCP bootstrap actions.

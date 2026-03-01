@@ -226,9 +226,12 @@ class SandboxAgent:
 
     def _run(self, script_path: str, cwd: str) -> SandboxResult:
         """Run a single Python script via subprocess."""
+        from core.sanitizer import sanitize_command
+        cmd = [self.python_exec, script_path]
         try:
+            sanitize_command(cmd)
             proc = subprocess.Popen(
-                [self.python_exec, script_path],
+                cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 cwd=cwd,
@@ -267,9 +270,12 @@ class SandboxAgent:
 
     def _run_pytest(self, tmpdir: str) -> SandboxResult:
         """Run pytest inside tmpdir."""
+        from core.sanitizer import sanitize_command
+        cmd = [self.python_exec, "-m", "pytest", tmpdir, "-v", "--tb=short", "--no-header"]
         try:
+            sanitize_command(cmd)
             proc = subprocess.Popen(
-                [self.python_exec, "-m", "pytest", tmpdir, "-v", "--tb=short", "--no-header"],
+                cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 cwd=tmpdir,
@@ -305,9 +311,12 @@ class SandboxAgent:
 
     def _run_unittest(self, tmpdir: str) -> SandboxResult:
         """Fallback: run unittest discover when pytest is unavailable."""
+        from core.sanitizer import sanitize_command
+        cmd = [self.python_exec, "-m", "unittest", "discover", "-s", tmpdir, "-v"]
         try:
+            sanitize_command(cmd)
             proc = subprocess.Popen(
-                [self.python_exec, "-m", "unittest", "discover", "-s", tmpdir, "-v"],
+                cmd,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                 cwd=tmpdir, text=True,
             )

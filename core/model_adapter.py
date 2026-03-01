@@ -11,6 +11,8 @@ import numpy as np
 
 from core.logging_utils import log_json # Import log_json
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
+from core.config_manager import config
+from core.runtime_auth import resolve_openai_api_key, resolve_openrouter_api_key
 
 # Removed dangerous global IPv4-only monkeypatch for socket.getaddrinfo.
 # This monkeypatch forced all network connections to use IPv4, potentially
@@ -32,21 +34,28 @@ class ModelAdapter:
         and defines an allowlist for executable tools.
         """
         # API keys will be fetched dynamically within their respective call methods
-        self.gemini_cli_path = os.getenv("GEMINI_CLI_PATH", "/data/data/com.termux/files/usr/bin/gemini") # Configurable path to gemini CLI
-        self.mcp_server_url = os.getenv("MCP_SERVER_URL", "http://localhost:8000") # Configurable MCP server URL
+        self.gemini_cli_path = config.get("gemini_cli_path") # Configurable path to gemini CLI
+        self.mcp_server_url = config.get("mcp_server_url") # Configurable MCP server URL
         self.router = None
         self.cache_db = None
-        self.cache_ttl = 3600
+        self.cache_ttl = config.get("llm_timeout", 3600) # Use llm_timeout for cache as well if appropriate, or keep separate
+        self._embedding_disabled = False
+        self._embedding_disabled_reason = None
+        self._embedding_disabled_logged = False
         
         # Configuration
-        self._embedding_model = "text-embedding-3-small" # Default from PRD
+        semantic_memory = config.get("semantic_memory", {}) or {}
+        configured_embedding_model = semantic_memory.get("embedding_model") or "text-embedding-3-small"
+        if isinstance(configured_embedding_model, str) and configured_embedding_model.startswith("openai/"):
+            configured_embedding_model = configured_embedding_model.split("/", 1)[1]
+        self._embedding_model = configured_embedding_model # Default from config
         self._embedding_dims = 1536
 
         # Validate gemini CLI path
-        if not Path(self.gemini_cli_path).is_file():
+        if self.gemini_cli_path and not Path(self.gemini_cli_path).is_file():
             log_json("WARN", "gemini_cli_not_found", details={"path": self.gemini_cli_path})
             self.gemini_cli_path = None
-        elif not os.access(self.gemini_cli_path, os.X_OK):
+        elif self.gemini_cli_path and not os.access(self.gemini_cli_path, os.X_OK):
             log_json("WARN", "gemini_cli_not_executable", details={"path": self.gemini_cli_path})
             self.gemini_cli_path = None
 
@@ -248,9 +257,9 @@ class ModelAdapter:
 
     # [LLM Call methods unchanged]
     def call_openrouter(self, prompt: str) -> str:
-        openrouter_key = os.getenv("OPENROUTER_API_KEY")
+        openrouter_key = resolve_openrouter_api_key()
         if not openrouter_key:
-            raise ValueError("OPENROUTER_API_KEY not set for OpenRouter call.")
+            raise ValueError("OpenRouter-compatible API key not set for OpenRouter call.")
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {openrouter_key}",
@@ -282,7 +291,7 @@ class ModelAdapter:
             raise RuntimeError(f"Unexpected error calling Gemini CLI: {e}") from e
 
     def call_openai(self, prompt: str) -> str:
-        openai_api_key = os.getenv("OPENAI_API_KEY")
+        openai_api_key = resolve_openai_api_key()
         if not openai_api_key:
             raise ValueError("OPENAI_API_KEY not set for OpenAI call.")
         url = "https://api.openai.com/v1/chat/completions"
@@ -299,7 +308,7 @@ class ModelAdapter:
         return data["choices"][0]["message"]["content"]
 
     def call_local(self, prompt: str) -> str:
-        local_model_command = os.getenv("AURA_LOCAL_MODEL_COMMAND")
+        local_model_command = config.get("local_model_command")
         if local_model_command:
             try:
                 command_parts = local_model_command.split()
@@ -319,11 +328,12 @@ class ModelAdapter:
             except Exception as e:
                 return f"Error: An unexpected error occurred while calling local model: {e}"
         else:
-            return "Local model not configured. Set the AURA_LOCAL_MODEL_COMMAND environment variable " \
-                   "to specify a command for local inference (e.g., 'ollama run llama2')."
+            return "Local model not configured. Set 'local_model_command' in aura.config.json or AURA_LOCAL_MODEL_COMMAND env var."
 
-    # Default timeout (seconds) for a single LLM call; overridable via env var
-    LLM_TIMEOUT = int(os.getenv("AURA_LLM_TIMEOUT", "60"))
+    # Default timeout (seconds) for a single LLM call
+    @property
+    def LLM_TIMEOUT(self) -> int:
+        return config.get("llm_timeout", 60)
 
     def _call_with_timeout(self, fn, *args, timeout: int | None = None) -> str:
         """Run *fn(*args)* in a thread and raise TimeoutError if it exceeds *timeout* seconds."""
@@ -402,10 +412,15 @@ class ModelAdapter:
         Generates vector embeddings for a list of texts.
         Falls back to zero vectors when OPENAI_API_KEY is not set.
         """
-        openai_api_key = os.getenv("OPENAI_API_KEY")
-        if not openai_api_key:
-            log_json("WARN", "search_embedding_failed",
-                     details={"error": "OPENAI_API_KEY not set for OpenAI embedding call."})
+        if not texts:
+            return []
+
+        openai_api_key = resolve_openai_api_key()
+        if not openai_api_key or self._embedding_disabled:
+            reason = self._embedding_disabled_reason or "OPENAI_API_KEY not set for OpenAI embedding call."
+            if not self._embedding_disabled_logged:
+                log_json("WARN", "search_embedding_failed", details={"error": reason})
+                self._embedding_disabled_logged = True
             # Return zero vectors — VectorStore search will rank all equally (no semantic search)
             return [np.zeros(self._embedding_dims, dtype=np.float32) for _ in texts]
 
@@ -425,8 +440,19 @@ class ModelAdapter:
             "model": self._embedding_model
         }
 
-        response = self._make_request_with_retries("POST", url, headers, payload)
-        data = response.json()
+        try:
+            response = self._make_request_with_retries("POST", url, headers, payload)
+            data = response.json()
+        except Exception as exc:
+            self._embedding_disabled = True
+            self._embedding_disabled_reason = f"embedding provider disabled after failure: {exc}"
+            log_json(
+                "WARN",
+                "search_embedding_provider_disabled",
+                details={"error": str(exc), "fallback": "zero_vectors"},
+            )
+            self._embedding_disabled_logged = True
+            return [np.zeros(self._embedding_dims, dtype=np.float32) for _ in texts]
         
         # Sort by index to ensure order matches input
         sorted_data = sorted(data["data"], key=lambda x: x["index"])

@@ -1,0 +1,8 @@
+aura contract-report
+
+Print aggregated parser/help/schema/dispatch contract checks as JSON.
+
+Examples:
+  python3 main.py contract-report --check
+  python3 main.py contract-report --compact
+

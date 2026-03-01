@@ -1,7 +1,7 @@
 import os
 import json
 from pathlib import Path
-from task_manager import TaskManager, Task
+from core.task_manager import TaskManager, Task
 
 def test_task_hierarchy_persistence(tmp_path):
     persistence_file = tmp_path / "test_hierarchy.json"

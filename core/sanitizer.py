@@ -3,15 +3,21 @@ import re
 from pathlib import Path
 from typing import Any, List, Union
 from core.exceptions import AuraError
+from core.config_manager import config
 
 class SecurityError(AuraError):
     """Raised when a security boundary is violated."""
     pass
 
 # Hardcoded safe commands for AURA
-ALLOWED_COMMANDS = {
+BASE_ALLOWED_COMMANDS = {
     "python", "python3", "pytest", "git", "ls", "cat", "rm", "mkdir", "mv", "grep", "sed", "npx"
 }
+
+def get_allowed_commands() -> set:
+    """Returns the effective set of allowed commands from config + base."""
+    extra = config.get("security", {}).get("allowed_commands", [])
+    return BASE_ALLOWED_COMMANDS.union(set(extra))
 
 # Regex for masking secrets (best-effort)
 SECRET_PATTERNS = [
@@ -44,8 +50,9 @@ def sanitize_command(cmd: List[str]):
     if not cmd:
         return
     
+    allowed = get_allowed_commands()
     base_cmd = os.path.basename(cmd[0])
-    if base_cmd not in ALLOWED_COMMANDS:
+    if base_cmd not in allowed:
         raise SecurityError(f"Access denied: Command '{base_cmd}' is not in the allowlist.")
     
     # Flag dangerous flags (shallow check)

@@ -55,8 +55,8 @@ class MomentoBrain(Brain):
             one is created (it will be a no-op adapter if no API key is set).
     """
 
-    def __init__(self, momento: Optional[MomentoAdapter] = None):
-        super().__init__()
+    def __init__(self, momento: Optional[MomentoAdapter] = None, db_path: Optional[str] = None):
+        super().__init__(db_path=db_path)
         self._m: MomentoAdapter = momento or MomentoAdapter()
 
     # ── Memory recall/store ───────────────────────────────────────────────────

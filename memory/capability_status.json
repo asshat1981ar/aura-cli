@@ -1,0 +1,13 @@
+{
+  "updated_at": "2026-03-01T05:29:57.526468+00:00",
+  "last_goal": "diagnostic smoke goal",
+  "matched_capabilities": [],
+  "recommended_skills": [],
+  "missing_skills": [],
+  "provisioning_actions": [],
+  "queued_goals": [],
+  "skipped_goals": [],
+  "queue_strategy": null,
+  "provisioning_results": [],
+  "pending_self_development_goals": []
+}

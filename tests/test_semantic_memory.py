@@ -135,4 +135,4 @@ class TestContextManager:
         prompt = cm.format_as_prompt(bundle)
         
         assert "core/utils.py:10" in prompt
-        assert "Snippet 1" in prompt
+        assert "Confidence: 1.00" in prompt

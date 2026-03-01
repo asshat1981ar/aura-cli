@@ -32,7 +32,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Literal, Optional
 
+from core.config_manager import ConfigManager, DEFAULT_CONFIG
 from core.logging_utils import log_json
+from core.runtime_paths import resolve_project_path
 
 _DB_PATH = Path(__file__).resolve().parent.parent / "memory" / "workflow_engine.db"
 _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -842,10 +844,20 @@ class WorkflowEngine:
                 from agents.registry import default_agents
                 from memory.brain import Brain
                 from core.model_adapter import ModelAdapter
-                brain = Brain()
+                project_config = ConfigManager(config_file=project_root / "aura.config.json")
+                brain_db_path = resolve_project_path(
+                    project_root,
+                    project_config.get("brain_db_path", DEFAULT_CONFIG["brain_db_path"]),
+                    DEFAULT_CONFIG["brain_db_path"],
+                )
+                memory_store_root = resolve_project_path(
+                    project_root,
+                    project_config.get("memory_store_path", DEFAULT_CONFIG["memory_store_path"]),
+                    DEFAULT_CONFIG["memory_store_path"],
+                )
+                brain = Brain(db_path=str(brain_db_path))
                 model = ModelAdapter()
                 agents = default_agents(brain, model)
-                memory_store_root = project_root / "memory" / "store"
                 self._orchestrator = LoopOrchestrator(
                     agents=agents,
                     memory_store=MemoryStore(memory_store_root),

@@ -8,7 +8,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Any, Dict
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -152,6 +152,39 @@ def test_verify_failure_routes_to_act_retry(tmp_path: Path):
     assert call_counts["verify"] >= 2
 
 
+def test_verify_failure_restores_only_loop_applied_files(tmp_path: Path):
+    """Verify-fail recovery should not stash or wipe unrelated dirty files."""
+    dirty_file = tmp_path / "notes.txt"
+    dirty_file.write_text("user dirty worktree note\n", encoding="utf-8")
+
+    target_file = tmp_path / "run_aura.sh"
+    target_file.write_text("#!/usr/bin/env bash\necho old\n", encoding="utf-8")
+    target_file.chmod(0o755)
+
+    agents = _base_agents(
+        act=_FakeAgent({
+            "changes": [{
+                "file_path": "run_aura.sh",
+                "old_code": "#!/usr/bin/env bash\necho old\n",
+                "new_code": "#!/usr/bin/env bash\necho new\n",
+                "overwrite_file": False,
+            }],
+        }),
+        verify=_FakeAgent({
+            "status": "fail",
+            "failures": ["AssertionError: wrapper output mismatch"],
+            "logs": "",
+        }),
+    )
+    orchestrator = _make_orchestrator(agents, tmp_path)
+    result = orchestrator.run_loop("fix wrapper", max_cycles=1, dry_run=False)
+
+    assert result["history"], "expected at least one cycle"
+    assert target_file.read_text(encoding="utf-8") == "#!/usr/bin/env bash\necho old\n"
+    assert target_file.stat().st_mode & 0o777 == 0o755
+    assert dirty_file.read_text(encoding="utf-8") == "user dirty worktree note\n"
+
+
 def test_dry_run_skips_file_writes(tmp_path: Path):
     """dry_run=True must not write any files to project_root."""
     target_file = tmp_path / "output.py"
@@ -204,3 +237,109 @@ def test_human_gate_blocks_and_denies_skips_apply(tmp_path: Path, monkeypatch):
     gate_info = phases.get("human_gate", {})
     assert gate_info.get("blocked") is True
     assert gate_info.get("approved") is False
+
+
+def test_goal_capability_plan_augments_skill_dispatch(tmp_path: Path):
+    orchestrator = _make_orchestrator(_base_agents(), tmp_path)
+    orchestrator.skills = {
+        "symbol_indexer": MagicMock(),
+        "architecture_validator": MagicMock(),
+        "dockerfile_analyzer": MagicMock(),
+        "observability_checker": MagicMock(),
+    }
+
+    with patch("core.orchestrator.dispatch_skills", return_value={}) as mock_dispatch:
+        result = orchestrator.run_cycle("Improve Docker logging and observability coverage", dry_run=True)
+
+    phases = result["phase_outputs"]
+    capability_plan = phases["capability_plan"]
+    assert "dockerfile_analyzer" in capability_plan["recommended_skills"]
+    assert "observability_checker" in capability_plan["recommended_skills"]
+    assert "dockerfile_analyzer" in phases["pipeline_config"]["skills"]
+    assert "observability_checker" in phases["pipeline_config"]["skills"]
+    active_skills = mock_dispatch.call_args.args[1]
+    assert "dockerfile_analyzer" in active_skills
+    assert "observability_checker" in active_skills
+
+
+def test_goal_capability_plan_can_trigger_mcp_provisioning(tmp_path: Path):
+    orchestrator = _make_orchestrator(
+        _base_agents(),
+        tmp_path,
+        auto_provision_mcp=True,
+    )
+    orchestrator.skills = {
+        "symbol_indexer": MagicMock(),
+        "git_history_analyzer": MagicMock(),
+        "changelog_generator": MagicMock(),
+    }
+
+    with patch(
+        "core.orchestrator.provision_capability_actions",
+        return_value={"attempted": True, "results": [{"action": "ensure_mcp_servers", "status": "applied"}]},
+    ) as mock_provision, patch("core.orchestrator.dispatch_skills", return_value={}):
+        result = orchestrator.run_cycle("Review GitHub pull requests and release notes", dry_run=False)
+
+    phases = result["phase_outputs"]
+    assert phases["capability_provisioning"]["attempted"] is True
+    mock_provision.assert_called_once()
+
+
+def test_missing_capability_skills_are_queued_as_self_development_goals(tmp_path: Path):
+    goal_queue = MagicMock()
+    goal_queue.queue = []
+    orchestrator = _make_orchestrator(
+        _base_agents(),
+        tmp_path,
+        goal_queue=goal_queue,
+    )
+    orchestrator.skills = {"symbol_indexer": MagicMock()}
+
+    with patch("core.orchestrator.dispatch_skills", return_value={}):
+        result = orchestrator.run_cycle("Improve Docker observability coverage", dry_run=False)
+
+    phases = result["phase_outputs"]
+    queued = phases["capability_goal_queue"]["queued"]
+    assert len(queued) == 2
+    assert any("dockerfile_analyzer" in item for item in queued)
+    assert any("observability_checker" in item for item in queued)
+    assert phases["capability_goal_queue"]["queue_strategy"] == "prepend"
+    goal_queue.prepend_batch.assert_called_once_with(queued)
+
+
+def test_capability_status_is_recorded_for_status_and_doctor_surfaces(tmp_path: Path):
+    goal_queue = MagicMock()
+    goal_queue.queue = []
+    orchestrator = _make_orchestrator(
+        _base_agents(),
+        tmp_path,
+        goal_queue=goal_queue,
+    )
+    orchestrator.skills = {"symbol_indexer": MagicMock()}
+
+    with patch("core.orchestrator.dispatch_skills", return_value={}):
+        orchestrator.run_cycle("Improve Docker observability coverage", dry_run=False)
+
+    assert orchestrator.last_capability_status["last_goal"] == "Improve Docker observability coverage"
+    matched = orchestrator.last_capability_status["matched_capabilities"]
+    assert any(item["capability_id"] == "docker_analysis" for item in matched)
+    assert (tmp_path / "memory" / "capability_status.json").exists()
+
+
+def test_missing_capability_skills_are_not_queued_in_dry_run(tmp_path: Path):
+    goal_queue = MagicMock()
+    goal_queue.queue = []
+    orchestrator = _make_orchestrator(
+        _base_agents(),
+        tmp_path,
+        goal_queue=goal_queue,
+    )
+    orchestrator.skills = {"symbol_indexer": MagicMock()}
+
+    with patch("core.orchestrator.dispatch_skills", return_value={}):
+        result = orchestrator.run_cycle("Improve Docker observability coverage", dry_run=True)
+
+    phases = result["phase_outputs"]
+    assert phases["capability_goal_queue"]["attempted"] is False
+    assert phases["capability_goal_queue"]["queued"] == []
+    goal_queue.prepend_batch.assert_not_called()

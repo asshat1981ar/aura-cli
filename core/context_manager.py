@@ -9,15 +9,18 @@ prioritised.
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from dataclasses import asdict
-
+from core.config_manager import config
 from core.logging_utils import log_json
 from core.memory_types import RetrievalQuery, ContextBundle, SearchHit
 
 class ContextManager:
-    """Manages the assembly and prioritization of agent context."""
+    """
+    ASCM v2: Manages the assembly and prioritization of agent context.
+    Enforces deterministic token budgets and rich provenance tags.
+    """
 
     def __init__(
         self,
@@ -29,8 +32,12 @@ class ContextManager:
         self.vs = vector_store
         self.cg = context_graph
         self.root = Path(project_root)
-        self.max_tokens = max_tokens
-        # Budget allocation percentages (total 1.0)
+        
+        # Load from unified config if available
+        sem_mem = config.get("semantic_memory", {}) or {}
+        self.max_tokens = sem_mem.get("budget_tokens", max_tokens)
+        
+        # Default budget allocation percentages
         self.budgets = {
             "goal": 0.1,
             "relevant_snippets": 0.5,
@@ -38,10 +45,14 @@ class ContextManager:
             "memory": 0.1,
             "files": 0.1
         }
+        # Override with config if present
+        if "budgets" in sem_mem:
+            self.budgets.update(sem_mem["budgets"])
 
     def _estimate_tokens(self, text: str) -> int:
         """Rough token estimation (4 chars / token)."""
-        return len(text) // 4
+        if not text: return 0
+        return max(1, len(text) // 4)
 
     def get_context_bundle(
         self,
@@ -53,29 +64,24 @@ class ContextManager:
         """Assemble a prioritized context bundle for the given goal."""
         log_json("INFO", "ascm_assembling_context", details={"goal": goal[:80], "type": goal_type})
 
-        # Adaptive Strategy: Adjust budgets based on past context failures
-        self._adjust_budgets(goal_type)
+        # 1. Retrieve Semantic Snippets (Greedy Candidates)
+        snippet_budget = int(self.max_tokens * self.budgets["relevant_snippets"])
+        snippets = self._get_semantic_snippets(goal, snippet_budget)
 
-        recent_memory = recent_memory or []
-        file_list = file_list or []
-
-        # 1. Retrieve Semantic Snippets
-        snippets = self._get_semantic_snippets(goal, self.max_tokens * self.budgets["relevant_snippets"])
-
-        # 2. Retrieve Insights
+        # 2. Retrieve Graph Insights
         insights = self._get_graph_insights(goal, goal_type)
 
-        # 3. Assemble Bundle with Budgeting
+        # 3. Assemble Bundle with Deterministic Budgeting
         used_tokens = 0
         budget_report = {}
         
-        # Goal (mandatory)
-        used_tokens += self._estimate_tokens(goal)
-        budget_report["goal"] = self._estimate_tokens(goal)
+        # A. Goal (Mandatory, First)
+        goal_cost = self._estimate_tokens(goal)
+        used_tokens += goal_cost
+        budget_report["goal"] = goal_cost
 
-        # Snippets
+        # B. Snippets (Primary Context)
         final_snippets = []
-        snippet_budget = int(self.max_tokens * self.budgets["relevant_snippets"])
         snippet_tokens = 0
         for snip in snippets:
             cost = self._estimate_tokens(snip["content"])
@@ -85,7 +91,7 @@ class ContextManager:
         used_tokens += snippet_tokens
         budget_report["snippets"] = snippet_tokens
 
-        # Insights
+        # C. Insights (Refined Context)
         final_insights = []
         insight_budget = int(self.max_tokens * self.budgets["related_insights"])
         insight_tokens = 0
@@ -97,12 +103,11 @@ class ContextManager:
         used_tokens += insight_tokens
         budget_report["insights"] = insight_tokens
 
-        # Memory
+        # D. Session Memory (Temporal Context)
         final_memory = []
         memory_budget = int(self.max_tokens * self.budgets["memory"])
         memory_tokens = 0
-        # Prioritize recent memory (reverse order loop, keep order)
-        for mem in reversed(recent_memory):
+        for mem in reversed(recent_memory or []):
             cost = self._estimate_tokens(mem)
             if memory_tokens + cost <= memory_budget:
                 final_memory.insert(0, mem)
@@ -112,12 +117,12 @@ class ContextManager:
         used_tokens += memory_tokens
         budget_report["memory"] = memory_tokens
 
-        # Files
+        # E. Files (Structural Context)
         final_files = []
         files_budget = int(self.max_tokens * self.budgets["files"])
         files_tokens = 0
-        for f in file_list:
-            cost = self._estimate_tokens(f) + 1 # +1 for newline/separator
+        for f in (file_list or []):
+            cost = self._estimate_tokens(f) + 1
             if files_tokens + cost <= files_budget:
                 final_files.append(f)
                 files_tokens += cost
@@ -142,34 +147,21 @@ class ContextManager:
 
         return asdict(bundle)
 
-    def _adjust_budgets(self, goal_type: str):
-        """Boost context budget if we detect 'context_gap' weaknesses."""
-        if not self.cg:
-            return
-            
-        weaknesses = self.cg.weaknesses_for_goal_type(goal_type, limit=10)
-        context_gaps = [w for w in weaknesses if "context_gap" in w]
-        
-        if context_gaps:
-            log_json("INFO", "ascm_adaptive_boost", details={"reason": "context_gaps_detected", "count": len(context_gaps)})
-            # Boost snippets and insights at the expense of raw file lists
-            self.budgets["relevant_snippets"] = 0.6  # +10%
-            self.budgets["related_insights"] = 0.25  # +5%
-            self.budgets["files"] = 0.05             # -5%
-
-    def _get_semantic_snippets(self, goal: str, token_budget: float) -> List[Dict[str, Any]]:
+    def _get_semantic_snippets(self, goal: str, token_budget: int) -> List[Dict[str, Any]]:
         """Retrieve code snippets semantically related to the goal."""
         if not self.vs:
             return []
         
-        # Calculate k based on budget approximation (assuming 200 tokens per snippet avg)
-        est_k = max(3, int(token_budget / 200))
+        # Over-fetch candidates then prune by score/budget
+        sem_mem = config.get("semantic_memory", {}) or {}
+        top_k = sem_mem.get("top_k", 15)
+        min_score = sem_mem.get("min_score", 0.65)
         
         query = RetrievalQuery(
             query_text=goal,
-            k=est_k,
-            min_score=0.6,
-            budget_tokens=int(token_budget)
+            k=top_k,
+            min_score=min_score,
+            budget_tokens=token_budget
         )
         
         hits = self.vs.search(query)
@@ -191,49 +183,50 @@ class ContextManager:
             return insights
 
         # 1. Best skills for this goal type
-        skills = self.cg.best_skills_for_goal_type(goal_type, limit=2)
-        if skills:
-            insights.append(f"High-value skills for this task: {', '.join(skills)}")
+        if hasattr(self.cg, "best_skills_for_goal_type"):
+            skills = self.cg.best_skills_for_goal_type(goal_type, limit=2)
+            if skills:
+                insights.append(f"Recommended skills: {', '.join(skills)}")
 
         # 2. Known weaknesses for this goal type
-        weaknesses = self.cg.weaknesses_for_goal_type(goal_type, limit=2)
-        if weaknesses:
-            insights.append(f"Potential pitfalls to avoid: {', '.join(weaknesses)}")
+        if hasattr(self.cg, "weaknesses_for_goal_type"):
+            weaknesses = self.cg.weaknesses_for_goal_type(goal_type, limit=2)
+            if weaknesses:
+                insights.append(f"Avoid these pitfalls: {', '.join(weaknesses)}")
 
         return insights
 
     def format_as_prompt(self, bundle: Dict[str, Any]) -> str:
-        """Helper to convert a bundle into a string suitable for an LLM prompt."""
+        """
+        R2: Provenance-tagged prompt formatting.
+        Converts context bundle into a structured LLM prompt.
+        """
         lines = [f"GOAL: {bundle['goal']}", f"TYPE: {bundle['goal_type']}", ""]
         
-        if bundle["snippets"]:
-            lines.append("### RELEVANT CODE SNIPPETS ###")
-            for i, snip in enumerate(bundle["snippets"], 1):
-                header = f"Snippet {i}"
-                if snip.get("source"):
-                    header += f" [Source: {snip['source']}]"
-                if snip.get("score"):
-                    header += f" [Score: {snip['score']:.2f}]"
-                lines.append(header)
-                lines.append("```python")
+        if bundle.get("snippets"):
+            lines.append("### SEMANTIC CONTEXT (PROVENANCE-TAGGED) ###")
+            for snip in bundle["snippets"]:
+                ref = snip.get("source") or "unknown"
+                score = snip.get("score", 0.0)
+                lines.append(f"--- [Source: {ref} | Confidence: {score:.2f}] ---")
                 lines.append(snip["content"])
-                lines.append("```")
+                lines.append("-" * 40)
             lines.append("")
 
-        if bundle["related_insights"]:
-            lines.append("### CONTEXTUAL INSIGHTS ###")
+        if bundle.get("related_insights"):
+            lines.append("### GRAPH-DRIVEN INSIGHTS ###")
             for ins in bundle["related_insights"]:
-                lines.append(f"- {ins}")
+                lines.append(f"💡 {ins}")
             lines.append("")
 
-        if bundle["memory"]:
-            lines.append("### RECENT SESSION HISTORY ###")
+        if bundle.get("memory"):
+            lines.append("### RECENT SESSION MEMORY ###")
             for m in bundle["memory"]:
-                lines.append(f"- {m}")
+                lines.append(f"⏱️ {m}")
             lines.append("")
 
-        if bundle["files"]:
-            lines.append("### PROJECT STRUCTURE (TRUNCATED) ###")
+        if bundle.get("files"):
+            lines.append("### PROJECT STRUCTURE ###")
             lines.append(", ".join(bundle["files"]))
             
         return "\n".join(lines)

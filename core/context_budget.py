@@ -5,7 +5,7 @@ import json
 from typing import List, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from memory.vector_store_v2 import SearchHit
+    from core.memory_types import SearchHit
 
 
 class ContextBudgetManager:

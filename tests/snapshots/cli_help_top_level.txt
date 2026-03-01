@@ -5,6 +5,7 @@ Commands:
   doctor       Run system diagnostics
   bootstrap    Create default config
   config       Show effective config
+  contract-report Print CLI contract report
   diag         MCP diagnostics snapshot
   logs         Stream AURA logs
   watch        Launch TUI monitor

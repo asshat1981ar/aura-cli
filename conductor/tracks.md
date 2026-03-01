@@ -6,3 +6,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [x] Track: Stabilize Core and Finalize R4 Optimization
 *Link: [./conductor/tracks/stabilize_core_20260301/](./conductor/tracks/stabilize_core_20260301/)*
+
+---
+
+## [ ] Track: Autonomous Feature Backfill (Self-Prompt to Fill)
+*Link: [./conductor/tracks/backfill_20260301/](./conductor/tracks/backfill_20260301/)*

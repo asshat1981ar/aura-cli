@@ -56,7 +56,7 @@ class StructuralAnalyzerSkill(SkillBase):
 
         # 2. Graph Analysis
         cycles = self.cg.find_circular_dependencies()
-        bottlenecks = self.cg.find_bottleneck_files(limit=10)
+        bottlenecks = self.cg.find_bottleneck_files(limit=20)
 
         # 2. Complexity Analysis
         comp_results = self.complexity_scorer.run({"project_root": project_root})
@@ -76,12 +76,12 @@ class StructuralAnalyzerSkill(SkillBase):
             funcs = detailed_comp.get(fname, [])
             max_cc = max([f["complexity"] for f in funcs], default=0)
             
-            if max_cc > 10 and centrality > 0.05: # Heuristic thresholds
+            if max_cc > 8 and centrality > 0.03: # Heuristic thresholds
                 hotspots.append({
                     "file": fname,
                     "centrality": centrality,
                     "max_complexity": max_cc,
-                    "risk_level": "CRITICAL" if max_cc > 20 else "HIGH"
+                    "risk_level": "CRITICAL" if max_cc > 20 else ("HIGH" if max_cc > 12 else "MEDIUM")
                 })
 
         return {

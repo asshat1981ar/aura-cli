@@ -523,12 +523,30 @@ class TestSkillFailureAnalyzer:
 
 
 # ---------------------------------------------------------------------------
+# 29. structural_analyzer
+# ---------------------------------------------------------------------------
+
+class TestStructuralAnalyzer:
+    def test_name(self, skills):
+        assert skills["structural_analyzer"].name == "structural_analyzer"
+
+    def test_empty_input(self, skills):
+        _run_ok(skills["structural_analyzer"], {})
+
+    def test_with_project_root(self, skills, project_root):
+        r = _run_ok(skills["structural_analyzer"], {"project_root": project_root})
+        assert isinstance(r, dict)
+        assert "hotspots" in r
+        assert "circular_dependencies" in r
+
+
+# ---------------------------------------------------------------------------
 # Registry-level assertions
 # ---------------------------------------------------------------------------
 
-def test_registry_has_all_28_skills(skills):
-    assert len(skills) >= 28, (
-        f"Expected ≥28 skills in registry, got {len(skills)}: {sorted(skills)}"
+def test_registry_has_all_29_skills(skills):
+    assert len(skills) >= 29, (
+        f"Expected ≥29 skills in registry, got {len(skills)}: {sorted(skills)}"
     )
 
 

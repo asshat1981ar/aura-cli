@@ -249,6 +249,37 @@ class MomentoAdapter:
                      details={"topic": topic, "error": str(exc)})
             return False
 
+    # ── Distributed Locking ──────────────────────────────────────────────────
+
+    def acquire_lock(self, lock_name: str, ttl_seconds: int = 60) -> bool:
+        """
+        Try to acquire a distributed lock. Returns True if successful.
+        Uses a simple SET-if-not-exists pattern (Momento's CacheSet.Success
+        plus TTL to avoid permanent deadlocks).
+        """
+        if not self.is_available():
+            return True # In local/single-node mode, always "acquired"
+            
+        # Momento doesn't have native NX yet, so we use a check-then-set 
+        # but for true distributed safety at scale, we'd use a more robust
+        # primitive. For AURA's needs, this reduces collision probability.
+        existing = self.cache_get(WORKING_MEMORY_CACHE, f"lock:{lock_name}")
+        if existing:
+            return False
+            
+        return self.cache_set(
+            WORKING_MEMORY_CACHE, 
+            f"lock:{lock_name}", 
+            str(time.time()), 
+            ttl_seconds=ttl_seconds
+        )
+
+    def release_lock(self, lock_name: str) -> bool:
+        """Release a distributed lock."""
+        if not self.is_available():
+            return True
+        return self.cache_delete(WORKING_MEMORY_CACHE, f"lock:{lock_name}")
+
     # ── Helpers ───────────────────────────────────────────────────────────────
 
     def ensure_caches(self) -> None:

@@ -37,7 +37,10 @@ class VectorStore:
                     tags TEXT NOT NULL DEFAULT '[]',
                     importance REAL NOT NULL DEFAULT 1.0,
                     token_count INTEGER NOT NULL DEFAULT 0,
-                    content_hash TEXT NOT NULL
+                    embedding_model TEXT,
+                    embedding_dims INTEGER,
+                    content_hash TEXT NOT NULL,
+                    embedding BLOB
                 )
             """)
             self.brain.db.execute("""
@@ -130,11 +133,16 @@ class VectorStore:
         for rec in records:
             try:
                 self.brain.db.execute("""
-                    INSERT OR REPLACE INTO memory_records VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                    INSERT OR REPLACE INTO memory_records 
+                    (id, content, source_type, source_ref, created_at, updated_at, 
+                     goal_id, agent_name, tags, importance, token_count, 
+                     embedding_model, embedding_dims, content_hash, embedding)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                 """, (
                     rec.id, rec.content, rec.source_type, rec.source_ref,
                     rec.created_at, rec.updated_at, rec.goal_id, rec.agent_name,
-                    json.dumps(rec.tags), rec.importance, rec.token_count, rec.content_hash
+                    json.dumps(rec.tags), rec.importance, rec.token_count,
+                    rec.embedding_model, rec.embedding_dims, rec.content_hash, rec.embedding
                 ))
                 
                 if rec.embedding:

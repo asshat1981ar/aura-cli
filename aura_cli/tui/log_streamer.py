@@ -39,12 +39,15 @@ _LEVEL_ORDER = {"DEBUG": 0, "INFO": 1, "WARN": 2, "WARNING": 2, "ERROR": 3, "CRI
 
 
 def _parse_line(line: str) -> Optional[dict]:
-    """Parse a JSON log line. Returns None if not valid JSON."""
+    """Parse a JSON log line. Returns None if not valid JSON or if not a dict."""
     line = line.strip()
     if not line:
         return None
     try:
-        return json.loads(line)
+        data = json.loads(line)
+        if isinstance(data, dict):
+            return data
+        return {"level": "INFO", "event": str(data), "ts": ""}
     except json.JSONDecodeError:
         return {"level": "INFO", "event": line, "ts": ""}
 

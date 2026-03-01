@@ -458,6 +458,54 @@ class TestApplicatorAgent:
 
 
 # ===========================================================================
+# SynthesizerAgent
+# ===========================================================================
+
+class TestSynthesizerAgent:
+    def test_instantiation(self):
+        from agents.synthesizer import SynthesizerAgent
+        a = SynthesizerAgent()
+        assert a.name == "synthesize"
+
+    def test_run_minimal(self):
+        from agents.synthesizer import SynthesizerAgent
+        a = SynthesizerAgent()
+        out = a.run({"goal": "test goal"})
+        assert "tasks" in out
+        assert len(out["tasks"]) == 1
+        assert out["tasks"][0]["title"] == "test goal"
+
+    def test_run_with_plan_and_critique(self):
+        from agents.synthesizer import SynthesizerAgent
+        a = SynthesizerAgent()
+        data = {
+            "goal": "g",
+            "plan": {"steps": ["step1"]},
+            "critique": {"issues": ["issue1"]}
+        }
+        out = a.run(data)
+        intent = out["tasks"][0]["intent"]
+        assert "step1" in intent
+        assert "issue1" in intent
+
+    def test_run_uses_provided_files_and_tests(self):
+        from agents.synthesizer import SynthesizerAgent
+        a = SynthesizerAgent()
+        data = {"files": ["a.py"], "tests": ["pytest a.py"]}
+        out = a.run(data)
+        assert out["tasks"][0]["files"] == ["a.py"]
+        assert out["tasks"][0]["tests"] == ["pytest a.py"]
+
+    def test_run_empty_input(self):
+        from agents.synthesizer import SynthesizerAgent
+        a = SynthesizerAgent()
+        out = a.run({})
+        assert "tasks" in out
+        assert out["tasks"][0]["title"] == "Unnamed goal"
+        assert out["tasks"][0]["intent"] == "No plan provided."
+
+
+# ===========================================================================
 # Registry adapters
 # ===========================================================================
 

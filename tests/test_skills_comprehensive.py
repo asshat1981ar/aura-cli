@@ -359,6 +359,30 @@ class TestSkillFailureAnalyzer(_SkillTestMixin, unittest.TestCase):
 
 
 # ===========================================================================
+# 29. EvolutionSkill
+# ===========================================================================
+
+class TestEvolutionSkill(_SkillTestMixin, unittest.TestCase):
+    from agents.skills.evolution_skill import EvolutionSkill
+    skill_cls = EvolutionSkill
+    minimal_valid_input = {"project_root": _PROJECT_ROOT}
+
+
+# ===========================================================================
+# 30. SecurityHardener
+# ===========================================================================
+
+class TestSecurityHardener(_SkillTestMixin, unittest.TestCase):
+    from agents.skills.security_hardener import SecurityHardenerSkill
+    skill_cls = SecurityHardenerSkill
+    minimal_valid_input = {"project_root": _PROJECT_ROOT}
+
+class TestStructuralAnalyzer(_SkillTestMixin, unittest.TestCase):
+    from agents.skills.structural_analyzer import StructuralAnalyzerSkill
+    skill_cls = StructuralAnalyzerSkill
+    minimal_valid_input = {"project_root": _PROJECT_ROOT}
+
+# ===========================================================================
 # Registry integration test
 # ===========================================================================
 

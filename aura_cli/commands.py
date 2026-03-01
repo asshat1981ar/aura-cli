@@ -26,23 +26,8 @@ def _handle_help():
 
 def _handle_doctor(project_root: Path | None = None):
     log_json("INFO", "aura_doctor_requested")
-    from aura_cli.doctor import check_python_version, check_env_vars, check_sqlite_write_access, check_git_status, check_pytest_and_run_tests
-
-    repo_root = Path(project_root or Path.cwd())
-    capability_status, capability_detail = capability_doctor_check(repo_root)
-    results = [
-        f"Python Version: {check_python_version()[0]} - {check_python_version()[1]}",
-        f"Environment Variables: {check_env_vars()[0]} - {check_env_vars()[1]}",
-        f"SQLite Write Access: {check_sqlite_write_access(repo_root)[0]} - {check_sqlite_write_access(repo_root)[1]}",
-        f"Git Status: {check_git_status(repo_root)[0]} - {check_git_status(repo_root)[1]}",
-        f"Pytest Tests: {check_pytest_and_run_tests(repo_root, False)[0]} - {check_pytest_and_run_tests(repo_root, False)[1]}",
-        f"Capability Bootstrap: {capability_status} - {capability_detail}",
-    ]
-    
-    print("\n--- AURA Doctor Report ---")
-    for res in results:
-        print(f"- {res}")
-    print("--------------------------\n")
+    from aura_cli.doctor import run_doctor_v2
+    run_doctor_v2(project_root=project_root, rich_output=True)
 
 def _handle_clear():
     import os

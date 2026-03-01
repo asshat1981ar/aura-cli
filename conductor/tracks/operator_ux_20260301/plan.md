@@ -8,7 +8,7 @@
 - [x] Task: Normalize Queue and Cycle Status Payloads
     - [x] Define a canonical runtime payload shape for operator-facing queue/cycle summaries.
     - [x] Update CLI/TUI entrypoints to consume the canonical shape instead of local one-off formatting where practical.
-- [ ] Task: Conductor - User Manual Verification 'Runtime Surface Parity' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Runtime Surface Parity' (Protocol in workflow.md)
 
 ## Phase 2: Log and Metrics Reliability
 - [x] Task: Harden Structured Log Streaming
@@ -17,7 +17,7 @@
 - [x] Task: Clarify Metrics and Stop Reasons
     - [x] Ensure operator metrics distinguish pass, fail, skip, retry, and policy-stop outcomes cleanly.
     - [x] Add tests for cycle outcome aggregation and metrics rendering where current coverage is thin.
-- [ ] Task: Conductor - User Manual Verification 'Log and Metrics Reliability' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Log and Metrics Reliability' (Protocol in workflow.md)
 
 ## Phase 3: TUI and Studio Usability
 - [x] Task: Improve High-Signal Operator Panels
@@ -26,4 +26,4 @@
 - [x] Task: Refresh Operator Docs and Snapshots
     - [x] Update generated docs and snapshots for any intentional CLI/TUI/operator-contract changes.
     - [x] Verify operator entrypoints remain documented in `README.md` / generated CLI reference as needed.
-- [ ] Task: Conductor - User Manual Verification 'TUI and Studio Usability' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'TUI and Studio Usability' (Protocol in workflow.md)

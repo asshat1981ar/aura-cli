@@ -77,5 +77,18 @@ class TestLogStreamingRobustness(unittest.TestCase):
         # The earlier ones should be log events
         self.assertTrue(any(obj.get("event") == "config_loaded_from_file" for obj in json_objects[:-1]))
 
+    def test_log_streamer_resilience(self):
+        from aura_cli.tui.log_streamer import LogStreamer
+        streamer = LogStreamer(level_filter="DEBUG")
+        
+        # Should not crash on these
+        streamer.process_line("")
+        streamer.process_line("{")
+        streamer.process_line("null")
+        streamer.process_line("123")
+        streamer.process_line('{"level": "INFO", "event": "ok"}')
+        
+        assert True
+
 if __name__ == "__main__":
     unittest.main()

@@ -876,6 +876,22 @@ class LoopOrchestrator:
                 log_json("WARN", "autonomous_discovery_phase_failed", details={"error": str(exc)})
         self._notify_ui("on_phase_complete", "discover", (time.time() - t0_discover) * 1000)
 
+        # Phase 11: evolve()
+        self._notify_ui("on_phase_start", "evolve")
+        t0_evolve = time.time()
+        evolution_loop = next((l for l in self._improvement_loops if type(l).__name__ == "EvolutionLoop"), None)
+        if evolution_loop:
+            try:
+                # We trigger it manually here to ensure it runs as a phase
+                # it will still honor its internal TRIGGER_EVERY_N in on_cycle_complete
+                # but we call run() directly if we want it to run NOW as a phase.
+                # Actually, the PRD says it should run based on specific signals.
+                # For now, we'll let it use its internal trigger but wrap it in phase events.
+                evolution_loop.on_cycle_complete(entry)
+            except Exception as exc:
+                log_json("WARN", "evolution_phase_failed", details={"error": str(exc)})
+        self._notify_ui("on_phase_complete", "evolve", (time.time() - t0_evolve) * 1000)
+
         if self.propagation_engine is not None:
             try:
                 self.propagation_engine.on_cycle_complete(entry)

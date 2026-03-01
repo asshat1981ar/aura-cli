@@ -12,7 +12,7 @@ try:
 except ImportError:
     _RICH_AVAILABLE = False
 
-_PHASES = ["ingest", "skill_dispatch", "plan", "critique", "synthesize", "act", "sandbox", "apply", "verify", "reflect", "measure", "learn", "discover"]
+_PHASES = ["ingest", "skill_dispatch", "plan", "critique", "synthesize", "act", "sandbox", "apply", "verify", "reflect", "measure", "learn", "discover", "evolve"]
 _ICONS = {"✅": "✅", "⟳": "[yellow]⟳[/yellow]", "○": "[dim]○[/dim]", "❌": "[red]❌[/red]"}
 
 

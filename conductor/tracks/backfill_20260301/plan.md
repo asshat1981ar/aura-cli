@@ -16,12 +16,12 @@
 - [x] Task: Update Planner for Backfill Prioritization [41551dd]
     - [x] Write Tests: Create `tests/test_planner_backfill_priority.py` to verify that backfill tasks appear first in the plan.
     - [x] Implement: Update `agents/planner.py` to handle `test_backfill` goals with higher precedence in generated plans.
-- [ ] Task: Conductor - User Manual Verification 'Orchestrator Integration' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Orchestrator Integration' (Protocol in workflow.md)
 
 ## Phase 3: Configuration & Finalization
-- [ ] Task: Add Configuration Settings
-    - [ ] Write Tests: Verify that setting `auto_backfill_coverage` to false disables the mechanism.
-    - [ ] Implement: Add `auto_backfill_coverage` and `reliability_threshold` to `core/config_manager.py` and `aura.config.json`.
+- [x] Task: Add Configuration Settings [ba02470]
+    - [x] Write Tests: Verify that setting `auto_backfill_coverage` to false disables the mechanism.
+    - [x] Implement: Add `auto_backfill_coverage` and `reliability_threshold` to `core/config_manager.py` and `aura.config.json`.
 - [ ] Task: Final Integration Test
     - [ ] Write Tests: Create a full integration test `tests/integration/test_full_backfill_flow.py` running a goal on a 0% coverage module.
     - [ ] Implement: Ensure the end-to-end flow correctly generates and executes backfill tasks.

@@ -10,7 +10,7 @@
 - [x] Task: Conductor - User Manual Verification 'Foundation & Skill Enhancement' (Protocol in workflow.md)
 
 ## Phase 2: Orchestrator Integration
-- [x] Task: Implement Sub-Goal Generation Logic [ba02470]
+- [x] Task: Implement Sub-Goal Generation Logic [7ed8eae]
     - [x] Write Tests: Create `tests/test_backfill_goal_generation.py` to verify that sub-goals are enqueued when gaps are found.
     - [x] Implement: Update `core/orchestrator.py` to check coverage before planning and inject `test_backfill` goals.
 - [ ] Task: Update Planner for Backfill Prioritization

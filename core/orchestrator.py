@@ -815,21 +815,13 @@ class LoopOrchestrator:
 
         return verification, None
 
-    def run_cycle(self, goal: str, dry_run: bool = False) -> Dict:
-        """Execute a single complete plan-act-verify cycle for *goal*."""
-        cycle_id = f"cycle_{uuid.uuid4().hex[:12]}"
-        phase_outputs = {}
-        self._notify_ui("on_cycle_start", goal)
-
-        # ── 0. ADAPTIVE PIPELINE CONFIG ──────────────────────────────────────
-        goal_type = classify_goal(goal)
+    def _configure_pipeline(self, goal: str, goal_type: str, phase_outputs: Dict) -> Any:
+        """Section 0: ADAPTIVE PIPELINE CONFIG."""
         if self.adaptive_pipeline:
             pipeline_cfg = self.adaptive_pipeline.configure(
                 goal, goal_type,
                 consecutive_fails=self._consecutive_fails,
-                past_failures=list(
-                    phase_outputs.get("_failure_context", {}).get("failures", [])
-                ),
+                past_failures=list(phase_outputs.get("_failure_context", {}).get("failures", [])),
             )
         else:
             from core.adaptive_pipeline import AdaptivePipeline
@@ -841,146 +833,77 @@ class LoopOrchestrator:
             "skills": pipeline_cfg.skill_set,
         }
         self._notify_ui("on_pipeline_configured", phase_outputs["pipeline_config"])
+        return pipeline_cfg
 
-        capability_plan = {
-            "matched_capabilities": [],
-            "recommended_skills": [],
-            "missing_skills": [],
-            "mcp_tools": [],
-            "provisioning_actions": [],
-        }
+    def _handle_capabilities(self, goal: str, pipeline_cfg: Any, phase_outputs: Dict, dry_run: bool):
+        """Section 0.1: CAPABILITY MANAGEMENT."""
+        capability_plan = {"matched_capabilities": [], "recommended_skills": [], "missing_skills": [], "mcp_tools": [], "provisioning_actions": []}
         capability_goal_queue = {"attempted": False, "queued": [], "skipped": [], "queue_strategy": None}
         capability_provisioning = {"attempted": False, "results": []}
 
         if self.auto_add_capabilities:
-            capability_plan = analyze_capability_needs(
-                goal,
-                available_skills=self.skills.keys(),
-                active_skills=pipeline_cfg.skill_set,
-            )
+            capability_plan = analyze_capability_needs(goal, available_skills=self.skills.keys(), active_skills=pipeline_cfg.skill_set)
             if capability_plan["recommended_skills"]:
-                pipeline_cfg.skill_set = list(
-                    dict.fromkeys(list(pipeline_cfg.skill_set) + list(capability_plan["recommended_skills"]))
-                )
+                pipeline_cfg.skill_set = list(dict.fromkeys(list(pipeline_cfg.skill_set) + list(capability_plan["recommended_skills"])))
                 phase_outputs["pipeline_config"]["skills"] = pipeline_cfg.skill_set
             phase_outputs["capability_plan"] = capability_plan
-            capability_goal_queue = queue_missing_capability_goals(
-                goal_queue=self.goal_queue,
-                missing_skills=capability_plan["missing_skills"],
-                goal=goal,
-                enabled=self.auto_queue_missing_capabilities,
-                dry_run=dry_run,
-            )
+            capability_goal_queue = queue_missing_capability_goals(goal_queue=self.goal_queue, missing_skills=capability_plan["missing_skills"], goal=goal, enabled=self.auto_queue_missing_capabilities, dry_run=dry_run)
             if capability_goal_queue["queued"] or capability_goal_queue["skipped"]:
                 phase_outputs["capability_goal_queue"] = capability_goal_queue
             if capability_plan["provisioning_actions"]:
-                capability_provisioning = provision_capability_actions(
-                    project_root=self.project_root,
-                    provisioning_actions=capability_plan["provisioning_actions"],
-                    auto_provision=self.auto_provision_mcp,
-                    start_servers=self.auto_start_mcp_servers,
-                    dry_run=dry_run,
-                )
+                capability_provisioning = provision_capability_actions(project_root=self.project_root, provisioning_actions=capability_plan["provisioning_actions"], auto_provision=self.auto_provision_mcp, start_servers=self.auto_start_mcp_servers, dry_run=dry_run)
                 phase_outputs["capability_provisioning"] = capability_provisioning
 
         self.last_capability_plan = capability_plan
         self.last_capability_goal_queue = capability_goal_queue
         self.last_capability_provisioning = capability_provisioning
-        self.last_capability_status = record_capability_status(
-            project_root=self.project_root,
-            goal=goal,
-            capability_plan=capability_plan,
-            capability_goal_queue=capability_goal_queue,
-            capability_provisioning=capability_provisioning,
-            goal_queue=self.goal_queue,
-        )
+        self.last_capability_status = record_capability_status(project_root=self.project_root, goal=goal, capability_plan=capability_plan, capability_goal_queue=capability_goal_queue, capability_provisioning=capability_provisioning, goal_queue=self.goal_queue)
 
-        # ── 1. INGEST ────────────────────────────────────────────────────────
+    def _run_ingest_phase(self, goal: str, cycle_id: str, phase_outputs: Dict) -> Dict:
+        """Section 1: INGEST."""
         self._notify_ui("on_phase_start", "ingest")
-        t0_ingest = time.time()
-        
-        # Retrieve context from memory tiers
+        t0 = time.time()
         working_memory = self.memory_controller.retrieve(MemoryTier.WORKING)
         session_memory = self.memory_controller.retrieve(MemoryTier.SESSION)
-        
-        context = self._run_phase("ingest", {
-            "goal": goal,
-            "project_root": str(self.project_root),
-            "hints": self._retrieve_hints(goal),
-            "working_memory": working_memory,
-            "session_memory": session_memory,
-        })
-        self._notify_ui("on_phase_complete", "ingest", (time.time() - t0_ingest) * 1000)
-
+        context = self._run_phase("ingest", {"goal": goal, "project_root": str(self.project_root), "hints": self._retrieve_hints(goal), "working_memory": working_memory, "session_memory": session_memory})
+        self._notify_ui("on_phase_complete", "ingest", (time.time() - t0) * 1000)
         if "bundle" in context:
             self._notify_ui("on_context_assembled", context["bundle"])
-
+        
         errors = validate_phase_output("context", context)
         if errors:
-            log_json("ERROR", "phase_schema_invalid",
-                     details={"phase": "context", "errors": errors})
-            if self.strict_schema:
-                return {
-                    "cycle_id": cycle_id,
-                    "phase_outputs": {"context": context},
-                    "stop_reason": "INVALID_OUTPUT",
-                }
+            log_json("ERROR", "phase_schema_invalid", details={"phase": "context", "errors": errors})
         phase_outputs["context"] = context
+        return context
 
-        # ── 2. SKILL DISPATCH (adaptive skill set) ───────────────────────────
+    def _dispatch_skills(self, goal_type: str, pipeline_cfg: Any, phase_outputs: Dict) -> Dict:
+        """Section 2: SKILL DISPATCH."""
         self._notify_ui("on_phase_start", "skill_dispatch")
-        t0_skills = time.time()
+        t0 = time.time()
         skill_context: Dict = {}
         if self.skills and pipeline_cfg.skill_set:
-            active_skills = {
-                k: self.skills[k] for k in pipeline_cfg.skill_set if k in self.skills
-            }
+            active_skills = {k: self.skills[k] for k in pipeline_cfg.skill_set if k in self.skills}
             skill_context = dispatch_skills(goal_type, active_skills, str(self.project_root))
         phase_outputs["skill_context"] = skill_context
-        self._notify_ui("on_phase_complete", "skill_dispatch",
-                        (time.time() - t0_skills) * 1000)
+        self._notify_ui("on_phase_complete", "skill_dispatch", (time.monotonic() - t0) * 1000)
+        return skill_context
 
-        # ── 3-8. PLAN → CRITIQUE → SYNTHESIZE → ACT → VERIFY (with retries) ─
-        verification, early_return = self._run_plan_loop(
-            goal=goal,
-            context=context,
-            skill_context=skill_context,
-            pipeline_cfg=pipeline_cfg,
-            cycle_id=cycle_id,
-            phase_outputs=phase_outputs,
-            dry_run=dry_run,
-        )
-        if early_return is not None:
-            return early_return
-
-        # ── 7. REFLECT ───────────────────────────────────────────────────────
+    def _run_reflection_phase(self, verification: Dict, skill_context: Dict, goal_type: str, cycle_id: str, phase_outputs: Dict) -> Dict:
+        """Section 7: REFLECT."""
         self._notify_ui("on_phase_start", "reflect")
-        t0_reflect = time.time()
-        reflection = self._run_phase("reflect", {
-            "verification": verification,
-            "skill_context": skill_context,
-            "goal_type": goal_type,
-        })
-        self._notify_ui("on_phase_complete", "reflect", (time.time() - t0_reflect) * 1000)
+        t0 = time.time()
+        reflection = self._run_phase("reflect", {"verification": verification, "skill_context": skill_context, "goal_type": goal_type})
+        self._notify_ui("on_phase_complete", "reflect", (time.time() - t0) * 1000)
         errors = validate_phase_output("reflection", reflection)
         if errors:
             log_json("ERROR", "phase_schema_invalid", details={"phase": "reflection", "errors": errors})
-            if self.strict_schema:
-                return {"cycle_id": cycle_id, "phase_outputs": phase_outputs, "stop_reason": "INVALID_OUTPUT"}
         phase_outputs["reflection"] = reflection
-        
-        # R2: Unified Control Plane - Store reflection in SESSION memory for cross-cycle context
         if reflection.get("summary"):
-            self.memory_controller.store(
-                MemoryTier.SESSION, 
-                reflection["summary"], 
-                metadata={"cycle_id": cycle_id, "type": "reflection"}
-            )
+            self.memory_controller.store(MemoryTier.SESSION, reflection["summary"], metadata={"cycle_id": cycle_id, "type": "reflection"})
+        return reflection
 
-        # Remove internal scratchpad key before persisting
-        phase_outputs.pop("_failure_context", None)
-
-        # Track consecutive failures for AdaptivePipeline intensity tuning
+    def _record_cycle_outcome(self, cycle_id: str, goal_type: str, phase_outputs: Dict):
+        """Final persistence and loop notification."""
         verify_status = phase_outputs.get("verification", {}).get("status", "skip")
         passed = verify_status in ("pass", "skip")
         if passed:
@@ -990,46 +913,64 @@ class LoopOrchestrator:
 
         if self.adaptive_pipeline:
             try:
-                # Record strategy success/failure for learning
                 strategy = phase_outputs.get("pipeline_config", {}).get("intensity", "normal")
                 self.adaptive_pipeline.record_outcome(goal_type, strategy, passed)
             except Exception as exc:
                 log_json("WARN", "adaptive_pipeline_outcome_record_failed", details={"error": str(exc)})
 
-        entry = {
-            "cycle_id": cycle_id,
-            "goal_type": goal_type,
-            "phase_outputs": phase_outputs,
-            "stop_reason": None,
-        }
+        entry = {"cycle_id": cycle_id, "goal_type": goal_type, "phase_outputs": phase_outputs, "stop_reason": None}
         if self.memory_controller.persistent_store:
             self.memory_controller.persistent_store.append_log(entry)
 
-        # ── CASPA-W: Update context graph ───────────────────────────────────
         if self.context_graph is not None:
             try:
                 self.context_graph.update_from_cycle(entry)
             except Exception as exc:
-                log_json("WARN", "context_graph_update_failed",
-                         details={"error": str(exc)})
+                log_json("WARN", "context_graph_update_failed", details={"error": str(exc)})
 
-        # Fire all registered self-improvement loops (errors are swallowed)
         for loop in self._improvement_loops:
             try:
                 loop.on_cycle_complete(entry)
             except Exception as exc:
-                log_json("WARN", "improvement_loop_error",
-                         details={"loop": type(loop).__name__, "error": str(exc)})
+                log_json("WARN", "improvement_loop_error", details={"loop": type(loop).__name__, "error": str(exc)})
 
-        # ── CASPA-W: Propagation engine fires after all loops ────────────────
         if self.propagation_engine is not None:
             try:
                 self.propagation_engine.on_cycle_complete(entry)
             except Exception as exc:
-                log_json("WARN", "propagation_engine_error",
-                         details={"error": str(exc)})
-
+                log_json("WARN", "propagation_engine_error", details={"error": str(exc)})
         return entry
+
+    def run_cycle(self, goal: str, dry_run: bool = False) -> Dict:
+        """Execute a single complete plan-act-verify cycle for *goal*."""
+        cycle_id = f"cycle_{uuid.uuid4().hex[:12]}"
+        phase_outputs = {}
+        self._notify_ui("on_cycle_start", goal)
+
+        goal_type = classify_goal(goal)
+        pipeline_cfg = self._configure_pipeline(goal, goal_type, phase_outputs)
+        self._handle_capabilities(goal, pipeline_cfg, phase_outputs, dry_run)
+
+        context = self._run_ingest_phase(goal, cycle_id, phase_outputs)
+        if self.strict_schema and validate_phase_output("context", context):
+             return {"cycle_id": cycle_id, "phase_outputs": phase_outputs, "stop_reason": "INVALID_OUTPUT"}
+
+        skill_context = self._dispatch_skills(goal_type, pipeline_cfg, phase_outputs)
+
+        verification, early_return = self._run_plan_loop(
+            goal=goal, context=context, skill_context=skill_context,
+            pipeline_cfg=pipeline_cfg, cycle_id=cycle_id,
+            phase_outputs=phase_outputs, dry_run=dry_run,
+        )
+        if early_return is not None:
+            return early_return
+
+        reflection = self._run_reflection_phase(verification, skill_context, goal_type, cycle_id, phase_outputs)
+        if self.strict_schema and validate_phase_output("reflection", reflection):
+            return {"cycle_id": cycle_id, "phase_outputs": phase_outputs, "stop_reason": "INVALID_OUTPUT"}
+
+        phase_outputs.pop("_failure_context", None)
+        return self._record_cycle_outcome(cycle_id, goal_type, phase_outputs)
 
     def run_loop(self, goal: str, max_cycles: int = 5, dry_run: bool = False) -> Dict:
         """Run :meth:`run_cycle` repeatedly until a stopping condition is met.

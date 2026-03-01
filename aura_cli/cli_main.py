@@ -200,62 +200,140 @@ class _ConvergenceEscapeLoop:
             self._escape.check_and_escape(goal, entry)
 
 
+def _resolve_runtime_paths(project_root: Path) -> dict:
+    """Resolve all required storage paths against the project root."""
+    paths = {}
+    for key in [
+        "goal_queue_path", "goal_archive_path", "brain_db_path",
+        "memory_store_path", "memory_persistence_path"
+    ]:
+        paths[key] = resolve_project_path(
+            project_root,
+            config.get(key, DEFAULT_CONFIG[key]),
+            DEFAULT_CONFIG[key]
+        )
+    return paths
+
+
+def _init_memory_and_brain(brain_db_path: Path):
+    """Initialize the brain instance and cache adapter."""
+    try:
+        from memory.cache_adapter_factory import create_cache_adapter
+        from memory.momento_brain import MomentoBrain
+        _momento = create_cache_adapter()
+        brain_instance = MomentoBrain(_momento, db_path=str(brain_db_path))
+        log_json("INFO", "runtime_cache_adapter_active", details={"adapter": type(_momento).__name__})
+        return brain_instance, _momento
+    except Exception as _exc:
+        log_json("WARN", "cache_adapter_init_failed", details={"error": str(_exc)})
+        return Brain(db_path=str(brain_db_path)), None
+
+
+def _start_background_sync(project_root: Path, vector_store, context_graph):
+    """Start the project knowledge syncer in a background thread."""
+    from core.project_syncer import ProjectKnowledgeSyncer
+    import threading
+    import atexit
+
+    syncer = ProjectKnowledgeSyncer(
+        vector_store=vector_store,
+        context_graph=context_graph,
+        project_root=project_root
+    )
+    _stop_event = threading.Event()
+
+    def _bg_sync():
+        try:
+            syncer.sync_all()
+        except Exception as e:
+            log_json("WARN", "background_sync_failed", details={"error": str(e)})
+
+    _sync_thread = threading.Thread(target=_bg_sync, daemon=True, name="aura-bg-sync")
+    _sync_thread.start()
+
+    def _on_exit():
+        _stop_event.set()
+        _sync_thread.join(timeout=5)
+
+    atexit.register(_on_exit)
+    log_json("INFO", "background_sync_started")
+
+
+def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal_queue, momento, project_root):
+    """Attach improvement loops and CASPA-W workflow to the orchestrator."""
+    if runtime_mode in ("lean", "queue"):
+        return
+
+    # 1. Improvement Loops
+    try:
+        from core.reflection_loop import DeepReflectionLoop
+        from core.health_monitor import HealthMonitor
+        from core.weakness_remediator import WeaknessRemediator
+        from core.skill_weight_adapter import SkillWeightAdapter
+        from core.convergence_escape import ConvergenceEscapeLoop
+        from core.memory_compaction import MemoryCompactionLoop
+
+        _reflection = DeepReflectionLoop(memory_store, brain)
+        _health = HealthMonitor(orchestrator.skills, goal_queue, memory_store, project_root)
+        _remediator = _WeaknessRemediatorLoop(WeaknessRemediator(), brain, goal_queue)
+        _skill_adapt = SkillWeightAdapter(memory_root=str(memory_store.root.parent), momento=momento)
+        _conv_escape = _ConvergenceEscapeLoop(ConvergenceEscapeLoop(memory_store, goal_queue))
+        _compaction = MemoryCompactionLoop(memory_store)
+
+        orchestrator.attach_improvement_loops(_reflection, _health, _remediator, _skill_adapt, _conv_escape, _compaction)
+    except Exception as _exc:
+        log_json("WARN", "improvement_loops_setup_failed", details={"error": str(_exc)})
+
+    # 2. CASPA-W
+    try:
+        from core.context_graph import ContextGraph
+        from core.adaptive_pipeline import AdaptivePipeline
+        from core.propagation_engine import PropagationEngine
+        from core.autonomous_discovery import AutonomousDiscovery
+
+        _context_graph = ContextGraph()
+        _adaptive_pipeline = AdaptivePipeline(
+            context_graph=_context_graph,
+            skill_weight_adapter=_skill_adapt if "_skill_adapt" in locals() else None,
+            memory_store=memory_store,
+        )
+        _propagation = PropagationEngine(goal_queue, _context_graph, memory_store)
+        _discovery = AutonomousDiscovery(goal_queue, memory_store, project_root=str(project_root))
+
+        orchestrator.attach_caspa(
+            adaptive_pipeline=_adaptive_pipeline,
+            propagation_engine=_propagation,
+            context_graph=_context_graph,
+        )
+        orchestrator.attach_improvement_loops(_discovery)
+    except Exception as _exc:
+        log_json("WARN", "caspa_setup_failed", details={"error": str(_exc)})
+
+
 def create_runtime(project_root: Path, overrides: dict | None = None):
     """
     Library-friendly initializer that sets up shared AURA runtime objects
     without user input loops or forced chdir. Used by the HTTP server.
     """
-    # Ensure project root is on path for module imports
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
     runtime_overrides = dict(overrides or {})
     runtime_mode = runtime_overrides.pop("runtime_mode", "full")
 
-    # Apply optional config overrides
-    if runtime_overrides:
-        for k, v in runtime_overrides.items():
-            config.set_runtime_override(k, v)
+    for k, v in runtime_overrides.items():
+        config.set_runtime_override(k, v)
 
-    goal_queue_path = resolve_project_path(
-        project_root,
-        config.get("goal_queue_path", DEFAULT_CONFIG["goal_queue_path"]),
-        DEFAULT_CONFIG["goal_queue_path"],
-    )
-    goal_archive_path = resolve_project_path(
-        project_root,
-        config.get("goal_archive_path", DEFAULT_CONFIG["goal_archive_path"]),
-        DEFAULT_CONFIG["goal_archive_path"],
-    )
-    brain_db_path = resolve_project_path(
-        project_root,
-        config.get("brain_db_path", DEFAULT_CONFIG["brain_db_path"]),
-        DEFAULT_CONFIG["brain_db_path"],
-    )
-    memory_store_path = resolve_project_path(
-        project_root,
-        config.get("memory_store_path", DEFAULT_CONFIG["memory_store_path"]),
-        DEFAULT_CONFIG["memory_store_path"],
-    )
-    memory_persistence_path = resolve_project_path(
-        project_root,
-        config.get("memory_persistence_path", DEFAULT_CONFIG["memory_persistence_path"]),
-        DEFAULT_CONFIG["memory_persistence_path"],
-    )
-
-    goal_queue = GoalQueue(str(goal_queue_path))
-    goal_archive = GoalArchive(str(goal_archive_path))
+    paths = _resolve_runtime_paths(project_root)
+    goal_queue = GoalQueue(str(paths["goal_queue_path"]))
+    goal_archive = GoalArchive(str(paths["goal_archive_path"]))
+    
     config_api_key = resolve_config_api_key(config.get("api_key", ""))
     provider_status = runtime_provider_status(config_api_key=config_api_key)
 
-    # Early API key check — warn clearly so users know what to fix
     if not provider_status["chat_ready"]:
-        log_json("WARN", "aura_api_key_missing",
-                 details={"message": "No chat provider is configured. LLM calls will fail.",
-                          "providers": runtime_provider_summary(provider_status)})
-        import sys as _sys
-        print("⚠️  AURA: No chat provider configured. Set OPENAI_API_KEY, OPENROUTER_API_KEY, AURA_API_KEY, or AURA_LOCAL_MODEL_COMMAND.",
-              file=_sys.stderr)
+        log_json("WARN", "aura_api_key_missing", details={"providers": runtime_provider_summary(provider_status)})
+        print("⚠️  AURA: No chat provider configured.", file=sys.stderr)
 
     if runtime_mode == "queue":
         return {
@@ -274,179 +352,50 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
             "router": None,
             "config_api_key": config_api_key,
             "provider_status": provider_status,
-            "memory_persistence_path": memory_persistence_path,
+            "memory_persistence_path": paths["memory_persistence_path"],
         }
 
-    # ── Cache adapter: Momento (cloud) when API key set, else local in-process ─
-    try:
-        from memory.cache_adapter_factory import create_cache_adapter
-        from memory.momento_brain import MomentoBrain
-        _momento = create_cache_adapter()
-        # MomentoBrain works with both MomentoAdapter and LocalCacheAdapter
-        brain_instance = MomentoBrain(_momento, db_path=str(brain_db_path))
-        _adapter_name = type(_momento).__name__
-        log_json("INFO", "runtime_cache_adapter_active",
-                 details={"adapter": _adapter_name})
-    except Exception as _exc:
-        log_json("WARN", "cache_adapter_init_failed", details={"error": str(_exc)})
-        _momento = None
-        brain_instance = Brain(db_path=str(brain_db_path))
-
+    brain_instance, _momento = _init_memory_and_brain(paths["brain_db_path"])
     model_adapter = ModelAdapter()
-    # Enable prompt-response cache (1hr TTL) — L1 via cache adapter
-    model_adapter.enable_cache(brain_instance.db, ttl_seconds=3600,
-                               momento=_momento)
-    # Attach VectorStore for semantic memory recall
+    model_adapter.enable_cache(brain_instance.db, ttl_seconds=3600, momento=_momento)
+    
     vector_store = VectorStore(model_adapter, brain_instance)
     brain_instance.set_vector_store(vector_store)
-    # Attach EMA-ranked router to model_adapter
+    
     router = RouterAgent(brain_instance, model_adapter)
     model_adapter.set_router(router)
+    
     debugger_instance = DebuggerAgent(brain_instance, model_adapter)
     planner_instance = PlannerAgent(brain_instance, model_adapter)
 
-    # ── Context Manager: Advanced Semantic Ingestion ────────────────────────
+    # Context Manager
     try:
         from core.context_manager import ContextManager
-        from core.project_syncer import ProjectKnowledgeSyncer
-        
-        context_manager = ContextManager(
-            vector_store=vector_store,
-            context_graph=_context_graph if "_context_graph" in dir() else None,
-            project_root=project_root
-        )
-        log_json("INFO", "context_manager_initialized")
-        
-        # ── Background Project Sync ─────────────────────────────────────────
+        context_manager = ContextManager(vector_store=vector_store, project_root=project_root)
         if runtime_mode != "lean":
-            syncer = ProjectKnowledgeSyncer(
-                vector_store=vector_store,
-                context_graph=_context_graph if "_context_graph" in dir() else None,
-                project_root=project_root
-            )
-            # Run sync in background thread to not block CLI startup.
-            # Register atexit to signal the syncer to stop before process exit
-            # so it doesn't corrupt the DB mid-write.
-            import threading
-            import atexit
-
-            _stop_event = threading.Event()
-
-            def _bg_sync():
-                try:
-                    syncer.sync_all()
-                except Exception as e:
-                    log_json("WARN", "background_sync_failed", details={"error": str(e)})
-
-            _sync_thread = threading.Thread(target=_bg_sync, daemon=True, name="aura-bg-sync")
-            _sync_thread.start()
-
-            def _on_exit():
-                _stop_event.set()
-                _sync_thread.join(timeout=5)
-
-            atexit.register(_on_exit)
-            log_json("INFO", "background_sync_started")
-        else:
-            log_json("INFO", "background_sync_skipped", details={"reason": "lean_runtime"})
-
+            _start_background_sync(project_root, vector_store, None)
     except Exception as _exc:
         log_json("WARN", "context_manager_init_failed", details={"error": str(_exc)})
         context_manager = None
 
-    # MemoryStore: use cache-adapter-backed version
-    _mem_root = memory_store_path
-    if _momento is not None:
-        try:
-            from memory.momento_memory_store import MomentoMemoryStore
-            memory_store = MomentoMemoryStore(_mem_root, _momento)
-            log_json("INFO", "runtime_memory_store_active",
-                     details={"adapter": type(_momento).__name__})
-        except Exception as _exc:
-            log_json("WARN", "memory_store_init_failed", details={"error": str(_exc)})
-            memory_store = MemoryStore(_mem_root)
-    else:
-        memory_store = MemoryStore(_mem_root)
-
-    # R2: Unified Control Plane - Memory Controller attachment
+    memory_store = (
+        _get_momento_store(paths["memory_store_path"], _momento) 
+        if _momento else MemoryStore(paths["memory_store_path"])
+    )
     from memory.controller import memory_controller
     memory_controller.set_store(memory_store)
 
-    policy_config = config.effective_config.copy()
-    policy = Policy.from_config(policy_config)
     orchestrator = LoopOrchestrator(
         agents=default_agents(brain_instance, model_adapter, context_manager=context_manager),
         memory_store=memory_store,
-        policy=policy,
+        policy=Policy.from_config(config.effective_config.copy()),
         project_root=project_root,
         strict_schema=config.get("strict_schema", False),
         debugger=debugger_instance,
-        auto_add_capabilities=config.get("auto_add_capabilities", True),
-        auto_queue_missing_capabilities=config.get("auto_queue_missing_capabilities", True),
-        auto_provision_mcp=config.get("auto_provision_mcp", False),
-        auto_start_mcp_servers=config.get("auto_start_mcp_servers", False),
         goal_queue=goal_queue,
     )
-    git_tools_instance = GitTools(repo_path=str(project_root))
 
-    # ── Self-improvement loops ────────────────────────────────────────────────
-    if runtime_mode not in ("lean", "queue"):
-        try:
-            from core.reflection_loop import DeepReflectionLoop
-            from core.health_monitor import HealthMonitor
-            from core.weakness_remediator import WeaknessRemediator
-            from core.skill_weight_adapter import SkillWeightAdapter
-            from core.convergence_escape import ConvergenceEscapeLoop
-            from core.memory_compaction import MemoryCompactionLoop
-
-            _reflection   = DeepReflectionLoop(memory_store, brain_instance)
-            _health       = HealthMonitor(orchestrator.skills, goal_queue, memory_store, project_root)
-            _remediator   = _WeaknessRemediatorLoop(WeaknessRemediator(), brain_instance, goal_queue)
-            _skill_adapt  = SkillWeightAdapter(
-                memory_root=str(memory_store_path.parent),
-                momento=_momento,
-            )
-            _conv_escape  = _ConvergenceEscapeLoop(ConvergenceEscapeLoop(memory_store, goal_queue))
-            _compaction   = MemoryCompactionLoop(memory_store)
-
-            orchestrator.attach_improvement_loops(
-                _reflection,
-                _health,
-                _remediator,
-                _skill_adapt,
-                _conv_escape,
-                _compaction,
-            )
-        except Exception as _exc:
-            log_json("WARN", "improvement_loops_setup_failed", details={"error": str(_exc)})
-
-    # ── CASPA-W: Contextually Adaptive Self-Propagating Workflow ─────────────
-    if runtime_mode not in ("lean", "queue"):
-        try:
-            from core.context_graph import ContextGraph
-            from core.adaptive_pipeline import AdaptivePipeline
-            from core.propagation_engine import PropagationEngine
-            from core.autonomous_discovery import AutonomousDiscovery
-
-            _context_graph = ContextGraph()
-            _adaptive_pipeline = AdaptivePipeline(
-                context_graph=_context_graph,
-                skill_weight_adapter=_skill_adapt if "_skill_adapt" in dir() else None,
-                memory_store=memory_store,
-            )
-            _propagation = PropagationEngine(goal_queue, _context_graph, memory_store)
-            _discovery = AutonomousDiscovery(goal_queue, memory_store, project_root=str(project_root))
-
-            orchestrator.attach_caspa(
-                adaptive_pipeline=_adaptive_pipeline,
-                propagation_engine=_propagation,
-                context_graph=_context_graph,
-            )
-            # Discovery runs on its own cycle counter via improvement loop interface
-            orchestrator.attach_improvement_loops(_discovery)
-        except Exception as _exc:
-            log_json("WARN", "caspa_setup_failed", details={"error": str(_exc)})
-    # ─────────────────────────────────────────────────────────────────────────
+    _attach_advanced_loops(orchestrator, runtime_mode, brain_instance, memory_store, goal_queue, _momento, project_root)
 
     return {
         "goal_queue": goal_queue,
@@ -457,7 +406,7 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         # Legacy loop is initialized lazily so non-legacy commands do not
         # instantiate deprecated HybridClosedLoop unnecessarily.
         "loop": None,
-        "git_tools": git_tools_instance,
+        "git_tools": GitTools(repo_path=str(project_root)),
         "project_root": project_root,
         "model_adapter": model_adapter,
         "memory_store": memory_store,
@@ -466,8 +415,17 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         "router": router,
         "config_api_key": config_api_key,
         "provider_status": provider_status,
-        "memory_persistence_path": memory_persistence_path,
+        "memory_persistence_path": paths["memory_persistence_path"],
     }
+
+
+def _get_momento_store(root, momento):
+    try:
+        from memory.momento_memory_store import MomentoMemoryStore
+        return MomentoMemoryStore(root, momento)
+    except Exception as e:
+        log_json("WARN", "memory_store_init_failed", details={"error": str(e)})
+        return MemoryStore(root)
 
 
 @dataclass

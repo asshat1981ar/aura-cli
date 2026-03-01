@@ -4,7 +4,7 @@
 - [x] Task: Enhance StructuralAnalyzerSkill for Coverage Reporting [5fbcd5f]
     - [x] Write Tests: Create `tests/test_structural_analyzer_coverage.py` to verify coverage detection logic.
     - [x] Implement: Update `agents/skills/structural_analyzer.py` to optionally return coverage data for scanned files.
-- [x] Task: Create Coverage Threshold Logic [ba02470]
+- [x] Task: Create Coverage Threshold Logic [4e4c5ed]
     - [x] Write Tests: Create `tests/test_coverage_threshold.py` to verify threshold comparison and flagging.
     - [x] Implement: Add utility in `core/quality_snapshot.py` to check if specific files meet the required coverage.
 - [ ] Task: Conductor - User Manual Verification 'Foundation & Skill Enhancement' (Protocol in workflow.md)

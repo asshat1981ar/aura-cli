@@ -27,6 +27,8 @@ def _make_brain():
     brain.recall_recent.return_value = []
     brain.recall_with_budget.return_value = []
     brain.remember.return_value = None
+    brain.get.return_value = None
+    brain.set.return_value = None
     return brain
 
 

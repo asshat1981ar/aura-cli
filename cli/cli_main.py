@@ -12,7 +12,7 @@ except ImportError:
     readline = None
 
 from core.goal_queue import GoalQueue
-from core.hybrid_loop import HybridClosedLoop
+from core.orchestrator import LoopOrchestrator
 from core.goal_archive import GoalArchive
 from memory.brain import Brain
 from core.model_adapter import ModelAdapter
@@ -20,6 +20,8 @@ from core.git_tools import GitTools, GitToolsError
 from core.logging_utils import log_json
 from agents.debugger import DebuggerAgent
 from agents.planner import PlannerAgent
+from agents.registry import default_agents
+from core.policy import Policy
 
 from core.task_handler import _check_project_writability, run_goals_loop
 from cli.commands import _handle_add, _handle_run, _handle_status, _handle_exit, _handle_help, _handle_doctor, _handle_clear
@@ -103,7 +105,14 @@ def main(project_root_override=None):
         log_json("ERROR", "git_tools_init_failed", details={"error": str(e)})
         return
 
-    loop = HybridClosedLoop(model_adapter, brain_instance, git_tools_instance)
+    loop = LoopOrchestrator(
+        agents=default_agents(brain_instance, model_adapter),
+        project_root=project_root,
+        policy=Policy.from_config({}),
+        debugger=debugger_instance,
+        goal_queue=goal_queue,
+        brain=brain_instance,
+    )
 
     log_json("INFO", "aura_cli_online", details={"dry_run_mode": getattr(args, 'dry_run', False)})
 

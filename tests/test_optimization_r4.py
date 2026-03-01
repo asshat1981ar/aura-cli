@@ -124,9 +124,10 @@ class TestReplacementMethodsPresent(unittest.TestCase):
         src = (ROOT / "agents/ingest.py").read_text()
         self.assertIn("recall_recent", src)
 
-    def test_router_uses_recall_recent(self):
+    def test_router_uses_brain_kv_store(self):
         src = (ROOT / "agents/router.py").read_text()
-        self.assertIn("recall_recent", src)
+        self.assertIn("brain.get", src)
+        self.assertIn("brain.set", src)
 
     def test_evolution_loop_uses_recall_with_budget(self):
         src = (ROOT / "core/evolution_loop.py").read_text()
@@ -322,14 +323,15 @@ class TestEvolutionLoopMemoryAssembly(unittest.TestCase):
 
 class TestRouterStatLookup(unittest.TestCase):
 
-    def test_router_source_uses_recall_recent(self):
+    def test_router_source_uses_brain_get(self):
         src = (ROOT / "agents/router.py").read_text()
-        self.assertIn("recall_recent", src)
+        self.assertIn("brain.get", src)
 
-    def test_router_load_stats_uses_limit_200(self):
+    def test_router_load_stats_uses_kv_store(self):
         src = (ROOT / "agents/router.py").read_text()
-        # Should scan only recent 200 entries, not all
-        self.assertIn("200", src)
+        # Should use KV store for O(1) lookup, not scan
+        self.assertIn("brain.get(\"__router_stats__\")", src)
+        self.assertNotIn("recall_recent", src)
         self.assertNotIn("recall_all()", src)
 
 

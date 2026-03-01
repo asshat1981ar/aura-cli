@@ -1,15 +1,14 @@
 import time
 import json
+import dataclasses
 from dataclasses import dataclass, asdict
-from typing import Optional, Callable
-from core.logging_utils import log_json # Import log_json
+from typing import Optional, Callable, Dict, List
+from core.logging_utils import log_json
 
 
-
-
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- 
 # Data structures
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- 
 
 @dataclass
 class ModelStats:
@@ -55,7 +54,8 @@ class ModelStats:
     def from_dict(cls, d: dict) -> "ModelStats":
         obj = cls(name=d["name"])
         for k, v in d.items():
-            setattr(obj, k, v)
+            if hasattr(obj, k):
+                setattr(obj, k, v)
         return obj
 
     def __str__(self):
@@ -67,9 +67,9 @@ class ModelStats:
         )
 
 
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- 
 # Router
-# ---------------------------------------------------------------------------
+# --------------------------------------------------------------------------- 
 
 class RouterAgent:
     """
@@ -97,13 +97,13 @@ class RouterAgent:
     SHORT_PROMPT_THRESHOLD = 500    # characters
     LONG_PROMPT_THRESHOLD  = 3000
 
-    def __init__(self, brain, model_adapter, enabled_models: Optional[list] = None):
+    def __init__(self, brain, model_adapter, enabled_models: Optional[List[str]] = None):
         self.brain = brain
         self.adapter = model_adapter
         self.enabled = enabled_models or ["openai", "gemini", "openrouter"]
 
         # Load persisted stats from brain or initialise fresh
-        self.stats: dict[str, ModelStats] = {}
+        self.stats: Dict[str, ModelStats] = {}
         self._load_stats()
 
     # ------------------------------------------------------------------
@@ -130,7 +130,7 @@ class RouterAgent:
                 response = caller(prompt)
                 latency = time.time() - start
                 self.stats[model_name].record(success=True, latency=latency)
-                self._persist_stats()
+                self._save_stats()
                 self.brain.remember(
                     f"RouterAgent: routed to {model_name} | "
                     f"lat={latency:.2f}s | ema={self.stats[model_name].ema_score:.3f}"
@@ -140,7 +140,7 @@ class RouterAgent:
             except Exception as exc:
                 latency = time.time() - start
                 self.stats[model_name].record(success=False, latency=latency)
-                self._persist_stats()
+                self._save_stats()
                 last_error = exc
                 self.brain.remember(
                     f"RouterAgent: {model_name} FAILED ({exc}) | "
@@ -172,7 +172,7 @@ class RouterAgent:
     # Ranking logic
     # ------------------------------------------------------------------
 
-    def _rank_candidates(self, prompt: str) -> list:
+    def _rank_candidates(self, prompt: str) -> List[str]:
         """
         Return an ordered list of model names to try, best-first.
 
@@ -208,28 +208,28 @@ class RouterAgent:
     # Persistence
     # ------------------------------------------------------------------
 
-    def _persist_stats(self):
-        payload = {name: stat.to_dict() for name, stat in self.stats.items()}
-        self.brain.remember(f"__router_stats__:{json.dumps(payload)}")
-
     def _load_stats(self):
         # Initialise all enabled models with defaults first
         for name in self.enabled:
             self.stats[name] = ModelStats(name=name)
 
-        # Try to restore from brain memory — use recall_recent to avoid full scan
+        # Try to restore from brain KV store — avoids full scan
         try:
-            for entry in reversed(self.brain.recall_recent(limit=200)):
-                if entry.startswith("__router_stats__:"):
-                    payload = json.loads(entry[len("__router_stats__:"):])
-                    for name, d in payload.items():
-                        if name in self.enabled:
-                            self.stats[name] = ModelStats.from_dict(d)
-                    break   # Only care about the most recent snapshot
-        except (json.JSONDecodeError, KeyError) as e:
-            log_json("ERROR", "router_load_stats_failed", details={"error": str(e), "message": "Could not load model stats from brain memory."})
+            payload = self.brain.get("__router_stats__")
+            if payload and isinstance(payload, dict):
+                for name, d in payload.items():
+                    if name in self.enabled:
+                        self.stats[name] = ModelStats.from_dict(d)
         except Exception as e:
             log_json("ERROR", "router_load_stats_unexpected_error", details={"error": str(e)})
+
+    def _save_stats(self):
+        """Persist current model stats to the brain KV store."""
+        try:
+            payload = {name: dataclasses.asdict(s) for name, s in self.stats.items()}
+            self.brain.set("__router_stats__", payload)
+        except Exception as e:
+            log_json("ERROR", "router_save_stats_failed", details={"error": str(e)})
 
     def _get_caller(self, model_name: str) -> Optional[Callable]:
         method_name = self.MODEL_REGISTRY.get(model_name)

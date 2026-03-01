@@ -72,12 +72,15 @@ def _handle_status(goal_queue: GoalQueue, goal_archive: GoalArchive, loop):
         for task in task_manager.root_tasks:
             print(task.display())
 
-    # Add HybridClosedLoop status
+    # Add Loop status
     print("\n--- AURA Loop Status ---")
-    print(f"Current Loop Score: {loop.current_score:.2f}")
-    print(f"Regression Count: {loop.regression_count}")
-    print(f"Stable Convergence Count: {loop.stable_convergence_count}")
-    print(f"Current Goal: {loop.current_goal if loop.current_goal else 'None'}")
+    if hasattr(loop, "current_score"):
+        print(f"Current Loop Score: {loop.current_score:.2f}")
+        print(f"Regression Count: {loop.regression_count}")
+        print(f"Stable Convergence Count: {loop.stable_convergence_count}")
+        print(f"Current Goal: {loop.current_goal if loop.current_goal else 'None'}")
+    else:
+        print("Loop status: active.")
     print("------------------------\n")
 
 def _handle_exit():

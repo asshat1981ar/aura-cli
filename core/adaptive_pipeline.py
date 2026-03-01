@@ -258,25 +258,15 @@ class AdaptivePipeline:
         if not hasattr(self, '_brain') or self._brain is None:
             return
         key = f"__strategy_stats__:{goal_type}:{strategy}"
-        existing = {"wins": 0, "losses": 0}
         try:
-            for entry in reversed(self._brain.recall_recent(limit=100)):
-                if entry.startswith(key + ":"):
-                    try:
-                        existing = json.loads(entry[len(key) + 1:])
-                    except Exception:
-                        pass
-                    break
-        except Exception:
-            pass
-        if success:
-            existing["wins"] += 1
-        else:
-            existing["losses"] += 1
-        try:
-            self._brain.remember(f"{key}:{json.dumps(existing)}")
-        except Exception:
-            pass
+            existing = self._brain.get(key, {"wins": 0, "losses": 0})
+            if success:
+                existing["wins"] += 1
+            else:
+                existing["losses"] += 1
+            self._brain.set(key, existing)
+        except Exception as exc:
+            log_json("WARN", "adaptive_pipeline_outcome_record_failed", details={"error": str(exc)})
 
     def win_rate(self, goal_type: str, strategy: str) -> float:
         """Return win rate 0.0-1.0 for this (goal_type, strategy) pair."""
@@ -284,16 +274,12 @@ class AdaptivePipeline:
             return 0.0
         key = f"__strategy_stats__:{goal_type}:{strategy}"
         try:
-            for entry in reversed(self._brain.recall_recent(limit=100)):
-                if entry.startswith(key + ":"):
-                    try:
-                        stats = json.loads(entry[len(key) + 1:])
-                        wins = stats.get("wins", 0)
-                        losses = stats.get("losses", 0)
-                        total = wins + losses
-                        return wins / total if total > 0 else 0.0
-                    except Exception:
-                        return 0.0
+            stats = self._brain.get(key)
+            if stats and isinstance(stats, dict):
+                wins = stats.get("wins", 0)
+                losses = stats.get("losses", 0)
+                total = wins + losses
+                return wins / total if total > 0 else 0.0
         except Exception:
             pass
         return 0.0

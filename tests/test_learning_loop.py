@@ -134,13 +134,13 @@ class TestQualitySnapshot:
 class TestAdaptivePipelineOutcome:
     def _make_brain(self):
         brain = MagicMock()
-        brain._stored = []
-        def remember(entry):
-            brain._stored.append(entry)
-        def recall_recent(limit=100):
-            return list(brain._stored[-limit:])
-        brain.remember.side_effect = remember
-        brain.recall_recent.side_effect = recall_recent
+        brain._kv = {}
+        def set_kv(key, value):
+            brain._kv[key] = value
+        def get_kv(key, default=None):
+            return brain._kv.get(key, default)
+        brain.set.side_effect = set_kv
+        brain.get.side_effect = get_kv
         return brain
 
     def test_record_outcome_no_brain_no_error(self):
@@ -151,7 +151,7 @@ class TestAdaptivePipelineOutcome:
         brain = self._make_brain()
         ap = AdaptivePipeline(brain=brain)
         ap.record_outcome("bug_fix", "deep", True)
-        assert brain.remember.called
+        assert brain.set.called
 
     def test_win_rate_no_brain_returns_zero(self):
         ap = AdaptivePipeline()
@@ -163,7 +163,7 @@ class TestAdaptivePipelineOutcome:
         ap.record_outcome("refactor", "normal", True)
         rate = ap.win_rate("refactor", "normal")
         assert isinstance(rate, float)
-        assert 0.0 <= rate <= 1.0
+        assert rate == 1.0
 
     def test_win_rate_100_percent(self):
         brain = self._make_brain()

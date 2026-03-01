@@ -19,6 +19,7 @@ Typical usage::
 """
 import os
 import json
+import dataclasses
 import time
 import uuid
 from pathlib import Path
@@ -26,6 +27,7 @@ from typing import Dict, List, Any, Optional, Tuple
 
 from core.logging_utils import log_json
 from core.operator_runtime import build_cycle_summary
+from core.cycle_outcome import CycleOutcome
 from core.capability_manager import (
     analyze_capability_needs,
     provision_capability_actions,
@@ -96,6 +98,7 @@ class LoopOrchestrator:
         auto_provision_mcp: bool = False,
         auto_start_mcp_servers: bool = False,
         goal_queue=None,
+        brain: Any = None,
     ):
         """Initialise the orchestrator with its agents and supporting services.
 
@@ -128,6 +131,7 @@ class LoopOrchestrator:
         self.auto_provision_mcp = auto_provision_mcp
         self.auto_start_mcp_servers = auto_start_mcp_servers
         self.goal_queue = goal_queue
+        self.brain = brain
         self.last_capability_plan: dict = {}
         self.last_capability_goal_queue: dict = {}
         self.last_capability_provisioning: dict = {}
@@ -789,14 +793,26 @@ class LoopOrchestrator:
         phase_outputs["quality"] = quality
         self._notify_ui("on_phase_complete", "measure", (time.time() - t0_measure) * 1000)
 
+        # ── Learning Loop: CycleOutcome ──
+        outcome = CycleOutcome(
+            goal=goal,
+            goal_type=goal_type,
+            started_at=started_at,
+            phases_completed=list(phase_outputs.keys()),
+            changes_applied=len(changed_files),
+            tests_after=quality.get("test_count", 0),
+            strategy_used=phase_outputs.get("pipeline_config", {}).get("intensity", "normal"),
+        )
+
         if self.adaptive_pipeline:
             try:
-                strategy = phase_outputs.get("pipeline_config", {}).get("intensity", "normal")
+                strategy = outcome.strategy_used
                 self.adaptive_pipeline.record_outcome(goal_type, strategy, passed)
             except Exception as exc:
                 log_json("WARN", "adaptive_pipeline_outcome_record_failed", details={"error": str(exc)})
 
         completed_at = time.time()
+        outcome.mark_complete(success=passed)
         entry = {
             "cycle_id": cycle_id,
             "goal": goal,
@@ -805,7 +821,8 @@ class LoopOrchestrator:
             "stop_reason": None,
             "started_at": started_at,
             "completed_at": completed_at,
-            "duration_s": max(completed_at - started_at, 0.0),
+            "duration_s": outcome.duration_s(),
+            "outcome": dataclasses.asdict(outcome),
         }
         
         # Phase 9: learn()
@@ -823,6 +840,14 @@ class LoopOrchestrator:
                 json.dumps(summary),
                 metadata={"type": "cycle_summary", "goal": goal, "cycle_id": cycle_id}
             )
+        
+        if self.brain:
+            try:
+                self.brain.set(f"outcome:{cycle_id}", outcome.to_json())
+                self.brain.remember(f"Cycle completed: {goal} -> {'SUCCESS' if passed else 'FAILED'}")
+            except Exception as exc:
+                log_json("WARN", "brain_outcome_storage_failed", details={"error": str(exc)})
+
         self._notify_ui("on_phase_complete", "learn", (time.time() - t0_learn) * 1000)
 
         if self.context_graph is not None:

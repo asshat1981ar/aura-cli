@@ -1,4 +1,5 @@
 import json
+import dataclasses
 from core.logging_utils import log_json # Import the new logging utility
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
 
@@ -30,6 +31,15 @@ class EvolutionLoop:
         self.vector = vector_store
         self.git = git_tools
         self.mutator = mutator
+        self._cycle_count = 0
+        self.TRIGGER_EVERY_N = 20
+
+    def on_cycle_complete(self, entry: dict) -> None:
+        """Trigger evolution every N cycles."""
+        self._cycle_count += 1
+        if self._cycle_count % self.TRIGGER_EVERY_N == 0:
+            goal = entry.get("goal", "evolve and improve the AURA system")
+            self.run(goal)
 
     def run(self, goal):
         """
@@ -50,8 +60,10 @@ class EvolutionLoop:
         """
         # Gather system state for PlannerAgent
         memory_snapshot = "\n".join(self.brain.recall_with_budget(max_tokens=3000))
-        similar_past_problems = "\n".join(self.vector.search(goal))
+        similar_past_problems = "\n".join(self.vector.search(goal)) if self.vector else ""
         known_weaknesses = "\n".join(self.brain.recall_weaknesses())
+
+        log_json("INFO", "evolution_loop_start", details={"goal": goal})
 
         # 1. Hypothesize
         hypothesis = self.planner.plan(
@@ -129,8 +141,9 @@ class EvolutionLoop:
         self.brain.remember(evaluation)
         self.brain.remember(mutation_str)
 
-        self.vector.add(goal)
-        self.vector.add(mutation_str)
+        if self.vector:
+            self.vector.add(goal)
+            self.vector.add(mutation_str)
 
         # 7. Commit evolution
         self.git.commit_all(f"AURA evolutionary update: {goal}")

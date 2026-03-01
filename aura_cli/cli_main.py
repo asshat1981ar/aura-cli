@@ -291,22 +291,33 @@ def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal
         from core.adaptive_pipeline import AdaptivePipeline
         from core.propagation_engine import PropagationEngine
         from core.autonomous_discovery import AutonomousDiscovery
+        from core.evolution_loop import EvolutionLoop
+        from agents.mutator import MutatorAgent
 
         _context_graph = ContextGraph()
         _adaptive_pipeline = AdaptivePipeline(
             context_graph=_context_graph,
             skill_weight_adapter=_skill_adapt if "_skill_adapt" in locals() else None,
             memory_store=memory_store,
+            brain=brain,
         )
         _propagation = PropagationEngine(goal_queue, _context_graph, memory_store)
         _discovery = AutonomousDiscovery(goal_queue, memory_store, project_root=str(project_root))
+        
+        # Evolution Loop
+        _coder = orchestrator.agents.get("act")
+        _critic = orchestrator.agents.get("critique")
+        _planner = orchestrator.agents.get("plan")
+        _git = GitTools(repo_path=str(project_root))
+        _mutator = MutatorAgent(project_root)
+        _evo = EvolutionLoop(_planner, _coder, _critic, brain, getattr(brain, "vector_store", None), _git, _mutator)
 
         orchestrator.attach_caspa(
             adaptive_pipeline=_adaptive_pipeline,
             propagation_engine=_propagation,
             context_graph=_context_graph,
         )
-        orchestrator.attach_improvement_loops(_discovery)
+        orchestrator.attach_improvement_loops(_discovery, _evo)
     except Exception as _exc:
         log_json("WARN", "caspa_setup_failed", details={"error": str(_exc)})
 
@@ -394,6 +405,7 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         strict_schema=config.get("strict_schema", False),
         debugger=debugger_instance,
         goal_queue=goal_queue,
+        brain=brain_instance,
     )
 
     _attach_advanced_loops(orchestrator, runtime_mode, brain_instance, memory_store, goal_queue, _momento, project_root)

@@ -2,7 +2,7 @@ import sqlite3
 from pathlib import Path
 import json # Added this line
 import time
-from typing import List, Optional
+from typing import List, Optional, Any
 from core.logging_utils import log_json # Import log_json
 
 # textblob is only needed by analyze_critique_for_weaknesses — lazy import to avoid 1.3s startup cost
@@ -30,7 +30,7 @@ def _ensure_nx():
 class Brain:
 
     # Current schema version. Bump when adding columns / tables.
-    SCHEMA_VERSION = 2
+    SCHEMA_VERSION = 3
 
     def __init__(self, db_path: Optional[str] = None):
         # Construct absolute path for the database file
@@ -81,6 +81,12 @@ class Brain:
             embedding BLOB
         )
         """)
+        self.db.execute("""
+        CREATE TABLE IF NOT EXISTS kv_store(
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+        """)
         # Index on memory.id enables fast ORDER BY id DESC LIMIT N queries (200x speedup
         # vs full-table scan on 30k+ row databases)
         self.db.execute("CREATE INDEX IF NOT EXISTS idx_memory_id ON memory(id)")
@@ -105,6 +111,7 @@ class Brain:
         Migration log:
           v0 → v1: initial schema (memory, weaknesses, vector_store_data)
           v1 → v2: absorb rows from legacy brain_v2.db (same directory)
+          v2 → v3: create kv_store table
         """
         current = self._get_schema_version()
         if current >= self.SCHEMA_VERSION:
@@ -123,6 +130,19 @@ class Brain:
                 self._absorb_legacy_db(legacy_path)
             self._set_schema_version(2)
             log_json("INFO", "brain_migration", details={"from": 1, "to": 2})
+            current = 2
+
+        # v2 → v3: create kv_store table
+        if current < 3:
+            self.db.execute("""
+            CREATE TABLE IF NOT EXISTS kv_store(
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+            """)
+            self.db.commit()
+            self._set_schema_version(3)
+            log_json("INFO", "brain_migration", details={"from": 2, "to": 3})
 
     def _absorb_legacy_db(self, legacy_path: Path) -> None:
         """Copy rows from *legacy_path* into this DB, skipping duplicates."""
@@ -169,6 +189,29 @@ class Brain:
         self.db.commit()
         # Invalidate recall cache on write
         self._recall_cache.clear()
+
+    def set(self, key: str, value: Any) -> None:
+        """Set a persistent key-value pair. value will be JSON serialized."""
+        if not isinstance(value, str):
+            value = json.dumps(value)
+        self.db.execute(
+            "INSERT OR REPLACE INTO kv_store(key, value) VALUES (?, ?)",
+            (key, value)
+        )
+        self.db.commit()
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Get a persistent key-value pair. Attempts to JSON deserialize the result."""
+        row = self.db.execute(
+            "SELECT value FROM kv_store WHERE key = ?", (key,)
+        ).fetchone()
+        if not row:
+            return default
+        raw = row[0]
+        try:
+            return json.loads(raw)
+        except (json.JSONDecodeError, TypeError):
+            return raw
 
     def recall_all(self):
         key = "recall_all"

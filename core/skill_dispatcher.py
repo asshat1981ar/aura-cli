@@ -121,13 +121,7 @@ def dispatch_skills(
         try:
             for future in concurrent.futures.as_completed(future_to_name, timeout=timeout):
                 name = future_to_name[future]
-                try:
-                    results[name] = future.result()
-                except Exception as exc:
-                    log_json("WARN", "skill_dispatch_error",
-                             details={"skill": name, "goal_type": goal_type,
-                                      "error": str(exc)})
-                    results[name] = {"error": str(exc)}
+                results[name] = future.result()
         except concurrent.futures.TimeoutError:
             # Mark any skills that didn't finish within the batch timeout
             for future, name in future_to_name.items():

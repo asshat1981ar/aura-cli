@@ -1,26 +1,18 @@
 # R1: Shim — canonical entry point lives in aura_cli/cli_main.py.
 # Keep this wrapper lazy so lightweight/help paths do not trigger full runtime imports.
-import io
 import json
 import sys
-from contextlib import redirect_stdout
 
 from aura_cli.cli_options import CLIParseError, attach_cli_warnings, parse_cli_args, render_help
 from aura_cli.cli_options import cli_parse_error_payload, unknown_command_help_topic_payload
 
-
-def main(*args, **kwargs):  # noqa: D401
-    """Proxy to the canonical CLI entry point."""
-    with redirect_stdout(io.StringIO()):
-        from aura_cli.cli_main import main as _main
-    return _main(*args, **kwargs)
 
 if __name__ == "__main__":
     raw_argv = sys.argv[1:]
 
     if "--json-help" in raw_argv:
         print(render_help(format="json"))
-        raise SystemExit(0)
+        sys.exit(0)
 
     try:
         parsed = parse_cli_args(raw_argv)
@@ -31,17 +23,29 @@ if __name__ == "__main__":
             print(f"Error: {exc}", file=sys.stderr)
             if exc.usage:
                 print(exc.usage, file=sys.stderr)
-        raise SystemExit(exc.code)
+        sys.exit(exc.code)
 
     if parsed.command == "help":
         try:
             print(render_help(getattr(parsed.namespace, "help_topics", None)))
-            raise SystemExit(0)
+            sys.exit(0)
         except ValueError as exc:
             if getattr(parsed.namespace, "json", False):
                 print(json.dumps(attach_cli_warnings(unknown_command_help_topic_payload(str(exc)), parsed)))
             else:
                 print(f"Error: {exc}", file=sys.stderr)
-            raise SystemExit(2)
+            sys.exit(2)
 
-    raise SystemExit(main(argv=raw_argv))
+    from aura_cli.cli_main import main as _main
+    try:
+        sys.exit(_main(argv=raw_argv))
+    except Exception as exc:
+        if "--json" in raw_argv:
+            print(json.dumps(attach_cli_warnings({
+                "status": "error",
+                "code": "unexpected_runtime_error",
+                "message": str(exc)
+            }, parsed)))
+        else:
+            raise
+        sys.exit(1)

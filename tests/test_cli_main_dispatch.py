@@ -291,10 +291,10 @@ class TestCLIMainDispatch(unittest.TestCase):
 
         self.assertEqual(proc.returncode, 0)
         payload = json.loads(proc.stdout)
-        self.assertIn("queue_length", payload)
+        self.assertIn("schema_version", payload)
         self.assertIn("queue", payload)
-        self.assertIn("completed_count", payload)
-        self.assertIn("completed", payload)
+        self.assertIn("pending_count", payload["queue"])
+        self.assertIn("completed_count", payload["queue"])
         self.assertNotIn("vector_store_initialized", proc.stderr)
         self.assertNotIn("background_sync_started", proc.stderr)
 
@@ -351,7 +351,6 @@ class TestCLIMainDispatch(unittest.TestCase):
              patch("aura_cli.cli_main.Policy.from_config", return_value=fake_policy), \
              patch("aura_cli.cli_main.LoopOrchestrator", return_value=fake_orchestrator), \
             patch("aura_cli.cli_main.GitTools", return_value=fake_git_tools), \
-            patch("core.hybrid_loop.HybridClosedLoop") as mock_hybrid_loop, \
             patch("aura_cli.cli_main.log_json"), \
             patch("builtins.__import__", side_effect=_guarded_import):
             runtime = cli_main.create_runtime(Path(d), overrides=None)
@@ -362,8 +361,7 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertIs(runtime["brain"], fake_brain)
         self.assertIs(runtime["orchestrator"], fake_orchestrator)
         self.assertIs(runtime["git_tools"], fake_git_tools)
-        self.assertIs(runtime["loop"], None)
-        mock_hybrid_loop.assert_not_called()
+        # loop key was removed during migration to LoopOrchestrator
 
     def test_create_runtime_full_mode_resolves_brain_and_memory_paths_against_project_root(self):
         fake_goal_queue = MagicMock()
@@ -429,7 +427,6 @@ class TestCLIMainDispatch(unittest.TestCase):
              patch("aura_cli.cli_main.Policy.from_config", return_value=fake_policy), \
              patch("aura_cli.cli_main.LoopOrchestrator", return_value=fake_orchestrator), \
              patch("aura_cli.cli_main.GitTools", return_value=fake_git_tools), \
-             patch("core.hybrid_loop.HybridClosedLoop"), \
              patch.object(cli_main.config, "get", side_effect=_config_get), \
              patch("aura_cli.cli_main.log_json"), \
              patch("builtins.__import__", side_effect=_guarded_import):
@@ -503,7 +500,6 @@ class TestCLIMainDispatch(unittest.TestCase):
                      patch("aura_cli.cli_main.Policy.from_config", return_value=fake_policy), \
                      patch("aura_cli.cli_main.LoopOrchestrator", return_value=fake_orchestrator), \
                      patch("aura_cli.cli_main.GitTools", return_value=fake_git_tools), \
-                     patch("core.hybrid_loop.HybridClosedLoop"), \
                      patch("aura_cli.cli_main.log_json"), \
                      patch("builtins.__import__", side_effect=_guarded_import):
                     cli_main.create_runtime(Path(d), overrides=None)
@@ -850,6 +846,69 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertEqual(canonical_payload, self._without_cli_warnings(legacy_payload))
         self._assert_json_snapshot(out_c, "cli_canonical_workflow_run_dispatch.json")
 
+    def test_legacy_goal_once_json_output_matches_snapshot(self):
+        orchestrator = MagicMock()
+        orchestrator.run_loop.return_value = {"stop_reason": "done", "history": [1, 2]}
+        fake_runtime = {
+            "goal_queue": MagicMock(),
+            "goal_archive": MagicMock(),
+            "orchestrator": orchestrator,
+            "debugger": MagicMock(),
+            "planner": MagicMock(),
+            "loop": MagicMock(),
+            "model_adapter": MagicMock(),
+            "brain": MagicMock(),
+        }
+        runtime_factory = MagicMock(return_value=fake_runtime)
+
+        with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"), \
+             patch.object(cli_main.config, "set_runtime_override"):
+            code, out, err, _ = self._dispatch(
+                ["--goal", "Summarize repo", "--max-cycles", "3", "--dry-run", "--json"],
+                runtime_factory=runtime_factory,
+            )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "Warning: Legacy flags are deprecated; use `aura goal once` instead.\n")
+        self._assert_json_snapshot(out, "cli_legacy_goal_once_dispatch.json")
+
+    def test_canonical_goal_once_json_output_matches_snapshot_and_legacy_base_shape(self):
+        orchestrator = MagicMock()
+        orchestrator.run_loop.return_value = {"stop_reason": "done", "history": [1, 2]}
+        fake_runtime = {
+            "goal_queue": MagicMock(),
+            "goal_archive": MagicMock(),
+            "orchestrator": orchestrator,
+            "debugger": MagicMock(),
+            "planner": MagicMock(),
+            "loop": MagicMock(),
+            "model_adapter": MagicMock(),
+            "brain": MagicMock(),
+        }
+        runtime_factory = MagicMock(return_value=fake_runtime)
+
+        with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"), \
+             patch.object(cli_main.config, "set_runtime_override"):
+            code_c, out_c, err_c, _ = self._dispatch(
+                ["goal", "once", "Summarize repo", "--max-cycles", "3", "--dry-run", "--json"],
+                runtime_factory=runtime_factory,
+            )
+            code_l, out_l, err_l, _ = self._dispatch(
+                ["--goal", "Summarize repo", "--max-cycles", "3", "--dry-run", "--json"],
+                runtime_factory=runtime_factory,
+            )
+
+        self.assertEqual(code_c, 0)
+        self.assertEqual(code_l, 0)
+        self.assertEqual(err_c, "")
+        self.assertEqual(err_l, "Warning: Legacy flags are deprecated; use `aura goal once` instead.\n")
+        canonical_payload = json.loads(out_c)
+        legacy_payload = json.loads(out_l)
+        self.assertEqual(canonical_payload, self._without_cli_warnings(legacy_payload))
+        self._assert_json_snapshot(out_c, "cli_canonical_goal_once_dispatch.json")
+
     def test_legacy_evolve_json_output_matches_snapshot(self):
         fake_runtime = {
             "planner": MagicMock(),
@@ -871,7 +930,7 @@ class TestCLIMainDispatch(unittest.TestCase):
              patch("aura_cli.cli_main.default_agents", return_value={"act": MagicMock(), "critique": MagicMock()}), \
              patch("aura_cli.cli_main.GitTools", return_value=MagicMock()), \
              patch("agents.mutator.MutatorAgent", return_value=MagicMock()), \
-             patch("core.vector_store.VectorStore", return_value=MagicMock()), \
+             patch("aura_cli.cli_main.VectorStore", return_value=MagicMock()), \
              patch("core.evolution_loop.EvolutionLoop", return_value=fake_evo):
             code, out, err, _ = self._dispatch(["--evolve"], runtime_factory=runtime_factory)
 
@@ -901,7 +960,7 @@ class TestCLIMainDispatch(unittest.TestCase):
              patch("aura_cli.cli_main.default_agents", return_value={"act": MagicMock(), "critique": MagicMock()}), \
              patch("aura_cli.cli_main.GitTools", return_value=MagicMock()), \
              patch("agents.mutator.MutatorAgent", return_value=MagicMock()), \
-             patch("core.vector_store.VectorStore", return_value=MagicMock()), \
+             patch("aura_cli.cli_main.VectorStore", return_value=MagicMock()), \
              patch("core.evolution_loop.EvolutionLoop", return_value=fake_evo):
             code_c, out_c, err_c, _ = self._dispatch(["evolve"], runtime_factory=runtime_factory)
             code_l, out_l, err_l, _ = self._dispatch(["--evolve"], runtime_factory=runtime_factory)
@@ -950,39 +1009,34 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertEqual(first_args.run_goals, second_args.run_goals)
         self.assertEqual(first_args.decompose, second_args.decompose)
 
-    def test_goal_run_dispatch_lazily_initializes_legacy_loop_once(self):
+    def test_goal_run_dispatch_uses_orchestrator(self):
         fake_runtime = {
             "goal_queue": MagicMock(),
             "goal_archive": MagicMock(),
             "orchestrator": MagicMock(),
             "debugger": MagicMock(),
             "planner": MagicMock(),
-            "loop": None,
             "model_adapter": MagicMock(),
             "brain": MagicMock(),
-            "git_tools": MagicMock(),
         }
         runtime_factory = MagicMock(return_value=fake_runtime)
-        fake_loop = MagicMock()
 
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
              patch("aura_cli.cli_main.log_json"), \
-             patch("core.hybrid_loop.HybridClosedLoop", return_value=fake_loop) as mock_hybrid, \
              patch("aura_cli.cli_main.run_goals_loop") as mock_run_goals:
-            code1, *_ = self._dispatch(["goal", "run"], runtime_factory=runtime_factory)
-            code2, *_ = self._dispatch(["goal", "run"], runtime_factory=runtime_factory)
+            code, *_ = self._dispatch(["goal", "run"], runtime_factory=runtime_factory)
 
-        self.assertEqual(code1, 0)
-        self.assertEqual(code2, 0)
-        mock_hybrid.assert_called_once_with(
-            fake_runtime["model_adapter"],
-            fake_runtime["brain"],
-            fake_runtime["git_tools"],
+        self.assertEqual(code, 0)
+        mock_run_goals.assert_called_once_with(
+            unittest.mock.ANY,
+            fake_runtime["goal_queue"],
+            fake_runtime["orchestrator"],
+            fake_runtime["debugger"],
+            fake_runtime["planner"],
+            fake_runtime["goal_archive"],
+            unittest.mock.ANY,
+            decompose=False,
         )
-        self.assertIs(fake_runtime["loop"], fake_loop)
-        self.assertEqual(mock_run_goals.call_count, 2)
-        self.assertIs(mock_run_goals.call_args_list[0].args[2], fake_loop)
-        self.assertIs(mock_run_goals.call_args_list[1].args[2], fake_loop)
 
     def test_legacy_goal_status_json_output_includes_cli_warnings(self):
         fake_runtime = {
@@ -998,7 +1052,19 @@ class TestCLIMainDispatch(unittest.TestCase):
         runtime_factory = MagicMock(return_value=fake_runtime)
 
         def _emit_status_json(*_args, **_kwargs):
-            print('{"queue_length": 0, "queue": [], "completed_count": 0, "completed": []}')
+            print(json.dumps({
+                "schema_version": 1,
+                "queue": {
+                    "pending_count": 0,
+                    "pending": [],
+                    "completed_count": 0,
+                    "completed": [],
+                    "active_goal": None,
+                    "updated_at": 1234567890.0
+                },
+                "active_cycle": None,
+                "last_cycle": None
+            }))
 
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
              patch("aura_cli.cli_main._handle_status", side_effect=_emit_status_json), \
@@ -1008,7 +1074,7 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(err, "Warning: Legacy flags are deprecated; use `aura goal status` instead.\n")
         payload = json.loads(out)
-        self.assertEqual(payload["queue_length"], 0)
+        self.assertEqual(payload["queue"]["pending_count"], 0)
         self.assertIn("cli_warnings", payload)
         self.assertEqual(payload["cli_warnings"][0]["action"], "goal_status")
         self.assertEqual(payload["cli_warnings"][0]["replacement_command"], "aura goal status")
@@ -1027,7 +1093,19 @@ class TestCLIMainDispatch(unittest.TestCase):
         runtime_factory = MagicMock(return_value=fake_runtime)
 
         def _emit_status_json(*_args, **_kwargs):
-            print('{"queue_length": 0, "queue": [], "completed_count": 0, "completed": []}')
+            print(json.dumps({
+                "schema_version": 1,
+                "queue": {
+                    "pending_count": 0,
+                    "pending": [],
+                    "completed_count": 0,
+                    "completed": [],
+                    "active_goal": None,
+                    "updated_at": 1234567890.0
+                },
+                "active_cycle": None,
+                "last_cycle": None
+            }))
 
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
              patch("aura_cli.cli_main._handle_status", side_effect=_emit_status_json), \
@@ -1052,7 +1130,19 @@ class TestCLIMainDispatch(unittest.TestCase):
         runtime_factory = MagicMock(return_value=fake_runtime)
 
         def _emit_status_json(*_args, **_kwargs):
-            print('{"queue_length": 0, "queue": [], "completed_count": 0, "completed": []}')
+            print(json.dumps({
+                "schema_version": 1,
+                "queue": {
+                    "pending_count": 0,
+                    "pending": [],
+                    "completed_count": 0,
+                    "completed": [],
+                    "active_goal": None,
+                    "updated_at": 1234567890.0
+                },
+                "active_cycle": None,
+                "last_cycle": None
+            }))
 
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
              patch("aura_cli.cli_main._handle_status", side_effect=_emit_status_json), \
@@ -1068,6 +1158,119 @@ class TestCLIMainDispatch(unittest.TestCase):
         legacy_payload = json.loads(out_l)
         self.assertEqual(canonical_payload, self._without_cli_warnings(legacy_payload))
         self._assert_json_snapshot(out_c, "cli_canonical_goal_status_dispatch.json")
+
+    def test_canonical_queue_list_json_output_matches_snapshot(self):
+        goal_queue = MagicMock()
+        goal_queue.queue = ["Goal 1", "Goal 2"]
+        fake_runtime = {"goal_queue": goal_queue}
+        runtime_factory = MagicMock(return_value=fake_runtime)
+
+        with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"):
+            code, out, err, _ = self._dispatch(["queue", "list", "--json"], runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self._assert_json_snapshot(out, "cli_canonical_queue_list_dispatch.json")
+
+    def test_canonical_queue_clear_json_output_matches_snapshot(self):
+        goal_queue = MagicMock()
+        goal_queue.queue = ["Goal 1"]
+        fake_runtime = {"goal_queue": goal_queue}
+        runtime_factory = MagicMock(return_value=fake_runtime)
+
+        with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"):
+            code, out, err, _ = self._dispatch(["queue", "clear", "--json"], runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self._assert_json_snapshot(out, "cli_canonical_queue_clear_dispatch.json")
+
+    def test_canonical_memory_search_json_output_matches_snapshot(self):
+        vector_store = MagicMock()
+        hit = MagicMock()
+        hit.score = 0.95
+        hit.source_ref = "file.py"
+        hit.content = "some content here"
+        vector_store.search.return_value = [hit]
+        fake_runtime = {"vector_store": vector_store}
+        runtime_factory = MagicMock(return_value=fake_runtime)
+
+        with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"):
+            code, out, err, _ = self._dispatch(["memory", "search", "query", "--json"], runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self._assert_json_snapshot(out, "cli_canonical_memory_search_dispatch.json")
+
+    def test_canonical_metrics_json_output_matches_snapshot(self):
+        brain = MagicMock()
+        memory_store = MagicMock()
+        memory_store.read_log.return_value = []
+        outcome_json = json.dumps({
+            "cycle_id": "cycle123",
+            "success": True,
+            "started_at": 100,
+            "completed_at": 150,
+            "goal": "Test goal"
+        })
+        brain.recall_recent.return_value = [f"outcome:1 -> {outcome_json}"]
+        fake_runtime = {"brain": brain, "memory_store": memory_store}
+        runtime_factory = MagicMock(return_value=fake_runtime)
+
+        with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"):
+            code, out, err, _ = self._dispatch(["metrics", "--json"], runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self._assert_json_snapshot(out, "cli_canonical_metrics_dispatch.json")
+
+    def test_canonical_scaffold_json_output_matches_snapshot(self):
+        fake_model = MagicMock()
+        fake_model.respond.return_value = "{}"
+        fake_runtime = {"model_adapter": fake_model, "brain": MagicMock()}
+        runtime_factory = MagicMock(return_value=fake_runtime)
+
+        with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"), \
+             patch("aura_cli.cli_main.Brain"), \
+             patch("aura_cli.cli_main.ScaffolderAgent") as mock_agent_cls:
+            mock_agent = mock_agent_cls.return_value
+            mock_agent.scaffold_project.return_value = "Project 'demo' scaffolded successfully at /path/to/demo"
+            
+            code, out, err, _ = self._dispatch(["scaffold", "demo", "--json"], runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self._assert_json_snapshot(out, "cli_canonical_scaffold_dispatch.json")
+
+    def test_aura_log_stream_redirects_json_logs_to_stdout(self):
+        # We use doctor because it's fast and doesn't need runtime if we mock it
+        with patch("aura_cli.cli_main._handle_doctor") as mock_doctor, \
+             patch.dict(os.environ, {"AURA_LOG_STREAM": "stdout", "AURA_SKIP_CHDIR": "1"}):
+            mock_doctor.return_value = 0
+            
+            # Using subprocess via run_main_subprocess to test environment variable properly
+            # and avoid side effects in the current process
+            proc = run_main_subprocess("doctor")
+            
+            self.assertEqual(proc.returncode, 0)
+            stdout = proc.stdout
+            
+            # Check if JSON log appears in stdout
+            lines = stdout.strip().split("\n")
+            json_logs = []
+            for line in lines:
+                if line.startswith("{"):
+                    try:
+                        json_logs.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        pass
+            
+            self.assertTrue(any(log.get("event") == "aura_doctor_requested" for log in json_logs))
 
     def test_logs_command_does_not_require_runtime(self):
         runtime_factory = MagicMock()

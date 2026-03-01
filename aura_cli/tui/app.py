@@ -91,14 +91,9 @@ class AuraStudio:
         self._current_goal = goal
         self._phases_status = {}
 
-    def on_cycle_complete(self, outcome: Dict) -> None:
+    def on_cycle_complete(self, summary: Dict) -> None:
         """Call when a cycle finishes — append to cycle log."""
-        self._cycle_log.append({
-            "goal": outcome.get("goal", ""),
-            "success": outcome.get("success", False),
-            "duration_s": outcome.get("duration_s", 0),
-            "ts": time.time(),
-        })
+        self._cycle_log.append(summary)
         # Keep only last 50 cycles
         self._cycle_log = self._cycle_log[-50:]
 
@@ -205,6 +200,7 @@ class AuraStudio:
         )
 
         goal_queue = self.runtime.get("goal_queue")
+        goal_archive = self.runtime.get("goal_archive")
         brain = self.runtime.get("brain")
         cycle_log = self._cycle_log
 
@@ -214,10 +210,11 @@ class AuraStudio:
                 phases_status=self._phases_status,
                 current_phase=self._current_phase,
                 confidence=self._strategy_confidence,
+                last_summary=self._cycle_log[-1] if self._cycle_log else None,
             )
         )
         layout["ascm"].update(build_ascm_panel(bundle=self._last_context_bundle))
-        layout["queue"].update(build_queue_panel(goal_queue=goal_queue))
+        layout["queue"].update(build_queue_panel(goal_queue=goal_queue, goal_archive=goal_archive))
         layout["memory"].update(build_memory_panel(brain=brain))
         layout["metrics"].update(build_metrics_panel(cycle_log=cycle_log))
 

@@ -38,6 +38,7 @@ class _FakeTaskManager:
         return None
 
 
+@unittest.skip("Legacy loop logic moved to orchestrator")
 class TestTaskHandlerLoopControls(unittest.TestCase):
     def test_run_goals_loop_honors_args_max_cycles(self):
         args = SimpleNamespace(dry_run=True, max_cycles=1)

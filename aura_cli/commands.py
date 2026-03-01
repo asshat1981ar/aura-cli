@@ -74,59 +74,62 @@ def _handle_add(goal_queue: GoalQueue, command: str):
     print(f"Added goal: {goal}")
     print(f"Queue length: {len(goal_queue.queue)}")
 
-def _handle_run(args, goal_queue: GoalQueue, goal_archive: GoalArchive, loop, debugger_instance, planner_instance, project_root: Path):
+def _handle_run(args, goal_queue: GoalQueue, goal_archive: GoalArchive, orchestrator, debugger_instance, planner_instance, project_root: Path):
     if not goal_queue.has_goals():
         log_json("WARN", "run_command_no_goals_in_queue")
         return
-    run_goals_loop(args, goal_queue, loop, debugger_instance, planner_instance, goal_archive, project_root, decompose=getattr(args, 'decompose', False))
+    run_goals_loop(args, goal_queue, orchestrator, debugger_instance, planner_instance, goal_archive, project_root, decompose=getattr(args, 'decompose', False))
 
 def _handle_status(
     goal_queue: GoalQueue,
     goal_archive: GoalArchive,
-    loop,
+    orchestrator,
     *,
     as_json: bool = False,
     project_root: Path | None = None,
     memory_persistence_path: Path | str | None = None,
 ):
     log_json("INFO", "aura_status_requested")
-    capability_status = build_capability_status_report(
-        Path(project_root or Path.cwd()),
+    
+    from core.operator_runtime import build_operator_runtime_snapshot
+    from core.capability_manager import build_capability_status_report
+
+    active_cycle = getattr(orchestrator, "active_cycle_summary", None)
+    last_cycle = getattr(orchestrator, "last_cycle_summary", None)
+    
+    snapshot = build_operator_runtime_snapshot(
         goal_queue=goal_queue,
-        last_status=getattr(loop, "last_capability_status", None),
+        goal_archive=goal_archive,
+        active_cycle=active_cycle,
+        last_cycle=last_cycle,
     )
+
     if as_json:
-        data = {
-            "queue_length": len(goal_queue.queue),
-            "queue": list(goal_queue.queue),
-            "completed_count": len(goal_archive.completed),
-            "completed": [{"goal": g, "score": s} for g, s in goal_archive.completed],
-            "capabilities": capability_status,
-        }
-        print(json.dumps(data))
+        # Include legacy capabilities field for now to avoid breaking tools
+        capability_status = build_capability_status_report(
+            Path(project_root or Path.cwd()),
+            goal_queue=goal_queue,
+            last_status=getattr(orchestrator, "last_capability_status", None),
+        )
+        snapshot["capabilities"] = capability_status
+        print(json.dumps(snapshot))
         return
 
     print("\n--- AURA Status ---")
-    print(f"Goals in queue: {len(goal_queue.queue)}")
-    for i, goal in enumerate(goal_queue.queue):
-        print(f"  {i+1}. {goal}")
-    print(f"Completed goals: {len(goal_archive.completed)}")
-    for goal, score in goal_archive.completed:
-        print(f"  - '{goal}' (Score: {score:.2f})")
+    print(f"Goals in queue: {snapshot['queue']['pending_count']}")
+    for item in snapshot['queue']['pending']:
+        print(f"  {item['position']}. {item['goal']}")
+    
+    print(f"Completed goals: {snapshot['queue']['completed_count']}")
+    for item in snapshot['queue']['completed']:
+        score_str = f" (Score: {item['score']:.2f})" if item['score'] is not None else ""
+        print(f"  - '{item['goal']}'{score_str}")
 
-    print("\n--- Capability Bootstrap ---")
-    print(f"Last analyzed goal: {capability_status['last_goal'] or 'None'}")
-    matched = capability_status["matched_capability_ids"]
-    print(f"Matched capability rules: {', '.join(matched) if matched else 'None'}")
-    print(f"Pending self-development goals: {len(capability_status['pending_self_development_goals'])}")
-    print(
-        "MCP bootstrap pending: "
-        + (", ".join(capability_status["pending_bootstrap_actions"]) if capability_status["pending_bootstrap_actions"] else "None")
-    )
-    print(
-        "MCP bootstrap running: "
-        + (", ".join(capability_status["running_bootstrap_actions"]) if capability_status["running_bootstrap_actions"] else "None")
-    )
+    if active_cycle:
+        print("\n--- Active Cycle ---")
+        print(f"ID: {active_cycle['cycle_id']}")
+        print(f"Goal: {active_cycle['goal']}")
+        print(f"Phase: {active_cycle['current_phase']} ({active_cycle['state']})")
 
     # Task Hierarchy
     task_manager = TaskManager(persistence_path=memory_persistence_path)
@@ -137,13 +140,15 @@ def _handle_status(
 
     # Add Loop status
     print("\n--- AURA Loop Status ---")
-    if hasattr(loop, "current_score"):
-        print(f"Current Loop Score: {loop.current_score:.2f}")
-        print(f"Regression Count: {loop.regression_count}")
-        print(f"Stable Convergence Count: {loop.stable_convergence_count}")
-        print(f"Current Goal: {loop.current_goal if loop.current_goal else 'None'}")
+    if hasattr(orchestrator, "current_score"):
+        print(f"Current Loop Score: {orchestrator.current_score:.2f}")
+        print(f"Regression Count: {orchestrator.regression_count}")
+        print(f"Stable Convergence Count: {orchestrator.stable_convergence_count}")
+        print(f"Current Goal: {orchestrator.current_goal if orchestrator.current_goal else 'None'}")
+    elif active_cycle:
+        print(f"Orchestrator active. Current Goal: {active_cycle['goal']}")
     else:
-        print("Loop status: orchestrator active (no legacy score fields).")
+        print("Loop status: idle.")
     print("------------------------\n")
 
 def _handle_exit():

@@ -72,20 +72,20 @@ def run_script_main_with_report(report: dict, *argv: str):
     return code, strip_aura_logs(out.getvalue()), strip_aura_logs(err.getvalue())
 
 def run_main_main(*argv: str):
-    import main as main_module
+    from aura_cli.cli_main import main as main_func
     out = io.StringIO()
     err = io.StringIO()
     with redirect_stdout(out), redirect_stderr(err):
-        code = main_module.main(argv=list(argv))
+        code = main_func(argv=list(argv))
     return code, strip_aura_logs(out.getvalue()), strip_aura_logs(err.getvalue())
 
 def run_main_main_with_report(report: dict, *argv: str):
-    import main as main_module
+    from aura_cli.cli_main import main as main_func
     out = io.StringIO()
     err = io.StringIO()
     with patch("aura_cli.contract_report.build_cli_contract_report", return_value=report):
         with redirect_stdout(out), redirect_stderr(err):
-            code = main_module.main(argv=list(argv))
+            code = main_func(argv=list(argv))
     return code, strip_aura_logs(out.getvalue()), strip_aura_logs(err.getvalue())
 
 def run_script_subprocess(*argv: str):
@@ -124,10 +124,10 @@ argv = sys.argv[3:]
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
-import main as main_module
+from aura_cli.cli_main import main as main_func
 
 with patch("aura_cli.contract_report.build_cli_contract_report", return_value=report):
-    raise SystemExit(main_module.main(argv=argv))
+    raise SystemExit(main_func(argv=argv))
 """
     proc = subprocess.run(
         [sys.executable, "-c", snippet, str(REPO_ROOT), json.dumps(report), *argv],

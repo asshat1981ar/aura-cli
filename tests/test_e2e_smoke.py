@@ -14,7 +14,7 @@ class TestDryRunCycleSmoke(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         from aura_cli.cli_main import create_runtime
-        cls.runtime = create_runtime(project_root=Path("."))
+        cls.runtime = create_runtime(project_root=Path(".").resolve())
 
     def test_cycle_completes_without_exception(self):
         orc = self.runtime["orchestrator"]

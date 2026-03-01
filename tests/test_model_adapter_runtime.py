@@ -32,16 +32,17 @@ def test_embed_disables_remote_provider_after_failure(monkeypatch):
         return default
 
     with patch("core.model_adapter.log_json"), \
+         patch("core.model_adapter.resolve_openai_api_key", return_value="openai-key"), \
          patch("core.model_adapter.config.get", side_effect=mock_get):
         adapter = ModelAdapter()
 
-    with patch("core.model_adapter.time.sleep"), \
-         patch.object(adapter, "_make_request_with_retries", side_effect=error) as mock_request:
-        first = adapter.embed(["alpha"])
-        second = adapter.embed(["beta"])
+        with patch("core.model_adapter.time.sleep"), \
+             patch.object(adapter, "_make_request_with_retries", side_effect=error) as mock_request:
+            first = adapter.embed(["alpha"])
+            second = adapter.embed(["beta"])
 
-    assert len(first) == 1
-    assert len(second) == 1
-    assert first[0].shape == second[0].shape == (adapter.dimensions(),)
-    assert adapter._embedding_disabled is True
-    assert mock_request.call_count == 1
+        assert len(first) == 1
+        assert len(second) == 1
+        assert first[0].shape == second[0].shape == (adapter.dimensions(),)
+        assert adapter._embedding_disabled is True
+        assert mock_request.call_count == 1

@@ -1,0 +1,10 @@
+{
+  "hits": [
+    {
+      "content_preview": "some content here",
+      "score": 0.95,
+      "source_ref": "file.py"
+    }
+  ],
+  "query": "query"
+}

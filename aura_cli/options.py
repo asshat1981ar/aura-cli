@@ -125,14 +125,20 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         path=("goal", "status"),
         summary="Show queue status",
         description="Show queued and completed goals.",
-        examples=("python3 main.py goal status --json",),
+        examples=(
+            "python3 main.py goal status",
+            "python3 main.py goal status --json",
+        ),
         legacy_flags=("--status",),
     ),
     CommandSpec(
         path=("goal", "once"),
         summary="Run a one-off goal",
         description="Run a single goal directly without queueing it.",
-        examples=("python3 main.py goal once \"Summarize repo\" --dry-run",),
+        examples=(
+            "python3 main.py goal once \"Summarize repo\"",
+            "python3 main.py goal once \"Refactor core\" --max-cycles 3",
+        ),
         legacy_flags=("--goal",),
     ),
     CommandSpec(
@@ -175,51 +181,75 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         path=("scaffold",),
         summary="Scaffold a project",
         description="Run the scaffolder agent for a named project type.",
-        examples=("python3 main.py scaffold demo --desc \"small demo app\"",),
+        examples=(
+            "python3 main.py scaffold demo --desc \"small demo app\"",
+            "python3 main.py scaffold demo --json",
+        ),
         legacy_flags=("--scaffold",),
     ),
     CommandSpec(
         path=("evolve",),
         summary="Run evolution loop",
-        description="Run the evolution loop to mutate and improve the system.",
-        examples=("python3 main.py evolve",),
+        description="Autonomous self-improvement loop for AURA core.",
+        examples=(
+            "python3 main.py evolve",
+            "python3 main.py evolve --json",
+        ),
         legacy_flags=("--evolve",),
     ),
     CommandSpec(
         path=("queue",),
         summary="Goal queue management",
         description="List, add, or clear goals in the autonomous queue.",
-        examples=("python3 main.py queue list",),
+        examples=(
+            "python3 main.py queue list",
+            "python3 main.py queue list --json",
+        ),
     ),
     CommandSpec(
         path=("queue", "list"),
         summary="List queued goals",
         description="Show all pending and completed goals.",
-        examples=("python3 main.py queue list",),
+        examples=(
+            "python3 main.py queue list",
+            "python3 main.py queue list --json",
+        ),
     ),
     CommandSpec(
         path=("queue", "clear"),
         summary="Clear the goal queue",
         description="Remove all pending goals from the queue.",
-        examples=("python3 main.py queue clear",),
+        examples=(
+            "python3 main.py queue clear",
+            "python3 main.py queue clear --json",
+        ),
     ),
     CommandSpec(
         path=("memory",),
         summary="Semantic memory operations",
         description="Search or browse through the AURA brain.",
-        examples=("python3 main.py memory search \"workflow engine\"",),
+        examples=(
+            "python3 main.py memory search \"workflow engine\"",
+            "python3 main.py memory search \"workflow engine\" --json",
+        ),
     ),
     CommandSpec(
         path=("memory", "search"),
         summary="Search semantic memory",
         description="Perform a semantic search over brain entries.",
-        examples=("python3 main.py memory search \"workflow engine\"",),
+        examples=(
+            "python3 main.py memory search \"workflow engine\"",
+            "python3 main.py memory search \"workflow engine\" --json",
+        ),
     ),
     CommandSpec(
         path=("metrics",),
         summary="Show performance metrics",
         description="Display cycle success rates and timing stats.",
-        examples=("python3 main.py metrics",),
+        examples=(
+            "python3 main.py metrics",
+            "python3 main.py metrics --json",
+        ),
     ),
 )
 
@@ -513,6 +543,11 @@ def help_schema() -> dict[str, Any]:
         if spec.path == ("goal", "add"):
             default_action = "goal_add"
         action_spec = CLI_ACTION_SPECS_BY_ACTION.get(default_action) if default_action else None
+        
+        flags = []
+        if default_action and default_action not in {"logs", "watch", "studio", "interactive"}:
+            flags.append({"name": "--json", "summary": "Output JSON instead of text"})
+
         commands.append(
             {
                 "path": list(spec.path),
@@ -522,6 +557,7 @@ def help_schema() -> dict[str, Any]:
                 "legacy_flags": list(spec.legacy_flags),
                 "action": default_action,
                 "requires_runtime": action_spec.requires_runtime if action_spec else None,
+                "flags": flags,
             }
         )
     return {

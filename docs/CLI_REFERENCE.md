@@ -79,6 +79,12 @@ Known record codes:
   - [`aura mcp call`](#aura-mcp-call)
 - [`scaffold`](#scaffold)
 - [`evolve`](#evolve)
+- [`queue`](#queue)
+  - [`aura queue list`](#aura-queue-list)
+  - [`aura queue clear`](#aura-queue-clear)
+- [`memory`](#memory)
+  - [`aura memory search`](#aura-memory-search)
+- [`metrics`](#metrics)
 
 ## `help`
 
@@ -262,6 +268,7 @@ Legacy flags:
 - `--status`
 
 Examples:
+- `python3 main.py goal status`
 - `python3 main.py goal status --json`
 
 ### `aura goal once`
@@ -276,7 +283,8 @@ Legacy flags:
 - `--goal`
 
 Examples:
-- `python3 main.py goal once "Summarize repo" --dry-run`
+- `python3 main.py goal once "Summarize repo"`
+- `python3 main.py goal once "Refactor core" --max-cycles 3`
 
 ## `workflow`
 
@@ -358,6 +366,7 @@ Legacy flags:
 
 Examples:
 - `python3 main.py scaffold demo --desc "small demo app"`
+- `python3 main.py scaffold demo --json`
 
 ## `evolve`
 
@@ -365,7 +374,7 @@ Examples:
 
 Run evolution loop
 
-Run the evolution loop to mutate and improve the system.
+Autonomous self-improvement loop for AURA core.
 
 `action`: `evolve` `requires_runtime`: `true`
 
@@ -374,3 +383,78 @@ Legacy flags:
 
 Examples:
 - `python3 main.py evolve`
+- `python3 main.py evolve --json`
+
+## `queue`
+
+### `aura queue`
+
+Goal queue management
+
+List, add, or clear goals in the autonomous queue.
+
+Examples:
+- `python3 main.py queue list`
+- `python3 main.py queue list --json`
+
+### `aura queue list`
+
+List queued goals
+
+Show all pending and completed goals.
+
+`action`: `queue_list` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py queue list`
+- `python3 main.py queue list --json`
+
+### `aura queue clear`
+
+Clear the goal queue
+
+Remove all pending goals from the queue.
+
+`action`: `queue_clear` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py queue clear`
+- `python3 main.py queue clear --json`
+
+## `memory`
+
+### `aura memory`
+
+Semantic memory operations
+
+Search or browse through the AURA brain.
+
+Examples:
+- `python3 main.py memory search "workflow engine"`
+- `python3 main.py memory search "workflow engine" --json`
+
+### `aura memory search`
+
+Search semantic memory
+
+Perform a semantic search over brain entries.
+
+`action`: `memory_search` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py memory search "workflow engine"`
+- `python3 main.py memory search "workflow engine" --json`
+
+## `metrics`
+
+### `aura metrics`
+
+Show performance metrics
+
+Display cycle success rates and timing stats.
+
+`action`: `metrics_show` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py metrics`
+- `python3 main.py metrics --json`

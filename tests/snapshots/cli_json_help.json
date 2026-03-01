@@ -7,6 +7,12 @@
         "python3 main.py help",
         "python3 main.py help goal add"
       ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
       "legacy_flags": [],
       "path": [
         "help"
@@ -20,6 +26,12 @@
       "examples": [
         "python3 main.py doctor"
       ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
       "legacy_flags": [],
       "path": [
         "doctor"
@@ -32,6 +44,12 @@
       "description": "Bootstrap local configuration files for AURA.",
       "examples": [
         "python3 main.py bootstrap"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
       ],
       "legacy_flags": [
         "--bootstrap"
@@ -48,6 +66,12 @@
       "examples": [
         "python3 main.py config"
       ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
       "legacy_flags": [],
       "path": [
         "config"
@@ -62,6 +86,12 @@
         "python3 main.py contract-report --check",
         "python3 main.py contract-report --compact"
       ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
       "legacy_flags": [],
       "path": [
         "contract-report"
@@ -74,6 +104,12 @@
       "description": "Fetch MCP health, metrics, limits, and recent logs via HTTP.",
       "examples": [
         "python3 main.py diag"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
       ],
       "legacy_flags": [
         "--diag"
@@ -91,6 +127,7 @@
         "python3 main.py logs --tail 50",
         "python3 main.py logs --file memory/aura.log --follow"
       ],
+      "flags": [],
       "legacy_flags": [],
       "path": [
         "logs"
@@ -105,6 +142,7 @@
         "python3 main.py watch",
         "python3 main.py watch --autonomous"
       ],
+      "flags": [],
       "legacy_flags": [],
       "path": [
         "watch"
@@ -119,6 +157,7 @@
         "python3 main.py studio",
         "python3 main.py studio --autonomous"
       ],
+      "flags": [],
       "legacy_flags": [],
       "path": [
         "studio"
@@ -133,6 +172,7 @@
         "python3 main.py goal status",
         "python3 main.py goal add \"Refactor queue\""
       ],
+      "flags": [],
       "legacy_flags": [],
       "path": [
         "goal"
@@ -146,6 +186,12 @@
       "examples": [
         "python3 main.py goal add \"Fix tests\"",
         "python3 main.py goal add \"Fix tests\" --run"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
       ],
       "legacy_flags": [
         "--add-goal",
@@ -164,6 +210,12 @@
       "examples": [
         "python3 main.py goal run --dry-run"
       ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
       "legacy_flags": [
         "--run-goals"
       ],
@@ -178,7 +230,14 @@
       "action": "goal_status",
       "description": "Show queued and completed goals.",
       "examples": [
+        "python3 main.py goal status",
         "python3 main.py goal status --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
       ],
       "legacy_flags": [
         "--status"
@@ -194,7 +253,14 @@
       "action": "goal_once",
       "description": "Run a single goal directly without queueing it.",
       "examples": [
-        "python3 main.py goal once \"Summarize repo\" --dry-run"
+        "python3 main.py goal once \"Summarize repo\"",
+        "python3 main.py goal once \"Refactor core\" --max-cycles 3"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
       ],
       "legacy_flags": [
         "--goal"
@@ -212,6 +278,7 @@
       "examples": [
         "python3 main.py workflow run \"Summarize repo\""
       ],
+      "flags": [],
       "legacy_flags": [],
       "path": [
         "workflow"
@@ -224,6 +291,12 @@
       "description": "Run the orchestrator loop for a single workflow goal.",
       "examples": [
         "python3 main.py workflow run \"Summarize repo\" --max-cycles 3"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
       ],
       "legacy_flags": [
         "--workflow-goal"
@@ -241,6 +314,7 @@
       "examples": [
         "python3 main.py mcp tools"
       ],
+      "flags": [],
       "legacy_flags": [],
       "path": [
         "mcp"
@@ -253,6 +327,12 @@
       "description": "List tools exposed by the MCP HTTP server.",
       "examples": [
         "python3 main.py mcp tools"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
       ],
       "legacy_flags": [
         "--mcp-tools"
@@ -271,6 +351,12 @@
         "python3 main.py mcp call limits",
         "python3 main.py mcp call tail_logs --args '{\"lines\": 10}'"
       ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
       "legacy_flags": [
         "--mcp-call"
       ],
@@ -285,7 +371,14 @@
       "action": "scaffold",
       "description": "Run the scaffolder agent for a named project type.",
       "examples": [
-        "python3 main.py scaffold demo --desc \"small demo app\""
+        "python3 main.py scaffold demo --desc \"small demo app\"",
+        "python3 main.py scaffold demo --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
       ],
       "legacy_flags": [
         "--scaffold"
@@ -298,9 +391,16 @@
     },
     {
       "action": "evolve",
-      "description": "Run the evolution loop to mutate and improve the system.",
+      "description": "Autonomous self-improvement loop for AURA core.",
       "examples": [
-        "python3 main.py evolve"
+        "python3 main.py evolve",
+        "python3 main.py evolve --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
       ],
       "legacy_flags": [
         "--evolve"
@@ -315,8 +415,10 @@
       "action": null,
       "description": "List, add, or clear goals in the autonomous queue.",
       "examples": [
-        "python3 main.py queue list"
+        "python3 main.py queue list",
+        "python3 main.py queue list --json"
       ],
+      "flags": [],
       "legacy_flags": [],
       "path": [
         "queue"
@@ -328,7 +430,14 @@
       "action": "queue_list",
       "description": "Show all pending and completed goals.",
       "examples": [
-        "python3 main.py queue list"
+        "python3 main.py queue list",
+        "python3 main.py queue list --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
       ],
       "legacy_flags": [],
       "path": [
@@ -342,7 +451,14 @@
       "action": "queue_clear",
       "description": "Remove all pending goals from the queue.",
       "examples": [
-        "python3 main.py queue clear"
+        "python3 main.py queue clear",
+        "python3 main.py queue clear --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
       ],
       "legacy_flags": [],
       "path": [
@@ -356,8 +472,10 @@
       "action": null,
       "description": "Search or browse through the AURA brain.",
       "examples": [
-        "python3 main.py memory search \"workflow engine\""
+        "python3 main.py memory search \"workflow engine\"",
+        "python3 main.py memory search \"workflow engine\" --json"
       ],
+      "flags": [],
       "legacy_flags": [],
       "path": [
         "memory"
@@ -369,7 +487,14 @@
       "action": "memory_search",
       "description": "Perform a semantic search over brain entries.",
       "examples": [
-        "python3 main.py memory search \"workflow engine\""
+        "python3 main.py memory search \"workflow engine\"",
+        "python3 main.py memory search \"workflow engine\" --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
       ],
       "legacy_flags": [],
       "path": [
@@ -383,7 +508,14 @@
       "action": "metrics_show",
       "description": "Display cycle success rates and timing stats.",
       "examples": [
-        "python3 main.py metrics"
+        "python3 main.py metrics",
+        "python3 main.py metrics --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
       ],
       "legacy_flags": [],
       "path": [

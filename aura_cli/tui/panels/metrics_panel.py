@@ -37,8 +37,9 @@ def build_metrics_panel(cycle_log: Optional[List[Dict]] = None) -> "Panel":
     table.add_column("Value")
 
     recent = cycle_log[-10:]
-    durations = [c.get("duration_s", 0) for c in recent if "duration_s" in c]
-    successes = [c for c in recent if c.get("success")]
+    durations = [c.get("duration_s", 0) for c in recent if c.get("duration_s") is not None]
+    successes = [c for c in recent if c.get("outcome") == "SUCCESS"]
+    skipped = [c for c in recent if c.get("outcome") == "SKIPPED"]
 
     if recent:
         avg_s = statistics.mean(durations) if durations else 0
@@ -49,7 +50,7 @@ def build_metrics_panel(cycle_log: Optional[List[Dict]] = None) -> "Panel":
         table.add_row("total cycles", str(len(cycle_log)))
         table.add_row("avg (last 10)", f"{avg_s:.1f}s")
         table.add_row("p95 (last 10)", f"{p95_s:.1f}s")
-        table.add_row("success rate", f"{success_pct}%")
+        table.add_row("success rate", f"{success_pct}% ({len(successes)} pass, {len(skipped)} skip)")
         table.add_row("trend", f"[cyan]{spark}[/cyan]")
     else:
         table.add_row("[dim]No cycles recorded yet[/dim]", "")

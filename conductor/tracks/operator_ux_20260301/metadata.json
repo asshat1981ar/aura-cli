@@ -1,0 +1,8 @@
+{
+  "track_id": "operator_ux_20260301",
+  "type": "feature",
+  "status": "in_progress",
+  "created_at": "2026-03-01T15:00:00Z",
+  "updated_at": "2026-03-01T16:00:00Z",
+  "description": "Operator UX and Observability Hardening: unify CLI, TUI, and log/metrics visibility so humans and agents can inspect queue state, cycle health, and runtime failures without ambiguity."
+}

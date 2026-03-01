@@ -1,0 +1,19 @@
+{
+  "cli_warnings": [
+    {
+      "action": "goal_once",
+      "category": "deprecation",
+      "code": "legacy_cli_flags_deprecated",
+      "legacy_flags": [
+        "--goal"
+      ],
+      "message": "Legacy flags are deprecated; use `aura goal once` instead.",
+      "phase": "compatibility",
+      "replacement_command": "aura goal once"
+    }
+  ],
+  "cycles": 2,
+  "dry_run": true,
+  "goal": "Summarize repo",
+  "stop_reason": "done"
+}

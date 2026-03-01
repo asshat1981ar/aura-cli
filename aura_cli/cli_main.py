@@ -28,6 +28,7 @@ from core.logging_utils import log_json
 from agents.debugger import DebuggerAgent
 from agents.planner import PlannerAgent
 from agents.router import RouterAgent
+from agents.scaffolder import ScaffolderAgent
 from core.vector_store import VectorStore
 from core.runtime_paths import resolve_project_path
 from core.runtime_auth import (
@@ -46,7 +47,7 @@ from aura_cli.cli_options import (
     render_help,
     unknown_command_help_topic_payload,
 )
-from aura_cli.options import action_runtime_required
+from aura_cli.options import action_runtime_required, action_default_canonical_path
 
 
 def _mcp_headers():
@@ -134,14 +135,13 @@ def cli_interaction_loop(args, runtime):
                     print("Initializing full AURA runtime for execution...")
                     full_runtime = create_runtime(project_root, overrides={"runtime_mode": "full"})
                     runtime.update(full_runtime)
-                if runtime.get("loop") is None:
-                    runtime["loop"] = _ensure_legacy_loop(runtime, project_root=project_root)
                 
+                orchestrator = runtime.get("orchestrator")
                 _handle_run(
                     args, 
                     runtime["goal_queue"], 
                     runtime["goal_archive"], 
-                    runtime["loop"], 
+                    orchestrator, 
                     runtime["debugger"], 
                     runtime["planner"], 
                     project_root
@@ -150,7 +150,7 @@ def cli_interaction_loop(args, runtime):
                 _handle_status(
                     runtime["goal_queue"], 
                     runtime["goal_archive"], 
-                    runtime.get("loop"), 
+                    runtime.get("orchestrator"), 
                     project_root=project_root, 
                     memory_persistence_path=runtime.get("memory_persistence_path")
                 )
@@ -404,9 +404,6 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         "orchestrator": orchestrator,
         "debugger": debugger_instance,
         "planner": planner_instance,
-        # Legacy loop is initialized lazily so non-legacy commands do not
-        # instantiate deprecated HybridClosedLoop unnecessarily.
-        "loop": None,
         "git_tools": GitTools(repo_path=str(project_root)),
         "project_root": project_root,
         "model_adapter": model_adapter,
@@ -443,26 +440,6 @@ class DispatchRule:
     action: str
     requires_runtime: bool
     handler: object
-
-
-def _ensure_legacy_loop(runtime: dict, *, project_root: Path) -> object:
-    # Lazy import so HybridClosedLoop is only loaded for legacy commands.
-    from core.hybrid_loop import HybridClosedLoop
-
-    loop = runtime.get("loop")
-    if loop is not None:
-        return loop
-
-    model_adapter = runtime.get("model_adapter")
-    brain_instance = runtime.get("brain")
-    git_tools_instance = runtime.get("git_tools")
-    if git_tools_instance is None:
-        git_tools_instance = GitTools(repo_path=str(project_root))
-        runtime["git_tools"] = git_tools_instance
-
-    loop = HybridClosedLoop(model_adapter, brain_instance, git_tools_instance)
-    runtime["loop"] = loop
-    return loop
 
 
 def _resolve_dispatch_action(parsed) -> str:
@@ -515,8 +492,8 @@ def _handle_json_help_dispatch(_ctx: DispatchContext) -> int:
     return 0
 
 
-def _handle_doctor_dispatch(_ctx: DispatchContext) -> int:
-    _handle_doctor(_ctx.project_root)
+def _handle_doctor_dispatch(ctx: DispatchContext) -> int:
+    _handle_doctor(ctx.project_root)
     return 0
 
 
@@ -617,6 +594,10 @@ def _handle_watch_dispatch(ctx: DispatchContext) -> int:
 
 def _handle_queue_list_dispatch(ctx: DispatchContext) -> int:
     goal_queue = ctx.runtime["goal_queue"]
+    if getattr(ctx.args, "json", False):
+        _print_json_payload({"queue": list(goal_queue.queue), "count": len(goal_queue.queue)}, parsed=ctx.parsed, indent=2)
+        return 0
+
     if not goal_queue.queue:
         print("Goal queue is empty.")
         return 0
@@ -632,7 +613,10 @@ def _handle_queue_clear_dispatch(ctx: DispatchContext) -> int:
     count = len(goal_queue.queue)
     goal_queue.queue = []
     goal_queue._save()
-    print(f"Cleared {count} goals from the queue.")
+    if getattr(ctx.args, "json", False):
+        _print_json_payload({"cleared_count": count}, parsed=ctx.parsed, indent=2)
+    else:
+        print(f"Cleared {count} goals from the queue.")
     return 0
 
 
@@ -646,6 +630,21 @@ def _handle_memory_search_dispatch(ctx: DispatchContext) -> int:
     )
     hits = vector_store.search(query)
     
+    if getattr(ctx.args, "json", False):
+        payload = {
+            "query": ctx.args.query,
+            "hits": [
+                {
+                    "score": hit.score,
+                    "source_ref": hit.source_ref,
+                    "content_preview": hit.content[:200] + "..." if len(hit.content) > 200 else hit.content
+                }
+                for hit in hits
+            ]
+        }
+        _print_json_payload(payload, parsed=ctx.parsed, indent=2)
+        return 0
+
     if not hits:
         print(f"No results found for '{ctx.args.query}'")
         return 0
@@ -659,41 +658,96 @@ def _handle_memory_search_dispatch(ctx: DispatchContext) -> int:
 
 
 def _handle_metrics_show_dispatch(ctx: DispatchContext) -> int:
-    brain = ctx.runtime["brain"]
-    outcomes = [e for e in brain.recall_recent(limit=100) if "outcome:" in e]
-    
-    if not outcomes:
+    memory_store = ctx.runtime["memory_store"]
+    log_entries = memory_store.read_log(limit=100)
+
+    recent_data = []
+    successes = 0
+    skipped = 0
+    fails = 0
+    total_time = 0.0
+
+    # 1. Try structured summaries from decision log
+    summaries = [e["cycle_summary"] for e in log_entries if "cycle_summary" in e]
+    if summaries:
+        for s in summaries[-10:]:
+            outcome = s.get("outcome", "FAILED")
+            duration = s.get("duration_s", 0.0)
+
+            if outcome == "SUCCESS": successes += 1
+            elif outcome == "SKIPPED": skipped += 1
+            else: fails += 1
+
+            total_time += duration
+            recent_data.append({
+                "cycle_id": s.get("cycle_id"),
+                "status": outcome,
+                "duration": duration,
+                "goal": s.get("goal")
+            })
+
+    # 2. Fallback to legacy outcome strings in brain
+    if not recent_data:
+        brain = ctx.runtime["brain"]
+        outcomes = [e for e in brain.recall_recent(limit=100) if "outcome:" in e]
+        for raw in outcomes[:10]:
+            try:
+                # Format: outcome:id -> json
+                data = json.loads(raw.split("->", 1)[1])
+                status = "SUCCESS" if data.get("success") else "FAILED"
+                duration = data.get("completed_at", 0) - data.get("started_at", 0)
+
+                if data.get("success"): successes += 1
+                else: fails += 1
+
+                total_time += duration
+                recent_data.append({
+                    "cycle_id": data.get("cycle_id"),
+                    "status": status,
+                    "duration": duration,
+                    "goal": data.get("goal")
+                })
+            except Exception:
+                continue
+
+    count = len(recent_data)
+    avg_time = total_time / count if count else 0
+    win_rate = (successes / count * 100) if count else 0
+
+    if getattr(ctx.args, "json", False):
+        payload = {
+            "recent_cycles": recent_data,
+            "summary": {
+                "win_rate": win_rate,
+                "avg_duration": avg_time,
+                "count": count,
+                "successes": successes,
+                "skipped": skipped,
+                "fails": fails
+            }
+        }
+        for i, s in enumerate(summaries[-10:]):
+            recent_data[i]["stop_reason"] = s.get("stop_reason")
+        _print_json_payload(payload, parsed=ctx.parsed, indent=2)
+        return 0
+
+    if not recent_data:
         print("No metrics recorded yet.")
         return 0
-        
-    successes = 0
-    total_time = 0.0
-    
+
     print("Recent Cycle Metrics (last 10 cycles):\n")
-    print(f"{'Cycle ID':<10} | {'Status':<8} | {'Duration':<8} | {'Goal'}")
-    print("-" * 60)
-    
-    for raw in outcomes[:10]:
-        try:
-            # Format: outcome:id -> json
-            data = json.loads(raw.split("->", 1)[1])
-            status = "SUCCESS" if data.get("success") else "FAILED"
-            duration = data.get("completed_at", 0) - data.get("started_at", 0)
-            
-            if data.get("success"): successes += 1
-            total_time += duration
-            
-            print(f"{data.get('cycle_id')[:8]:<10} | {status:<8} | {duration:>7.1f}s | {data.get('goal')[:30]}...")
-        except Exception:
-            continue
-            
-    print("-" * 60)
-    avg_time = total_time / len(outcomes[:10]) if outcomes else 0
-    win_rate = (successes / len(outcomes[:10]) * 100) if outcomes else 0
-    print(f"Summary: {win_rate:.1f}% success rate | Avg duration: {avg_time:.1f}s")
+    print(f"{'Cycle ID':<10} | {'Status':<8} | {'Dur':<6} | {'Stop Reason':<15} | {'Goal'}")
+    print("-" * 85)
+
+    for i, item in enumerate(recent_data):
+        cid = (item['cycle_id'] or "unknown")[:8]
+        stop = (summaries[-len(recent_data):][i].get("stop_reason") or "N/A") if summaries else "N/A"
+        print(f"{cid:<10} | {item['status']:<8} | {item['duration']:>5.1f}s | {stop:<15} | {item['goal'][:30]}...")
+
+    print("-" * 85)
+    print(f"Summary: {win_rate:.1f}% success rate | {successes} pass, {skipped} skip, {fails} fail")
+    print(f"Avg duration: {avg_time:.1f}s")
     return 0
-
-
 def _handle_workflow_run_dispatch(ctx: DispatchContext) -> int:
     args = ctx.args
     orchestrator = ctx.runtime["orchestrator"]
@@ -713,22 +767,25 @@ def _handle_workflow_run_dispatch(ctx: DispatchContext) -> int:
 def _handle_scaffold_dispatch(ctx: DispatchContext) -> int:
     args = ctx.args
     runtime = ctx.runtime
-    from agents.scaffolder import ScaffolderAgent
 
-    scaffolder = ScaffolderAgent(runtime.get("brain", None) or __import__("memory.brain", fromlist=["Brain"]).Brain(), runtime["model_adapter"])
+    scaffolder = ScaffolderAgent(runtime.get("brain", None) or Brain(), runtime["model_adapter"])
     result = scaffolder.scaffold_project(args.scaffold, args.scaffold_desc)
-    print(result)
+    
+    if getattr(args, "json", False):
+        _print_json_payload({"result": result, "project_name": args.scaffold}, parsed=ctx.parsed, indent=2)
+    else:
+        print(result)
     return 0
 
 
 def _handle_evolve_dispatch(ctx: DispatchContext) -> int:
-    args = ctx.args
-    runtime = ctx.runtime
     from core.evolution_loop import EvolutionLoop
     from agents.mutator import MutatorAgent
-    from core.vector_store import VectorStore
 
-    _brain = runtime.get("brain") or __import__("memory.brain", fromlist=["Brain"]).Brain()
+    args = ctx.args
+    runtime = ctx.runtime
+
+    _brain = runtime.get("brain") or Brain()
     _model = runtime["model_adapter"]
     _planner = runtime["planner"]
     _coder = default_agents(_brain, _model).get("act")
@@ -813,11 +870,10 @@ def _handle_goal_once_dispatch(ctx: DispatchContext) -> int:
 def _handle_goal_run_dispatch(ctx: DispatchContext) -> int:
     args = ctx.args
     runtime = ctx.runtime
-    loop = _ensure_legacy_loop(runtime, project_root=ctx.project_root)
     run_goals_loop(
         args,
         runtime["goal_queue"],
-        loop,
+        runtime["orchestrator"],
         runtime["debugger"],
         runtime["planner"],
         runtime["goal_archive"],

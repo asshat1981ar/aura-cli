@@ -1,0 +1,6 @@
+{
+  "cycles": 2,
+  "dry_run": true,
+  "goal": "Summarize repo",
+  "stop_reason": "done"
+}

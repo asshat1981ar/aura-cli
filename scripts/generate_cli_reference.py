@@ -198,6 +198,19 @@ def main(argv: list[str] | None = None) -> int:
         existing = args.output.read_text(encoding="utf-8") if args.output.exists() else None
         if existing != rendered:
             print(f"{args.output} is out of date. Run scripts/generate_cli_reference.py.")
+            if existing is not None:
+                import difflib
+                diff = difflib.unified_diff(
+                    existing.splitlines(),
+                    rendered.splitlines(),
+                    fromfile=f"{args.output} (existing)",
+                    tofile=f"{args.output} (rendered)",
+                    lineterm="",
+                )
+                diff_text = "\n".join(diff)
+                if diff_text:
+                    print("\nDiff:")
+                    print(diff_text)
             return 1
         return 0
 

@@ -18,12 +18,14 @@ Typical usage::
     print(result["stop_reason"])
 """
 import os
+import json
 import time
 import uuid
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
 from core.logging_utils import log_json
+from core.operator_runtime import build_cycle_summary
 from core.capability_manager import (
     analyze_capability_needs,
     provision_capability_actions,
@@ -130,6 +132,9 @@ class LoopOrchestrator:
         self.last_capability_goal_queue: dict = {}
         self.last_capability_provisioning: dict = {}
         self.last_capability_status: dict = {}
+        self.current_goal: str | None = None
+        self.active_cycle_summary: dict | None = None
+        self.last_cycle_summary: dict | None = None
 
         # Lazy-load skills so missing optional deps don't break startup
         try:
@@ -507,6 +512,7 @@ class LoopOrchestrator:
                               "summary": sandbox_result.get("summary", "")})
 
             if _sandbox_try < MAX_SANDBOX_RETRIES - 1:
+                phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
                 task_bundle["fix_hints"] = [stderr_hint]
                 act = self._run_phase("act", {
                     "task": goal,
@@ -579,6 +585,7 @@ class LoopOrchestrator:
         while act_attempt < max_act_attempts:
             act_attempt += 1
             if act_attempt > 1:
+                phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
                 time.sleep(min(2 ** (act_attempt - 2), 16))
 
             act, apply_result, verification, extra_uses = self._execute_act_verify_attempt(goal, plan, task_bundle, cycle_id, phase_outputs, dry_run)
@@ -598,6 +605,7 @@ class LoopOrchestrator:
 
             route = self._route_failure(verification)
             if route == "plan" and plan_attempt < max_plan_retries:
+                phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
                 phase_outputs["_failure_context"] = {"failures": verification.get("failures", []), "logs": verification.get("logs", ""), "route": "plan"}
                 replan_needed = True
                 break
@@ -752,14 +760,34 @@ class LoopOrchestrator:
             self.memory_controller.store(MemoryTier.SESSION, reflection["summary"], metadata={"cycle_id": cycle_id, "type": "reflection"})
         return reflection
 
-    def _record_cycle_outcome(self, cycle_id: str, goal_type: str, phase_outputs: Dict):
+    def _refresh_cycle_summary(self, entry: Dict, *, state: str = "complete", current_phase: str | None = None) -> Dict:
+        """Rebuild and cache the canonical operator-facing cycle summary."""
+        summary = build_cycle_summary(entry, state=state, current_phase=current_phase)
+        entry["cycle_summary"] = summary
+        if state == "running":
+            self.active_cycle_summary = summary
+        else:
+            self.last_cycle_summary = summary
+        return summary
+
+    def _record_cycle_outcome(self, cycle_id: str, goal: str, goal_type: str, phase_outputs: Dict, started_at: float):
         """Final persistence and loop notification."""
+        from core.quality_snapshot import run_quality_snapshot
+        
         verify_status = phase_outputs.get("verification", {}).get("status", "skip")
         passed = verify_status in ("pass", "skip")
         if passed:
             self._consecutive_fails = 0
         elif verify_status == "fail":
             self._consecutive_fails += 1
+
+        # Phase 8: measure()
+        self._notify_ui("on_phase_start", "measure")
+        t0_measure = time.time()
+        changed_files = phase_outputs.get("apply_result", {}).get("applied", [])
+        quality = run_quality_snapshot(self.project_root, changed_files=changed_files)
+        phase_outputs["quality"] = quality
+        self._notify_ui("on_phase_complete", "measure", (time.time() - t0_measure) * 1000)
 
         if self.adaptive_pipeline:
             try:
@@ -768,9 +796,34 @@ class LoopOrchestrator:
             except Exception as exc:
                 log_json("WARN", "adaptive_pipeline_outcome_record_failed", details={"error": str(exc)})
 
-        entry = {"cycle_id": cycle_id, "goal_type": goal_type, "phase_outputs": phase_outputs, "stop_reason": None}
+        completed_at = time.time()
+        entry = {
+            "cycle_id": cycle_id,
+            "goal": goal,
+            "goal_type": goal_type,
+            "phase_outputs": phase_outputs,
+            "stop_reason": None,
+            "started_at": started_at,
+            "completed_at": completed_at,
+            "duration_s": max(completed_at - started_at, 0.0),
+        }
+        
+        # Phase 9: learn()
+        self._notify_ui("on_phase_start", "learn")
+        t0_learn = time.time()
+        summary = self._refresh_cycle_summary(entry)
+        self._notify_ui("on_cycle_complete", summary)
+        self.current_goal = None
+        self.active_cycle_summary = None
         if self.memory_controller.persistent_store:
             self.memory_controller.persistent_store.append_log(entry)
+            # Store structured outcome for learning
+            self.memory_controller.store(
+                MemoryTier.PROJECT,
+                json.dumps(summary),
+                metadata={"type": "cycle_summary", "goal": goal, "cycle_id": cycle_id}
+            )
+        self._notify_ui("on_phase_complete", "learn", (time.time() - t0_learn) * 1000)
 
         if self.context_graph is not None:
             try:
@@ -784,6 +837,20 @@ class LoopOrchestrator:
             except Exception as exc:
                 log_json("WARN", "improvement_loop_error", details={"loop": type(loop).__name__, "error": str(exc)})
 
+        # Phase 10: discover()
+        self._notify_ui("on_phase_start", "discover")
+        t0_discover = time.time()
+        # Find discovery loop if attached
+        discovery_loop = next((l for l in self._improvement_loops if type(l).__name__ == "AutonomousDiscovery"), None)
+        if discovery_loop:
+            try:
+                # We trigger it manually here to ensure it runs as a phase
+                # instead of waiting for its internal TRIGGER_EVERY_N
+                discovery_loop.run_scan()
+            except Exception as exc:
+                log_json("WARN", "autonomous_discovery_phase_failed", details={"error": str(exc)})
+        self._notify_ui("on_phase_complete", "discover", (time.time() - t0_discover) * 1000)
+
         if self.propagation_engine is not None:
             try:
                 self.propagation_engine.on_cycle_complete(entry)
@@ -794,16 +861,38 @@ class LoopOrchestrator:
     def run_cycle(self, goal: str, dry_run: bool = False) -> Dict:
         """Execute a single complete plan-act-verify cycle for *goal*."""
         cycle_id = f"cycle_{uuid.uuid4().hex[:12]}"
-        phase_outputs = {}
+        started_at = time.time()
+        phase_outputs = {"retry_count": 0}
         self._notify_ui("on_cycle_start", goal)
 
         goal_type = classify_goal(goal)
+        self.current_goal = goal
+        self.active_cycle_summary = build_cycle_summary(
+            cycle_id=cycle_id,
+            goal=goal,
+            goal_type=goal_type,
+            phase_outputs=phase_outputs,
+            state="running",
+            started_at=started_at,
+        )
         pipeline_cfg = self._configure_pipeline(goal, goal_type, phase_outputs)
         self._handle_capabilities(goal, pipeline_cfg, phase_outputs, dry_run)
 
         context = self._run_ingest_phase(goal, cycle_id, phase_outputs)
         if self.strict_schema and validate_phase_output("context", context):
-             return {"cycle_id": cycle_id, "phase_outputs": phase_outputs, "stop_reason": "INVALID_OUTPUT"}
+             entry = {
+                 "cycle_id": cycle_id,
+                 "goal": goal,
+                 "goal_type": goal_type,
+                 "phase_outputs": phase_outputs,
+                 "stop_reason": "INVALID_OUTPUT",
+                 "started_at": started_at,
+                 "completed_at": time.time(),
+             }
+             self._refresh_cycle_summary(entry)
+             self.current_goal = None
+             self.active_cycle_summary = None
+             return entry
 
         skill_context = self._dispatch_skills(goal_type, pipeline_cfg, phase_outputs)
 
@@ -831,10 +920,22 @@ class LoopOrchestrator:
 
         reflection = self._run_reflection_phase(verification, skill_context, goal_type, cycle_id, phase_outputs)
         if self.strict_schema and validate_phase_output("reflection", reflection):
-            return {"cycle_id": cycle_id, "phase_outputs": phase_outputs, "stop_reason": "INVALID_OUTPUT"}
+            entry = {
+                "cycle_id": cycle_id,
+                "goal": goal,
+                "goal_type": goal_type,
+                "phase_outputs": phase_outputs,
+                "stop_reason": "INVALID_OUTPUT",
+                "started_at": started_at,
+                "completed_at": time.time(),
+            }
+            self._refresh_cycle_summary(entry)
+            self.current_goal = None
+            self.active_cycle_summary = None
+            return entry
 
         phase_outputs.pop("_failure_context", None)
-        return self._record_cycle_outcome(cycle_id, goal_type, phase_outputs)
+        return self._record_cycle_outcome(cycle_id, goal, goal_type, phase_outputs, started_at)
 
     def run_loop(self, goal: str, max_cycles: int = 5, dry_run: bool = False) -> Dict:
         """Run :meth:`run_cycle` repeatedly until a stopping condition is met.
@@ -881,7 +982,11 @@ class LoopOrchestrator:
             stop_reason = self.policy.evaluate(history, entry.get("phase_outputs", {}).get("verification", {}), started_at=started_at)
             if stop_reason:
                 entry["stop_reason"] = stop_reason
+                self._refresh_cycle_summary(entry)
                 break
+        if not stop_reason and history:
+            history[-1]["stop_reason"] = "MAX_CYCLES"
+            self._refresh_cycle_summary(history[-1])
         return {
             "goal": goal,
             "stop_reason": stop_reason or "MAX_CYCLES",

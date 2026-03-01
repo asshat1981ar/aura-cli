@@ -1,4 +1,5 @@
 {
+  "active_cycle": null,
   "cli_warnings": [
     {
       "action": "goal_status",
@@ -12,8 +13,14 @@
       "replacement_command": "aura goal status"
     }
   ],
-  "completed": [],
-  "completed_count": 0,
-  "queue": [],
-  "queue_length": 0
+  "last_cycle": null,
+  "queue": {
+    "active_goal": null,
+    "completed": [],
+    "completed_count": 0,
+    "pending": [],
+    "pending_count": 0,
+    "updated_at": 1234567890.0
+  },
+  "schema_version": 1
 }

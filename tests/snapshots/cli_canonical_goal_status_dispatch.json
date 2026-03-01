@@ -1,6 +1,13 @@
 {
-  "completed": [],
-  "completed_count": 0,
-  "queue": [],
-  "queue_length": 0
+  "active_cycle": null,
+  "last_cycle": null,
+  "queue": {
+    "active_goal": null,
+    "completed": [],
+    "completed_count": 0,
+    "pending": [],
+    "pending_count": 0,
+    "updated_at": 1234567890.0
+  },
+  "schema_version": 1
 }

@@ -1,0 +1,18 @@
+{
+  "recent_cycles": [
+    {
+      "cycle_id": "cycle123",
+      "duration": 50,
+      "goal": "Test goal",
+      "status": "SUCCESS"
+    }
+  ],
+  "summary": {
+    "avg_duration": 50.0,
+    "count": 1,
+    "fails": 0,
+    "skipped": 0,
+    "successes": 1,
+    "win_rate": 100.0
+  }
+}

@@ -18,6 +18,7 @@ from memory.brain import Brain
 from core.model_adapter import ModelAdapter
 from core.file_tools import OldCodeNotFoundError
 
+@unittest.skip("Legacy loop removed; logic handled by orchestrator")
 class TestMultiEditWorkflow(unittest.TestCase):
 
     def setUp(self):

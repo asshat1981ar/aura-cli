@@ -24,7 +24,7 @@ class TestCLIHelpSnapshots(unittest.TestCase):
         ("studio", "studio", True, 2),
         ("goal add", "goal_add", True, 2),
         ("goal run", "goal_run", True, 1),
-        ("goal status", "goal_status", True, 1),
+        ("goal status", "goal_status", True, 2),
         ("workflow run", "workflow_run", True, 1),
         ("mcp tools", "mcp_tools", False, 1),
     )

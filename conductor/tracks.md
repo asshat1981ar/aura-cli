@@ -11,3 +11,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [x] Track: Autonomous Feature Backfill (Self-Prompt to Fill)
 *Link: [./conductor/tracks/backfill_20260301/](./conductor/tracks/backfill_20260301/)*
+
+---
+
+## [x] Track: Operator UX and Observability Hardening
+*Link: [./conductor/tracks/operator_ux_20260301/](./conductor/tracks/operator_ux_20260301/)*

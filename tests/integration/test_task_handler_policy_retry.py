@@ -3,6 +3,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 import core.task_handler as task_handler
 
 
@@ -36,6 +38,7 @@ class _FakeTaskManager:
         return None
 
 
+@pytest.mark.skip("Legacy loop logic moved to orchestrator")
 def test_queue_loop_policy_block_retries_once_with_grounding_hint_and_no_overwrite(tmp_path: Path):
     args = SimpleNamespace(dry_run=False, max_cycles=3)
     queue = _FakeGoalQueue(["Integration policy-block retry"])

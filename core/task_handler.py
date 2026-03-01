@@ -357,7 +357,7 @@ def _mismatch_overwrite_blocked_grounding_hint(file_path: str) -> str:
     )
 
 
-def run_goals_loop(args, goal_queue, loop, debugger_instance, planner_instance, goal_archive, project_root, decompose=False):
+def run_goals_loop(args, goal_queue, orchestrator, debugger_instance, planner_instance, goal_archive, project_root, decompose=False):
     """
     Processes all goals in the queue using the hierarchical TaskManager.
     """
@@ -383,173 +383,47 @@ def run_goals_loop(args, goal_queue, loop, debugger_instance, planner_instance, 
             task.status = "in_progress"
             task_manager.save()
 
-            converged = False
-            loop.previous_score = 0
-            loop.regression_count = 0
-            loop.stable_convergence_count = 0
-
-            cycle_count = 0
-            changes_applied_successfully = True
-            grounding_hint = None
-            invalid_path_retry_used = False
-            mismatch_overwrite_retry_used = False
-
-            while not converged and changes_applied_successfully:
-                cycle_count += 1
-                log_json("INFO", "cycle_start", goal=task.title, details={"cycle_count": cycle_count})
-                retry_after_invalid_target = False
-                retry_after_mismatch_overwrite_blocked = False
-
-                loop_goal = _compose_loop_goal(task.title, grounding_hint)
-                loop_result_json_str = loop.run(loop_goal, dry_run=getattr(args, "dry_run", False))
-
-                try:
-                    result_json = json.loads(loop_result_json_str)
-                except json.JSONDecodeError:
-                    log_json("ERROR", "invalid_json_from_loop", goal=task.title)
-                    break
-
-                implement_data = result_json.get("IMPLEMENT")
-                if implement_data:
-                    changes_to_apply = []
-                    if isinstance(implement_data, dict):
-                        if all(k in implement_data for k in ["file_path", "old_code", "new_code"]):
-                            changes_to_apply.append(implement_data)
-                        elif "changes" in implement_data and isinstance(implement_data["changes"], list):
-                            changes_to_apply.extend(implement_data["changes"])
-
-                    for change in changes_to_apply:
-                        file_path = change.get("file_path")
-                        old_code = change.get("old_code")
-                        new_code = change.get("new_code")
-                        overwrite_file = change.get("overwrite_file", False)
-
-                        if all([file_path is not None, old_code is not None, new_code is not None]):
-                            full_target_path, invalid_reason = _validate_change_target_path(project_root, str(file_path))
-                            if invalid_reason == "file_not_found":
-                                allowed_new_test_target = _allow_new_test_file_target(
-                                    project_root,
-                                    str(file_path),
-                                    task.title,
-                                    old_code,
-                                    overwrite_file,
-                                )
-                                if allowed_new_test_target is not None:
-                                    full_target_path = allowed_new_test_target
-                                    invalid_reason = None
-                                    log_json(
-                                        "INFO",
-                                        "allowed_new_test_target",
-                                        goal=task.title,
-                                        details={"file": str(file_path)},
-                                    )
-                            if invalid_reason:
-                                candidate_files = _candidate_existing_files(project_root, str(file_path), task.title, limit=6)
-                                grounding_hint = _invalid_path_grounding_hint(str(file_path), invalid_reason, candidate_files)
-                                log_json(
-                                    "WARN",
-                                    "invalid_implement_target_path",
-                                    goal=task.title,
-                                    details={
-                                        "file": file_path,
-                                        "reason": invalid_reason,
-                                        "dry_run": bool(getattr(args, "dry_run", False)),
-                                        "candidate_files": candidate_files,
-                                        "retry_with_grounding_hint": (not invalid_path_retry_used and cycle_count < cycle_limit),
-                                    },
-                                )
-                                if not invalid_path_retry_used and cycle_count < cycle_limit:
-                                    invalid_path_retry_used = True
-                                    retry_after_invalid_target = True
-                                    log_json(
-                                        "INFO",
-                                        "grounding_retry_scheduled",
-                                        goal=task.title,
-                                        details={"reason": "invalid_implement_target_path", "next_cycle": cycle_count + 1},
-                                    )
-                                else:
-                                    changes_applied_successfully = False
-                                break
-
-                            grounding_hint = None
-                            if not getattr(args, "dry_run", False):
-                                try:
-                                    log_json("INFO", "applying_code_change", goal=task.title, details={"file": file_path})
-                                    apply_change_with_explicit_overwrite_policy(
-                                        project_root,
-                                        str(file_path),
-                                        old_code,
-                                        new_code,
-                                        overwrite_file=overwrite_file,
-                                    )
-                                except MismatchOverwriteBlockedError as e:
-                                    log_json(
-                                        "ERROR",
-                                        MISMATCH_OVERWRITE_BLOCK_EVENT,
-                                        goal=task.title,
-                                        details=mismatch_overwrite_block_log_details(e, str(file_path)),
-                                    )
-                                    if not mismatch_overwrite_retry_used and cycle_count < cycle_limit:
-                                        mismatch_overwrite_retry_used = True
-                                        retry_after_mismatch_overwrite_blocked = True
-                                        grounding_hint = _mismatch_overwrite_blocked_grounding_hint(str(file_path))
-                                        log_json(
-                                            "INFO",
-                                            "grounding_retry_scheduled",
-                                            goal=task.title,
-                                                details={
-                                                    "reason": MISMATCH_OVERWRITE_BLOCK_EVENT,
-                                                    "next_cycle": cycle_count + 1,
-                                                },
-                                            )
-                                    else:
-                                        changes_applied_successfully = False
-                                    break
-                                except OldCodeNotFoundError as e:
-                                    log_json(
-                                        "ERROR",
-                                        "old_code_not_found",
-                                        goal=task.title,
-                                        details={"error": str(e), "file": file_path},
-                                    )
-                                    changes_applied_successfully = False
-                                    break
-                                except Exception as e:
-                                    log_json(
-                                        "ERROR",
-                                        "apply_change_failed",
-                                        goal=task.title,
-                                        details={"error": str(e), "file": file_path},
-                                    )
-                                    changes_applied_successfully = False
-                                    break
-                            else:
-                                log_json("INFO", "replace_code_skipped", goal=task.title, details={"reason": "dry_run", "file": file_path})
-
-                if retry_after_invalid_target or retry_after_mismatch_overwrite_blocked:
-                    continue
-
-                if "FINAL_STATUS" in result_json:
-                    converged = True
-                    task.status = "completed"
-                    task.result = result_json["FINAL_STATUS"]
-                    task_manager.save()
-                    log_json(
-                        "INFO",
-                        "goal_completed" if task == root_task else "subtask_completed",
-                        goal=task.title,
-                        details={"status": result_json["FINAL_STATUS"]},
-                    )
-
-                if cycle_count >= cycle_limit:
-                    log_json("WARN", "cycle_limit_reached", goal=task.title, details={"cycle_limit": cycle_limit})
-                    break
-
-            if not converged and not changes_applied_successfully:
+            # Execute the goal using the modern orchestrator
+            result = orchestrator.run_loop(
+                task.title, 
+                max_cycles=cycle_limit, 
+                dry_run=getattr(args, "dry_run", False)
+            )
+            
+            history = result.get("history", [])
+            last_entry = history[-1] if history else {}
+            
+            # Update task status based on orchestrator result
+            if result.get("stop_reason") == "PASS":
+                task.status = "completed"
+                task.result = "Goal achieved (PASS)"
+            elif result.get("stop_reason") == "MAX_CYCLES":
                 task.status = "failed"
-                task_manager.save()
-                log_json("WARN", "goal_terminated_without_convergence" if task == root_task else "subtask_failed", goal=task.title)
+                task.result = "Cycle limit reached"
+            else:
+                task.status = "failed"
+                task.result = result.get("stop_reason", "unknown_failure")
+            
+            task_manager.save()
+            
+            # Record outcome in archive
+            final_score = 0.0 # Modern orchestrator doesn't have a single score yet
+            if history:
+                # We could derive a score from verification or use legacy if available
+                final_score = 1.0 if result.get("stop_reason") == "PASS" else 0.0
+            
+            goal_archive.record(task.title, final_score)
+
+            if task.status == "failed":
+                log_json("WARN", "goal_failed" if task == root_task else "subtask_failed", goal=task.title)
                 break
+            else:
+                log_json(
+                    "INFO",
+                    "goal_completed" if task == root_task else "subtask_completed",
+                    goal=task.title,
+                    details={"status": task.result},
+                )
 
         if decompose and planner_instance:
             if all(st.status == "completed" for st in root_task.subtasks):
@@ -559,6 +433,3 @@ def run_goals_loop(args, goal_queue, loop, debugger_instance, planner_instance, 
                 root_task.status = "failed"
                 log_json("WARN", "goal_failed", goal=goal)
             task_manager.save()
-
-        final_score = loop.current_score if hasattr(loop, "current_score") else 0.0
-        goal_archive.record(goal, final_score)

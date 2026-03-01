@@ -83,6 +83,7 @@ def test_wrapper_status_json_stays_machine_readable_and_lightweight():
         )
 
         assert result.returncode == 0
-        assert json.loads(result.stdout)["queue"] == ["Wrapper queued goal"]
+        status_data = json.loads(result.stdout)
+        assert status_data["queue"]["pending"][0]["goal"] == "Wrapper queued goal"
         assert "vector_store_initialized" not in result.stderr
         assert "background_sync_started" not in result.stderr

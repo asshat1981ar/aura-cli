@@ -118,6 +118,7 @@ class AutonomousDiscovery:
         findings: List[Dict] = []
         findings += self._scan_code_signals()
         findings += self._scan_missing_tests()
+        findings += self._scan_structural_debt()
 
         # Sort by priority (high first)
         priority_order = {"high": 0, "medium": 1, "low": 2}

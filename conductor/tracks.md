@@ -16,3 +16,8 @@ This file tracks all major tracks for the project. Each track has its own detail
 
 ## [x] Track: Operator UX and Observability Hardening
 *Link: [./conductor/tracks/operator_ux_20260301/](./conductor/tracks/operator_ux_20260301/)*
+
+---
+
+## [ ] Track: Recursive Self-Improvement (RSI) Lifecycle
+*Link: [./conductor/tracks/recursive_self_improvement_20260301/](./conductor/tracks/recursive_self_improvement_20260301/)*

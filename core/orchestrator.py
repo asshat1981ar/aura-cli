@@ -782,6 +782,16 @@ class LoopOrchestrator:
 
         skill_context = self._dispatch_skills(goal_type, pipeline_cfg, phase_outputs)
 
+        # ── Coverage Backfill ──
+        if getattr(self, "auto_backfill_coverage", False) and self.goal_queue:
+            gaps = skill_context.get("structural_analyzer", {}).get("coverage_gaps", [])
+            for gap in gaps:
+                f = gap.get("file")
+                priority = gap.get("risk_priority", "MEDIUM")
+                backfill_goal = f"test_backfill: Write missing unit tests for '{f}' to resolve coverage gap (priority: {priority})"
+                self.goal_queue.add(backfill_goal)
+                log_json("INFO", "backfill_goal_enqueued", details={"file": f, "priority": priority})
+
         verification, early_return = self._run_plan_loop(
             goal=goal, context=context, skill_context=skill_context,
             pipeline_cfg=pipeline_cfg, cycle_id=cycle_id,

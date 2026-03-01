@@ -7,12 +7,12 @@
 - [x] Task: Create Coverage Threshold Logic [4e4c5ed]
     - [x] Write Tests: Create `tests/test_coverage_threshold.py` to verify threshold comparison and flagging.
     - [x] Implement: Add utility in `core/quality_snapshot.py` to check if specific files meet the required coverage.
-- [ ] Task: Conductor - User Manual Verification 'Foundation & Skill Enhancement' (Protocol in workflow.md)
+- [x] Task: Conductor - User Manual Verification 'Foundation & Skill Enhancement' (Protocol in workflow.md)
 
 ## Phase 2: Orchestrator Integration
-- [ ] Task: Implement Sub-Goal Generation Logic
-    - [ ] Write Tests: Create `tests/test_backfill_goal_generation.py` to verify that sub-goals are enqueued when gaps are found.
-    - [ ] Implement: Update `core/orchestrator.py` to check coverage before planning and inject `test_backfill` goals.
+- [x] Task: Implement Sub-Goal Generation Logic [ba02470]
+    - [x] Write Tests: Create `tests/test_backfill_goal_generation.py` to verify that sub-goals are enqueued when gaps are found.
+    - [x] Implement: Update `core/orchestrator.py` to check coverage before planning and inject `test_backfill` goals.
 - [ ] Task: Update Planner for Backfill Prioritization
     - [ ] Write Tests: Create `tests/test_planner_backfill_priority.py` to verify that backfill tasks appear first in the plan.
     - [ ] Implement: Update `agents/planner.py` to handle `test_backfill` goals with higher precedence in generated plans.

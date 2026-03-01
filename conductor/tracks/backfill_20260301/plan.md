@@ -13,7 +13,7 @@
 - [x] Task: Implement Sub-Goal Generation Logic [7ed8eae]
     - [x] Write Tests: Create `tests/test_backfill_goal_generation.py` to verify that sub-goals are enqueued when gaps are found.
     - [x] Implement: Update `core/orchestrator.py` to check coverage before planning and inject `test_backfill` goals.
-- [x] Task: Update Planner for Backfill Prioritization [ba02470]
+- [x] Task: Update Planner for Backfill Prioritization [41551dd]
     - [x] Write Tests: Create `tests/test_planner_backfill_priority.py` to verify that backfill tasks appear first in the plan.
     - [x] Implement: Update `agents/planner.py` to handle `test_backfill` goals with higher precedence in generated plans.
 - [ ] Task: Conductor - User Manual Verification 'Orchestrator Integration' (Protocol in workflow.md)

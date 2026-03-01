@@ -5,7 +5,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 
 def run_quality_snapshot(
@@ -85,3 +85,44 @@ def run_quality_snapshot(
         }
     except Exception as e:
         return {"error": str(e)}
+
+
+def check_coverage_thresholds(
+    project_root: Path,
+    files: List[str],
+    threshold: float = 80.0
+) -> List[Dict[str, Any]]:
+    """
+    Checks if given files meet the coverage threshold.
+    Requires coverage.json to exist in project_root.
+    """
+    import json
+    cov_path = project_root / "coverage.json"
+    if not cov_path.exists():
+        return []
+
+    try:
+        data = json.loads(cov_path.read_text())
+        files_data = data.get("files", {})
+        gaps = []
+        
+        for f in files:
+            # Normalize path for comparison
+            matched = None
+            for cov_f, fd in files_data.items():
+                # Check if f is a suffix of cov_f or vice versa
+                if f.replace("\\", "/") in cov_f.replace("\\", "/"):
+                    matched = fd
+                    break
+            
+            if matched:
+                pct = matched.get("summary", {}).get("percent_covered", 0.0)
+                if pct < threshold:
+                    gaps.append({"file": f, "coverage": pct})
+            else:
+                # If file not in coverage data at all, it's 0%
+                gaps.append({"file": f, "coverage": 0.0})
+                
+        return gaps
+    except Exception:
+        return []

@@ -2,9 +2,9 @@ fastapi==0.129.0
 uvicorn==0.40.0
 requests==2.32.3
 pydantic==2.12.5
-python-dotenv
-numpy
-gitpython
-rich
-textblob
-networkx
+python-dotenv==1.0.1
+numpy==1.26.4
+gitpython==3.1.43
+rich==13.7.1
+textblob==0.18.0.post0
+networkx==3.2.1

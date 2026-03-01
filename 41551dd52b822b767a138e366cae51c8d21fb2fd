@@ -1,0 +1,4 @@
+Task: Update Planner for Backfill Prioritization
+Summary: Updated PlannerAgent to support a new 'backfill_context' input. When provided, the agent injects explicit instructions into the LLM prompt to prioritize 'Test Backfill' steps at the beginning of the plan for modules with low/zero coverage.
+Files: agents/planner.py, tests/test_planner_backfill_priority.py
+Why: To ensure that architectural risks due to missing tests are addressed before implementing new features.

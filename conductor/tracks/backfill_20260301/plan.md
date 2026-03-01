@@ -19,7 +19,7 @@
 - [x] Task: Conductor - User Manual Verification 'Orchestrator Integration' (Protocol in workflow.md)
 
 ## Phase 3: Configuration & Finalization
-- [x] Task: Add Configuration Settings [ba02470]
+- [x] Task: Add Configuration Settings [947d6fb]
     - [x] Write Tests: Verify that setting `auto_backfill_coverage` to false disables the mechanism.
     - [x] Implement: Add `auto_backfill_coverage` and `reliability_threshold` to `core/config_manager.py` and `aura.config.json`.
 - [ ] Task: Final Integration Test

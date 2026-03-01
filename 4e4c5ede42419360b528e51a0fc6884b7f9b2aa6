@@ -1,0 +1,4 @@
+Task: Create Coverage Threshold Logic
+Summary: Added check_coverage_thresholds utility to core/quality_snapshot.py. This function identifies files below a specified coverage threshold by reading coverage.json.
+Files: core/quality_snapshot.py, tests/test_coverage_threshold.py
+Why: To provide a mechanism for AURA to determine which files require test backfills based on configurable thresholds.

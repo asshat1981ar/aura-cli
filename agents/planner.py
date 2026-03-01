@@ -15,6 +15,8 @@ System State:
 - Similar Past Problems: {similar}
 - Known Weaknesses: {weakness}
 
+{backfill_instr}
+
 You must:
 
 1. Analyze structural gaps.
@@ -48,27 +50,35 @@ class PlannerAgent:
         self.brain = brain
         self.model = model
 
-    def plan(self, goal: str, memory_snapshot: str, similar_past_problems: str, known_weaknesses: str) -> List[str]:
+    def run(self, input_data: dict) -> dict:
+        """Standard agent interface."""
+        goal = input_data.get("goal", "")
+        mem = input_data.get("memory_snapshot", "")
+        sim = input_data.get("similar_past_problems", "")
+        weak = input_data.get("known_weaknesses", "")
+        backfill_ctx = input_data.get("backfill_context", [])
+
+        steps = self.plan(goal, mem, sim, weak, backfill_context=backfill_ctx)
+        return {"steps": steps}
+
+    def plan(self, goal: str, memory_snapshot: str, similar_past_problems: str, known_weaknesses: str, backfill_context: list = None) -> List[str]:
         """
         Generates a detailed plan based on the current goal, system memory,
-        similar past problems, and known system weaknesses. The LLM is prompted
-        to output the plan as a JSON array of strings, each representing a step.
-
-        Args:
-            goal (str): The current objective for which a plan is needed.
-            memory_snapshot (str): A summary of the system's current memory.
-            similar_past_problems (str): Information about problems similar to the current goal.
-            known_weaknesses (str): Identified weaknesses of the AURA system.
-
-        Returns:
-            List[str]: A list of strings, where each string is a step in the generated plan.
-                       Returns an error message within the list if parsing fails.
+        similar past problems, and known system weaknesses.
         """
+        backfill_instr = ""
+        if backfill_context:
+            backfill_instr = "CRITICAL: The following modules have LOW/ZERO test coverage and are considered HIGH RISK:\n"
+            for item in backfill_context:
+                backfill_instr += f"- {item['file']} ({item['coverage']}% coverage)\n"
+            backfill_instr += "\nPRIORITIZE these modules by adding 'Test Backfill' steps at the BEGINNING of your plan."
+
         prompt = EVOLUTION_PROMPT.format(
             goal=goal,
             memory=memory_snapshot,
             similar=similar_past_problems,
-            weakness=known_weaknesses
+            weakness=known_weaknesses,
+            backfill_instr=backfill_instr
         )
         response = self.model.respond(prompt)
         self.brain.remember(f"Planned for goal: {goal} with raw response: {response[:100]}...")

@@ -22,7 +22,7 @@
 - [x] Task: Add Configuration Settings [947d6fb]
     - [x] Write Tests: Verify that setting `auto_backfill_coverage` to false disables the mechanism.
     - [x] Implement: Add `auto_backfill_coverage` and `reliability_threshold` to `core/config_manager.py` and `aura.config.json`.
-- [ ] Task: Final Integration Test
-    - [ ] Write Tests: Create a full integration test `tests/integration/test_full_backfill_flow.py` running a goal on a 0% coverage module.
-    - [ ] Implement: Ensure the end-to-end flow correctly generates and executes backfill tasks.
+- [x] Task: Final Integration Test [ba02470]
+    - [x] Write Tests: Create a full integration test `tests/integration/test_full_backfill_flow.py` running a goal on a 0% coverage module.
+    - [x] Implement: Ensure the end-to-end flow correctly generates and executes backfill tasks.
 - [ ] Task: Conductor - User Manual Verification 'Configuration & Finalization' (Protocol in workflow.md)

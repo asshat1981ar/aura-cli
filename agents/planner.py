@@ -70,7 +70,8 @@ class PlannerAgent:
         if backfill_context:
             backfill_instr = "CRITICAL: The following modules have LOW/ZERO test coverage and are considered HIGH RISK:\n"
             for item in backfill_context:
-                backfill_instr += f"- {item['file']} ({item['coverage']}% coverage)\n"
+                pct = item.get("coverage_pct", item.get("coverage", 0.0))
+                backfill_instr += f"- {item['file']} ({pct}% coverage)\n"
             backfill_instr += "\nPRIORITIZE these modules by adding 'Test Backfill' steps at the BEGINNING of your plan."
 
         prompt = EVOLUTION_PROMPT.format(

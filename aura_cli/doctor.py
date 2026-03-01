@@ -139,7 +139,8 @@ def main():
 
     print("AURA Doctor - System Health Check\n")
 
-    repo_root = Path(__file__).resolve().parent
+    # Correctly resolve the repository root (parent of the directory containing this file)
+    repo_root = Path(__file__).resolve().parent.parent
 
     results = []
 

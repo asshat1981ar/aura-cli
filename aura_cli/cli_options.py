@@ -29,6 +29,8 @@ from aura_cli.options import (
 _REQUIRED_SUBCOMMAND_PARENT_PATHS: set[tuple[str, ...]] = {
     ("goal",),
     ("mcp",),
+    ("memory",),
+    ("queue",),
     ("workflow",),
 }
 
@@ -335,6 +337,23 @@ def _customize_studio(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--autonomous", action="store_true", help="Start the goal loop in the background.")
 
 
+def _customize_queue_list(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(queue_list=True)
+
+
+def _customize_queue_clear(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(queue_clear=True)
+
+
+def _customize_memory_search(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("query", help="Text query for semantic search.")
+    parser.add_argument("--limit", type=int, default=5, help="Max results to return.")
+
+
+def _customize_metrics(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(metrics_show=True)
+
+
 _PARSER_CUSTOMIZERS.update(
     {
         ("help",): _customize_help,
@@ -353,6 +372,10 @@ _PARSER_CUSTOMIZERS.update(
         ("scaffold",): _customize_scaffold,
         ("evolve",): _customize_evolve,
         ("logs",): _customize_logs,
+        ("queue", "list"): _customize_queue_list,
+        ("queue", "clear"): _customize_queue_clear,
+        ("memory", "search"): _customize_memory_search,
+        ("metrics",): _customize_metrics,
     }
 )
 

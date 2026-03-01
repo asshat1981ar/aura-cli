@@ -32,6 +32,15 @@ class DeterministicMockAdapter:
         self._embedding_model = "test-deterministic"
         self._embedding_dims = 4
 
+    def model_id(self) -> str:
+        return self._embedding_model
+
+    def dimensions(self) -> int:
+        return self._embedding_dims
+
+    def embed(self, texts):
+        return [self.get_embedding(t) for t in texts]
+
     def get_embedding(self, text):
         # Map text to vector
         if "calculate_metric" in text or "calculate metric" in text:
@@ -54,6 +63,7 @@ def golden_set():
 def vector_store(tmp_path):
     db_path = tmp_path / "brain_test.db"
     conn = sqlite3.connect(str(db_path), check_same_thread=False)
+    conn.row_factory = sqlite3.Row
     brain = MagicMock()
 
     brain.db = conn

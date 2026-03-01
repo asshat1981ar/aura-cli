@@ -4,5 +4,7 @@
     "CLI smoke goal from diagnostics",
     "CLI smoke goal from diagnostics",
     "CLI smoke goal from diagnostics",
-    "CLI smoke goal from diagnostics"
+    "CLI smoke goal from diagnostics",
+    "Validate API contracts after new feature addition",
+    "Run architecture validation after refactor \u2014 check for new circular deps"
 ]

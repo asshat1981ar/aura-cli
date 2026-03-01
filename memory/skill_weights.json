@@ -1,28 +1,28 @@
 {
   "feature": {
     "dependency_analyzer": {
-      "ema": 0.7523792637324217,
-      "runs": 9,
+      "ema": 0.6551565180466746,
+      "runs": 11,
       "suspended": false
     },
     "symbol_indexer": {
-      "ema": 0.751199198102539,
-      "runs": 9,
+      "ema": 0.6702414206290844,
+      "runs": 11,
       "suspended": false
     },
     "complexity_scorer": {
-      "ema": 0.8433179481025391,
-      "runs": 9,
+      "ema": 0.7367972175040846,
+      "runs": 11,
       "suspended": false
     },
     "architecture_validator": {
-      "ema": 0.3747175779667577,
-      "runs": 9,
+      "ema": 0.3518234500809824,
+      "runs": 11,
       "suspended": false
     },
     "api_contract_validator": {
-      "ema": 0.6978160531103514,
-      "runs": 9,
+      "ema": 0.6061720983722289,
+      "runs": 11,
       "suspended": false
     }
   },
@@ -55,40 +55,40 @@
   },
   "default": {
     "linter_enforcer": {
-      "ema": 0.7457564322717388,
-      "runs": 10,
+      "ema": 0.6415740223163313,
+      "runs": 12,
       "suspended": false
     },
     "symbol_indexer": {
-      "ema": 0.9015627978296387,
-      "runs": 10,
+      "ema": 0.778879121431914,
+      "runs": 12,
       "suspended": false
     }
   },
   "refactor": {
     "tech_debt_quantifier": {
-      "ema": 0.5031218749999999,
-      "runs": 4,
+      "ema": 0.4910055546874999,
+      "runs": 6,
       "suspended": false
     },
     "complexity_scorer": {
-      "ema": 0.738996875,
-      "runs": 4,
+      "ema": 0.6614252421875,
+      "runs": 6,
       "suspended": false
     },
     "code_clone_detector": {
-      "ema": 0.4806218749999999,
-      "runs": 4,
+      "ema": 0.4747493046875,
+      "runs": 6,
       "suspended": false
     },
     "refactoring_advisor": {
-      "ema": 0.6306218749999999,
-      "runs": 4,
+      "ema": 0.5831243046874999,
+      "runs": 6,
       "suspended": false
     },
     "symbol_indexer": {
-      "ema": 0.738996875,
-      "runs": 4,
+      "ema": 0.6614252421875,
+      "runs": 6,
       "suspended": false
     }
   }

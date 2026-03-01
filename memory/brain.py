@@ -37,6 +37,7 @@ class Brain:
         db_file_path = Path(db_path) if db_path else Path(__file__).parent / "brain.db"
         self._db_path = db_file_path
         self.db = sqlite3.connect(str(db_file_path), check_same_thread=False)
+        self.db.row_factory = sqlite3.Row
         self._graph = None   # lazy — created on first relate() call
         self._recall_cache: dict = {}   # {query_key: (result, timestamp)}
         self._cache_ttl: float = 5.0    # seconds — invalidated on remember()

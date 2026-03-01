@@ -130,31 +130,41 @@ class VectorStore:
                 log_json("ERROR", "vector_store_batch_embed_failed", details={"error": str(e)})
 
         # 3. Insert/Update records and embeddings
-        for rec in records:
-            try:
-                self.brain.db.execute("""
-                    INSERT OR REPLACE INTO memory_records 
-                    (id, content, source_type, source_ref, created_at, updated_at, 
-                     goal_id, agent_name, tags, importance, token_count, 
-                     embedding_model, embedding_dims, content_hash, embedding)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                """, (
-                    rec.id, rec.content, rec.source_type, rec.source_ref,
-                    rec.created_at, rec.updated_at, rec.goal_id, rec.agent_name,
-                    json.dumps(rec.tags), rec.importance, rec.token_count,
-                    rec.embedding_model, rec.embedding_dims, rec.content_hash, rec.embedding
-                ))
-                
-                if rec.embedding:
+        try:
+            # Use a manual transaction for the batch to ensure consistency
+            self.brain.db.execute("BEGIN TRANSACTION")
+            for rec in records:
+                try:
                     self.brain.db.execute("""
-                        INSERT OR REPLACE INTO embeddings (record_id, model_id, dims, data)
-                        VALUES (?, ?, ?, ?)
-                    """, (rec.id, current_model, rec.embedding_dims, rec.embedding))
-                count += 1
-            except sqlite3.Error as e:
-                log_json("ERROR", "vector_store_upsert_failed", details={"id": rec.id, "error": str(e)})
+                        INSERT OR REPLACE INTO memory_records 
+                        (id, content, source_type, source_ref, created_at, updated_at, 
+                         goal_id, agent_name, tags, importance, token_count, 
+                         embedding_model, embedding_dims, content_hash, embedding)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    """, (
+                        rec.id, rec.content, rec.source_type, rec.source_ref,
+                        rec.created_at, rec.updated_at, rec.goal_id, rec.agent_name,
+                        json.dumps(rec.tags), rec.importance, rec.token_count,
+                        rec.embedding_model, rec.embedding_dims, rec.content_hash, rec.embedding
+                    ))
+                    
+                    if rec.embedding:
+                        self.brain.db.execute("""
+                            INSERT OR REPLACE INTO embeddings (record_id, model_id, dims, data)
+                            VALUES (?, ?, ?, ?)
+                        """, (rec.id, current_model, rec.embedding_dims, rec.embedding))
+                    count += 1
+                except sqlite3.Error as e:
+                    log_json("ERROR", "vector_store_record_upsert_failed", details={"id": rec.id, "error": str(e)})
+                    # Individual record failure doesn't necessarily abort the whole batch, 
+                    # but we should be careful. For now, we continue but don't commit this specific record.
+            
+            self.brain.db.commit()
+        except sqlite3.Error as e:
+            self.brain.db.rollback()
+            log_json("ERROR", "vector_store_batch_upsert_failed", details={"error": str(e)})
+            return {"upserted": 0, "error": str(e)}
 
-        self.brain.db.commit()
         return {"upserted": count}
 
     def search(self, query: Union[str, RetrievalQuery], k: int = 5) -> Union[List[str], List[SearchHit]]:

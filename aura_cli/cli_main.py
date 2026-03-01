@@ -614,6 +614,85 @@ def _handle_watch_dispatch(ctx: DispatchContext) -> int:
     return 0
 
 
+def _handle_queue_list_dispatch(ctx: DispatchContext) -> int:
+    goal_queue = ctx.runtime["goal_queue"]
+    if not goal_queue.queue:
+        print("Goal queue is empty.")
+        return 0
+    
+    print(f"Goal Queue ({len(goal_queue.queue)} goals):")
+    for i, goal in enumerate(goal_queue.queue, 1):
+        print(f"  {i}. {goal}")
+    return 0
+
+
+def _handle_queue_clear_dispatch(ctx: DispatchContext) -> int:
+    goal_queue = ctx.runtime["goal_queue"]
+    count = len(goal_queue.queue)
+    goal_queue.queue = []
+    goal_queue._save()
+    print(f"Cleared {count} goals from the queue.")
+    return 0
+
+
+def _handle_memory_search_dispatch(ctx: DispatchContext) -> int:
+    from core.memory_types import RetrievalQuery
+    
+    vector_store = ctx.runtime["vector_store"]
+    query = RetrievalQuery(
+        query_text=ctx.args.query,
+        k=ctx.args.limit
+    )
+    hits = vector_store.search(query)
+    
+    if not hits:
+        print(f"No results found for '{ctx.args.query}'")
+        return 0
+        
+    print(f"Memory Search Results for '{ctx.args.query}':\n")
+    for i, hit in enumerate(hits, 1):
+        print(f"[{i}] Score: {hit.score:.3f} | Source: {hit.source_ref}")
+        print(f"Content: {hit.content[:200]}...")
+        print("-" * 40)
+    return 0
+
+
+def _handle_metrics_show_dispatch(ctx: DispatchContext) -> int:
+    brain = ctx.runtime["brain"]
+    outcomes = [e for e in brain.recall_recent(limit=100) if "outcome:" in e]
+    
+    if not outcomes:
+        print("No metrics recorded yet.")
+        return 0
+        
+    successes = 0
+    total_time = 0.0
+    
+    print("Recent Cycle Metrics (last 10 cycles):\n")
+    print(f"{'Cycle ID':<10} | {'Status':<8} | {'Duration':<8} | {'Goal'}")
+    print("-" * 60)
+    
+    for raw in outcomes[:10]:
+        try:
+            # Format: outcome:id -> json
+            data = json.loads(raw.split("->", 1)[1])
+            status = "SUCCESS" if data.get("success") else "FAILED"
+            duration = data.get("completed_at", 0) - data.get("started_at", 0)
+            
+            if data.get("success"): successes += 1
+            total_time += duration
+            
+            print(f"{data.get('cycle_id')[:8]:<10} | {status:<8} | {duration:>7.1f}s | {data.get('goal')[:30]}...")
+        except Exception:
+            continue
+            
+    print("-" * 60)
+    avg_time = total_time / len(outcomes[:10]) if outcomes else 0
+    win_rate = (successes / len(outcomes[:10]) * 100) if outcomes else 0
+    print(f"Summary: {win_rate:.1f}% success rate | Avg duration: {avg_time:.1f}s")
+    return 0
+
+
 def _handle_workflow_run_dispatch(ctx: DispatchContext) -> int:
     args = ctx.args
     orchestrator = ctx.runtime["orchestrator"]
@@ -780,6 +859,10 @@ COMMAND_DISPATCH_REGISTRY = {
     "logs": _dispatch_rule("logs", _handle_logs_dispatch),
     "watch": _dispatch_rule("watch", _handle_watch_dispatch),
     "studio": _dispatch_rule("studio", _handle_watch_dispatch),
+    "queue_list": _dispatch_rule("queue_list", _handle_queue_list_dispatch),
+    "queue_clear": _dispatch_rule("queue_clear", _handle_queue_clear_dispatch),
+    "memory_search": _dispatch_rule("memory_search", _handle_memory_search_dispatch),
+    "metrics_show": _dispatch_rule("metrics_show", _handle_metrics_show_dispatch),
     "workflow_run": _dispatch_rule("workflow_run", _handle_workflow_run_dispatch),
     "scaffold": _dispatch_rule("scaffold", _handle_scaffold_dispatch),
     "evolve": _dispatch_rule("evolve", _handle_evolve_dispatch),

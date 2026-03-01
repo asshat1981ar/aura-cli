@@ -185,6 +185,42 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         examples=("python3 main.py evolve",),
         legacy_flags=("--evolve",),
     ),
+    CommandSpec(
+        path=("queue",),
+        summary="Goal queue management",
+        description="List, add, or clear goals in the autonomous queue.",
+        examples=("python3 main.py queue list",),
+    ),
+    CommandSpec(
+        path=("queue", "list"),
+        summary="List queued goals",
+        description="Show all pending and completed goals.",
+        examples=("python3 main.py queue list",),
+    ),
+    CommandSpec(
+        path=("queue", "clear"),
+        summary="Clear the goal queue",
+        description="Remove all pending goals from the queue.",
+        examples=("python3 main.py queue clear",),
+    ),
+    CommandSpec(
+        path=("memory",),
+        summary="Semantic memory operations",
+        description="Search or browse through the AURA brain.",
+        examples=("python3 main.py memory search \"workflow engine\"",),
+    ),
+    CommandSpec(
+        path=("memory", "search"),
+        summary="Search semantic memory",
+        description="Perform a semantic search over brain entries.",
+        examples=("python3 main.py memory search \"workflow engine\"",),
+    ),
+    CommandSpec(
+        path=("metrics",),
+        summary="Show performance metrics",
+        description="Display cycle success rates and timing stats.",
+        examples=("python3 main.py metrics",),
+    ),
 )
 
 COMMAND_SPECS_BY_PATH: dict[tuple[str, ...], CommandSpec] = {spec.path: spec for spec in COMMAND_SPECS}
@@ -217,6 +253,10 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     ),
     CLIActionSpec("goal_once", True, ("goal", "once"), legacy_primary_flags=("goal",)),
     CLIActionSpec("goal_run", True, ("goal", "run"), legacy_primary_flags=("run_goals",)),
+    CLIActionSpec("queue_list", True, ("queue", "list")),
+    CLIActionSpec("queue_clear", True, ("queue", "clear")),
+    CLIActionSpec("memory_search", True, ("memory", "search")),
+    CLIActionSpec("metrics_show", True, ("metrics",)),
     CLIActionSpec("interactive", True, None),
 )
 
@@ -234,6 +274,7 @@ _SMOKE_POSITIONAL_ARGS_BY_PATH: dict[tuple[str, ...], tuple[str, ...]] = {
     ("workflow", "run"): ("example-goal",),
     ("mcp", "call"): ("limits",),
     ("scaffold",): ("demo",),
+    ("memory", "search"): ("example-query",),
 }
 
 HELP_SCHEMA_VERSION = 3
@@ -303,6 +344,10 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("goal", "status"): "goal_status",
     ("goal", "once"): "goal_once",
     ("goal", "run"): "goal_run",
+    ("queue", "list"): "queue_list",
+    ("queue", "clear"): "queue_clear",
+    ("memory", "search"): "memory_search",
+    ("metrics",): "metrics_show",
 }
 
 _LEGACY_PRIMARY_FLAGS: tuple[str, ...] = (

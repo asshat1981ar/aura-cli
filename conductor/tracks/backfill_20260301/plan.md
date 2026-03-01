@@ -1,9 +1,9 @@
 # Track Plan: Autonomous Feature Backfill (Self-Prompt to Fill)
 
 ## Phase 1: Foundation & Skill Enhancement
-- [ ] Task: Enhance StructuralAnalyzerSkill for Coverage Reporting
-    - [ ] Write Tests: Create `tests/test_structural_analyzer_coverage.py` to verify coverage detection logic.
-    - [ ] Implement: Update `agents/skills/structural_analyzer.py` to optionally return coverage data for scanned files.
+- [x] Task: Enhance StructuralAnalyzerSkill for Coverage Reporting [ba02470]
+    - [x] Write Tests: Create `tests/test_structural_analyzer_coverage.py` to verify coverage detection logic.
+    - [x] Implement: Update `agents/skills/structural_analyzer.py` to optionally return coverage data for scanned files.
 - [ ] Task: Create Coverage Threshold Logic
     - [ ] Write Tests: Create `tests/test_coverage_threshold.py` to verify threshold comparison and flagging.
     - [ ] Implement: Add utility in `core/quality_snapshot.py` to check if specific files meet the required coverage.

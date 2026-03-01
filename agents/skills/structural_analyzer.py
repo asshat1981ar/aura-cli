@@ -58,15 +58,11 @@ class StructuralAnalyzerSkill(SkillBase):
         cycles = self.cg.find_circular_dependencies()
         bottlenecks = self.cg.find_bottleneck_files(limit=20)
 
-        # 2. Complexity Analysis
+        # 3. Complexity Analysis
         comp_results = self.complexity_scorer.run({"project_root": project_root})
-        file_complexities = comp_results.get("file_avg_complexity", 0) # This is global avg
-        
-        # We need per-file complexity for hotspots
-        # Extract from file_results if present
         detailed_comp = comp_results.get("file_results", {})
 
-        # 3. Identify Hotspots (High Centrality + High Complexity)
+        # 4. Identify Hotspots (High Centrality + High Complexity)
         hotspots = []
         for b in bottlenecks:
             fname = b["file"]
@@ -84,9 +80,45 @@ class StructuralAnalyzerSkill(SkillBase):
                     "risk_level": "CRITICAL" if max_cc > 20 else ("HIGH" if max_cc > 12 else "MEDIUM")
                 })
 
-        return {
+        # 5. Coverage Analysis (Optional)
+        coverage_gaps = []
+        if input_data.get("report_coverage"):
+            from agents.skills.test_coverage_analyzer import TestCoverageAnalyzerSkill
+            cov_analyzer = TestCoverageAnalyzerSkill()
+            cov_results = cov_analyzer.run({"project_root": project_root})
+            
+            # Identify high-risk files with low/zero coverage
+            # For now, focus on files identified as bottlenecks or hotspots
+            monitored_files = set([h["file"] for h in hotspots] + [b["file"] for b in bottlenecks])
+            
+            # Missing files (0% coverage)
+            for f in cov_results.get("missing_files", []):
+                # Clean path if absolute
+                rel_f = f
+                if Path(f).is_absolute():
+                    try:
+                        rel_f = str(Path(f).relative_to(project_root))
+                    except ValueError:
+                        pass
+                
+                coverage_gaps.append({
+                    "file": rel_f,
+                    "coverage_pct": 0.0,
+                    "risk_priority": "HIGH" if rel_f in monitored_files else "MEDIUM"
+                })
+
+        summary = f"Detected {len(cycles)} cycles and {len(hotspots)} architectural hotspots."
+        
+        res = {
             "circular_dependencies": cycles,
             "bottlenecks": bottlenecks,
             "hotspots": hotspots,
-            "summary": f"Detected {len(cycles)} cycles and {len(hotspots)} architectural hotspots."
+            "summary": summary
         }
+
+        if input_data.get("report_coverage"):
+            if coverage_gaps:
+                res["summary"] += f" Found {len(coverage_gaps)} coverage gaps."
+            res["coverage_gaps"] = coverage_gaps
+
+        return res

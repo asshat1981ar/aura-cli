@@ -1,0 +1,4 @@
+Task: Implement Sub-Goal Generation Logic
+Summary: Updated LoopOrchestrator to detect coverage gaps reported by StructuralAnalyzerSkill. When auto_backfill_coverage is enabled, the orchestrator now enqueues 'test_backfill' goals into the GoalQueue.
+Files: core/orchestrator.py, tests/test_backfill_goal_generation.py
+Why: To automate the process of creating corrective tasks for missing test coverage as part of the autonomous development loop.

@@ -275,13 +275,24 @@ class ModelAdapter:
         openrouter_key = resolve_openrouter_api_key()
         if not openrouter_key:
             raise ValueError("OpenRouter-compatible API key not set for OpenRouter call.")
+
+        # Free models to rotate through to avoid rate limits
+        free_models = [
+            "mistralai/mistral-7b-instruct:free",
+            "google/gemini-2.0-flash-exp:free",
+            "meta-llama/llama-3-8b-instruct:free",
+            "qwen/qwen-2-7b-instruct:free"
+        ]
+        import random
+        selected_model = random.choice(free_models)
+
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {openrouter_key}",
             "Content-Type": "application/json"
         }
         payload = {
-            "model": "openrouter/auto",
+            "model": selected_model,
             "messages": [{"role": "user", "content": prompt}]
         }
         response = self._make_request_with_retries("POST", url, headers, payload)

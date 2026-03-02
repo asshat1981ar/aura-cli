@@ -50,8 +50,9 @@ class ModelStats:
             self.failure_count += 1
             self.consecutive_failures += 1
             if self.consecutive_failures >= self.FAILURE_THRESHOLD:
-                self.cooldown_until = time.time() + self.COOLDOWN_SECONDS
-                log_json("WARN", "router_model_consecutive_failure_cooldown", details={"model": self.name, "cooldown": self.COOLDOWN_SECONDS})
+                cooldown = 1.0 if self.name == "openai" else self.COOLDOWN_SECONDS
+                self.cooldown_until = time.time() + cooldown
+                log_json("WARN", "router_model_consecutive_failure_cooldown", details={"model": self.name, "cooldown": cooldown})
 
         # Automatic benching based on EMA score or latency
         if self.ema_score < self.MIN_EMA_SCORE:

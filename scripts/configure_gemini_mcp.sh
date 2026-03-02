@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BASE_URL=${MCP_SERVER_URL:-http://localhost:8001}
+BASE_URL=${MCP_SERVER_URL:-http://localhost}
 TOKEN=${MCP_API_TOKEN:-dev-mcp-token}
 OUT=${GEMINI_SETTINGS_PATH:-$HOME/.gemini/settings.json}
 
@@ -15,20 +15,41 @@ mkdir -p "$(dirname "$OUT")"
 cat > "$OUT" <<EOF
 {
   "mcp": {
-    "allowed": ["aura-mcp"]
+    "allowed": ["aura-dev", "aura-skills", "aura-control", "aura-loop", "aura-copilot"]
   },
   "mcpServers": {
-    "aura-mcp": {
-      "httpUrl": "$BASE_URL",
-      "headers": {
-        "Authorization": "Bearer $TOKEN"
-      },
+    "aura-dev": {
+      "httpUrl": "${BASE_URL}:8001",
+      "headers": { "Authorization": "Bearer $TOKEN" },
       "timeout": 120000,
-      "trust": false,
-      "description": "AURA MCP server"
+      "trust": true
+    },
+    "aura-skills": {
+      "httpUrl": "${BASE_URL}:8002",
+      "headers": { "Authorization": "Bearer $TOKEN" },
+      "timeout": 120000,
+      "trust": true
+    },
+    "aura-control": {
+      "httpUrl": "${BASE_URL}:8003",
+      "headers": { "Authorization": "Bearer $TOKEN" },
+      "timeout": 120000,
+      "trust": true
+    },
+    "aura-loop": {
+      "httpUrl": "${BASE_URL}:8006",
+      "headers": { "Authorization": "Bearer $TOKEN" },
+      "timeout": 120000,
+      "trust": true
+    },
+    "aura-copilot": {
+      "httpUrl": "${BASE_URL}:8007",
+      "headers": { "Authorization": "Bearer $TOKEN" },
+      "timeout": 120000,
+      "trust": true
     }
   }
 }
 EOF
-banner "Wrote $OUT pointing to $BASE_URL"
+banner "Wrote $OUT with 5 AURA MCP servers pointing to $BASE_URL"
 banner "Tip: run 'gemini mcp reload' (or restart gemini-cli) to pick up the new config."

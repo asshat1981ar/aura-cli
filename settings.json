@@ -1,0 +1,65 @@
+{
+    "aura": {
+        "version": "2.0.0",
+        "description": "AURA Autonomous Development Platform - Optimized Settings",
+        "model_routing": {
+            "code_generation": "google/gemini-2.0-flash-exp:free",
+            "planning": "google/gemini-2.0-flash-exp:free",
+            "analysis": "google/gemini-2.0-flash-exp:free",
+            "critique": "google/gemini-2.0-flash-exp:free",
+            "embedding": "openai/text-embedding-3-small",
+            "fast": "google/gemini-2.0-flash-exp:free",
+            "quality": "anthropic/claude-3.5-sonnet"
+        },
+        "autonomous_evolution": {
+            "enabled": true,
+            "target_cycles": 50,
+            "max_intensity": "deep",
+            "convergence_escape": {
+                "failure_threshold": 3,
+                "strategy": "decompose"
+            }
+        },
+        "context_management": {
+            "backend": "sqlite_local",
+            "top_k": 9,
+            "min_score": 0.65,
+            "max_snippet_chars": 2000,
+            "ascm_enabled": true
+        },
+        "discovery": {
+            "max_files": 500,
+            "scan_depth": 5,
+            "ignored_patterns": [
+                "node_modules",
+                ".git",
+                "__pycache__",
+                ".pytest_cache",
+                "archive"
+            ]
+        },
+        "mcp_servers": {
+            "dev_tools": 8001,
+            "skills": 8002,
+            "control": 8003,
+            "agentic_loop": 8006,
+            "copilot": 8007
+        }
+    },
+    "gemini_cli": {
+        "mcp": {
+            "allowed": [
+                "aura-dev",
+                "aura-skills",
+                "aura-control",
+                "aura-loop",
+                "aura-copilot"
+            ],
+            "timeout_ms": 120000
+        },
+        "ui": {
+            "theme": "dark",
+            "compact_mode": false
+        }
+    }
+}

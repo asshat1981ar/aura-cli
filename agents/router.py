@@ -23,6 +23,11 @@ class ModelStats:
     EMA_ALPHA: float = 0.2            # Weight of latest observation in EMA
     COOLDOWN_SECONDS: float = 120.0   # Backoff window after 3 consecutive failures
     FAILURE_THRESHOLD: int = 3
+    
+    # New thresholds for automatic benching
+    MIN_EMA_SCORE: float = 0.3        # Below this, model is benched for LONG_COOLDOWN
+    MAX_LATENCY_SECONDS: float = 90.0 # Above this, model is benched for LONG_COOLDOWN
+    LONG_COOLDOWN_SECONDS: float = 600.0 # 10 minutes
 
     @property
     def is_cooled_down(self) -> bool:
@@ -31,7 +36,7 @@ class ModelStats:
     @property
     def avg_latency(self) -> float:
         total = self.success_count + self.failure_count
-        return self.total_latency / total if total > 0 else 999.0
+        return self.total_latency / total if total > 0 else 0.0
 
     def record(self, success: bool, latency: float):
         observation = 1.0 if success else 0.0
@@ -46,6 +51,17 @@ class ModelStats:
             self.consecutive_failures += 1
             if self.consecutive_failures >= self.FAILURE_THRESHOLD:
                 self.cooldown_until = time.time() + self.COOLDOWN_SECONDS
+                log_json("WARN", "router_model_consecutive_failure_cooldown", details={"model": self.name, "cooldown": self.COOLDOWN_SECONDS})
+
+        # Automatic benching based on EMA score or latency
+        if self.ema_score < self.MIN_EMA_SCORE:
+            self.cooldown_until = max(self.cooldown_until, time.time() + self.LONG_COOLDOWN_SECONDS)
+            log_json("WARN", "router_model_low_score_cooldown", details={"model": self.name, "score": f"{self.ema_score:.2f}", "cooldown": self.LONG_COOLDOWN_SECONDS})
+            
+        if self.avg_latency > self.MAX_LATENCY_SECONDS and (self.success_count + self.failure_count) >= 5:
+            self.cooldown_until = max(self.cooldown_until, time.time() + self.LONG_COOLDOWN_SECONDS)
+            log_json("WARN", "router_model_high_latency_cooldown", details={"model": self.name, "avg_latency": f"{self.avg_latency:.2f}", "cooldown": self.LONG_COOLDOWN_SECONDS})
+
 
     def to_dict(self) -> dict:
         return asdict(self)

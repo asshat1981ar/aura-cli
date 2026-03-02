@@ -15,6 +15,10 @@ class SkillBase(ABC):
 
     name: str = "base_skill"
 
+    def __init__(self, brain=None, model=None):
+        self.brain = brain
+        self.model = model
+
     def run(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Execute the skill. Returns a JSON-serialisable dict."""
         try:

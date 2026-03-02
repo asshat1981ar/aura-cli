@@ -214,31 +214,32 @@ class AdaptivePipeline:
         baseline = "normal"
         if consecutive_fails >= 3:
             baseline = "deep"
-        elif consecutive_fails == 0 and not past_failures:
-            # Check if we've had recent phase failure spikes
-            if self.memory:
-                reports = self.memory.query("reflection_reports", limit=1)
-                if reports:
-                    high_count = sum(
-                        1 for ins in reports[-1].get("insights", [])
-                        if ins.get("severity") == "HIGH"
-                    )
-                    if high_count >= 2:
-                        baseline = "deep"
             
         # Data-driven override
-        rates = {
-            "minimal": self.win_rate(goal_type, "minimal"),
-            "normal":  self.win_rate(goal_type, "normal"),
-            "deep":    self.win_rate(goal_type, "deep"),
-        }
+        strategies = ["minimal", "normal", "deep"]
+        rates = {s: self.win_rate(goal_type, s) for s in strategies}
         
-        # If we have enough data (e.g. non-zero rates), prefer the winner
-        if any(r > 0 for r in rates.values()):
+        # Check if we have any data at all
+        has_data = any(self._brain.get(f"__strategy_stats__:{goal_type}:{s}") is not None for s in strategies) if self._brain else False
+        
+        if has_data:
             best_strategy = max(rates, key=rates.get)
-            # If the winner is better than baseline, or baseline is failing, switch
-            if rates[best_strategy] > rates.get(baseline, 0) or rates.get(baseline, 0) < 0.3:
-                log_json("INFO", "adaptive_strategy_override", details={"baseline": baseline, "override": best_strategy, "win_rate": rates[best_strategy]})
+            current_rate = rates.get(baseline, 0.0)
+            
+            # If baseline is doing poorly (< 30%) and we have a better (or even untested) alternative
+            if current_rate < 0.3:
+                # If everything is failing, prefer "deep"
+                if all(r < 0.3 for r in rates.values()):
+                    override = "deep"
+                else:
+                    override = best_strategy
+                
+                log_json("INFO", "adaptive_strategy_override", details={"baseline": baseline, "override": override, "reason": "low_win_rate", "rate": current_rate})
+                return override, rates.get(override, 0.5)
+            
+            # If another strategy is significantly better, switch
+            if rates[best_strategy] > current_rate + 0.2:
+                log_json("INFO", "adaptive_strategy_override", details={"baseline": baseline, "override": best_strategy, "reason": "better_performance", "rate": rates[best_strategy]})
                 return best_strategy, rates[best_strategy]
         
         return baseline, rates.get(baseline, 1.0 if consecutive_fails == 0 else 0.5)
@@ -265,8 +266,42 @@ class AdaptivePipeline:
             else:
                 existing["losses"] += 1
             self._brain.set(key, existing)
+            
+            # Periodically review performance and optimize parameters
+            # Just use a 10-cycle window for optimization
+            if (existing["wins"] + existing["losses"]) % 10 == 0:
+                self._optimize_parameters(goal_type, strategy)
+                
         except Exception as exc:
             log_json("WARN", "adaptive_pipeline_outcome_record_failed", details={"error": str(exc)})
+
+    def _optimize_parameters(self, goal_type: str, strategy: str) -> None:
+        """Review performance and adjust aura.config.json parameters."""
+        rate = self.win_rate(goal_type, strategy)
+        log_json("INFO", "adaptive_pipeline_optimizing_parameters", details={"goal_type": goal_type, "strategy": strategy, "win_rate": f"{rate:.2f}"})
+        
+        from core.config_manager import config
+        
+        updates = {}
+        # If win rate is low (< 40%), increase context depth or decrease selectivity
+        if rate < 0.4:
+            current_top_k = config.get("semantic_memory", {}).get("top_k", 10)
+            current_min_score = config.get("semantic_memory", {}).get("min_score", 0.65)
+            
+            if current_top_k < 20:
+                updates["semantic_memory"] = {"top_k": current_top_k + 2}
+            elif current_min_score > 0.4:
+                updates["semantic_memory"] = {"min_score": round(current_min_score - 0.05, 2)}
+                
+        # If win rate is high (> 80%), maybe reduce context depth to save speed/cost
+        elif rate > 0.8:
+            current_top_k = config.get("semantic_memory", {}).get("top_k", 10)
+            if current_top_k > 5:
+                updates["semantic_memory"] = {"top_k": current_top_k - 1}
+
+        if updates:
+            log_json("INFO", "adaptive_pipeline_applying_parameter_updates", details={"updates": updates})
+            config.update_config(updates, persist=True)
 
     def win_rate(self, goal_type: str, strategy: str) -> float:
         """Return win rate 0.0-1.0 for this (goal_type, strategy) pair."""

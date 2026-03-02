@@ -99,6 +99,7 @@ class LoopOrchestrator:
         auto_start_mcp_servers: bool = False,
         goal_queue=None,
         brain: Any = None,
+        model: Any = None,
     ):
         """Initialise the orchestrator with its agents and supporting services.
 
@@ -132,6 +133,7 @@ class LoopOrchestrator:
         self.auto_start_mcp_servers = auto_start_mcp_servers
         self.goal_queue = goal_queue
         self.brain = brain
+        self.model = model
         self.last_capability_plan: dict = {}
         self.last_capability_goal_queue: dict = {}
         self.last_capability_provisioning: dict = {}
@@ -143,7 +145,7 @@ class LoopOrchestrator:
         # Lazy-load skills so missing optional deps don't break startup
         try:
             from agents.skills.registry import all_skills
-            self.skills = all_skills()
+            self.skills = all_skills(brain=self.brain, model=self.model)
         except Exception as exc:  # pragma: no cover
             log_json("WARN", "skills_load_failed", details={"error": str(exc)})
             self.skills = {}

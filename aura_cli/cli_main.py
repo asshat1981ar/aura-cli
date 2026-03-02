@@ -406,6 +406,7 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         debugger=debugger_instance,
         goal_queue=goal_queue,
         brain=brain_instance,
+        model=model_adapter,
     )
 
     _attach_advanced_loops(orchestrator, runtime_mode, brain_instance, memory_store, goal_queue, _momento, project_root)

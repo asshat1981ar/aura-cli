@@ -134,8 +134,15 @@ class ConfigManager:
     Unified Control Plane: Centralized configuration manager for AURA.
     Enforces a tiered strategy: (Overrides > ENV > JSON > Defaults).
     """
-    def __init__(self, config_file="aura.config.json", overrides: Optional[Dict[str, Any]] = None):
-        self.config_file = Path(config_file)
+    def __init__(self, config_file=None, overrides: Optional[Dict[str, Any]] = None):
+        # Look for settings.json first, then aura.config.json
+        if config_file:
+            self.config_file = Path(config_file)
+        elif Path("settings.json").exists():
+            self.config_file = Path("settings.json")
+        else:
+            self.config_file = Path("aura.config.json")
+            
         self.runtime_overrides = overrides or {}
         self.file_config = {}
         self.effective_config = {}
@@ -149,6 +156,18 @@ class ConfigManager:
             with open(self.config_file, 'r') as f:
                 data = json.load(f)
                 log_json("INFO", "config_loaded_from_file", details={"path": str(self.config_file)})
+                
+                # If using the new settings.json format, the AURA config is under the "aura" key
+                if "aura" in data and isinstance(data["aura"], dict):
+                    # Flatten the aura section for the ConfigManager
+                    aura_config = data["aura"]
+                    
+                    # Map new optimized keys back to flat keys if necessary
+                    if "context_management" in aura_config:
+                        aura_config["semantic_memory"] = aura_config.pop("context_management")
+                    
+                    return aura_config
+                    
                 return data
         except json.JSONDecodeError as e:
             log_json("ERROR", "config_parse_failed", details={"error": str(e)})
@@ -277,6 +296,30 @@ class ConfigManager:
     def set_runtime_override(self, key: str, value: Any):
         """Sets a temporary runtime override."""
         self.runtime_overrides[key] = value
+        self.refresh()
+
+    def update_config(self, updates: Dict[str, Any], persist: bool = True):
+        """Update multiple configuration values, optionally persisting to disk.
+        
+        Supports deep merging for 'model_routing' and 'semantic_memory'.
+        """
+        for k, v in updates.items():
+            if k in ["model_routing", "semantic_memory"] and isinstance(v, dict):
+                if k not in self.file_config:
+                    self.file_config[k] = {}
+                self.file_config[k].update(v)
+            else:
+                self.file_config[k] = v
+        
+        if persist:
+            try:
+                with open(self.config_file, 'w') as f:
+                    json.dump(self.file_config, f, indent=4)
+                log_json("INFO", "config_updated_and_persisted", details={"keys": list(updates.keys())})
+            except Exception as e:
+                log_json("ERROR", "config_save_failed", details={"error": str(e)})
+                raise ConfigurationError(f"Failed to save config: {e}")
+        
         self.refresh()
 
     def persist_to_file(self, key: str, value: Any):

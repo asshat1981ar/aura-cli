@@ -19,10 +19,11 @@ class StructuralAnalyzerSkill(SkillBase):
     """
     name = "structural_analyzer"
 
-    def __init__(self, context_graph: Optional[ContextGraph] = None):
+    def __init__(self, brain=None, model=None, context_graph: Optional[ContextGraph] = None):
+        super().__init__(brain=brain, model=model)
         self.cg = context_graph or ContextGraph()
-        self.complexity_scorer = ComplexityScorerSkill()
-        self.symbol_indexer = SymbolIndexerSkill()
+        self.complexity_scorer = ComplexityScorerSkill(brain=brain, model=model)
+        self.symbol_indexer = SymbolIndexerSkill(brain=brain, model=model)
 
     def _run(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         project_root = input_data.get("project_root")

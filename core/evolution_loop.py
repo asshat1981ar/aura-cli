@@ -35,10 +35,15 @@ class EvolutionLoop:
         self.TRIGGER_EVERY_N = 20
 
     def on_cycle_complete(self, entry: dict) -> None:
-        """Trigger evolution every N cycles."""
+        """Trigger evolution every N cycles, or immediately for structural hotspot signals."""
         self._cycle_count += 1
-        if self._cycle_count % self.TRIGGER_EVERY_N == 0:
-            goal = entry.get("goal", "evolve and improve the AURA system")
+        
+        goal = entry.get("goal", "evolve and improve the AURA system")
+        is_hotspot = "structural_hotspot" in str(entry.get("phase_outputs", {}).get("skill_context", {})) or "refactor hotspot" in goal.lower()
+        
+        if self._cycle_count % self.TRIGGER_EVERY_N == 0 or is_hotspot:
+            if is_hotspot:
+                log_json("INFO", "evolution_loop_triggered_by_hotspot_signal", details={"goal": goal})
             self.run(goal)
 
     def run(self, goal):

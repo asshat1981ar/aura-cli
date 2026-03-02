@@ -63,3 +63,32 @@ def test_panel_builders_dont_crash():
     mock_archive.completed = [("done goal", 8.0)]
     p2 = build_queue_panel(mock_queue, mock_archive)
     assert isinstance(p2, Panel)
+
+
+def test_cycle_panel_renders_beads_context():
+    from aura_cli.tui.panels.cycle_panel import build_cycle_panel
+    from rich.console import Console
+
+    panel = build_cycle_panel(
+        "",
+        {},
+        "",
+        None,
+        last_summary={
+            "outcome": "SUCCESS",
+            "stop_reason": "PASS",
+            "queued_follow_up_goals": [],
+            "beads_status": "allow",
+            "beads_decision_id": "beads-42",
+            "beads_summary": "Proceed with the scoped test fix.",
+        },
+        beads_runtime={"enabled": True, "required": True, "scope": "goal_run"},
+    )
+
+    console = Console(record=True, width=120)
+    console.print(panel)
+    rendered = console.export_text()
+
+    assert "BEADS" in rendered
+    assert "beads-42" in rendered
+    assert "goal_run" in rendered

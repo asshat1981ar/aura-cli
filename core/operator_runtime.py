@@ -218,6 +218,29 @@ def build_cycle_summary(
     }
 
 
+def build_beads_runtime_metadata(orchestrator: Any = None) -> Dict[str, Any] | None:
+    if orchestrator is None:
+        return None
+
+    bridge = getattr(orchestrator, "beads_bridge", None)
+    metadata: Dict[str, Any] = {}
+    if bridge is not None and hasattr(bridge, "to_runtime_metadata"):
+        try:
+            maybe_metadata = bridge.to_runtime_metadata()
+        except Exception:
+            maybe_metadata = None
+        if isinstance(maybe_metadata, dict):
+            metadata.update(maybe_metadata)
+
+    metadata.setdefault("enabled", bool(getattr(orchestrator, "beads_enabled", False)))
+    metadata.setdefault("required", bool(getattr(orchestrator, "beads_required", False)))
+    metadata.setdefault("scope", getattr(orchestrator, "beads_scope", "goal_run"))
+    runtime_mode = getattr(orchestrator, "runtime_mode", None)
+    if runtime_mode is not None:
+        metadata.setdefault("runtime_mode", runtime_mode)
+    return metadata
+
+
 def build_operator_runtime_snapshot(
     goal_queue: Any = None,
     goal_archive: Any = None,
@@ -226,6 +249,7 @@ def build_operator_runtime_snapshot(
     last_cycle: Dict[str, Any] | None = None,
     active_goal: str | None = None,
     updated_at: float | None = None,
+    beads_runtime: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     if active_goal is None and isinstance(active_cycle, dict):
         active_goal = active_cycle.get("goal")
@@ -239,4 +263,5 @@ def build_operator_runtime_snapshot(
         ),
         "active_cycle": active_cycle,
         "last_cycle": last_cycle,
+        "beads_runtime": beads_runtime,
     }

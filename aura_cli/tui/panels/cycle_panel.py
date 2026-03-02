@@ -22,6 +22,7 @@ def build_cycle_panel(
     current_phase: str,
     confidence: Optional[float] = None,
     last_summary: Optional[Dict[str, Any]] = None,
+    beads_runtime: Optional[Dict[str, Any]] = None,
 ) -> "Panel":
     """Build the pipeline progress panel."""
     if not _RICH_AVAILABLE:
@@ -60,8 +61,22 @@ def build_cycle_panel(
         table.add_section()
         table.add_row("Last Outcome", f"[bold {color}]{outcome}[/bold {color}]")
         table.add_row("Stop Reason", f"[dim]{stop}[/dim]")
+        if last_summary.get("beads_status"):
+            beads_detail = str(last_summary["beads_status"])
+            if last_summary.get("beads_decision_id"):
+                beads_detail += f" ({last_summary['beads_decision_id']})"
+            table.add_row("BEADS", f"[magenta]{beads_detail}[/magenta]")
+            if last_summary.get("beads_summary"):
+                table.add_row("BEADS Note", str(last_summary["beads_summary"]))
         if follow_ups:
             table.add_row("Follow-ups", f"[cyan]{len(follow_ups)} goals enqueued[/cyan]")
+
+    if beads_runtime:
+        gate_label = "required" if beads_runtime.get("required") else "optional"
+        enabled = "on" if beads_runtime.get("enabled") else "off"
+        table.add_section()
+        table.add_row("Gate", f"[magenta]{enabled} ({gate_label})[/magenta]")
+        table.add_row("Scope", f"[dim]{beads_runtime.get('scope', 'goal_run')}[/dim]")
 
     goal_text = (current_goal[:55] + "…") if len(current_goal) > 56 else (current_goal or "(idle)")
     title = f"[bold blue]Pipeline[/bold blue] [dim]{goal_text}[/dim]"

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 from core.operator_runtime import (
+    build_beads_runtime_metadata,
     build_cycle_summary,
     build_operator_runtime_snapshot,
     build_queue_summary,
@@ -154,6 +155,7 @@ def test_build_operator_runtime_snapshot_composes_queue_and_cycle_summaries():
         last_cycle=None,
         active_goal="Fix failing tests",
         updated_at=55.0,
+        beads_runtime={"enabled": True, "required": True, "scope": "goal_run"},
     )
 
     assert snapshot["schema_version"] == 1
@@ -161,6 +163,28 @@ def test_build_operator_runtime_snapshot_composes_queue_and_cycle_summaries():
     assert snapshot["queue"]["active_goal"] == "Fix failing tests"
     assert snapshot["active_cycle"]["cycle_id"] == "cycle_123"
     assert snapshot["last_cycle"] is None
+    assert snapshot["beads_runtime"]["scope"] == "goal_run"
+
+
+def test_build_beads_runtime_metadata_reads_orchestrator_contract():
+    orchestrator = SimpleNamespace(
+        beads_bridge=SimpleNamespace(
+            to_runtime_metadata=lambda: {"enabled": True, "required": True, "scope": "goal_run"}
+        ),
+        beads_enabled=True,
+        beads_required=True,
+        beads_scope="goal_run",
+        runtime_mode="full",
+    )
+
+    metadata = build_beads_runtime_metadata(orchestrator)
+
+    assert metadata == {
+        "enabled": True,
+        "required": True,
+        "scope": "goal_run",
+        "runtime_mode": "full",
+    }
 
 
 def test_orchestrator_run_cycle_and_loop_publish_cycle_summary(tmp_path: Path):

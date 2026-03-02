@@ -80,17 +80,19 @@ def _handle_status(
 ):
     log_json("INFO", "aura_status_requested")
     
-    from core.operator_runtime import build_operator_runtime_snapshot
+    from core.operator_runtime import build_beads_runtime_metadata, build_operator_runtime_snapshot
     from core.capability_manager import build_capability_status_report
 
     active_cycle = getattr(orchestrator, "active_cycle_summary", None)
     last_cycle = getattr(orchestrator, "last_cycle_summary", None)
+    beads_runtime = build_beads_runtime_metadata(orchestrator)
     
     snapshot = build_operator_runtime_snapshot(
         goal_queue=goal_queue,
         goal_archive=goal_archive,
         active_cycle=active_cycle,
         last_cycle=last_cycle,
+        beads_runtime=beads_runtime,
     )
 
     if as_json:
@@ -114,11 +116,38 @@ def _handle_status(
         score_str = f" (Score: {item['score']:.2f})" if item['score'] is not None else ""
         print(f"  - '{item['goal']}'{score_str}")
 
+    if beads_runtime:
+        gate_mode = "required" if beads_runtime.get("required") else "optional"
+        print("\n--- BEADS Gate ---")
+        print(f"Enabled: {'yes' if beads_runtime.get('enabled') else 'no'}")
+        print(f"Mode: {gate_mode}")
+        print(f"Scope: {beads_runtime.get('scope', 'goal_run')}")
+
     if active_cycle:
         print("\n--- Active Cycle ---")
         print(f"ID: {active_cycle['cycle_id']}")
         print(f"Goal: {active_cycle['goal']}")
         print(f"Phase: {active_cycle['current_phase']} ({active_cycle['state']})")
+        if active_cycle.get("beads_status"):
+            beads_label = active_cycle["beads_status"]
+            if active_cycle.get("beads_decision_id"):
+                beads_label += f" ({active_cycle['beads_decision_id']})"
+            print(f"BEADS: {beads_label}")
+            if active_cycle.get("beads_summary"):
+                print(f"BEADS Summary: {active_cycle['beads_summary']}")
+    elif last_cycle:
+        print("\n--- Last Cycle ---")
+        print(f"ID: {last_cycle['cycle_id']}")
+        print(f"Goal: {last_cycle['goal']}")
+        print(f"Outcome: {last_cycle['outcome']}")
+        print(f"Stop Reason: {last_cycle['stop_reason']}")
+        if last_cycle.get("beads_status"):
+            beads_label = last_cycle["beads_status"]
+            if last_cycle.get("beads_decision_id"):
+                beads_label += f" ({last_cycle['beads_decision_id']})"
+            print(f"BEADS: {beads_label}")
+            if last_cycle.get("beads_summary"):
+                print(f"BEADS Summary: {last_cycle['beads_summary']}")
 
     # Task Hierarchy
     task_manager = TaskManager(persistence_path=memory_persistence_path)

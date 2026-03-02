@@ -18,6 +18,7 @@ def test_tools_requires_auth_when_token_set(monkeypatch):
 def test_goal_sse_shape(monkeypatch):
     # disable auth for this test
     monkeypatch.delenv("AGENT_API_TOKEN", raising=False)
+    monkeypatch.setattr(server, "_beads_runtime_snapshot", lambda: {"enabled": True, "required": True, "scope": "goal_run"})
     # stub run_cycle to avoid real model calls
     monkeypatch.setattr(server.orchestrator, "run_cycle", lambda goal, dry_run=False: {
         "cycle_id": "stub-1",
@@ -39,6 +40,11 @@ def test_goal_sse_shape(monkeypatch):
             "applied_files": [],
             "failed_files": [],
             "queued_follow_up_goals": [],
+            "beads_status": "allow",
+            "beads_decision_id": "beads-1",
+            "beads_summary": "Proceed with the scoped change.",
+            "beads_required_constraints": ["Keep CLI JSON stable."],
+            "beads_follow_up_goals": ["Review telemetry"],
             "started_at": 1.0,
             "completed_at": 2.0,
             "duration_s": 1.0,
@@ -71,11 +77,14 @@ def test_goal_sse_shape(monkeypatch):
         providers = health.get("providers", {})
         for key in ["openai", "openrouter", "gemini"]:
             assert key in providers
+        assert health["beads_runtime"] == {"enabled": True, "required": True, "scope": "goal_run"}
         cycle = next(e for e in events if isinstance(e, dict) and e.get("type") == "cycle")
         assert cycle["summary"]["cycle_id"] == "stub-1"
         assert cycle["summary"]["goal"] == "sample goal"
         assert cycle["summary"]["verification_status"] == "pass"
         assert cycle["summary"]["outcome"] == "SUCCESS"
+        assert cycle["summary"]["beads_status"] == "allow"
+        assert cycle["summary"]["beads_decision_id"] == "beads-1"
         complete = next(e for e in events if isinstance(e, dict) and e.get("type") == "complete")
         assert "stop_reason" in complete
         assert complete["history"][-1]["stop_reason"] == "done"

@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from aura_cli.cli_main import create_runtime
 from core.sanitizer import sanitize_command
 from core.logging_utils import log_json
-from core.operator_runtime import build_cycle_summary
+from core.operator_runtime import build_beads_runtime_metadata, build_cycle_summary
 from core.runtime_auth import resolve_openai_api_key, resolve_openrouter_api_key, resolve_gemini_cli_path
 from core.skill_dispatcher import SKILL_METRICS
 from memory.store import MemoryStore
@@ -39,6 +39,10 @@ def _provider_snapshot() -> dict[str, bool]:
         "openrouter": bool(resolve_openrouter_api_key(config_api_key=config_api_key)),
         "gemini": bool(resolve_gemini_cli_path() or os.getenv("GEMINI_API_KEY")),
     }
+
+
+def _beads_runtime_snapshot() -> dict | None:
+    return build_beads_runtime_metadata(orchestrator)
 
 def require_auth(authorization: str | None = Header(default=None)):
     """Simple bearer-token auth; disabled if AGENT_API_TOKEN is unset."""
@@ -182,7 +186,7 @@ async def execute(req: ExecuteRequest, auth=Depends(require_auth)):
             async def goal_stream():
                 yield "data: {\"type\":\"start\"}\n\n"
                 providers = _provider_snapshot()
-                yield f"data: {json.dumps({'type': 'health', 'status': 'ok', 'providers': providers, 'ts': time.time()})}\n\n"
+                yield f"data: {json.dumps({'type': 'health', 'status': 'ok', 'providers': providers, 'beads_runtime': _beads_runtime_snapshot(), 'ts': time.time()})}\n\n"
                 goal = args[0]
                 max_cycles = 5
                 history = []

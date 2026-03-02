@@ -39,7 +39,7 @@ from aura_cli.tui.panels.memory_panel import build_memory_panel
 from aura_cli.tui.panels.metrics_panel import build_metrics_panel
 from aura_cli.tui.panels.ascm_panel import build_ascm_panel
 from core.logging_utils import log_json
-from core.operator_runtime import build_operator_runtime_snapshot
+from core.operator_runtime import build_beads_runtime_metadata, build_operator_runtime_snapshot
 
 
 class AuraStudio:
@@ -212,6 +212,7 @@ class AuraStudio:
             active_cycle=getattr(orchestrator, "active_cycle_summary", None) if orchestrator else None,
             last_cycle=getattr(orchestrator, "last_cycle_summary", None) if orchestrator else None,
             active_goal=self._current_goal or (getattr(orchestrator, "current_goal", None) if orchestrator else None),
+            beads_runtime=build_beads_runtime_metadata(orchestrator),
         )
         cycle_log = self._cycle_log
 
@@ -222,6 +223,7 @@ class AuraStudio:
                 current_phase=self._current_phase,
                 confidence=self._strategy_confidence,
                 last_summary=snapshot["active_cycle"] or snapshot["last_cycle"] or (self._cycle_log[-1] if self._cycle_log else None),
+                beads_runtime=snapshot.get("beads_runtime"),
             )
         )
         layout["ascm"].update(build_ascm_panel(bundle=self._last_context_bundle))

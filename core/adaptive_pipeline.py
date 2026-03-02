@@ -300,8 +300,14 @@ class AdaptivePipeline:
                 updates["semantic_memory"] = {"top_k": current_top_k - 1}
 
         if updates:
-            log_json("INFO", "adaptive_pipeline_applying_parameter_updates", details={"updates": updates})
-            config.update_config(updates, persist=True)
+            config_path = getattr(config, "config_file", None)
+            persist_updates = bool(config_path and getattr(config_path, "name", "") == "aura.config.json")
+            log_json(
+                "INFO",
+                "adaptive_pipeline_applying_parameter_updates",
+                details={"updates": updates, "persist": persist_updates},
+            )
+            config.update_config(updates, persist=persist_updates)
 
     def win_rate(self, goal_type: str, strategy: str) -> float:
         """Return win rate 0.0-1.0 for this (goal_type, strategy) pair."""

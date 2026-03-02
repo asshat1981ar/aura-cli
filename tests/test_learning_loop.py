@@ -188,6 +188,20 @@ class TestAdaptivePipelineOutcome:
         ap = AdaptivePipeline()
         assert ap._brain is None
 
+    def test_optimize_parameters_does_not_persist_into_settings_json(self):
+        brain = self._make_brain()
+        ap = AdaptivePipeline(brain=brain)
+        brain._kv["__strategy_stats__:feature:deep"] = {"wins": 9, "losses": 1}
+
+        fake_config = MagicMock()
+        fake_config.config_file = Path("settings.json")
+        fake_config.get.return_value = {"top_k": 8, "min_score": 0.65}
+
+        with patch("core.config_manager.config", fake_config), patch("core.adaptive_pipeline.config", fake_config, create=True):
+            ap._optimize_parameters("feature", "deep")
+
+        fake_config.update_config.assert_called_once_with({"semantic_memory": {"top_k": 7}}, persist=False)
+
 
 # ── TestHybridClosedLoopDeprecation ──────────────────────────────────────────
 

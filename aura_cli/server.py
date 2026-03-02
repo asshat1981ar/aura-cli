@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from aura_cli.cli_main import create_runtime
 from core.sanitizer import sanitize_command
 from core.logging_utils import log_json
+from core.operator_runtime import build_cycle_summary
 from core.runtime_auth import resolve_openai_api_key, resolve_openrouter_api_key, resolve_gemini_cli_path
 from core.skill_dispatcher import SKILL_METRICS
 from memory.store import MemoryStore
@@ -190,14 +191,13 @@ async def execute(req: ExecuteRequest, auth=Depends(require_auth)):
 
                 for _ in range(max_cycles):
                     entry = await asyncio.to_thread(orchestrator.run_cycle, goal, False)
+                    summary = dict(entry.get("cycle_summary") or build_cycle_summary(entry))
                     verification = entry.get("phase_outputs", {}).get("verification", {})
-                    summary = {
-                        "cycle_id": entry.get("cycle_id"),
-                        "stop_reason": entry.get("stop_reason"),
-                        "verification_status": verification.get("status"),
-                        "failures": verification.get("failures", []),
-                    }
                     history.append(summary)
+                    stop_reason = summary.get("stop_reason") or orchestrator.policy.evaluate(history, verification, started_at=started_at)
+                    if stop_reason:
+                        summary["stop_reason"] = stop_reason
+                        history[-1] = summary
 
                     # Persist compact summary if memory_store available
                     if memory_store:
@@ -211,8 +211,6 @@ async def execute(req: ExecuteRequest, auth=Depends(require_auth)):
 
                     yield f"data: {json.dumps({'type': 'cycle', 'summary': summary})}\n\n"
 
-                    verification = entry.get("phase_outputs", {}).get("verification", {})
-                    stop_reason = entry.get("stop_reason") or orchestrator.policy.evaluate(history, verification, started_at=started_at)
                     if stop_reason:
                         break
 

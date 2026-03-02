@@ -1,7 +1,7 @@
 """Cycle pipeline panel for AURA TUI."""
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Any, Dict, Optional
 
 try:
     from rich.panel import Panel
@@ -31,14 +31,26 @@ def build_cycle_panel(
     table.add_column("Phase", style="bold", width=12)
     table.add_column("Status", width=4)
 
-    # Active Pipeline
+    summary_phase_status = {}
+    if last_summary and isinstance(last_summary.get("phase_status"), dict):
+        summary_phase_status = {
+            phase: (
+                "✅" if status == "pass"
+                else "❌" if status == "fail"
+                else "⟳" if status == "running"
+                else "○"
+            )
+            for phase, status in last_summary["phase_status"].items()
+        }
+
+    display_status = phases_status or summary_phase_status
+
     for phase in _PHASES:
-        status = phases_status.get(phase, "○")
+        status = display_status.get(phase, "○")
         icon = _ICONS.get(status, status)
         phase_label = f"[cyan]{phase}[/cyan]" if phase == current_phase else phase
         table.add_row(phase_label, icon)
 
-    # Outcome summary if idle
     if not current_goal and last_summary:
         outcome = last_summary.get("outcome", "UNKNOWN")
         stop = last_summary.get("stop_reason", "N/A")

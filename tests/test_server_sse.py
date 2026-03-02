@@ -21,8 +21,28 @@ def test_goal_sse_shape(monkeypatch):
     # stub run_cycle to avoid real model calls
     monkeypatch.setattr(server.orchestrator, "run_cycle", lambda goal, dry_run=False: {
         "cycle_id": "stub-1",
+        "goal": goal,
         "phase_outputs": {"verification": {"status": "pass", "failures": []}},
         "stop_reason": "done",
+        "cycle_summary": {
+            "cycle_id": "stub-1",
+            "goal": goal,
+            "goal_type": "default",
+            "state": "complete",
+            "current_phase": "verify",
+            "phase_status": {"verify": "pass"},
+            "verification_status": "pass",
+            "outcome": "SUCCESS",
+            "stop_reason": "done",
+            "failures": [],
+            "retry_count": 0,
+            "applied_files": [],
+            "failed_files": [],
+            "queued_follow_up_goals": [],
+            "started_at": 1.0,
+            "completed_at": 2.0,
+            "duration_s": 1.0,
+        },
     })
 
     with TestClient(server.app) as c:
@@ -51,9 +71,14 @@ def test_goal_sse_shape(monkeypatch):
         providers = health.get("providers", {})
         for key in ["openai", "openrouter", "gemini"]:
             assert key in providers
-        assert any(e.get("type") == "cycle" for e in events if isinstance(e, dict))
+        cycle = next(e for e in events if isinstance(e, dict) and e.get("type") == "cycle")
+        assert cycle["summary"]["cycle_id"] == "stub-1"
+        assert cycle["summary"]["goal"] == "sample goal"
+        assert cycle["summary"]["verification_status"] == "pass"
+        assert cycle["summary"]["outcome"] == "SUCCESS"
         complete = next(e for e in events if isinstance(e, dict) and e.get("type") == "complete")
         assert "stop_reason" in complete
+        assert complete["history"][-1]["stop_reason"] == "done"
 
 
 def test_run_sse_stream(monkeypatch):

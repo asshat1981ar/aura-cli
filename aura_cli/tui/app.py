@@ -39,6 +39,7 @@ from aura_cli.tui.panels.memory_panel import build_memory_panel
 from aura_cli.tui.panels.metrics_panel import build_metrics_panel
 from aura_cli.tui.panels.ascm_panel import build_ascm_panel
 from core.logging_utils import log_json
+from core.operator_runtime import build_operator_runtime_snapshot
 
 
 class AuraStudio:
@@ -122,7 +123,9 @@ class AuraStudio:
                 continue
             
             try:
-                goal = goal_queue.pop()
+                goal = goal_queue.next()
+                if goal is None:
+                    continue
                 self._current_goal = str(goal)
                 orchestrator.run_loop(self._current_goal, max_cycles=5)
             except Exception as e:
@@ -202,19 +205,27 @@ class AuraStudio:
         goal_queue = self.runtime.get("goal_queue")
         goal_archive = self.runtime.get("goal_archive")
         brain = self.runtime.get("brain")
+        orchestrator = self.runtime.get("orchestrator")
+        snapshot = build_operator_runtime_snapshot(
+            goal_queue=goal_queue,
+            goal_archive=goal_archive,
+            active_cycle=getattr(orchestrator, "active_cycle_summary", None) if orchestrator else None,
+            last_cycle=getattr(orchestrator, "last_cycle_summary", None) if orchestrator else None,
+            active_goal=self._current_goal or (getattr(orchestrator, "current_goal", None) if orchestrator else None),
+        )
         cycle_log = self._cycle_log
 
         layout["pipeline"].update(
             build_cycle_panel(
-                current_goal=self._current_goal,
+                current_goal=self._current_goal or (snapshot["active_cycle"] or {}).get("goal", ""),
                 phases_status=self._phases_status,
                 current_phase=self._current_phase,
                 confidence=self._strategy_confidence,
-                last_summary=self._cycle_log[-1] if self._cycle_log else None,
+                last_summary=snapshot["active_cycle"] or snapshot["last_cycle"] or (self._cycle_log[-1] if self._cycle_log else None),
             )
         )
         layout["ascm"].update(build_ascm_panel(bundle=self._last_context_bundle))
-        layout["queue"].update(build_queue_panel(goal_queue=goal_queue, goal_archive=goal_archive))
+        layout["queue"].update(build_queue_panel(queue_summary=snapshot["queue"]))
         layout["memory"].update(build_memory_panel(brain=brain))
         layout["metrics"].update(build_metrics_panel(cycle_log=cycle_log))
 

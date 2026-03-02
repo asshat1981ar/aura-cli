@@ -32,7 +32,7 @@ def test_tui_callbacks():
     assert app._phases_status["plan"] == "✅"
     
     # 4. Cycle complete
-    app.on_cycle_complete({"goal": "fix something", "success": True, "duration_s": 5.2})
+    app.on_cycle_complete({"goal": "fix something", "outcome": "SUCCESS", "duration_s": 5.2})
     assert len(app._cycle_log) == 1
     assert app._cycle_log[0]["goal"] == "fix something"
 
@@ -59,5 +59,7 @@ def test_panel_builders_dont_crash():
     # Mock goal queue
     mock_queue = MagicMock()
     mock_queue.queue = ["goal1", "goal2"]
-    p2 = build_queue_panel(mock_queue)
+    mock_archive = MagicMock()
+    mock_archive.completed = [("done goal", 8.0)]
+    p2 = build_queue_panel(mock_queue, mock_archive)
     assert isinstance(p2, Panel)

@@ -22,6 +22,7 @@ class StructuralAnalyzerSkill(SkillBase):
     def __init__(self, brain=None, model=None, context_graph: Optional[ContextGraph] = None):
         super().__init__(brain=brain, model=model)
         self.cg = context_graph or ContextGraph()
+        # Initialize sub-skills with the same brain and model
         self.complexity_scorer = ComplexityScorerSkill(brain=brain, model=model)
         self.symbol_indexer = SymbolIndexerSkill(brain=brain, model=model)
 

@@ -272,7 +272,7 @@ class ModelAdapter:
 
     # [LLM Call methods unchanged]
     def call_openrouter(self, prompt: str) -> str:
-        openrouter_key = resolve_openrouter_api_key()
+        openrouter_key = resolve_openrouter_api_key() or os.environ.get("OPENROUTER_API_KEY")
         if not openrouter_key:
             raise ValueError("OpenRouter-compatible API key not set for OpenRouter call.")
 
@@ -351,7 +351,7 @@ class ModelAdapter:
             raise RuntimeError(f"Unexpected error calling Copilot CLI: {e}") from e
 
     def call_openai(self, prompt: str) -> str:
-        openai_api_key = resolve_openai_api_key()
+        openai_api_key = resolve_openai_api_key() or os.environ.get("OPENAI_API_KEY")
         if not openai_api_key:
             raise ValueError("OPENAI_API_KEY not set for OpenAI call.")
         url = "https://api.openai.com/v1/chat/completions"
@@ -475,7 +475,7 @@ class ModelAdapter:
         if not texts:
             return []
 
-        openai_api_key = resolve_openai_api_key()
+        openai_api_key = resolve_openai_api_key() or os.environ.get("OPENAI_API_KEY")
         if not openai_api_key or self._embedding_disabled:
             reason = self._embedding_disabled_reason or "OPENAI_API_KEY not set for OpenAI embedding call."
             if not self._embedding_disabled_logged:

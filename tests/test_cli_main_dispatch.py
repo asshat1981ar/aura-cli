@@ -287,6 +287,58 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertEqual(runtime_factory.call_args.kwargs["overrides"], {"runtime_mode": "queue"})
         goal_queue.add.assert_called_once_with("Fix tests")
 
+    def test_dispatch_goal_once_can_force_beads_optional(self):
+        parsed = parse_cli_args(["goal", "once", "Fix tests", "--beads-optional"])
+        fake_runtime = {
+            "goal_queue": MagicMock(),
+            "goal_archive": MagicMock(),
+            "orchestrator": MagicMock(run_loop=MagicMock(return_value={"stop_reason": "PASS", "history": []})),
+            "debugger": None,
+            "planner": None,
+            "model_adapter": MagicMock(),
+            "brain": MagicMock(),
+        }
+        runtime_factory = MagicMock(return_value=fake_runtime)
+
+        with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"):
+            code = cli_main.dispatch_command(parsed, project_root=Path("."), runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        overrides = runtime_factory.call_args.kwargs["overrides"]
+        self.assertIn("beads", overrides)
+        self.assertTrue(overrides["beads"]["enabled"])
+        self.assertFalse(overrides["beads"]["required"])
+
+    def test_dispatch_goal_once_can_disable_beads(self):
+        parsed = parse_cli_args(["goal", "once", "Fix tests", "--no-beads"])
+        fake_runtime = {
+            "goal_queue": MagicMock(),
+            "goal_archive": MagicMock(),
+            "orchestrator": MagicMock(run_loop=MagicMock(return_value={"stop_reason": "PASS", "history": []})),
+            "debugger": None,
+            "planner": None,
+            "model_adapter": MagicMock(),
+            "brain": MagicMock(),
+        }
+        runtime_factory = MagicMock(return_value=fake_runtime)
+
+        with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"):
+            code = cli_main.dispatch_command(parsed, project_root=Path("."), runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        overrides = runtime_factory.call_args.kwargs["overrides"]
+        self.assertIn("beads", overrides)
+        self.assertFalse(overrides["beads"]["enabled"])
+
+    def test_parse_cli_args_rejects_conflicting_beads_flags(self):
+        with self.assertRaisesRegex(cli_main.CLIParseError, "Cannot pass both `--beads` and `--no-beads`"):
+            parse_cli_args(["goal", "once", "Fix tests", "--beads", "--no-beads"])
+
+        with self.assertRaisesRegex(cli_main.CLIParseError, "Cannot pass both `--beads-required` and `--beads-optional`"):
+            parse_cli_args(["goal", "once", "Fix tests", "--beads-required", "--beads-optional"])
+
     def test_goal_status_json_subprocess_stdout_is_clean_json_and_skips_heavy_runtime_logs(self):
         proc = run_main_subprocess("goal", "status", "--json")
 

@@ -162,6 +162,10 @@ def _add_common_flags(parser: argparse.ArgumentParser, *, include_max_cycles: bo
     parser.add_argument("--dry-run", dest="dry_run", action="store_true", help="Do not apply filesystem changes.")
     parser.add_argument("--decompose", action="store_true", help="Enable task decomposition mode.")
     parser.add_argument("--model", help="Override model name for this run.")
+    parser.add_argument("--beads", action="store_true", help="Enable BEADS gating for this invocation.")
+    parser.add_argument("--no-beads", dest="no_beads", action="store_true", help="Disable BEADS gating for this invocation.")
+    parser.add_argument("--beads-required", dest="beads_required", action="store_true", help="Require BEADS to allow execution for this invocation.")
+    parser.add_argument("--beads-optional", dest="beads_optional", action="store_true", help="Enable BEADS without making it a hard gate for this invocation.")
     parser.add_argument("--explain", action="store_true", help="Print decision log for one-off goal runs.")
     if include_max_cycles:
         parser.add_argument("--max-cycles", dest="max_cycles", type=int, help="Maximum loop cycles for one-off runs.")
@@ -468,6 +472,17 @@ def _validate_args(
 
     if "workflow_max_cycles" in explicit_long_options and not getattr(ns, "workflow_goal", None):
         raise CLIParseError("`--workflow-max-cycles` requires `--workflow-goal <goal>`.", usage=usage)
+
+    if "beads" in explicit_long_options and "no_beads" in explicit_long_options:
+        raise CLIParseError("Cannot pass both `--beads` and `--no-beads`.", usage=usage)
+
+    if "beads_required" in explicit_long_options and "beads_optional" in explicit_long_options:
+        raise CLIParseError("Cannot pass both `--beads-required` and `--beads-optional`.", usage=usage)
+
+    if "no_beads" in explicit_long_options and (
+        "beads_required" in explicit_long_options or "beads_optional" in explicit_long_options
+    ):
+        raise CLIParseError("`--no-beads` cannot be combined with BEADS mode overrides.", usage=usage)
 
     if not uses_subcommand and len(explicit_legacy_flags) > 1:
         if frozenset(explicit_legacy_flags) not in legacy_allowed_multi_primary_flag_sets():

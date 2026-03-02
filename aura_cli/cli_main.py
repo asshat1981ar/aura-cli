@@ -495,6 +495,26 @@ def _prepare_runtime_context(ctx: DispatchContext) -> int | None:
         overrides["decompose"] = True
     if getattr(args, "model", None):
         overrides["model_name"] = args.model
+
+    beads_config = dict(config.get("beads", DEFAULT_CONFIG["beads"]) or {})
+    beads_override_requested = False
+    if getattr(args, "beads", False):
+        beads_config["enabled"] = True
+        beads_override_requested = True
+    if getattr(args, "no_beads", False):
+        beads_config["enabled"] = False
+        beads_override_requested = True
+    if getattr(args, "beads_required", False):
+        beads_config["enabled"] = True
+        beads_config["required"] = True
+        beads_override_requested = True
+    if getattr(args, "beads_optional", False):
+        beads_config["enabled"] = True
+        beads_config["required"] = False
+        beads_override_requested = True
+    if beads_override_requested:
+        overrides["beads"] = beads_config
+
     if _resolve_dispatch_action(ctx.parsed) in {"goal_status", "goal_add", "interactive"}:
         overrides["runtime_mode"] = "queue"
     elif _resolve_dispatch_action(ctx.parsed) == "goal_once" and getattr(args, "dry_run", False):

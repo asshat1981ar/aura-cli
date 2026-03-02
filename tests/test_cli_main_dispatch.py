@@ -235,6 +235,7 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertIsNone(runtime["memory_store"])
         self.assertIsNone(runtime["brain"])
         self.assertIsNone(runtime["vector_store"])
+        self.assertIsNone(runtime["beads_bridge"])
         self.assertFalse(hasattr(runtime["orchestrator"], "run_loop"))
         mock_model_adapter.assert_not_called()
         mock_vector_store.assert_not_called()
@@ -312,6 +313,7 @@ class TestCLIMainDispatch(unittest.TestCase):
         fake_policy = MagicMock()
         fake_orchestrator = MagicMock()
         fake_git_tools = MagicMock()
+        fake_beads_bridge = MagicMock()
 
         blocked_optional_imports = {
             "memory.cache_adapter_factory",
@@ -349,6 +351,7 @@ class TestCLIMainDispatch(unittest.TestCase):
              patch("aura_cli.cli_main.MemoryStore", return_value=fake_memory_store), \
              patch("aura_cli.cli_main.default_agents", return_value={}), \
              patch("aura_cli.cli_main.Policy.from_config", return_value=fake_policy), \
+             patch("aura_cli.cli_main.BeadsBridge.from_defaults", return_value=fake_beads_bridge) as mock_beads_bridge, \
              patch("aura_cli.cli_main.LoopOrchestrator", return_value=fake_orchestrator), \
             patch("aura_cli.cli_main.GitTools", return_value=fake_git_tools), \
             patch("aura_cli.cli_main.log_json"), \
@@ -360,7 +363,9 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertIs(runtime["model_adapter"], fake_model_adapter)
         self.assertIs(runtime["brain"], fake_brain)
         self.assertIs(runtime["orchestrator"], fake_orchestrator)
+        self.assertIs(runtime["beads_bridge"], fake_beads_bridge)
         self.assertIs(runtime["git_tools"], fake_git_tools)
+        mock_beads_bridge.assert_called_once()
         # loop key was removed during migration to LoopOrchestrator
 
     def test_create_runtime_full_mode_resolves_brain_and_memory_paths_against_project_root(self):

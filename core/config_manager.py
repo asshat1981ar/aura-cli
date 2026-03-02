@@ -103,6 +103,14 @@ DEFAULT_CONFIG = {
     "mcp_server_url": "http://localhost:8000",
     "local_model_command": None,
     "llm_timeout": 60,
+    "beads": {
+        "enabled": True,
+        "required": True,
+        "bridge_command": None,
+        "timeout_seconds": 20,
+        "scope": "goal_run",
+        "persist_artifacts": True,
+    },
     "model_routing": {
         "code_generation": "google/gemini-2.0-flash-exp:free",
         "planning": "google/gemini-2.0-flash-exp:free",
@@ -251,7 +259,9 @@ class ConfigManager:
         # Merge hierarchy: Defaults < JSON < ENV < Overrides
         merged = DEFAULT_CONFIG.copy()
         
-        # Deep merge for model_routing and semantic_memory to preserve defaults if partial override
+        # Deep merge for nested config groups to preserve defaults if partial override
+        if "beads" in self.file_config:
+            merged["beads"].update(self.file_config["beads"])
         if "model_routing" in self.file_config:
             merged["model_routing"].update(self.file_config["model_routing"])
         if "semantic_memory" in self.file_config:
@@ -259,17 +269,19 @@ class ConfigManager:
             
         # Update other top-level keys
         for k, v in self.file_config.items():
-            if k not in ["model_routing", "semantic_memory"]:
+            if k not in ["beads", "model_routing", "semantic_memory"]:
                 merged[k] = v
         
         # Merge ENV (env_config already has merged sub-dicts)
+        if "beads" in env_config:
+            merged["beads"].update(env_config["beads"])
         if "model_routing" in env_config:
             merged["model_routing"].update(env_config["model_routing"])
         if "semantic_memory" in env_config:
             merged["semantic_memory"].update(env_config["semantic_memory"])
             
         for k, v in env_config.items():
-            if k not in ["model_routing", "semantic_memory"]:
+            if k not in ["beads", "model_routing", "semantic_memory"]:
                 merged[k] = v
                 
         merged.update(self.runtime_overrides)
@@ -307,10 +319,10 @@ class ConfigManager:
     def update_config(self, updates: Dict[str, Any], persist: bool = True):
         """Update multiple configuration values, optionally persisting to disk.
         
-        Supports deep merging for 'model_routing' and 'semantic_memory'.
+        Supports deep merging for nested config groups.
         """
         for k, v in updates.items():
-            if k in ["model_routing", "semantic_memory"] and isinstance(v, dict):
+            if k in ["beads", "model_routing", "semantic_memory"] and isinstance(v, dict):
                 if k not in self.file_config:
                     self.file_config[k] = {}
                 self.file_config[k].update(v)

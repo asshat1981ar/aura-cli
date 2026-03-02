@@ -77,6 +77,13 @@ def test_build_cycle_summary_derives_operator_fields():
         "stop_reason": "MAX_CYCLES",
         "started_at": 10.0,
         "completed_at": 13.5,
+        "beads": {
+            "status": "allow",
+            "decision_id": "beads-123",
+            "summary": "Proceed with additional test coverage.",
+            "required_constraints": ["Preserve goal status JSON shape."],
+            "follow_up_goals": ["Review BEADS gate telemetry"],
+        },
         "phase_outputs": {
             "retry_count": 2,
             "context": {},
@@ -107,6 +114,11 @@ def test_build_cycle_summary_derives_operator_fields():
     assert summary["applied_files"] == ["tests/test_example.py"]
     assert summary["failed_files"] == []
     assert summary["queued_follow_up_goals"] == ["Follow-up goal"]
+    assert summary["beads_status"] == "allow"
+    assert summary["beads_decision_id"] == "beads-123"
+    assert summary["beads_summary"] == "Proceed with additional test coverage."
+    assert summary["beads_required_constraints"] == ["Preserve goal status JSON shape."]
+    assert summary["beads_follow_up_goals"] == ["Review BEADS gate telemetry"]
     assert summary["duration_s"] == 3.5
     assert summary["phase_status"]["verify"] == "fail"
     assert summary["phase_status"]["sandbox"] == "pass"

@@ -114,5 +114,72 @@ class TestOrchestratorPhases(unittest.TestCase):
         self.orchestrator.run_cycle("test goal", dry_run=True)
         assert mock_evolution.on_cycle_complete.called
 
+    def test_beads_block_stops_before_plan(self):
+        beads_bridge = MagicMock()
+        beads_bridge.run.return_value = {
+            "schema_version": 1,
+            "ok": True,
+            "status": "ok",
+            "decision": {
+                "schema_version": 1,
+                "decision_id": "beads-block-1",
+                "status": "block",
+                "summary": "Blocked pending operator review.",
+                "rationale": ["The change scope is too broad."],
+                "required_constraints": [],
+                "required_skills": [],
+                "required_tests": [],
+                "follow_up_goals": [],
+                "stop_reason": None,
+            },
+            "error": None,
+            "stderr": None,
+            "duration_ms": 5,
+        }
+        orchestrator = LoopOrchestrator(
+            agents=self.agents,
+            brain=self.mock_brain,
+            project_root=Path("."),
+            policy=Policy.from_config({}),
+            beads_bridge=beads_bridge,
+            beads_enabled=True,
+            beads_required=True,
+        )
+
+        result = orchestrator.run_cycle("test goal", dry_run=True)
+
+        self.assertEqual(result["stop_reason"], "BEADS_BLOCKED")
+        self.assertEqual(result["beads"]["status"], "block")
+        self.assertIn("beads_gate", result["phase_outputs"])
+        self.agents["plan"].run.assert_not_called()
+
+    def test_beads_error_required_stops_before_plan(self):
+        beads_bridge = MagicMock()
+        beads_bridge.run.return_value = {
+            "schema_version": 1,
+            "ok": False,
+            "status": "error",
+            "decision": None,
+            "error": "timeout",
+            "stderr": "timed out",
+            "duration_ms": 20,
+        }
+        orchestrator = LoopOrchestrator(
+            agents=self.agents,
+            brain=self.mock_brain,
+            project_root=Path("."),
+            policy=Policy.from_config({}),
+            beads_bridge=beads_bridge,
+            beads_enabled=True,
+            beads_required=True,
+        )
+
+        result = orchestrator.run_cycle("test goal", dry_run=True)
+
+        self.assertEqual(result["stop_reason"], "BEADS_UNAVAILABLE")
+        self.assertEqual(result["beads"]["error"], "timeout")
+        self.assertIn("beads_gate", result["phase_outputs"])
+        self.agents["plan"].run.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main()

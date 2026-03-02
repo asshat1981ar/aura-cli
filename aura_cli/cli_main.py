@@ -30,6 +30,7 @@ from agents.planner import PlannerAgent
 from agents.router import RouterAgent
 from agents.scaffolder import ScaffolderAgent
 from core.vector_store import VectorStore
+from core.beads_bridge import BeadsBridge
 from core.runtime_paths import resolve_project_path
 from core.runtime_auth import (
     resolve_config_api_key,
@@ -352,6 +353,7 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
             "goal_queue": goal_queue,
             "goal_archive": goal_archive,
             "orchestrator": SimpleNamespace(),
+            "beads_bridge": None,
             "debugger": None,
             "planner": None,
             "loop": None,
@@ -397,6 +399,18 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     from memory.controller import memory_controller
     memory_controller.set_store(memory_store)
 
+    beads_config = config.get("beads", DEFAULT_CONFIG["beads"]) or {}
+    bridge_command = beads_config.get("bridge_command")
+    beads_bridge = BeadsBridge.from_defaults(
+        project_root,
+        command=bridge_command,
+        timeout_seconds=float(beads_config.get("timeout_seconds", 20)),
+        enabled=bool(beads_config.get("enabled", True)),
+        required=bool(beads_config.get("required", True)),
+        persist_artifacts=bool(beads_config.get("persist_artifacts", True)),
+        scope=str(beads_config.get("scope", "goal_run")),
+    )
+
     orchestrator = LoopOrchestrator(
         agents=default_agents(brain_instance, model_adapter, context_manager=context_manager),
         memory_store=memory_store,
@@ -405,8 +419,14 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         strict_schema=config.get("strict_schema", False),
         debugger=debugger_instance,
         goal_queue=goal_queue,
+        goal_archive=goal_archive,
         brain=brain_instance,
         model=model_adapter,
+        runtime_mode=runtime_mode,
+        beads_bridge=beads_bridge,
+        beads_enabled=bool(beads_config.get("enabled", True)),
+        beads_required=bool(beads_config.get("required", True)),
+        beads_scope=str(beads_config.get("scope", "goal_run")),
     )
 
     _attach_advanced_loops(orchestrator, runtime_mode, brain_instance, memory_store, goal_queue, _momento, project_root)
@@ -415,6 +435,7 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         "goal_queue": goal_queue,
         "goal_archive": goal_archive,
         "orchestrator": orchestrator,
+        "beads_bridge": beads_bridge,
         "debugger": debugger_instance,
         "planner": planner_instance,
         "git_tools": GitTools(repo_path=str(project_root)),

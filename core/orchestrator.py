@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
 from core.logging_utils import log_json
+from core.beads_bridge import build_beads_runtime_input
 from core.operator_runtime import build_cycle_summary
 from core.cycle_outcome import CycleOutcome
 from core.capability_manager import (
@@ -98,8 +99,14 @@ class LoopOrchestrator:
         auto_provision_mcp: bool = False,
         auto_start_mcp_servers: bool = False,
         goal_queue=None,
+        goal_archive=None,
         brain: Any = None,
         model: Any = None,
+        runtime_mode: str = "full",
+        beads_bridge: Any = None,
+        beads_enabled: bool = False,
+        beads_required: bool = False,
+        beads_scope: str = "goal_run",
     ):
         """Initialise the orchestrator with its agents and supporting services.
 
@@ -132,8 +139,14 @@ class LoopOrchestrator:
         self.auto_provision_mcp = auto_provision_mcp
         self.auto_start_mcp_servers = auto_start_mcp_servers
         self.goal_queue = goal_queue
+        self.goal_archive = goal_archive
         self.brain = brain
         self.model = model
+        self.runtime_mode = runtime_mode
+        self.beads_bridge = beads_bridge
+        self.beads_enabled = beads_enabled
+        self.beads_required = beads_required
+        self.beads_scope = beads_scope
         self.last_capability_plan: dict = {}
         self.last_capability_goal_queue: dict = {}
         self.last_capability_provisioning: dict = {}
@@ -623,6 +636,7 @@ class LoopOrchestrator:
 
     def _execute_plan_critique_synthesize(self, goal: str, context: Dict, skill_context: Dict, pipeline_cfg: Any, phase_outputs: Dict) -> Tuple[Dict, Dict]:
         """Section 3-5: PLAN -> CRITIQUE -> SYNTHESIZE."""
+        beads_decision = phase_outputs.get("beads_gate", {})
         self._notify_ui("on_phase_start", "plan")
         t0 = time.time()
         plan = self._run_phase("plan", {
@@ -634,6 +648,10 @@ class LoopOrchestrator:
             "failure_context": phase_outputs.get("_failure_context", {}),
             "extra_context": getattr(pipeline_cfg, "extra_plan_ctx", {}),
             "backfill_context": context.get("backfill_context", []),
+            "beads_decision": beads_decision,
+            "beads_constraints": beads_decision.get("required_constraints", []),
+            "beads_required_tests": beads_decision.get("required_tests", []),
+            "beads_required_skills": beads_decision.get("required_skills", []),
         })
         self._notify_ui("on_phase_complete", "plan", (time.time() - t0) * 1000)
         phase_outputs["plan"] = plan
@@ -653,6 +671,7 @@ class LoopOrchestrator:
             "goal": goal,
             "plan": plan,
             "critique": critique,
+            "beads_decision": beads_decision,
         })
         self._notify_ui("on_phase_complete", "synthesize", (time.time() - t0) * 1000)
         phase_outputs["task_bundle"] = task_bundle
@@ -752,6 +771,94 @@ class LoopOrchestrator:
         self._notify_ui("on_phase_complete", "skill_dispatch", (time.monotonic() - t0) * 1000)
         return skill_context
 
+    def _beads_gate_applies(self) -> bool:
+        if not self.beads_enabled or self.beads_bridge is None:
+            return False
+        if self.beads_scope == "all_runtime":
+            return True
+        return self.beads_scope == "goal_run"
+
+    def _run_beads_gate(
+        self,
+        goal: str,
+        goal_type: str,
+        context: Dict,
+        skill_context: Dict,
+    ) -> Dict[str, Any]:
+        active_context = {
+            "context": context,
+            "skill_context": skill_context,
+            "capability_plan": self.last_capability_plan,
+            "capability_goal_queue": self.last_capability_goal_queue,
+            "capability_provisioning": self.last_capability_provisioning,
+        }
+        payload = build_beads_runtime_input(
+            goal=goal,
+            goal_type=goal_type,
+            project_root=self.project_root,
+            runtime_mode=self.runtime_mode,
+            goal_queue=self.goal_queue,
+            goal_archive=self.goal_archive,
+            active_goal=goal,
+            active_context=active_context,
+        )
+        log_json("INFO", "beads_gate_start", details={"goal": goal, "goal_type": goal_type, "scope": self.beads_scope})
+        result = self.beads_bridge.run(payload)
+        decision = result.get("decision") or {}
+        beads_state = {
+            "ok": bool(result.get("ok")),
+            "status": decision.get("status") if decision else ("error" if not result.get("ok") else None),
+            "decision_id": decision.get("decision_id"),
+            "summary": decision.get("summary"),
+            "required_constraints": list(decision.get("required_constraints", [])) if isinstance(decision, dict) else [],
+            "required_skills": list(decision.get("required_skills", [])) if isinstance(decision, dict) else [],
+            "required_tests": list(decision.get("required_tests", [])) if isinstance(decision, dict) else [],
+            "follow_up_goals": list(decision.get("follow_up_goals", [])) if isinstance(decision, dict) else [],
+            "stop_reason": decision.get("stop_reason") if isinstance(decision, dict) else None,
+            "error": result.get("error"),
+            "stderr": result.get("stderr"),
+            "duration_ms": result.get("duration_ms", 0),
+        }
+        log_json(
+            "INFO" if beads_state["ok"] else "WARN",
+            "beads_gate_complete",
+            details={
+                "goal": goal,
+                "ok": beads_state["ok"],
+                "status": beads_state["status"],
+                "decision_id": beads_state["decision_id"],
+                "error": beads_state["error"],
+            },
+        )
+        return beads_state
+
+    def _build_early_stop_entry(
+        self,
+        *,
+        cycle_id: str,
+        goal: str,
+        goal_type: str,
+        phase_outputs: Dict,
+        started_at: float,
+        stop_reason: str,
+        beads: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any]:
+        entry = {
+            "cycle_id": cycle_id,
+            "goal": goal,
+            "goal_type": goal_type,
+            "phase_outputs": phase_outputs,
+            "stop_reason": stop_reason,
+            "started_at": started_at,
+            "completed_at": time.time(),
+        }
+        if beads is not None:
+            entry["beads"] = beads
+        self._refresh_cycle_summary(entry)
+        self.current_goal = None
+        self.active_cycle_summary = None
+        return entry
+
     def _run_reflection_phase(self, verification: Dict, skill_context: Dict, goal_type: str, cycle_id: str, phase_outputs: Dict) -> Dict:
         """Section 7: REFLECT."""
         self._notify_ui("on_phase_start", "reflect")
@@ -820,6 +927,7 @@ class LoopOrchestrator:
             "goal": goal,
             "goal_type": goal_type,
             "phase_outputs": phase_outputs,
+            "beads": phase_outputs.get("beads_gate"),
             "stop_reason": None,
             "started_at": started_at,
             "completed_at": completed_at,
@@ -923,21 +1031,50 @@ class LoopOrchestrator:
 
         context = self._run_ingest_phase(goal, cycle_id, phase_outputs)
         if self.strict_schema and validate_phase_output("context", context):
-             entry = {
-                 "cycle_id": cycle_id,
-                 "goal": goal,
-                 "goal_type": goal_type,
-                 "phase_outputs": phase_outputs,
-                 "stop_reason": "INVALID_OUTPUT",
-                 "started_at": started_at,
-                 "completed_at": time.time(),
-             }
-             self._refresh_cycle_summary(entry)
-             self.current_goal = None
-             self.active_cycle_summary = None
-             return entry
+             return self._build_early_stop_entry(
+                 cycle_id=cycle_id,
+                 goal=goal,
+                 goal_type=goal_type,
+                 phase_outputs=phase_outputs,
+                 started_at=started_at,
+                 stop_reason="INVALID_OUTPUT",
+             )
 
         skill_context = self._dispatch_skills(goal_type, pipeline_cfg, phase_outputs)
+
+        if self._beads_gate_applies():
+            beads_gate = self._run_beads_gate(goal, goal_type, context, skill_context)
+            phase_outputs["beads_gate"] = beads_gate
+            if not beads_gate.get("ok") and self.beads_required:
+                return self._build_early_stop_entry(
+                    cycle_id=cycle_id,
+                    goal=goal,
+                    goal_type=goal_type,
+                    phase_outputs=phase_outputs,
+                    started_at=started_at,
+                    stop_reason="BEADS_UNAVAILABLE",
+                    beads=beads_gate,
+                )
+            if beads_gate.get("status") == "block":
+                return self._build_early_stop_entry(
+                    cycle_id=cycle_id,
+                    goal=goal,
+                    goal_type=goal_type,
+                    phase_outputs=phase_outputs,
+                    started_at=started_at,
+                    stop_reason=beads_gate.get("stop_reason") or "BEADS_BLOCKED",
+                    beads=beads_gate,
+                )
+            if beads_gate.get("status") == "revise":
+                return self._build_early_stop_entry(
+                    cycle_id=cycle_id,
+                    goal=goal,
+                    goal_type=goal_type,
+                    phase_outputs=phase_outputs,
+                    started_at=started_at,
+                    stop_reason=beads_gate.get("stop_reason") or "BEADS_REVISE_REQUIRED",
+                    beads=beads_gate,
+                )
 
         # ── Coverage Backfill ──
         gaps = skill_context.get("structural_analyzer", {}).get("coverage_gaps", [])
@@ -963,19 +1100,15 @@ class LoopOrchestrator:
 
         reflection = self._run_reflection_phase(verification, skill_context, goal_type, cycle_id, phase_outputs)
         if self.strict_schema and validate_phase_output("reflection", reflection):
-            entry = {
-                "cycle_id": cycle_id,
-                "goal": goal,
-                "goal_type": goal_type,
-                "phase_outputs": phase_outputs,
-                "stop_reason": "INVALID_OUTPUT",
-                "started_at": started_at,
-                "completed_at": time.time(),
-            }
-            self._refresh_cycle_summary(entry)
-            self.current_goal = None
-            self.active_cycle_summary = None
-            return entry
+            return self._build_early_stop_entry(
+                cycle_id=cycle_id,
+                goal=goal,
+                goal_type=goal_type,
+                phase_outputs=phase_outputs,
+                started_at=started_at,
+                stop_reason="INVALID_OUTPUT",
+                beads=phase_outputs.get("beads_gate"),
+            )
 
         phase_outputs.pop("_failure_context", None)
         return self._record_cycle_outcome(cycle_id, goal, goal_type, phase_outputs, started_at)

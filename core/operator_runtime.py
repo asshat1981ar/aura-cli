@@ -174,6 +174,9 @@ def build_cycle_summary(
     ] if isinstance(apply_result, dict) else []
     queued_follow_up_goals = list(capability_goal_queue.get("queued", [])) if isinstance(capability_goal_queue, dict) else []
     retry_count = int(phase_outputs.get("retry_count", 0)) if isinstance(phase_outputs, dict) else 0
+    beads = entry.get("beads") or phase_outputs.get("beads_gate", {}) if isinstance(phase_outputs, dict) else {}
+    if not isinstance(beads, dict):
+        beads = {}
 
     duration_s = None
     if started_at is not None and completed_at is not None:
@@ -204,6 +207,11 @@ def build_cycle_summary(
         "applied_files": applied_files,
         "failed_files": failed_files,
         "queued_follow_up_goals": queued_follow_up_goals,
+        "beads_status": beads.get("status"),
+        "beads_decision_id": beads.get("decision_id"),
+        "beads_summary": beads.get("summary"),
+        "beads_required_constraints": list(beads.get("required_constraints", [])),
+        "beads_follow_up_goals": list(beads.get("follow_up_goals", [])),
         "started_at": started_at,
         "completed_at": completed_at,
         "duration_s": duration_s,

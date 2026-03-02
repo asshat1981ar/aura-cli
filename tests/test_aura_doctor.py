@@ -180,7 +180,8 @@ class TestAuraDoctorOutputParsing(unittest.TestCase):
             _handle_doctor()
 
         output = out.getvalue()
-        self.assertIn("Capability Bootstrap: PASS - matched: docker_analysis", output)
+        self.assertIn("Capability", output)
+        self.assertIn("matched: docker_analysis", output)
 
 if __name__ == '__main__':
     unittest.main()

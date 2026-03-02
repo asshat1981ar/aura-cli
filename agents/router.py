@@ -21,8 +21,8 @@ class ModelStats:
     cooldown_until: float = 0.0       # Unix timestamp
 
     EMA_ALPHA: float = 0.2            # Weight of latest observation in EMA
-    COOLDOWN_SECONDS: float = 120.0   # Backoff window after 3 consecutive failures
-    FAILURE_THRESHOLD: int = 3
+    COOLDOWN_SECONDS: float = 10.0    # Backoff window after consecutive failures
+    FAILURE_THRESHOLD: int = 10
     
     # New thresholds for automatic benching
     MIN_EMA_SCORE: float = 0.3        # Below this, model is benched for LONG_COOLDOWN
@@ -107,6 +107,8 @@ class RouterAgent:
         "gemini":     "call_gemini",
         "openrouter": "call_openrouter",
         "local":      "call_local",
+        "codex":      "call_codex",
+        "copilot":    "call_copilot",
     }
 
     # Short prompts stay local/fast; long prompts need more capable models
@@ -116,7 +118,7 @@ class RouterAgent:
     def __init__(self, brain, model_adapter, enabled_models: Optional[List[str]] = None):
         self.brain = brain
         self.adapter = model_adapter
-        self.enabled = enabled_models or ["openai", "gemini", "openrouter"]
+        self.enabled = enabled_models or ["openai", "gemini", "openrouter", "codex", "copilot"]
 
         # Load persisted stats from brain or initialise fresh
         self.stats: Dict[str, ModelStats] = {}

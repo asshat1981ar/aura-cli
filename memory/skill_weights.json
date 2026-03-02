@@ -67,28 +67,28 @@
   },
   "refactor": {
     "tech_debt_quantifier": {
-      "ema": 0.4910055546874999,
-      "runs": 6,
+      "ema": 0.6068017183315917,
+      "runs": 10,
       "suspended": false
     },
     "complexity_scorer": {
-      "ema": 0.6614252421875,
-      "runs": 6,
+      "ema": 0.8232618603296387,
+      "runs": 10,
       "suspended": false
     },
     "code_clone_detector": {
-      "ema": 0.4747493046875,
-      "runs": 6,
+      "ema": 0.7258158542300294,
+      "runs": 10,
       "suspended": false
     },
     "refactoring_advisor": {
-      "ema": 0.5831243046874999,
-      "runs": 6,
+      "ema": 0.7823882815737793,
+      "runs": 10,
       "suspended": false
     },
     "symbol_indexer": {
-      "ema": 0.6614252421875,
-      "runs": 6,
+      "ema": 0.8232618603296387,
+      "runs": 10,
       "suspended": false
     }
   }

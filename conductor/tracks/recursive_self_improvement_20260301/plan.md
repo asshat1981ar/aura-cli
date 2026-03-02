@@ -19,5 +19,8 @@
 - [x] Task: Autonomous Skill Creation
     - [x] Implement: A special `skill_generator` agent/skill that can write and register new Python skills based on recurring task patterns.
     - [x] Verify: AURA identifies a missing capability (e.g., "YAML linting") and creates a basic `YamlLinterSkill`.
+- [x] Task: Multi-CLI LLM Integration
+    - [x] Implement: Support for `codex-cli` and `copilot-cli` in `ModelAdapter` and `RouterAgent`.
+    - [x] Configure: Added environment and config support for external CLI paths.
 - [ ] Task: System Evolution Verification
     - [ ] Final Integration: Run AURA in a fully autonomous "evolve" mode for 50 cycles and audit the architectural delta.

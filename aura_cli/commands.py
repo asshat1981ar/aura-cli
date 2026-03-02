@@ -27,7 +27,11 @@ def _handle_help():
 def _handle_doctor(project_root: Path | None = None):
     log_json("INFO", "aura_doctor_requested")
     from aura_cli.doctor import run_doctor_v2
-    run_doctor_v2(project_root=project_root, rich_output=True)
+    run_doctor_v2(
+        project_root=project_root,
+        rich_output=True,
+        capability_check=capability_doctor_check,
+    )
 
 def _handle_clear():
     import os

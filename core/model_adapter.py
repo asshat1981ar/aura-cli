@@ -30,11 +30,13 @@ class ModelAdapter:
 
     def __init__(self):
         """
-        Initializes the ModelAdapter, validates the Gemini CLI path,
+        Initializes the ModelAdapter, validates CLI paths,
         and defines an allowlist for executable tools.
         """
         # API keys will be fetched dynamically within their respective call methods
         self.gemini_cli_path = config.get("gemini_cli_path") # Configurable path to gemini CLI
+        self.codex_cli_path = config.get("codex_cli_path")   # Configurable path to codex CLI
+        self.copilot_cli_path = config.get("copilot_cli_path") # Configurable path to copilot CLI
         self.mcp_server_url = config.get("mcp_server_url") # Configurable MCP server URL
         self.router = None
         self.cache_db = None
@@ -51,13 +53,8 @@ class ModelAdapter:
         self._embedding_model = configured_embedding_model # Default from config
         self._embedding_dims = 1536
 
-        # Validate gemini CLI path
-        if self.gemini_cli_path and not Path(self.gemini_cli_path).is_file():
-            log_json("WARN", "gemini_cli_not_found", details={"path": self.gemini_cli_path})
-            self.gemini_cli_path = None
-        elif self.gemini_cli_path and not os.access(self.gemini_cli_path, os.X_OK):
-            log_json("WARN", "gemini_cli_not_executable", details={"path": self.gemini_cli_path})
-            self.gemini_cli_path = None
+        # Validate CLI paths
+        self._validate_cli_paths()
 
         # In-memory cache (L0) — populated by preload_cache()
         self._mem_cache: dict = {}
@@ -68,6 +65,24 @@ class ModelAdapter:
             # New GitHub tools
             "get_repo", "create_issue", "get_issue_details", "update_file", "get_pull_request_details"
         }
+
+    def _validate_cli_paths(self):
+        """Helper to validate external LLM CLI paths."""
+        cli_configs = [
+            ("gemini", self.gemini_cli_path),
+            ("codex", self.codex_cli_path),
+            ("copilot", self.copilot_cli_path)
+        ]
+        
+        for name, path in cli_configs:
+            if path:
+                p = Path(path)
+                if not p.is_file():
+                    log_json("WARN", f"{name}_cli_not_found", details={"path": path})
+                    setattr(self, f"{name}_cli_path", None)
+                elif not os.access(path, os.X_OK):
+                    log_json("WARN", f"{name}_cli_not_executable", details={"path": path})
+                    setattr(self, f"{name}_cli_path", None)
 
     # ... [Existing cache methods kept as is] ...
     def enable_cache(self, db_conn, ttl_seconds: int = 3600, momento=None):
@@ -278,7 +293,7 @@ class ModelAdapter:
             raise ValueError("Gemini CLI path not configured or not executable.")
         try:
             result = subprocess.run(
-                [self.gemini_cli_path, "--non-interactive", prompt],
+                [self.gemini_cli_path, "-p", prompt, "--output-format", "text"],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -289,6 +304,40 @@ class ModelAdapter:
             raise RuntimeError(f"Gemini CLI call failed: {e.stderr}") from e
         except Exception as e:
             raise RuntimeError(f"Unexpected error calling Gemini CLI: {e}") from e
+
+    def call_codex(self, prompt: str) -> str:
+        if not self.codex_cli_path:
+            raise ValueError("Codex CLI path not configured or not executable.")
+        try:
+            result = subprocess.run(
+                [self.codex_cli_path, "exec", prompt, "--ask-for-approval", "never"],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=120
+            )
+            return result.stdout.strip()
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Codex CLI call failed: {e.stderr}") from e
+        except Exception as e:
+            raise RuntimeError(f"Unexpected error calling Codex CLI: {e}") from e
+
+    def call_copilot(self, prompt: str) -> str:
+        if not self.copilot_cli_path:
+            raise ValueError("Copilot CLI path not configured or not executable.")
+        try:
+            result = subprocess.run(
+                [self.copilot_cli_path, "-p", prompt, "--silent", "--allow-all-tools"],
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=120
+            )
+            return result.stdout.strip()
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Copilot CLI call failed: {e.stderr}") from e
+        except Exception as e:
+            raise RuntimeError(f"Unexpected error calling Copilot CLI: {e}") from e
 
     def call_openai(self, prompt: str) -> str:
         openai_api_key = resolve_openai_api_key()

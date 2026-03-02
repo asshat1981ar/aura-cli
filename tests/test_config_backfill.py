@@ -41,3 +41,16 @@ def test_config_manager_handles_env_overrides():
         cm = ConfigManager()
         assert cm.get("auto_backfill_coverage") is False
         assert cm.get("reliability_threshold") == 95.0
+
+def test_config_manager_refresh_does_not_repopulate_cleared_env():
+    watched = {
+        "OPENAI_API_KEY",
+        "OPENROUTER_API_KEY",
+        "AURA_API_KEY",
+        "GEMINI_CLI_PATH",
+    }
+
+    with patch.dict(os.environ, {}, clear=True):
+        cm = ConfigManager(config_file="nonexistent.json")
+        cm.refresh()
+        assert watched.isdisjoint(os.environ)

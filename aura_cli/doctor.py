@@ -218,7 +218,11 @@ if __name__ == "__main__":
 # Doctor v2 — Rich-formatted comprehensive health check
 # ---------------------------------------------------------------------------
 
-def run_doctor_v2(project_root: Path = None, rich_output: bool = True) -> list:
+def run_doctor_v2(
+    project_root: Path = None,
+    rich_output: bool = True,
+    capability_check=capability_doctor_check,
+) -> list:
     """
     Run all AURA health checks and return results as a list of dicts.
 
@@ -302,7 +306,7 @@ def run_doctor_v2(project_root: Path = None, rich_output: bool = True) -> list:
         _add("Goal queue", "WARN", f"{goal_queue_rel} not found")
 
     # 6b. Capability bootstrap
-    capability_status, capability_detail = capability_doctor_check(project_root, config=cfg)
+    capability_status, capability_detail = capability_check(project_root, config=cfg)
     _add("Capability bootstrap", capability_status, capability_detail)
 
     # 7. Dependencies

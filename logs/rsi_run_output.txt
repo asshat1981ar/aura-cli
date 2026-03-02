@@ -1,0 +1,24 @@
+{"ts": "2026-03-02T00:53:27.963993+00:00", "level": "INFO", "event": "config_loaded_from_file", "details": {"path": "settings.json"}}
+{"ts": "2026-03-02T00:53:28.793580+00:00", "level": "INFO", "event": "local_cache_adapter_initialized", "details": {"db_path": "memory/local_cache.db"}}
+{"ts": "2026-03-02T00:53:28.796384+00:00", "level": "INFO", "event": "runtime_cache_adapter_active", "details": {"adapter": "LocalCacheAdapter"}}
+{"ts": "2026-03-02T00:53:28.799752+00:00", "level": "INFO", "event": "model_cache_enabled", "details": {"ttl": 3600, "l1_momento": true}}
+{"ts": "2026-03-02T00:53:28.833759+00:00", "level": "INFO", "event": "model_cache_preloaded", "details": {"count": 50}}
+{"ts": "2026-03-02T00:53:28.834763+00:00", "level": "INFO", "event": "vector_store_initialized", "details": {"backend": "sqlite_local_v2"}}
+{"ts": "2026-03-02T00:53:28.834963+00:00", "level": "INFO", "event": "brain_vector_store_attached"}
+{"ts": "2026-03-02T00:53:28.836256+00:00", "level": "INFO", "event": "model_router_attached"}
+{"ts": "2026-03-02T00:53:28.842594+00:00", "level": "INFO", "event": "project_sync_start", "details": {"root": "/data/data/com.termux/files/home/aura_cli/aura-cli"}}
+{"ts": "2026-03-02T00:53:28.843022+00:00", "level": "INFO", "event": "background_sync_started"}
+{"ts": "2026-03-02T00:53:28.847665+00:00", "level": "INFO", "event": "memory_controller_store_attached"}
+{"ts": "2026-03-02T00:53:28.847953+00:00", "level": "INFO", "event": "memory_controller_store_attached"}
+{"ts": "2026-03-02T00:53:29.030096+00:00", "level": "INFO", "event": "orchestrator_loops_attached", "details": {"count": 6, "types": ["DeepReflectionLoop", "HealthMonitor", "_WeaknessRemediatorLoop", "SkillWeightAdapter", "_ConvergenceEscapeLoop", "MemoryCompactionLoop"]}}
+{"ts": "2026-03-02T00:53:29.049997+00:00", "level": "INFO", "event": "propagation_builtin_rules_registered", "details": {"count": 8}}
+{"ts": "2026-03-02T00:53:29.052387+00:00", "level": "INFO", "event": "mutator_agent_initialized"}
+{"ts": "2026-03-02T00:53:29.052536+00:00", "level": "INFO", "event": "orchestrator_caspa_attached", "details": {"adaptive_pipeline": true, "propagation_engine": true, "context_graph": true}}
+{"ts": "2026-03-02T00:53:29.052668+00:00", "level": "INFO", "event": "orchestrator_loops_attached", "details": {"count": 8, "types": ["DeepReflectionLoop", "HealthMonitor", "_WeaknessRemediatorLoop", "SkillWeightAdapter", "_ConvergenceEscapeLoop", "MemoryCompactionLoop", "AutonomousDiscovery", "EvolutionLoop"]}}
+{"ts": "2026-03-02T00:53:29.053882+00:00", "level": "INFO", "event": "rsi_evolution_script_initialized"}
+{"ts": "2026-03-02T00:53:29.055828+00:00", "level": "INFO", "event": "adaptive_strategy_override", "details": {"baseline": "normal", "override": "deep", "reason": "low_win_rate", "rate": 0.0}}
+{"ts": "2026-03-02T00:53:29.083582+00:00", "level": "INFO", "event": "adaptive_pipeline_configured", "details": {"goal_type": "refactor", "intensity": "deep", "confidence": "0.90", "phases": ["ingest", "plan", "synthesize", "critique", "act", "verify", "reflect"], "skills": ["symbol_indexer", "complexity_scorer", "refactoring_advisor", "tech_debt_quantifier"], "hints_count": 3}}
+{"ts": "2026-03-02T00:53:29.091587+00:00", "level": "INFO", "event": "project_sync_complete", "details": {"duration_sec": 0.25, "files_processed": 7, "files_skipped": 136, "chunks_created": 24, "relationships_extracted": 0, "errors": 0}}
+{"ts": "2026-03-02T00:53:29.103988+00:00", "level": "INFO", "event": "ascm_assembling_context", "details": {"goal": "evolve and improve the AURA system via recursive self-improvement", "type": "default"}}
+{"ts": "2026-03-02T00:53:29.104206+00:00", "level": "WARN", "event": "search_embedding_failed", "details": {"error": "OPENAI_API_KEY not set for OpenAI embedding call."}}
+{"ts": "2026-03-02T00:53:29.167861+00:00", "level": "INFO", "event": "skill_dispatch_start", "details": {"goal_type": "refactor", "skills": ["symbol_indexer", "complexity_scorer", "code_clone_detector", "tech_debt_quantifier", "refactoring_advisor"]}}

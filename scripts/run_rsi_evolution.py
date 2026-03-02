@@ -19,7 +19,15 @@ if str(project_root) not in sys.path:
 from aura_cli.cli_main import create_runtime
 from core.logging_utils import log_json
 
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = None
+
 def main():
+    if load_dotenv:
+        load_dotenv()
+        
     # Setup environment for tests if needed
     if "AGENT_API_TOKEN" not in os.environ:
         os.environ["AGENT_API_TOKEN"] = "rsi-dev-token"

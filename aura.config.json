@@ -1,6 +1,31 @@
 {
     "model_name": "google/gemini-2.0-flash-exp:free",
-    "api_key": "your-openrouter-api-key-here",
+    "api_key": null,
+    "openai_api_key": null,
+    "local_model_profiles": {
+        "android_coder": {
+            "provider": "openai_compatible",
+            "base_url": "http://127.0.0.1:8080/v1",
+            "model": "qwen2.5-coder-3b-instruct-q4",
+            "temperature": 0.1,
+            "max_tokens": 2048
+        },
+        "android_planner": {
+            "provider": "openai_compatible",
+            "base_url": "http://127.0.0.1:8081/v1",
+            "model": "phi-4-mini-instruct-q4",
+            "temperature": 0.2,
+            "max_tokens": 1536
+        }
+    },
+    "local_model_routing": {
+        "planning": "android_planner",
+        "analysis": "android_planner",
+        "critique": "android_planner",
+        "code_generation": "android_coder",
+        "quality": "android_planner",
+        "fast": "android_coder"
+    },
     "model_routing": {
         "code_generation": "google/gemini-2.0-flash-exp:free",
         "planning": "google/gemini-2.0-flash-exp:free",

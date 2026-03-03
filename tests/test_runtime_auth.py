@@ -1,9 +1,12 @@
 from unittest.mock import patch, MagicMock
 
 from core.runtime_auth import (
+    resolve_local_embedding_mode,
+    resolve_local_embedding_profile_name,
     resolve_local_model_profiles,
     resolve_openai_api_key,
     resolve_openrouter_api_key,
+    runtime_provider_summary,
     runtime_provider_status,
 )
 
@@ -117,3 +120,48 @@ def test_runtime_provider_status_allows_profile_only_local_chat():
     assert status["local_model"] is True
     assert status["chat_ready"] is True
     assert status["embedding_ready"] is False
+
+
+def test_runtime_provider_status_allows_local_embedding_profile():
+    mock_config = MagicMock()
+    def mock_get(k, d=None):
+        return {
+            "openai_api_key": None,
+            "api_key": None,
+            "local_model_command": None,
+            "local_model_profiles": {
+                "android_embeddings": {"provider": "openai_compatible", "embedding_model": "bge-small"}
+            },
+            "local_model_routing": {"embedding": "android_embeddings"},
+            "semantic_memory": {"embedding_model": "local_profile:android_embeddings"},
+        }.get(k, d)
+    mock_config.get.side_effect = mock_get
+
+    with patch("core.runtime_auth.config", mock_config), \
+         patch("core.runtime_auth.resolve_gemini_cli_path", return_value=None):
+        status = runtime_provider_status()
+
+    assert status["chat_ready"] is True
+    assert status["embedding_ready"] is True
+    assert resolve_local_embedding_profile_name() == "android_embeddings"
+    assert runtime_provider_summary(status).endswith("embeddings: local:android_embeddings")
+
+
+def test_runtime_provider_status_allows_builtin_local_embeddings():
+    mock_config = MagicMock()
+    mock_config.get.side_effect = lambda k, d=None: {
+        "openai_api_key": None,
+        "api_key": None,
+        "local_model_command": None,
+        "local_model_profiles": {},
+        "local_model_routing": {},
+        "semantic_memory": {"embedding_model": "local-tfidf-svd-50d"},
+    }.get(k, d)
+
+    with patch("core.runtime_auth.config", mock_config), \
+         patch("core.runtime_auth.resolve_gemini_cli_path", return_value=None):
+        status = runtime_provider_status()
+
+    assert status["embedding_ready"] is True
+    assert resolve_local_embedding_mode() == "local-tfidf-svd-50d"
+    assert runtime_provider_summary(status).endswith("embeddings: local-tfidf-svd-50d")

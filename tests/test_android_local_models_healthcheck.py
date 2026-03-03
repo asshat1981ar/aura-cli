@@ -59,3 +59,24 @@ def test_check_model_endpoint_fails_for_closed_port():
 
     assert ok is False
     assert "unreachable" in message
+
+
+def test_wait_for_optional_embedding_endpoint_succeeds():
+    coder_port = _free_port()
+    planner_port = _free_port()
+    embedding_port = _free_port()
+    coder = _start_server(coder_port)
+    planner = _start_server(planner_port)
+    embedding = _start_server(embedding_port)
+    try:
+        for name, port in [("coder", coder_port), ("planner", planner_port), ("embedding", embedding_port)]:
+            ok, message = MODULE.wait_for_model_endpoint(name, "127.0.0.1", port, 1.0)
+            assert ok is True
+            assert name in message
+    finally:
+        coder.shutdown()
+        coder.server_close()
+        planner.shutdown()
+        planner.server_close()
+        embedding.shutdown()
+        embedding.server_close()

@@ -1,5 +1,6 @@
 import contextlib
 import importlib.util
+import json
 import socket
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -80,3 +81,62 @@ def test_wait_for_optional_embedding_endpoint_succeeds():
         planner.server_close()
         embedding.shutdown()
         embedding.server_close()
+
+
+def test_build_checks_from_config_uses_configured_http_profiles():
+    config_data = {
+        "local_model_profiles": {
+            "android_coder": {
+                "provider": "openai_compatible",
+                "base_url": "http://127.0.0.1:8080/v1",
+            },
+            "android_planner": {
+                "provider": "openai_compatible",
+                "base_url": "http://127.0.0.1:8081/v1",
+            },
+            "android_embeddings": {
+                "provider": "openai_compatible",
+                "base_url": "http://127.0.0.1:8082/v1",
+            },
+        },
+        "local_model_routing": {
+            "code_generation": "android_coder",
+            "planning": "android_planner",
+            "embedding": "android_embeddings",
+        },
+        "semantic_memory": {
+            "embedding_model": "local_profile:android_embeddings",
+        },
+    }
+
+    checks = MODULE.build_checks_from_config(config_data)
+
+    assert checks == [
+        ("coder", "127.0.0.1", 8080),
+        ("planner", "127.0.0.1", 8081),
+        ("embedding", "127.0.0.1", 8082),
+    ]
+
+
+def test_build_checks_from_config_skips_non_http_profiles_and_deduplicates():
+    config_data = {
+        "local_model_profiles": {
+            "shared": {
+                "provider": "openai_compatible",
+                "base_url": "http://127.0.0.1:8080/v1",
+            },
+            "command_embed": {
+                "provider": "command",
+                "command": "fake",
+            },
+        },
+        "local_model_routing": {
+            "code_generation": "shared",
+            "planning": "shared",
+            "embedding": "command_embed",
+        },
+    }
+
+    checks = MODULE.build_checks_from_config(config_data)
+
+    assert checks == [("coder", "127.0.0.1", 8080)]

@@ -35,7 +35,20 @@ Convenience:
 Tip:
   Set `AURA_SKIP_CHDIR=1` when running locally or in tests to keep the
   current working directory unchanged.
+
+Android local model gate:
+  Set `AURA_REQUIRE_LOCAL_MODEL_HEALTH=1` to verify configured local
+  coder/planner/embedding endpoints before runtime commands start.
 EOF
+}
+
+maybe_check_local_models() {
+  if [ "${AURA_REQUIRE_LOCAL_MODEL_HEALTH:-0}" != "1" ]; then
+    return 0
+  fi
+
+  local config_path="${AURA_ANDROID_CONFIG_PATH:-${ROOT_DIR}/aura.config.json}"
+  "${PYTHON_BIN}" "${ROOT_DIR}/scripts/check_android_local_models.py" --config "${config_path}"
 }
 
 exec_main() {
@@ -46,8 +59,13 @@ exec_main() {
   exec "${PYTHON_BIN}" "${ROOT_DIR}/main.py" "$@"
 }
 
+exec_main_checked() {
+  maybe_check_local_models
+  exec_main "$@"
+}
+
 if [ "$#" -eq 0 ]; then
-  exec_main
+  exec_main_checked
 fi
 
 case "$1" in
@@ -56,7 +74,7 @@ case "$1" in
     ;;
   interactive)
     shift
-    exec_main "$@"
+    exec_main_checked "$@"
     ;;
   add)
     shift
@@ -64,20 +82,27 @@ case "$1" in
     ;;
   once)
     shift
-    exec_main goal once "$@"
+    exec_main_checked goal once "$@"
     ;;
   run)
     shift
-    exec_main goal run "$@"
+    exec_main_checked goal run "$@"
     ;;
   status)
     shift
     exec_main goal status "$@"
     ;;
   --*)
-    exec_main goal run "$@"
+    exec_main_checked goal run "$@"
     ;;
   *)
-    exec_main "$@"
+    case "$1" in
+      goal|workflow|watch|studio|evolve)
+        exec_main_checked "$@"
+        ;;
+      *)
+        exec_main "$@"
+        ;;
+    esac
     ;;
 esac

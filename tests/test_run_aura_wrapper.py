@@ -87,3 +87,66 @@ def test_wrapper_status_json_stays_machine_readable_and_lightweight():
         assert status_data["queue"]["pending"][0]["goal"] == "Wrapper queued goal"
         assert "vector_store_initialized" not in result.stderr
         assert "background_sync_started" not in result.stderr
+
+
+def test_wrapper_can_require_local_model_health_before_runtime_commands():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmp = Path(tmpdir)
+        config_path = tmp / "aura.config.json"
+        log_path = tmp / "wrapper.log"
+        fake_python = tmp / "fake_python.sh"
+
+        config_path.write_text(
+            json.dumps(
+                {
+                    "local_model_profiles": {
+                        "android_coder": {
+                            "provider": "openai_compatible",
+                            "base_url": "http://127.0.0.1:8080/v1",
+                        },
+                        "android_planner": {
+                            "provider": "openai_compatible",
+                            "base_url": "http://127.0.0.1:8081/v1",
+                        },
+                        "android_embeddings": {
+                            "provider": "openai_compatible",
+                            "base_url": "http://127.0.0.1:8082/v1",
+                        },
+                    },
+                    "local_model_routing": {
+                        "code_generation": "android_coder",
+                        "planning": "android_planner",
+                        "embedding": "android_embeddings",
+                    },
+                    "semantic_memory": {
+                        "embedding_model": "local_profile:android_embeddings",
+                    },
+                }
+            ),
+            encoding="utf-8",
+        )
+        fake_python.write_text(
+            "#!/usr/bin/env bash\n"
+            "script=\"$1\"\n"
+            "shift\n"
+            "printf '%s %s\\n' \"$script\" \"$*\" >> \"$AURA_WRAPPER_LOG\"\n"
+            "exit 0\n",
+            encoding="utf-8",
+        )
+        fake_python.chmod(0o700)
+
+        result = _run_wrapper(
+            "run",
+            "--dry-run",
+            extra_env={
+                "AURA_REQUIRE_LOCAL_MODEL_HEALTH": "1",
+                "AURA_ANDROID_CONFIG_PATH": str(config_path),
+                "AURA_PYTHON_BIN": str(fake_python),
+                "AURA_WRAPPER_LOG": str(log_path),
+            },
+        )
+
+        assert result.returncode == 0
+        lines = log_path.read_text(encoding="utf-8").splitlines()
+        assert "scripts/check_android_local_models.py --config " in lines[0]
+        assert "main.py goal run --dry-run" in lines[1]

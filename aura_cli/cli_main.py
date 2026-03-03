@@ -283,6 +283,12 @@ def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal
         _compaction = MemoryCompactionLoop(memory_store)
 
         orchestrator.attach_improvement_loops(_reflection, _health, _remediator, _skill_adapt, _conv_escape, _compaction)
+
+        # 1.1 Beads Sync Loop
+        if "beads_skill" in orchestrator.skills:
+            from core.orchestrator import BeadsSyncLoop
+            _beads_sync = BeadsSyncLoop(orchestrator.skills["beads_skill"])
+            orchestrator.attach_improvement_loops(_beads_sync)
     except Exception as _exc:
         log_json("WARN", "improvement_loops_setup_failed", details={"error": str(_exc)})
 
@@ -333,6 +339,7 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
 
     runtime_overrides = dict(overrides or {})
     runtime_mode = runtime_overrides.pop("runtime_mode", "full")
+    beads_cli_override = runtime_overrides.pop("beads_cli_override", None)
 
     for k, v in runtime_overrides.items():
         config.set_runtime_override(k, v)
@@ -367,6 +374,7 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
             "config_api_key": config_api_key,
             "provider_status": provider_status,
             "memory_persistence_path": paths["memory_persistence_path"],
+            "beads_cli_override": beads_cli_override,
         }
 
     brain_instance, _momento = _init_memory_and_brain(paths["brain_db_path"])
@@ -428,6 +436,7 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         beads_required=bool(beads_config.get("required", True)),
         beads_scope=str(beads_config.get("scope", "goal_run")),
     )
+    orchestrator.beads_runtime_override = beads_cli_override
 
     _attach_advanced_loops(orchestrator, runtime_mode, brain_instance, memory_store, goal_queue, _momento, project_root)
 
@@ -448,6 +457,7 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         "config_api_key": config_api_key,
         "provider_status": provider_status,
         "memory_persistence_path": paths["memory_persistence_path"],
+        "beads_cli_override": beads_cli_override,
     }
 
 
@@ -498,6 +508,7 @@ def _prepare_runtime_context(ctx: DispatchContext) -> int | None:
 
     beads_config = dict(config.get("beads", DEFAULT_CONFIG["beads"]) or {})
     beads_override_requested = False
+    beads_cli_override: dict[str, object] | None = None
     if getattr(args, "beads", False):
         beads_config["enabled"] = True
         beads_override_requested = True
@@ -514,6 +525,12 @@ def _prepare_runtime_context(ctx: DispatchContext) -> int | None:
         beads_override_requested = True
     if beads_override_requested:
         overrides["beads"] = beads_config
+        beads_cli_override = {
+            "source": "cli",
+            "enabled": bool(beads_config.get("enabled", True)),
+            "required": bool(beads_config.get("required", True)),
+        }
+        overrides["beads_cli_override"] = beads_cli_override
 
     if _resolve_dispatch_action(ctx.parsed) in {"goal_status", "goal_add", "interactive"}:
         overrides["runtime_mode"] = "queue"
@@ -803,6 +820,8 @@ def _handle_metrics_show_dispatch(ctx: DispatchContext) -> int:
     print(f"Avg duration: {avg_time:.1f}s")
     return 0
 def _handle_workflow_run_dispatch(ctx: DispatchContext) -> int:
+    from core.operator_runtime import build_beads_runtime_metadata
+
     args = ctx.args
     orchestrator = ctx.runtime["orchestrator"]
     result = orchestrator.run_loop(
@@ -811,7 +830,12 @@ def _handle_workflow_run_dispatch(ctx: DispatchContext) -> int:
         dry_run=args.dry_run,
     )
     _print_json_payload(
-        {"goal": args.workflow_goal, "stop_reason": result.get("stop_reason"), "cycles": len(result.get("history", []))},
+        {
+            "goal": args.workflow_goal,
+            "stop_reason": result.get("stop_reason"),
+            "cycles": len(result.get("history", [])),
+            "beads_runtime": build_beads_runtime_metadata(orchestrator),
+        },
         parsed=ctx.parsed,
         indent=2,
     )
@@ -892,6 +916,7 @@ def _maybe_add_goal(ctx: DispatchContext) -> None:
 
 def _handle_goal_once_dispatch(ctx: DispatchContext) -> int:
     from core.explain import format_decision_log
+    from core.operator_runtime import build_beads_runtime_metadata
 
     args = ctx.args
     orchestrator = ctx.runtime["orchestrator"]
@@ -906,7 +931,13 @@ def _handle_goal_once_dispatch(ctx: DispatchContext) -> int:
     
     if getattr(args, "json", False):
         _print_json_payload(
-            {"goal": args.goal, "stop_reason": result.get("stop_reason"), "cycles": len(history), "dry_run": args.dry_run},
+            {
+                "goal": args.goal,
+                "stop_reason": result.get("stop_reason"),
+                "cycles": len(history),
+                "dry_run": args.dry_run,
+                "beads_runtime": build_beads_runtime_metadata(orchestrator),
+            },
             parsed=ctx.parsed,
             indent=2,
         )

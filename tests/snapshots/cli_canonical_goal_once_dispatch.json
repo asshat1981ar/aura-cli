@@ -1,4 +1,10 @@
 {
+  "beads_runtime": {
+    "enabled": true,
+    "required": true,
+    "runtime_mode": "full",
+    "scope": "goal_run"
+  },
   "cycles": 2,
   "dry_run": true,
   "goal": "Summarize repo",

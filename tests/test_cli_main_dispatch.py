@@ -815,6 +815,10 @@ class TestCLIMainDispatch(unittest.TestCase):
     def test_legacy_and_canonical_workflow_run_call_same_orchestrator(self):
         orchestrator = MagicMock()
         orchestrator.run_loop.return_value = {"stop_reason": "done", "history": [1, 2]}
+        orchestrator.beads_enabled = True
+        orchestrator.beads_required = True
+        orchestrator.beads_scope = "goal_run"
+        orchestrator.runtime_mode = "full"
         fake_runtime = {
             "goal_queue": MagicMock(),
             "goal_archive": MagicMock(),
@@ -843,6 +847,10 @@ class TestCLIMainDispatch(unittest.TestCase):
     def test_legacy_workflow_run_json_output_matches_snapshot(self):
         orchestrator = MagicMock()
         orchestrator.run_loop.return_value = {"stop_reason": "done", "history": [1, 2]}
+        orchestrator.beads_enabled = True
+        orchestrator.beads_required = True
+        orchestrator.beads_scope = "goal_run"
+        orchestrator.runtime_mode = "full"
         fake_runtime = {
             "goal_queue": MagicMock(),
             "goal_archive": MagicMock(),
@@ -870,6 +878,10 @@ class TestCLIMainDispatch(unittest.TestCase):
     def test_canonical_workflow_run_json_output_matches_snapshot_and_legacy_base_shape(self):
         orchestrator = MagicMock()
         orchestrator.run_loop.return_value = {"stop_reason": "done", "history": [1, 2]}
+        orchestrator.beads_enabled = True
+        orchestrator.beads_required = True
+        orchestrator.beads_scope = "goal_run"
+        orchestrator.runtime_mode = "full"
         fake_runtime = {
             "goal_queue": MagicMock(),
             "goal_archive": MagicMock(),
@@ -906,6 +918,10 @@ class TestCLIMainDispatch(unittest.TestCase):
     def test_legacy_goal_once_json_output_matches_snapshot(self):
         orchestrator = MagicMock()
         orchestrator.run_loop.return_value = {"stop_reason": "done", "history": [1, 2]}
+        orchestrator.beads_enabled = True
+        orchestrator.beads_required = True
+        orchestrator.beads_scope = "goal_run"
+        orchestrator.runtime_mode = "full"
         fake_runtime = {
             "goal_queue": MagicMock(),
             "goal_archive": MagicMock(),
@@ -933,6 +949,10 @@ class TestCLIMainDispatch(unittest.TestCase):
     def test_canonical_goal_once_json_output_matches_snapshot_and_legacy_base_shape(self):
         orchestrator = MagicMock()
         orchestrator.run_loop.return_value = {"stop_reason": "done", "history": [1, 2]}
+        orchestrator.beads_enabled = True
+        orchestrator.beads_required = True
+        orchestrator.beads_scope = "goal_run"
+        orchestrator.runtime_mode = "full"
         fake_runtime = {
             "goal_queue": MagicMock(),
             "goal_archive": MagicMock(),
@@ -965,6 +985,47 @@ class TestCLIMainDispatch(unittest.TestCase):
         legacy_payload = json.loads(out_l)
         self.assertEqual(canonical_payload, self._without_cli_warnings(legacy_payload))
         self._assert_json_snapshot(out_c, "cli_canonical_goal_once_dispatch.json")
+
+    def test_canonical_goal_once_json_reports_cli_beads_override(self):
+        orchestrator = MagicMock()
+        orchestrator.run_loop.return_value = {"stop_reason": "done", "history": [1]}
+        orchestrator.beads_enabled = True
+        orchestrator.beads_required = False
+        orchestrator.beads_scope = "goal_run"
+        orchestrator.runtime_mode = "full"
+        orchestrator.beads_runtime_override = {
+            "source": "cli",
+            "enabled": True,
+            "required": False,
+        }
+        fake_runtime = {
+            "goal_queue": MagicMock(),
+            "goal_archive": MagicMock(),
+            "orchestrator": orchestrator,
+            "debugger": MagicMock(),
+            "planner": MagicMock(),
+            "loop": MagicMock(),
+            "model_adapter": MagicMock(),
+            "brain": MagicMock(),
+        }
+        runtime_factory = MagicMock(return_value=fake_runtime)
+
+        with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"), \
+             patch.object(cli_main.config, "set_runtime_override"):
+            code, out, err, _ = self._dispatch(
+                ["goal", "once", "Summarize repo", "--max-cycles", "3", "--dry-run", "--json", "--beads-optional"],
+                runtime_factory=runtime_factory,
+            )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        payload = json.loads(out)
+        self.assertEqual(payload["beads_runtime"]["override"], {
+            "source": "cli",
+            "enabled": True,
+            "required": False,
+        })
 
     def test_legacy_evolve_json_output_matches_snapshot(self):
         fake_runtime = {

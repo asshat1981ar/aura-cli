@@ -232,13 +232,25 @@ def build_beads_runtime_metadata(orchestrator: Any = None) -> Dict[str, Any] | N
         if isinstance(maybe_metadata, dict):
             metadata.update(maybe_metadata)
 
-    metadata.setdefault("enabled", bool(getattr(orchestrator, "beads_enabled", False)))
-    metadata.setdefault("required", bool(getattr(orchestrator, "beads_required", False)))
-    metadata.setdefault("scope", getattr(orchestrator, "beads_scope", "goal_run"))
+    enabled = getattr(orchestrator, "beads_enabled", None)
+    if isinstance(enabled, bool):
+        metadata.setdefault("enabled", enabled)
+
+    required = getattr(orchestrator, "beads_required", None)
+    if isinstance(required, bool):
+        metadata.setdefault("required", required)
+
+    scope = getattr(orchestrator, "beads_scope", None)
+    if isinstance(scope, str):
+        metadata.setdefault("scope", scope)
+
     runtime_mode = getattr(orchestrator, "runtime_mode", None)
-    if runtime_mode is not None:
+    if isinstance(runtime_mode, str):
         metadata.setdefault("runtime_mode", runtime_mode)
-    return metadata
+    override = getattr(orchestrator, "beads_runtime_override", None)
+    if isinstance(override, dict):
+        metadata["override"] = dict(override)
+    return metadata or None
 
 
 def build_operator_runtime_snapshot(

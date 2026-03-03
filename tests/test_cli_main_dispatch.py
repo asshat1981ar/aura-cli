@@ -1390,6 +1390,49 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertEqual(err, "")
         self._assert_json_snapshot(out, "cli_canonical_memory_search_dispatch.json")
 
+    def test_memory_reindex_json_reports_rebuild_and_forced_sync(self):
+        vector_store = MagicMock()
+        vector_store.rebuild.return_value = {
+            "model_id": "bge-small-en-v1.5-q8_0",
+            "records_seen": 2,
+            "embeddings_written": 2,
+            "records_failed": 0,
+            "drop_existing_embeddings": True,
+        }
+        model_adapter = MagicMock()
+        model_adapter.model_id.return_value = "bge-small-en-v1.5-q8_0"
+        model_adapter.dimensions.return_value = 384
+        fake_runtime = {"vector_store": vector_store, "model_adapter": model_adapter}
+        runtime_factory = MagicMock(return_value=fake_runtime)
+
+        with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"), \
+             patch("core.project_syncer.ProjectKnowledgeSyncer") as mock_syncer_cls:
+            mock_syncer = mock_syncer_cls.return_value
+            mock_syncer.sync_all.return_value = {
+                "files_processed": 3,
+                "files_skipped": 0,
+                "chunks_created": 7,
+                "relationships_extracted": 2,
+                "errors": 0,
+            }
+
+            code, out, err, _ = self._dispatch(["memory", "reindex", "--json"], runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        payload = json.loads(out)
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["embedding_model"], "bge-small-en-v1.5-q8_0")
+        self.assertEqual(payload["embedding_dims"], 384)
+        self.assertEqual(payload["rebuild"]["embeddings_written"], 2)
+        self.assertEqual(payload["project_sync"]["files_processed"], 3)
+        vector_store.rebuild.assert_called_once_with({
+            "exclude_source_types": ["file"],
+            "drop_existing_embeddings": True,
+        })
+        mock_syncer.sync_all.assert_called_once_with(force=True)
+
     def test_canonical_metrics_json_output_matches_snapshot(self):
         brain = MagicMock()
         memory_store = MagicMock()

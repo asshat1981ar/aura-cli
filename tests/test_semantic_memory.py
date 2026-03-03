@@ -109,6 +109,33 @@ class TestVectorStore:
         assert len(hits) == 1
         assert hits[0].record_id == "1"
 
+    def test_rebuild_rewrites_embeddings_for_active_model(self, vector_store, mock_adapter, mock_brain):
+        rec1 = MemoryRecord(
+            id="1", content="hello", source_type="test", source_ref="ref",
+            created_at=0, updated_at=0, content_hash="h1"
+        )
+        vector_store.upsert([rec1])
+
+        mock_adapter._embedding_model = "new-local-model"
+        stats = vector_store.rebuild({})
+
+        assert stats["records_seen"] == 1
+        assert stats["embeddings_written"] == 1
+
+        row = mock_brain.db.execute(
+            "SELECT embedding_model, embedding_dims FROM memory_records WHERE id = ?",
+            ("1",),
+        ).fetchone()
+        assert row[0] == "new-local-model"
+        assert row[1] == 4
+
+        emb_row = mock_brain.db.execute(
+            "SELECT model_id, dims FROM embeddings WHERE record_id = ?",
+            ("1",),
+        ).fetchone()
+        assert emb_row[0] == "new-local-model"
+        assert emb_row[1] == 4
+
 class TestContextManager:
     def test_budget_allocation(self, vector_store):
         cm = ContextManager(vector_store=vector_store, max_tokens=100)

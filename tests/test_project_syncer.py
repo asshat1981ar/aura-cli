@@ -68,3 +68,24 @@ def test_syncer_hydrates_store(temp_project):
     
     # Verify relations (cg.add_edge called for imports)
     assert cg.add_edge.called
+
+
+def test_syncer_force_reprocesses_unchanged_files(temp_project):
+    db_path = temp_project / "brain.db"
+    conn = sqlite3.connect(str(db_path), check_same_thread=False)
+    brain = MagicMock()
+    brain.db = conn
+
+    adapter = MockAdapter()
+    vs = VectorStore(adapter, brain)
+    cg = MagicMock()
+
+    syncer = ProjectKnowledgeSyncer(vs, cg, project_root=str(temp_project))
+    first = syncer.sync_all()
+    second = syncer.sync_all()
+    forced = syncer.sync_all(force=True)
+
+    assert first["files_processed"] >= 1
+    assert second["files_skipped"] >= 1
+    assert forced["files_processed"] >= 1
+    assert forced["files_skipped"] == 0

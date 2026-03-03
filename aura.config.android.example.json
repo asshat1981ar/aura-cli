@@ -15,6 +15,12 @@
       "model": "phi-4-mini-instruct-q4",
       "temperature": 0.2,
       "max_tokens": 1536
+    },
+    "android_embeddings": {
+      "provider": "openai_compatible",
+      "base_url": "http://127.0.0.1:8082/v1",
+      "embedding_model": "bge-small-en-v1.5-q8_0",
+      "embedding_dims": 384
     }
   },
   "local_model_routing": {
@@ -22,10 +28,12 @@
     "analysis": "android_planner",
     "critique": "android_planner",
     "code_generation": "android_coder",
+    "embedding": "android_embeddings",
     "quality": "android_planner",
     "fast": "android_coder"
   },
   "semantic_memory": {
-    "top_k": 9
+    "top_k": 9,
+    "embedding_model": "local_profile:android_embeddings"
   }
 }

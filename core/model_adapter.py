@@ -14,6 +14,7 @@ from core.logging_utils import log_json # Import log_json
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
 from core.config_manager import config
 from core.runtime_auth import resolve_local_model_profiles, resolve_openai_api_key, resolve_openrouter_api_key
+from memory.embedding_provider import LocalEmbeddingProvider
 
 # Removed dangerous global IPv4-only monkeypatch for socket.getaddrinfo.
 # This monkeypatch forced all network connections to use IPv4, potentially
@@ -48,11 +49,15 @@ class ModelAdapter:
         
         # Configuration
         semantic_memory = config.get("semantic_memory", {}) or {}
-        configured_embedding_model = semantic_memory.get("embedding_model") or "text-embedding-3-small"
+        configured_embedding_model = semantic_memory.get("embedding_model") or config.get("model_routing", {}).get("embedding") or "text-embedding-3-small"
         if isinstance(configured_embedding_model, str) and configured_embedding_model.startswith("openai/"):
             configured_embedding_model = configured_embedding_model.split("/", 1)[1]
         self._embedding_model = configured_embedding_model # Default from config
         self._embedding_dims = 1536
+        self._local_embedding_provider = LocalEmbeddingProvider()
+        self._embedding_profile_name = None
+        self._embedding_mode = "openai"
+        self._configure_embedding_backend()
 
         # Validate CLI paths
         self._validate_cli_paths()
@@ -103,6 +108,37 @@ class ModelAdapter:
         if isinstance(profile_name, str) and profile_name in self._get_local_profiles():
             return profile_name
         return None
+
+    def _configure_embedding_backend(self) -> None:
+        semantic_memory = config.get("semantic_memory", {}) or {}
+        embedding_model = semantic_memory.get("embedding_model")
+
+        if isinstance(embedding_model, str) and embedding_model.startswith("local_profile:"):
+            profile_name = embedding_model.split(":", 1)[1]
+            if profile_name in self._get_local_profiles():
+                self._embedding_profile_name = profile_name
+                self._embedding_mode = "local_profile"
+        elif embedding_model in {"local-tfidf-svd-50d", "local/tfidf-svd-50d"}:
+            self._embedding_model = "local-tfidf-svd-50d"
+            self._embedding_dims = self._local_embedding_provider.dimensions()
+            self._embedding_mode = "local_builtin"
+        else:
+            profile_name = self._resolve_local_profile_name("embedding")
+            if profile_name is not None:
+                self._embedding_profile_name = profile_name
+                self._embedding_mode = "local_profile"
+
+        if self._embedding_profile_name:
+            profile = self._get_local_profiles().get(self._embedding_profile_name, {})
+            profile_model = profile.get("embedding_model") or profile.get("model")
+            if isinstance(profile_model, str) and profile_model.strip():
+                self._embedding_model = profile_model
+            dims = profile.get("embedding_dims")
+            if dims is not None:
+                try:
+                    self._embedding_dims = int(dims)
+                except (TypeError, ValueError):
+                    pass
 
     def _call_local_openai_compatible(self, profile: dict, prompt: str) -> str:
         base_url = str(profile.get("base_url") or "http://127.0.0.1:8080/v1").rstrip("/")
@@ -185,6 +221,119 @@ class ModelAdapter:
             timeout=120,
         )
         return result.stdout.strip()
+
+    def _call_local_openai_embeddings(self, profile: dict, texts: List[str]) -> List[np.ndarray]:
+        base_url = str(profile.get("base_url") or "http://127.0.0.1:8080/v1").rstrip("/")
+        if not base_url.endswith("/v1"):
+            base_url = f"{base_url}/v1"
+        url = f"{base_url}/embeddings"
+        model = profile.get("embedding_model") or profile.get("model")
+        if not isinstance(model, str) or not model.strip():
+            raise ValueError("Local openai_compatible embedding profile requires `embedding_model` or `model`.")
+
+        headers = {"Content-Type": "application/json"}
+        api_key = profile.get("api_key")
+        if isinstance(api_key, str) and api_key.strip():
+            headers["Authorization"] = f"Bearer {api_key.strip()}"
+
+        payload: dict[str, Any] = {
+            "model": model,
+            "input": texts,
+        }
+        response = self._make_request_with_retries("POST", url, headers, payload)
+        data = response.json()
+        sorted_data = sorted(data["data"], key=lambda x: x["index"])
+        vectors = [np.array(item["embedding"], dtype=np.float32) for item in sorted_data]
+        if vectors:
+            self._embedding_dims = int(vectors[0].shape[0])
+        return vectors
+
+    def _call_local_command_embeddings(self, profile: dict, texts: List[str]) -> List[np.ndarray]:
+        command = profile.get("embedding_command") or profile.get("command")
+        if isinstance(command, str):
+            command_parts = shlex.split(command)
+        elif isinstance(command, list) and all(isinstance(part, str) for part in command):
+            command_parts = list(command)
+        else:
+            raise ValueError("Local command embedding profile requires `embedding_command` or `command`.")
+
+        input_json = json.dumps({"texts": texts})
+        use_stdin = True
+        rendered_parts: list[str] = []
+        for part in command_parts:
+            if "{input_json}" in part:
+                use_stdin = False
+                rendered_parts.append(part.replace("{input_json}", input_json))
+            else:
+                rendered_parts.append(part)
+
+        result = subprocess.run(
+            rendered_parts,
+            input=input_json if use_stdin else None,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=120,
+        )
+        payload = _aura_safe_loads(result.stdout, "local_embedding_command")
+        if isinstance(payload, dict) and "data" in payload:
+            payload = [item.get("embedding") for item in payload["data"]]
+        if not isinstance(payload, list):
+            raise ValueError("Embedding command must return a JSON array or OpenAI-style data object.")
+        vectors = [np.array(item, dtype=np.float32) for item in payload]
+        if vectors:
+            self._embedding_dims = int(vectors[0].shape[0])
+        return vectors
+
+    def _call_local_ollama_embeddings(self, profile: dict, texts: List[str]) -> List[np.ndarray]:
+        base_url = str(profile.get("base_url") or "http://127.0.0.1:11434").rstrip("/")
+        model = profile.get("embedding_model") or profile.get("model")
+        if not isinstance(model, str) or not model.strip():
+            raise ValueError("Local ollama embedding profile requires `embedding_model` or `model`.")
+
+        headers = {"Content-Type": "application/json"}
+        payload = {"model": model, "input": texts}
+        try:
+            response = self._make_request_with_retries("POST", f"{base_url}/api/embed", headers, payload)
+            data = response.json()
+            embeddings = data.get("embeddings")
+            if isinstance(embeddings, list):
+                vectors = [np.array(item, dtype=np.float32) for item in embeddings]
+                if vectors:
+                    self._embedding_dims = int(vectors[0].shape[0])
+                return vectors
+        except Exception:
+            pass
+
+        vectors: list[np.ndarray] = []
+        for text in texts:
+            response = self._make_request_with_retries(
+                "POST",
+                f"{base_url}/api/embeddings",
+                headers,
+                {"model": model, "prompt": text},
+            )
+            data = response.json()
+            vectors.append(np.array(data["embedding"], dtype=np.float32))
+        if vectors:
+            self._embedding_dims = int(vectors[0].shape[0])
+        return vectors
+
+    def _embed_with_local_profile(self, texts: List[str]) -> List[np.ndarray]:
+        if not self._embedding_profile_name:
+            raise ValueError("No local embedding profile configured.")
+        profile = self._get_local_profiles().get(self._embedding_profile_name)
+        if not isinstance(profile, dict):
+            raise ValueError(f"Unknown local embedding profile: {self._embedding_profile_name}")
+
+        provider = str(profile.get("provider") or "openai_compatible")
+        if provider == "openai_compatible":
+            return self._call_local_openai_embeddings(profile, texts)
+        if provider == "command":
+            return self._call_local_command_embeddings(profile, texts)
+        if provider == "ollama":
+            return self._call_local_ollama_embeddings(profile, texts)
+        raise ValueError(f"Unsupported local embedding provider: {provider}")
 
     def call_local_profile(self, profile_name: str, prompt: str) -> str:
         profiles = self._get_local_profiles()
@@ -617,6 +766,23 @@ class ModelAdapter:
         """
         if not texts:
             return []
+
+        if self._embedding_mode == "local_builtin":
+            return [np.array(vec, dtype=np.float32) for vec in self._local_embedding_provider.embed(texts)]
+
+        if self._embedding_mode == "local_profile":
+            try:
+                return self._embed_with_local_profile(texts)
+            except Exception as exc:
+                log_json(
+                    "WARN",
+                    "search_embedding_local_profile_failed",
+                    details={"error": str(exc), "profile": self._embedding_profile_name, "fallback": "local_tfidf_svd"},
+                )
+                self._embedding_model = "local-tfidf-svd-50d"
+                self._embedding_dims = self._local_embedding_provider.dimensions()
+                self._embedding_mode = "local_builtin"
+                return [np.array(vec, dtype=np.float32) for vec in self._local_embedding_provider.embed(texts)]
 
         openai_api_key = resolve_openai_api_key() or os.environ.get("OPENAI_API_KEY")
         if not openai_api_key or self._embedding_disabled:

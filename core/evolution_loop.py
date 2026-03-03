@@ -217,7 +217,11 @@ class EvolutionLoop:
             parsed_validation = _aura_safe_loads(raw_validation_result, "evolution_mutation_validation")
             if isinstance(parsed_validation, dict):
                 decision = parsed_validation.get("decision", decision)
-                confidence_score = parsed_validation.get("confidence_score", confidence_score)
+                raw_confidence = parsed_validation.get("confidence_score", confidence_score)
+                try:
+                    confidence_score = float(raw_confidence)
+                except (ValueError, TypeError):
+                    confidence_score = 0.0
                 impact_assessment = parsed_validation.get("impact_assessment", impact_assessment)
                 reasoning = parsed_validation.get("reasoning", reasoning)
             else:

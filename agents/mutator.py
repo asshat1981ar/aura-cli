@@ -54,15 +54,25 @@ class MutatorAgent:
         """
         Applies one or more mutations to the codebase based on the `mutation_proposal`.
 
-        The proposal is parsed for multiple commands (ADD_FILE or REPLACE_IN_FILE).
-        Path validation is performed for every operation.
-
-        Args:
-            mutation_proposal (str): A string detailing the mutations to apply.
+        Supports:
+        1. Native command blocks (ADD_FILE, REPLACE_IN_FILE)
+        2. JSON mutation plans ({"mutations": [...]})
         """
         log_json("INFO", "mutator_applying_mutation", details={"proposal_snippet": mutation_proposal[:200]})
 
-        # Split into blocks based on command keywords at start of lines
+        # Try JSON first
+        from core.file_tools import _aura_safe_loads
+        import json
+        try:
+            parsed = _aura_safe_loads(mutation_proposal, "mutator_json_apply")
+            if isinstance(parsed, dict) and "mutations" in parsed:
+                self._apply_json_mutations(parsed["mutations"])
+                log_json("INFO", "mutator_application_attempt_complete")
+                return
+        except Exception:
+            pass
+
+        # Fallback to block parsing
         blocks = re.split(r'^(?=ADD_FILE|REPLACE_IN_FILE)', mutation_proposal, flags=re.MULTILINE)
 
         for block in blocks:
@@ -81,6 +91,29 @@ class MutatorAgent:
                 log_json("WARN", "mutator_skipping_unrecognized_block", details={"command_line": command_line})
 
         log_json("INFO", "mutator_application_attempt_complete")
+
+    def _apply_json_mutations(self, mutations: list):
+        for m in mutations:
+            try:
+                m_type = m.get("type")
+                file_path = m.get("file_path")
+                new_content = m.get("new_content")
+                old_code = m.get("old_code", "")
+
+                if not file_path or new_content is None:
+                    continue
+
+                validated = self._validate_file_path(file_path)
+                rel_path = str(validated.relative_to(self.project_root))
+
+                if m_type == "file_change" or m_type == "add_file":
+                    apply_change_with_explicit_overwrite_policy(
+                        self.project_root, rel_path, old_code, new_content,
+                        overwrite_file=(not old_code)
+                    )
+                    log_json("INFO", "mutator_json_mutation_success", details={"file": rel_path})
+            except Exception as e:
+                log_json("ERROR", "mutator_json_mutation_failed", details={"error": str(e), "mutation": str(m)[:200]})
 
     def _handle_add_file(self, command_line: str, content_lines: list):
         try:
@@ -109,9 +142,6 @@ class MutatorAgent:
     def _handle_replace_in_file(self, command_line: str, lines: list, full_block: str):
         file_path = "N/A"
         try:
-            # Expected format variations:
-            # 1. REPLACE_IN_FILE <filepath>\n---OLD_CONTENT_START---...
-            # 2. REPLACE_IN_FILE\n<filepath>\n---OLD_CONTENT_START---...
             parts = command_line.split(' ', 1)
             if len(parts) >= 2:
                 file_path = parts[1].strip()

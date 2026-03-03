@@ -48,20 +48,28 @@ Critique:
 System Context:
 {memory_snapshot}
 
-Output a structured JSON mutation plan. 
-You MUST provide the full source code for any new or modified files.
+Output a list of mutation commands. 
+Use the following commands ONLY:
 
-REQUIRED JSON FORMAT:
-{
-    "mutations": [
-        {
-            "type": "file_change",
-            "file_path": "path/to/file.py",
-            "reason": "Why this change is needed",
-            "new_content": "FULL SOURCE CODE HERE"
-        }
-    ],
-    "model_routing_updates": {},
-    "capability_updates": []
-}
+ADD_FILE <path>
+<full content of the file>
+
+REPLACE_IN_FILE <path>
+---OLD_CONTENT_START---
+<exact code snippet to be replaced>
+---OLD_CONTENT_END---
+---NEW_CONTENT_START---
+<new code snippet to replace the old one>
+---NEW_CONTENT_END---
+
+Example:
+REPLACE_IN_FILE core/config_manager.py
+---OLD_CONTENT_START---
+    def get(self, key):
+        return self._config.get(key)
+---OLD_CONTENT_END---
+---NEW_CONTENT_START---
+    def get(self, key, default=None):
+        return self._config.get(key, default)
+---NEW_CONTENT_END---
 """

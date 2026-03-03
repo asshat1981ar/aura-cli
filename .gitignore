@@ -67,3 +67,6 @@ changed.txt
 *.swp
 *.swo
 .DS_Store
+
+# Dolt database files (added by bd init)
+.dolt/

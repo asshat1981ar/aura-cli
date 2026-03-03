@@ -48,7 +48,7 @@
   "agents/skills/skill_failure_analyzer.py": "f089e6ce8e138c607f11605708dd2431496f99f3c30b3cc849c2b49651979460",
   "agents/skills/security_hardener.py": "3515363b13dde0f0e3bfd252e122db84742a0289876e0f2b3b266f4fbe8d4d76",
   "core/closed_loop.py": "645e7f872b08ea64491087fadd2507238abb1415fc7bc06afe7dec95c37ed60a",
-  "core/evolution_loop.py": "698ecf6b613aad6f85308917bbddd6c15f28f17d3187480d41fe02036f514c92",
+  "core/evolution_loop.py": "8f373fb0dd723c607df724566a88f2c58acc75b64230a41a64c6bf24b0f6b0c9",
   "core/file_tools.py": "e191fd3dc7d7ec5b34036215aa2ba9c6b4c83266f16c4724ab1a2850e34d115c",
   "core/git_tools.py": "ceaf1cacd88050d5c215fc0b895c56c8593504b3271ab0079b82e4ec34d5d80c",
   "core/goal_archive.py": "1768f3bc13b7c10cdabd43b706ab6aa2e25f5a054df9001ba2de985e70ef1518",
@@ -146,5 +146,7 @@
   "core/fitness.py": "49b5ee0450304dadc7a20c894a053abd10369dd671ee06b2f7e8c6685048d7fc",
   "core/beads_contract.py": "70b9acda38ab6357a9d2b8be7f02cec006543054546b556c95bf8ce7f5fad2ac",
   "core/beads_bridge.py": "1ff8a724bc86ee843921945bb89d9d872562b1e9d753d14a6b67346c6ab4892b",
-  "core/recursive_improvement.py": "ac806ac142178f24bd9242d280b083b08507b033622083f7aa962791b6e03f12"
+  "core/recursive_improvement.py": "ac806ac142178f24bd9242d280b083b08507b033622083f7aa962791b6e03f12",
+  "core/rsi_integration_verification.py": "cb1eeb72289ccf717f7363e63fcae398446a5703cab13daa14f951f21e8ccfa9",
+  "core/evolution_prompts.py": "405ceed23b7a2462ebd1fc8ac98a0905fa1392e0f785dd04e02d3aff2ef00547"
 }

@@ -55,13 +55,13 @@
   },
   "default": {
     "linter_enforcer": {
-      "ema": 0.6415740223163313,
-      "runs": 12,
+      "ema": 0.6953379189688816,
+      "runs": 13,
       "suspended": false
     },
     "symbol_indexer": {
-      "ema": 0.778879121431914,
-      "runs": 12,
+      "ema": 0.8120472532171269,
+      "runs": 13,
       "suspended": false
     }
   },

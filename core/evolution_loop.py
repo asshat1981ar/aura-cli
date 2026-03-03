@@ -2,6 +2,11 @@ import json
 import dataclasses
 from core.logging_utils import log_json # Import the new logging utility
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
+from core.evolution_prompts import (
+    EVOLUTION_HYPOTHESIS_PROMPT,
+    EVOLUTION_TASK_DECOMPOSITION_PROMPT,
+    EVOLUTION_MUTATION_PROMPT
+)
 
 class EvolutionLoop:
     """
@@ -84,15 +89,21 @@ class EvolutionLoop:
 
         # 1. Hypothesize
         hypothesis = self.planner.plan(
-            goal=f"Analyze this goal: {goal}\nIdentify:\n- Required capabilities\n- Missing architecture\n- Possible improvements to AURA itself",
+            goal=EVOLUTION_HYPOTHESIS_PROMPT.replace("{goal}", goal)
+                                            .replace("{memory_snapshot}", memory_snapshot)
+                                            .replace("{similar_past_problems}", similar_past_problems)
+                                            .replace("{known_weaknesses}", known_weaknesses),
             memory_snapshot=memory_snapshot,
             similar_past_problems=similar_past_problems,
             known_weaknesses=known_weaknesses
         )
+        # Hypothesis can be a list or a string depending on model output, ensure string
+        hypothesis_str = "\n".join(hypothesis) if isinstance(hypothesis, list) else str(hypothesis)
 
         # 2. Decompose
         task_list = self.planner.plan(
-            goal=f"Break this into atomic executable tasks:\n{hypothesis}",
+            goal=EVOLUTION_TASK_DECOMPOSITION_PROMPT.replace("{hypothesis}", hypothesis_str)
+                                                    .replace("{memory_snapshot}", memory_snapshot),
             memory_snapshot=memory_snapshot,
             similar_past_problems=similar_past_problems,
             known_weaknesses=known_weaknesses
@@ -112,14 +123,19 @@ class EvolutionLoop:
         # Detect weaknesses from evaluation using Brain's method
         self.brain.analyze_critique_for_weaknesses(evaluation)
 
+        evaluation_str = str(evaluation)
+
         # 5. Mutate (Self-Improvement)
-        mutation_list = self.planner.plan(
-            goal=f"Based on this critique:\n{evaluation}\n\nPropose modifications to:\n- Agents\n- Memory\n- Model routing\n- Tooling",
+        mutation_str = self.planner.plan(
+            goal=EVOLUTION_MUTATION_PROMPT.replace("{evaluation}", evaluation_str)
+                                          .replace("{memory_snapshot}", memory_snapshot),
             memory_snapshot=memory_snapshot,
             similar_past_problems=similar_past_problems,
             known_weaknesses=known_weaknesses
         )
-        mutation_str = "\n".join(mutation_list)
+        # Mutation result should be a single string for parsing, but plan() might return a list
+        if isinstance(mutation_str, list):
+            mutation_str = "\n".join(mutation_str)
 
         # 6. Integrate mutation
         raw_validation_result = self.critic.validate_mutation(mutation_str)

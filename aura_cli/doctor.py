@@ -16,6 +16,82 @@ from core.runtime_auth import (
 )
 from core.capability_manager import capability_doctor_check
 
+
+def _resolve_active_embedding_model_id(cfg: dict) -> str | None:
+    semantic_memory = cfg.get("semantic_memory", DEFAULT_CONFIG["semantic_memory"]) or {}
+    local_profiles = cfg.get("local_model_profiles", {}) or {}
+    local_routing = cfg.get("local_model_routing", {}) or {}
+
+    embedding_model = semantic_memory.get("embedding_model")
+    if isinstance(embedding_model, str):
+        if embedding_model.startswith("local_profile:"):
+            profile_name = embedding_model.split(":", 1)[1]
+            profile = local_profiles.get(profile_name, {}) or {}
+            return profile.get("embedding_model") or profile.get("model")
+        if embedding_model in {"local-tfidf-svd-50d", "local/tfidf-svd-50d"}:
+            return "local-tfidf-svd-50d"
+        if embedding_model.startswith("openai/"):
+            return embedding_model.split("/", 1)[1]
+        if embedding_model:
+            return embedding_model
+
+    routed_profile_name = local_routing.get("embedding")
+    if isinstance(routed_profile_name, str) and routed_profile_name:
+        profile = local_profiles.get(routed_profile_name, {}) or {}
+        return profile.get("embedding_model") or profile.get("model")
+
+    model_routing = cfg.get("model_routing", {}) or {}
+    fallback = model_routing.get("embedding")
+    if isinstance(fallback, str) and fallback:
+        return fallback.split("/", 1)[1] if fallback.startswith("openai/") else fallback
+    return None
+
+
+def check_embedding_index(project_root: Path, cfg: dict) -> tuple[str, str]:
+    brain_db_rel = cfg.get("brain_db_path", DEFAULT_CONFIG["brain_db_path"])
+    brain_db = project_root / brain_db_rel
+    if not brain_db.exists():
+        return "WARN", f"{brain_db_rel} not found"
+
+    active_model = _resolve_active_embedding_model_id(cfg)
+    if not active_model:
+        return "WARN", "Unable to resolve active embedding model from config."
+
+    try:
+        conn = sqlite3.connect(str(brain_db), check_same_thread=False)
+        try:
+            total_records_row = conn.execute("SELECT COUNT(*) FROM memory_records").fetchone()
+            total_records = int(total_records_row[0]) if total_records_row else 0
+            if total_records == 0:
+                return "PASS", f"No semantic records indexed yet for {active_model}."
+
+            rows = conn.execute(
+                "SELECT model_id, COUNT(*) FROM embeddings GROUP BY model_id ORDER BY model_id"
+            ).fetchall()
+        finally:
+            conn.close()
+    except sqlite3.OperationalError as exc:
+        return "WARN", f"Semantic index not initialized ({exc})."
+    except Exception as exc:
+        return "WARN", f"Unable to inspect semantic index ({exc})."
+
+    if not rows:
+        return "WARN", (
+            f"Semantic records exist but no embeddings are stored for active model {active_model}. "
+            "Run `python3 main.py memory reindex --json`."
+        )
+
+    model_counts = {str(model_id): int(count) for model_id, count in rows}
+    active_count = model_counts.get(active_model, 0)
+    if active_count > 0:
+        return "PASS", f"Active model {active_model} has {active_count} stored embeddings."
+
+    available = ", ".join(f"{model} ({count})" for model, count in sorted(model_counts.items()))
+    return "WARN", (
+        f"Active embedding model {active_model} has no stored embeddings. "
+        f"Found: {available}. Run `python3 main.py memory reindex --json`."
+    )
+
 def check_python_version():
     """Checks if the Python version is 3.9 or higher."""
     if sys.version_info >= (3, 9):
@@ -269,11 +345,18 @@ def run_doctor_v2(
     )
 
     # 4. Embeddings
+    active_embedding_model = _resolve_active_embedding_model_id(cfg)
     _add(
         "Embeddings",
         "PASS" if provider_status["embedding_ready"] else "WARN",
-        "OPENAI_API_KEY available" if provider_status["embedding_ready"] else "OPENAI_API_KEY not set; semantic search will fall back",
+        (
+            f"Configured embedding backend: {active_embedding_model}"
+            if provider_status["embedding_ready"] and active_embedding_model
+            else "OPENAI_API_KEY not set; semantic search will fall back"
+        ),
     )
+    embedding_index_status, embedding_index_detail = check_embedding_index(project_root, cfg)
+    _add("Embedding index", embedding_index_status, embedding_index_detail)
 
     # 5. Brain DB
     brain_db_rel = cfg.get("brain_db_path", DEFAULT_CONFIG["brain_db_path"])

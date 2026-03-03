@@ -285,7 +285,7 @@ def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal
         orchestrator.attach_improvement_loops(_reflection, _health, _remediator, _skill_adapt, _conv_escape, _compaction)
 
         # 1.1 Beads Sync Loop
-        if "beads_skill" in orchestrator.skills:
+        if getattr(orchestrator, "beads_enabled", False) and "beads_skill" in orchestrator.skills:
             from core.orchestrator import BeadsSyncLoop
             _beads_sync = BeadsSyncLoop(orchestrator.skills["beads_skill"])
             orchestrator.attach_improvement_loops(_beads_sync)

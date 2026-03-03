@@ -3,7 +3,7 @@ import unittest
 import time
 import uuid
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 
 from core.orchestrator import LoopOrchestrator
 from core.policy import Policy
@@ -180,6 +180,67 @@ class TestOrchestratorPhases(unittest.TestCase):
         self.assertEqual(result["beads"]["error"], "timeout")
         self.assertIn("beads_gate", result["phase_outputs"])
         self.agents["plan"].run.assert_not_called()
+
+    def test_bead_side_effects_are_disabled_when_beads_disabled(self):
+        beads_skill = MagicMock()
+        orchestrator = LoopOrchestrator(
+            agents=self.agents,
+            brain=self.mock_brain,
+            project_root=Path("."),
+            policy=Policy.from_config({}),
+            beads_enabled=False,
+        )
+        orchestrator.skills = {"beads_skill": beads_skill}
+
+        orchestrator._claim_bead("bd-1")
+        orchestrator._close_bead("bd-1", "done")
+
+        self.assertEqual(orchestrator.poll_external_goals(), [])
+        beads_skill.run.assert_not_called()
+
+    def test_bead_side_effects_claim_and_close_when_enabled(self):
+        beads_skill = MagicMock()
+        orchestrator = LoopOrchestrator(
+            agents=self.agents,
+            brain=self.mock_brain,
+            project_root=Path("."),
+            policy=Policy.from_config({}),
+            beads_enabled=True,
+        )
+        orchestrator.skills = {"beads_skill": beads_skill}
+
+        orchestrator._claim_bead("bd-1")
+        orchestrator._close_bead("bd-1", "done")
+
+        self.assertEqual(
+            beads_skill.run.call_args_list,
+            [
+                call({"cmd": "update", "id": "bd-1", "args": ["--status", "in_progress"]}),
+                call({"cmd": "close", "id": "bd-1", "args": ["--reason", "done"]}),
+            ],
+        )
+
+    def test_poll_external_goals_reads_ready_dict_shape(self):
+        beads_skill = MagicMock()
+        beads_skill.run.return_value = {
+            "ready": [
+                {"id": "bd-1", "title": "Fix tests"},
+                {"id": "bd-2", "summary": "Refresh snapshots"},
+            ]
+        }
+        orchestrator = LoopOrchestrator(
+            agents=self.agents,
+            brain=self.mock_brain,
+            project_root=Path("."),
+            policy=Policy.from_config({}),
+            beads_enabled=True,
+        )
+        orchestrator.skills = {"beads_skill": beads_skill}
+
+        goals = orchestrator.poll_external_goals()
+
+        self.assertEqual(goals, ["bead:bd-1: Fix tests", "bead:bd-2: Refresh snapshots"])
+        beads_skill.run.assert_called_once_with({"cmd": "ready"})
 
 if __name__ == "__main__":
     unittest.main()

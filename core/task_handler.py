@@ -364,7 +364,17 @@ def run_goals_loop(args, goal_queue, orchestrator, debugger_instance, planner_in
     task_manager = TaskManager()
     cycle_limit = _goal_cycle_limit(args)
 
-    while goal_queue.has_goals():
+    while True:
+        # 1. If queue is empty, poll for external goals (e.g. BEADS)
+        if not goal_queue.has_goals() and hasattr(orchestrator, "poll_external_goals"):
+            new_goals = orchestrator.poll_external_goals()
+            for g in new_goals:
+                goal_queue.add(g)
+                log_json("INFO", "external_goal_discovered", goal=g)
+
+        if not goal_queue.has_goals():
+            break
+
         goal = goal_queue.next()
         log_json("INFO", "processing_goal", goal=goal)
 

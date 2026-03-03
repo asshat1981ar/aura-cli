@@ -51,6 +51,24 @@ from memory.controller import memory_controller, MemoryTier
 MAX_SANDBOX_RETRIES = 3
 
 
+class BeadsSyncLoop:
+    """Triggers beads synchronization (dolt push/pull) periodically."""
+    EVERY_N = 5
+
+    def __init__(self, beads_skill):
+        self._skill = beads_skill
+        self._n = 0
+
+    def on_cycle_complete(self, _entry):
+        self._n += 1
+        if self._n % self.EVERY_N == 0:
+            log_json("INFO", "beads_sync_loop_starting")
+            # Try to pull latest changes from remote
+            self._skill.run({"cmd": "dolt", "args": ["pull"]})
+            # Push local changes to remote
+            self._skill.run({"cmd": "dolt", "args": ["push"]})
+
+
 class LoopOrchestrator:
     """Coordinates the full AURA autonomous-coding pipeline across one or more cycles.
 
@@ -172,6 +190,12 @@ class LoopOrchestrator:
         self.context_graph = None       # ContextGraph
         self._consecutive_fails: int = 0
         self._ui_callbacks: list = []
+
+    def _get_beads_skill(self):
+        """Return the BEADS skill only when runtime BEADS integration is enabled."""
+        if not self.beads_enabled:
+            return None
+        return self.skills.get("beads_skill")
 
     def attach_ui_callback(self, callback) -> None:
         """Register a UI callback (e.g., AuraStudio) to receive real-time updates."""
@@ -974,33 +998,13 @@ class LoopOrchestrator:
 
         # Phase 10: discover()
         self._notify_ui("on_phase_start", "discover")
-        t0_discover = time.time()
-        # Find discovery loop if attached
-        discovery_loop = next((l for l in self._improvement_loops if type(l).__name__ == "AutonomousDiscovery"), None)
-        if discovery_loop:
-            try:
-                # We trigger it manually here to ensure it runs as a phase
-                # instead of waiting for its internal TRIGGER_EVERY_N
-                discovery_loop.run_scan()
-            except Exception as exc:
-                log_json("WARN", "autonomous_discovery_phase_failed", details={"error": str(exc)})
-        self._notify_ui("on_phase_complete", "discover", (time.time() - t0_discover) * 1000)
+        # Discovery now happens via on_cycle_complete (TRIGGER_EVERY_N=15)
+        self._notify_ui("on_phase_complete", "discover", 0)
 
         # Phase 11: evolve()
         self._notify_ui("on_phase_start", "evolve")
-        t0_evolve = time.time()
-        evolution_loop = next((l for l in self._improvement_loops if type(l).__name__ == "EvolutionLoop"), None)
-        if evolution_loop:
-            try:
-                # We trigger it manually here to ensure it runs as a phase
-                # it will still honor its internal TRIGGER_EVERY_N in on_cycle_complete
-                # but we call run() directly if we want it to run NOW as a phase.
-                # Actually, the PRD says it should run based on specific signals.
-                # For now, we'll let it use its internal trigger but wrap it in phase events.
-                evolution_loop.on_cycle_complete(entry)
-            except Exception as exc:
-                log_json("WARN", "evolution_phase_failed", details={"error": str(exc)})
-        self._notify_ui("on_phase_complete", "evolve", (time.time() - t0_evolve) * 1000)
+        # Evolution now happens via on_cycle_complete (TRIGGER_EVERY_N=20)
+        self._notify_ui("on_phase_complete", "evolve", 0)
 
         if self.propagation_engine is not None:
             try:
@@ -1009,12 +1013,46 @@ class LoopOrchestrator:
                 log_json("WARN", "propagation_engine_error", details={"error": str(exc)})
         return entry
 
+    def _parse_bead_id(self, goal: str) -> Optional[str]:
+        """Extract bead ID from goal string if present (format: 'bead:ID: Title')."""
+        if goal.startswith("bead:"):
+            parts = goal.split(":", 2)
+            if len(parts) >= 2:
+                return parts[1]
+        return None
+
+    def _claim_bead(self, bead_id: str):
+        """Mark a bead as in_progress using BeadsSkill."""
+        beads_skill = self._get_beads_skill()
+        if beads_skill is not None:
+            log_json("INFO", "orchestrator_claiming_bead", details={"bead_id": bead_id})
+            beads_skill.run({
+                "cmd": "update",
+                "id": bead_id,
+                "args": ["--status", "in_progress"]
+            })
+
+    def _close_bead(self, bead_id: str, reason: str):
+        """Close a bead using BeadsSkill."""
+        beads_skill = self._get_beads_skill()
+        if beads_skill is not None:
+            log_json("INFO", "orchestrator_closing_bead", details={"bead_id": bead_id})
+            beads_skill.run({
+                "cmd": "close",
+                "id": bead_id,
+                "args": ["--reason", reason]
+            })
+
     def run_cycle(self, goal: str, dry_run: bool = False) -> Dict:
         """Execute a single complete plan-act-verify cycle for *goal*."""
         cycle_id = f"cycle_{uuid.uuid4().hex[:12]}"
         started_at = time.time()
         phase_outputs = {"retry_count": 0}
         self._notify_ui("on_cycle_start", goal)
+
+        bead_id = self._parse_bead_id(goal)
+        if bead_id and not dry_run:
+            self._claim_bead(bead_id)
 
         goal_type = classify_goal(goal)
         self.current_goal = goal
@@ -1113,6 +1151,41 @@ class LoopOrchestrator:
         phase_outputs.pop("_failure_context", None)
         return self._record_cycle_outcome(cycle_id, goal, goal_type, phase_outputs, started_at)
 
+    def poll_external_goals(self) -> List[str]:
+        """Poll external systems (like BEADS) for new goals.
+        
+        Returns:
+            A list of goal description strings.
+        """
+        new_goals = []
+        
+        beads_skill = self._get_beads_skill()
+        if beads_skill is not None:
+            try:
+                log_json("INFO", "orchestrator_polling_beads")
+                result = beads_skill.run({"cmd": "ready"})
+                
+                # 'bd ready --json' returns a list of beads or an object with a list
+                beads = []
+                if isinstance(result, list):
+                    beads = result
+                elif isinstance(result, dict) and "beads" in result:
+                    beads = result["beads"]
+                elif isinstance(result, dict) and "ready" in result:
+                    beads = result["ready"]
+                
+                for bead in beads:
+                    if isinstance(bead, dict):
+                        title = bead.get("title") or bead.get("summary")
+                        bead_id = bead.get("id")
+                        if title and bead_id:
+                            goal = f"bead:{bead_id}: {title}"
+                            new_goals.append(goal)
+            except Exception as exc:
+                log_json("WARN", "beads_poll_failed", details={"error": str(exc)})
+                
+        return new_goals
+
     def run_loop(self, goal: str, max_cycles: int = 5, dry_run: bool = False) -> Dict:
         """Run :meth:`run_cycle` repeatedly until a stopping condition is met.
 
@@ -1163,6 +1236,13 @@ class LoopOrchestrator:
         if not stop_reason and history:
             history[-1]["stop_reason"] = "MAX_CYCLES"
             self._refresh_cycle_summary(history[-1])
+
+        # If goal was a bead and we passed, close it
+        if stop_reason == "PASS" and not dry_run:
+            bead_id = self._parse_bead_id(goal)
+            if bead_id:
+                self._close_bead(bead_id, reason="AURA successfully completed the goal.")
+
         return {
             "goal": goal,
             "stop_reason": stop_reason or "MAX_CYCLES",

@@ -45,11 +45,13 @@ def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
     from agents.skills.database_query_analyzer import DatabaseQueryAnalyzerSkill
     from agents.skills.skill_failure_analyzer import SkillFailureAnalyzerSkill
     from agents.skills.security_hardener import SecurityHardenerSkill
+    from agents.skills.beads_skill import BeadsSkill
     from agents.skills.structural_analyzer import StructuralAnalyzerSkill
     from agents.skills.evolution_skill import EvolutionSkill
     from agents.skills.skill_generator import SkillGeneratorSkill
 
     return {
+        "beads_skill": BeadsSkill(brain=brain, model=model),
         "dependency_analyzer": DependencyAnalyzerSkill(brain=brain, model=model),
         "architecture_validator": ArchitectureValidatorSkill(brain=brain, model=model),
         "complexity_scorer": ComplexityScorerSkill(brain=brain, model=model),

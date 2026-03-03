@@ -4,8 +4,10 @@ import os
 import tempfile
 import unittest
 import builtins
+import sys
 from contextlib import redirect_stdout, redirect_stderr
 from pathlib import Path
+from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock, patch, call
 
 from aura_cli.cli_options import parse_cli_args
@@ -566,6 +568,71 @@ class TestCLIMainDispatch(unittest.TestCase):
 
         mock_brain_cls.assert_called_once_with(db_path=str(Path(d) / "env_state" / "runtime_brain.db"))
         mock_memory_store_cls.assert_called_once_with(Path(d) / "env_state" / "runtime_store")
+
+    def test_attach_advanced_loops_only_adds_beads_sync_when_enabled(self):
+        def _module(name, **attrs):
+            mod = ModuleType(name)
+            for key, value in attrs.items():
+                setattr(mod, key, value)
+            return mod
+
+        class _AcceptAny:
+            def __init__(self, *args, **kwargs):
+                pass
+
+        fake_modules = {
+            "core.reflection_loop": _module("core.reflection_loop", DeepReflectionLoop=_AcceptAny),
+            "core.health_monitor": _module("core.health_monitor", HealthMonitor=_AcceptAny),
+            "core.weakness_remediator": _module("core.weakness_remediator", WeaknessRemediator=_AcceptAny),
+            "core.skill_weight_adapter": _module("core.skill_weight_adapter", SkillWeightAdapter=_AcceptAny),
+            "core.convergence_escape": _module("core.convergence_escape", ConvergenceEscapeLoop=_AcceptAny),
+            "core.memory_compaction": _module("core.memory_compaction", MemoryCompactionLoop=_AcceptAny),
+            "core.context_graph": _module("core.context_graph", ContextGraph=_AcceptAny),
+            "core.adaptive_pipeline": _module("core.adaptive_pipeline", AdaptivePipeline=_AcceptAny),
+            "core.propagation_engine": _module("core.propagation_engine", PropagationEngine=_AcceptAny),
+            "core.autonomous_discovery": _module("core.autonomous_discovery", AutonomousDiscovery=_AcceptAny),
+            "core.evolution_loop": _module("core.evolution_loop", EvolutionLoop=_AcceptAny),
+            "agents.mutator": _module("agents.mutator", MutatorAgent=_AcceptAny),
+        }
+        orchestrator = MagicMock()
+        orchestrator.skills = {"beads_skill": MagicMock()}
+        orchestrator.agents = {"act": MagicMock(), "critique": MagicMock(), "plan": MagicMock()}
+        memory_store = SimpleNamespace(root=Path("/tmp/aura-memory/store"))
+
+        with patch.dict(sys.modules, fake_modules), \
+             patch("aura_cli.cli_main.GitTools", return_value=MagicMock()), \
+             patch("aura_cli.cli_main.log_json"):
+            orchestrator.beads_enabled = False
+            cli_main._attach_advanced_loops(
+                orchestrator,
+                "full",
+                MagicMock(),
+                memory_store,
+                MagicMock(),
+                None,
+                Path("."),
+            )
+            self.assertEqual(len(orchestrator.attach_improvement_loops.call_args_list), 2)
+            self.assertEqual(len(orchestrator.attach_improvement_loops.call_args_list[0].args), 6)
+            self.assertEqual(len(orchestrator.attach_improvement_loops.call_args_list[1].args), 2)
+
+            orchestrator.attach_improvement_loops.reset_mock()
+            orchestrator.attach_caspa.reset_mock()
+
+            orchestrator.beads_enabled = True
+            cli_main._attach_advanced_loops(
+                orchestrator,
+                "full",
+                MagicMock(),
+                memory_store,
+                MagicMock(),
+                None,
+                Path("."),
+            )
+
+        self.assertEqual(len(orchestrator.attach_improvement_loops.call_args_list), 3)
+        self.assertEqual(len(orchestrator.attach_improvement_loops.call_args_list[1].args), 1)
+        self.assertEqual(type(orchestrator.attach_improvement_loops.call_args_list[1].args[0]).__name__, "BeadsSyncLoop")
 
 
     def test_main_returns_json_parse_error(self):

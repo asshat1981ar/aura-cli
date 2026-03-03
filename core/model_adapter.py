@@ -46,6 +46,8 @@ class ModelAdapter:
         self._embedding_disabled = False
         self._embedding_disabled_reason = None
         self._embedding_disabled_logged = False
+        self._local_profile_cooldowns: dict[str, float] = {}
+        self._local_profile_cooldown_reasons: dict[str, str] = {}
         
         # Configuration
         semantic_memory = config.get("semantic_memory", {}) or {}
@@ -109,6 +111,74 @@ class ModelAdapter:
             return profile_name
         return None
 
+    def _profile_timeout(self, profile: dict, *, key: str, default: float) -> float:
+        try:
+            value = float(profile.get(key, default))
+        except (TypeError, ValueError):
+            return default
+        return value if value > 0 else default
+
+    def _profile_retries(self, profile: dict) -> int:
+        try:
+            value = int(profile.get("retries", 3))
+        except (TypeError, ValueError):
+            return 3
+        return value if value > 0 else 3
+
+    def _profile_backoff(self, profile: dict) -> float:
+        try:
+            value = float(profile.get("backoff_factor", 0.5))
+        except (TypeError, ValueError):
+            return 0.5
+        return value if value >= 0 else 0.5
+
+    def _profile_cooldown_seconds(self, profile: dict) -> float:
+        return self._profile_timeout(profile, key="cooldown_seconds", default=30.0)
+
+    def _profile_fallbacks(self, profile: dict) -> list[str]:
+        fallback_profiles = profile.get("fallback_profiles")
+        if isinstance(fallback_profiles, list):
+            return [item for item in fallback_profiles if isinstance(item, str) and item.strip()]
+
+        fallback_profile = profile.get("fallback_profile")
+        if isinstance(fallback_profile, str) and fallback_profile.strip():
+            return [fallback_profile]
+        return []
+
+    def _local_profile_cooldown_remaining(self, profile_name: str) -> float:
+        until = self._local_profile_cooldowns.get(profile_name)
+        if until is None:
+            return 0.0
+        return max(until - time.time(), 0.0)
+
+    def _mark_local_profile_unhealthy(self, profile_name: str, profile: dict, exc: Exception) -> None:
+        cooldown_seconds = self._profile_cooldown_seconds(profile)
+        self._local_profile_cooldowns[profile_name] = time.time() + cooldown_seconds
+        self._local_profile_cooldown_reasons[profile_name] = str(exc)
+        log_json(
+            "WARN",
+            "local_profile_cooldown_started",
+            details={
+                "profile": profile_name,
+                "cooldown_seconds": cooldown_seconds,
+                "reason": str(exc),
+            },
+        )
+
+    def _clear_local_profile_unhealthy(self, profile_name: str) -> None:
+        self._local_profile_cooldowns.pop(profile_name, None)
+        self._local_profile_cooldown_reasons.pop(profile_name, None)
+
+    def _call_local_profile_provider(self, profile: dict, prompt: str) -> str:
+        provider = str(profile.get("provider") or "openai_compatible")
+        if provider == "openai_compatible":
+            return self._call_local_openai_compatible(profile, prompt)
+        if provider == "ollama":
+            return self._call_local_ollama(profile, prompt)
+        if provider == "command":
+            return self._call_local_command_profile(profile, prompt)
+        raise ValueError(f"Unsupported local model provider: {provider}")
+
     def _configure_embedding_backend(self) -> None:
         semantic_memory = config.get("semantic_memory", {}) or {}
         embedding_model = semantic_memory.get("embedding_model")
@@ -164,7 +234,16 @@ class ModelAdapter:
         if isinstance(profile.get("extra_body"), dict):
             payload.update(profile["extra_body"])
 
-        response = self._make_request_with_retries("POST", url, headers, payload)
+        response = self._make_request_with_retries(
+            "POST",
+            url,
+            headers,
+            payload,
+            retries=self._profile_retries(profile),
+            backoff_factor=self._profile_backoff(profile),
+            timeout=self._profile_timeout(profile, key="request_timeout_seconds", default=float(self.LLM_TIMEOUT)),
+            retry_label=f"local_openai:{model}",
+        )
         data = response.json()
         return data["choices"][0]["message"]["content"]
 
@@ -190,7 +269,16 @@ class ModelAdapter:
         if isinstance(profile.get("system"), str) and profile["system"].strip():
             payload["system"] = profile["system"]
 
-        response = self._make_request_with_retries("POST", url, {"Content-Type": "application/json"}, payload)
+        response = self._make_request_with_retries(
+            "POST",
+            url,
+            {"Content-Type": "application/json"},
+            payload,
+            retries=self._profile_retries(profile),
+            backoff_factor=self._profile_backoff(profile),
+            timeout=self._profile_timeout(profile, key="request_timeout_seconds", default=float(self.LLM_TIMEOUT)),
+            retry_label=f"local_ollama:{model}",
+        )
         data = response.json()
         return data.get("response", "")
 
@@ -218,7 +306,7 @@ class ModelAdapter:
             capture_output=True,
             text=True,
             check=True,
-            timeout=120,
+            timeout=self._profile_timeout(profile, key="subprocess_timeout_seconds", default=120.0),
         )
         return result.stdout.strip()
 
@@ -240,7 +328,16 @@ class ModelAdapter:
             "model": model,
             "input": texts,
         }
-        response = self._make_request_with_retries("POST", url, headers, payload)
+        response = self._make_request_with_retries(
+            "POST",
+            url,
+            headers,
+            payload,
+            retries=self._profile_retries(profile),
+            backoff_factor=self._profile_backoff(profile),
+            timeout=self._profile_timeout(profile, key="request_timeout_seconds", default=float(self.LLM_TIMEOUT)),
+            retry_label=f"local_openai_embeddings:{model}",
+        )
         data = response.json()
         sorted_data = sorted(data["data"], key=lambda x: x["index"])
         vectors = [np.array(item["embedding"], dtype=np.float32) for item in sorted_data]
@@ -273,7 +370,7 @@ class ModelAdapter:
             capture_output=True,
             text=True,
             check=True,
-            timeout=120,
+            timeout=self._profile_timeout(profile, key="subprocess_timeout_seconds", default=120.0),
         )
         payload = _aura_safe_loads(result.stdout, "local_embedding_command")
         if isinstance(payload, dict) and "data" in payload:
@@ -294,7 +391,16 @@ class ModelAdapter:
         headers = {"Content-Type": "application/json"}
         payload = {"model": model, "input": texts}
         try:
-            response = self._make_request_with_retries("POST", f"{base_url}/api/embed", headers, payload)
+            response = self._make_request_with_retries(
+                "POST",
+                f"{base_url}/api/embed",
+                headers,
+                payload,
+                retries=self._profile_retries(profile),
+                backoff_factor=self._profile_backoff(profile),
+                timeout=self._profile_timeout(profile, key="request_timeout_seconds", default=float(self.LLM_TIMEOUT)),
+                retry_label=f"local_ollama_embeddings:{model}",
+            )
             data = response.json()
             embeddings = data.get("embeddings")
             if isinstance(embeddings, list):
@@ -312,6 +418,10 @@ class ModelAdapter:
                 f"{base_url}/api/embeddings",
                 headers,
                 {"model": model, "prompt": text},
+                retries=self._profile_retries(profile),
+                backoff_factor=self._profile_backoff(profile),
+                timeout=self._profile_timeout(profile, key="request_timeout_seconds", default=float(self.LLM_TIMEOUT)),
+                retry_label=f"local_ollama_embeddings:{model}",
             )
             data = response.json()
             vectors.append(np.array(data["embedding"], dtype=np.float32))
@@ -336,19 +446,73 @@ class ModelAdapter:
         raise ValueError(f"Unsupported local embedding provider: {provider}")
 
     def call_local_profile(self, profile_name: str, prompt: str) -> str:
+        return self._call_local_profile_with_fallbacks(profile_name, prompt, attempted_profiles=set())
+
+    def _call_local_profile_with_fallbacks(
+        self,
+        profile_name: str,
+        prompt: str,
+        *,
+        attempted_profiles: set[str],
+    ) -> str:
         profiles = self._get_local_profiles()
         profile = profiles.get(profile_name)
         if not isinstance(profile, dict):
             raise ValueError(f"Unknown local model profile: {profile_name}")
 
-        provider = str(profile.get("provider") or "openai_compatible")
-        if provider == "openai_compatible":
-            return self._call_local_openai_compatible(profile, prompt)
-        if provider == "ollama":
-            return self._call_local_ollama(profile, prompt)
-        if provider == "command":
-            return self._call_local_command_profile(profile, prompt)
-        raise ValueError(f"Unsupported local model provider: {provider}")
+        if profile_name in attempted_profiles:
+            raise RuntimeError(f"Local profile fallback loop detected for {profile_name}.")
+        attempted_profiles.add(profile_name)
+
+        remaining = self._local_profile_cooldown_remaining(profile_name)
+        if remaining > 0:
+            for fallback_profile in self._profile_fallbacks(profile):
+                if fallback_profile in attempted_profiles:
+                    continue
+                log_json(
+                    "INFO",
+                    "local_profile_fallback_due_to_cooldown",
+                    details={
+                        "profile": profile_name,
+                        "fallback_profile": fallback_profile,
+                        "remaining_seconds": round(remaining, 2),
+                    },
+                )
+                return self._call_local_profile_with_fallbacks(
+                    fallback_profile,
+                    prompt,
+                    attempted_profiles=attempted_profiles,
+                )
+            raise RuntimeError(
+                f"Local profile '{profile_name}' is cooling down for another {remaining:.1f}s: "
+                f"{self._local_profile_cooldown_reasons.get(profile_name, 'unknown error')}"
+            )
+
+        try:
+            response = self._call_local_profile_provider(profile, prompt)
+        except Exception as exc:
+            self._mark_local_profile_unhealthy(profile_name, profile, exc)
+            for fallback_profile in self._profile_fallbacks(profile):
+                if fallback_profile in attempted_profiles:
+                    continue
+                log_json(
+                    "WARN",
+                    "local_profile_fallback_started",
+                    details={
+                        "profile": profile_name,
+                        "fallback_profile": fallback_profile,
+                        "error": str(exc),
+                    },
+                )
+                return self._call_local_profile_with_fallbacks(
+                    fallback_profile,
+                    prompt,
+                    attempted_profiles=attempted_profiles,
+                )
+            raise
+
+        self._clear_local_profile_unhealthy(profile_name)
+        return response
 
     # ... [Existing cache methods kept as is] ...
     def enable_cache(self, db_conn, ttl_seconds: int = 3600, momento=None):
@@ -520,17 +684,38 @@ class ModelAdapter:
         except Exception as e:
             return f"Tool execution failed unexpectedly for {tool_name}: {str(e)}"
 
-    def _make_request_with_retries(self, method, url, headers, json_payload, retries=3, backoff_factor=0.5):
+    def _make_request_with_retries(
+        self,
+        method,
+        url,
+        headers,
+        json_payload,
+        retries=3,
+        backoff_factor=0.5,
+        timeout=60,
+        retry_label: str | None = None,
+    ):
         # [Retry logic unchanged]
         for attempt in range(retries):
             try:
-                response = requests.request(method, url, headers=headers, json=json_payload, timeout=60) 
+                response = requests.request(method, url, headers=headers, json=json_payload, timeout=timeout)
                 response.raise_for_status()
                 return response
             except requests.exceptions.RequestException as e:
                 if attempt < retries - 1:
                     sleep_time = backoff_factor * (2 ** attempt)
-                    log_json("WARN", "request_failed_retrying", details={"attempt": attempt + 1, "retries": retries, "error": str(e), "sleep_time": f"{sleep_time:.2f}"})
+                    log_json(
+                        "WARN",
+                        "request_failed_retrying",
+                        details={
+                            "attempt": attempt + 1,
+                            "retries": retries,
+                            "error": str(e),
+                            "sleep_time": f"{sleep_time:.2f}",
+                            "timeout_s": timeout,
+                            "label": retry_label,
+                        },
+                    )
                     time.sleep(sleep_time)
                 else:
                     raise 

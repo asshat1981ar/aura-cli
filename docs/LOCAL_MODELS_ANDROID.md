@@ -222,6 +222,51 @@ This cleanly shores up AURA's current software-development gaps:
 - planner model handles diagnosis, planning, and critique better
 - AURA stops overusing a single small model for every phase
 
+### Automation Hardening Knobs
+
+For autonomous runs on a phone, local endpoint failure handling matters almost
+as much as model quality. AURA now supports a few per-profile knobs that make
+the loop recover faster when one local server stalls or dies:
+
+- `request_timeout_seconds`
+  Caps the HTTP wait for `openai_compatible` and `ollama` local profiles.
+- `subprocess_timeout_seconds`
+  Caps command-profile execution time.
+- `cooldown_seconds`
+  Temporarily marks a failed local profile unhealthy so the loop does not keep
+  paying the full timeout on every subsequent call.
+- `fallback_profile` or `fallback_profiles`
+  Lets a role fall through to another local profile before giving up and using
+  the normal non-local fallback path.
+
+Example:
+
+```json
+{
+  "local_model_profiles": {
+    "android_coder": {
+      "provider": "openai_compatible",
+      "base_url": "http://127.0.0.1:8080/v1",
+      "model": "qwen2.5-coder-3b-instruct-q4",
+      "request_timeout_seconds": 45,
+      "cooldown_seconds": 20
+    },
+    "android_planner": {
+      "provider": "openai_compatible",
+      "base_url": "http://127.0.0.1:8081/v1",
+      "model": "phi-4-mini-instruct-q4",
+      "request_timeout_seconds": 45,
+      "cooldown_seconds": 20,
+      "fallback_profiles": ["android_coder"]
+    }
+  }
+}
+```
+
+This is especially useful when the planner endpoint is the first one to OOM or
+stall under heavy autonomous runs: the route will cool down and fail over
+instead of hanging the whole loop repeatedly.
+
 
 ## Runner Recommendation
 

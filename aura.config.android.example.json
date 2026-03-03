@@ -6,6 +6,8 @@
       "provider": "openai_compatible",
       "base_url": "http://127.0.0.1:8080/v1",
       "model": "qwen2.5-coder-3b-instruct-q4",
+      "request_timeout_seconds": 45,
+      "cooldown_seconds": 20,
       "temperature": 0.1,
       "max_tokens": 2048
     },
@@ -13,6 +15,9 @@
       "provider": "openai_compatible",
       "base_url": "http://127.0.0.1:8081/v1",
       "model": "phi-4-mini-instruct-q4",
+      "request_timeout_seconds": 45,
+      "cooldown_seconds": 20,
+      "fallback_profiles": ["android_coder"],
       "temperature": 0.2,
       "max_tokens": 1536
     },

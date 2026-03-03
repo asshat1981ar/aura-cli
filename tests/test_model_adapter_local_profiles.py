@@ -89,3 +89,94 @@ def test_respond_for_role_falls_back_to_default_path_when_profile_missing():
 
     assert result == '["fallback"]'
     mock_respond.assert_called_once_with("plan it")
+
+
+def test_local_profile_failure_uses_configured_fallback_profile():
+    def _config_get(key, default=None):
+        if key == "semantic_memory":
+            return {"embedding_model": "text-embedding-3-small"}
+        if key == "local_model_profiles":
+            return {
+                "android_coder": {
+                    "provider": "openai_compatible",
+                    "base_url": "http://127.0.0.1:8080/v1",
+                    "model": "qwen2.5-coder-3b",
+                },
+                "android_planner": {
+                    "provider": "openai_compatible",
+                    "base_url": "http://127.0.0.1:8081/v1",
+                    "model": "phi4-mini",
+                    "fallback_profiles": ["android_coder"],
+                    "cooldown_seconds": 15,
+                },
+            }
+        if key == "local_model_routing":
+            return {
+                "planning": "android_planner",
+                "fast": "android_coder",
+            }
+        return default
+
+    seen_models = []
+
+    def _call(profile, prompt):
+        seen_models.append(profile.get("model"))
+        if profile.get("model") == "phi4-mini":
+            raise RuntimeError("planner endpoint down")
+        return '["fallback step"]'
+
+    with patch("core.model_adapter.config.get", side_effect=_config_get), \
+         patch("core.model_adapter.log_json"), \
+         patch.object(ModelAdapter, "_call_local_openai_compatible", side_effect=_call):
+        adapter = ModelAdapter()
+        result = adapter.respond_for_role("planning", "plan the task")
+
+    assert result == '["fallback step"]'
+    assert seen_models == ["phi4-mini", "qwen2.5-coder-3b"]
+    assert "android_planner" in adapter._local_profile_cooldowns
+
+
+def test_local_profile_cooldown_skips_failed_profile_on_next_call():
+    def _config_get(key, default=None):
+        if key == "semantic_memory":
+            return {"embedding_model": "text-embedding-3-small"}
+        if key == "local_model_profiles":
+            return {
+                "android_coder": {
+                    "provider": "openai_compatible",
+                    "base_url": "http://127.0.0.1:8080/v1",
+                    "model": "qwen2.5-coder-3b",
+                },
+                "android_planner": {
+                    "provider": "openai_compatible",
+                    "base_url": "http://127.0.0.1:8081/v1",
+                    "model": "phi4-mini",
+                    "fallback_profiles": ["android_coder"],
+                    "cooldown_seconds": 30,
+                },
+            }
+        if key == "local_model_routing":
+            return {
+                "planning": "android_planner",
+                "fast": "android_coder",
+            }
+        return default
+
+    seen_models = []
+
+    def _call(profile, prompt):
+        seen_models.append(profile.get("model"))
+        if profile.get("model") == "phi4-mini":
+            raise RuntimeError("planner endpoint down")
+        return '["fallback step"]'
+
+    with patch("core.model_adapter.config.get", side_effect=_config_get), \
+         patch("core.model_adapter.log_json"), \
+         patch.object(ModelAdapter, "_call_local_openai_compatible", side_effect=_call):
+        adapter = ModelAdapter()
+        first = adapter.respond_for_role("planning", "plan the task")
+        second = adapter.respond_for_role("planning", "plan the task again")
+
+    assert first == '["fallback step"]'
+    assert second == '["fallback step"]'
+    assert seen_models == ["phi4-mini", "qwen2.5-coder-3b", "qwen2.5-coder-3b"]

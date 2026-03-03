@@ -1,3 +1,4 @@
+import inspect
 from typing import List
 import json
 from core.file_tools import _aura_safe_loads
@@ -61,6 +62,16 @@ class PlannerAgent:
         steps = self.plan(goal, mem, sim, weak, backfill_context=backfill_ctx)
         return {"steps": steps}
 
+    def _respond(self, prompt: str) -> str:
+        try:
+            inspect.getattr_static(self.model, "respond_for_role")
+        except AttributeError:
+            return self.model.respond(prompt)
+        responder = getattr(self.model, "respond_for_role", None)
+        if callable(responder):
+            return responder("planning", prompt)
+        return self.model.respond(prompt)
+
     def plan(self, goal: str, memory_snapshot: str, similar_past_problems: str, known_weaknesses: str, backfill_context: list = None) -> List[str]:
         """
         Generates a detailed plan based on the current goal, system memory,
@@ -81,7 +92,7 @@ class PlannerAgent:
             weakness=known_weaknesses,
             backfill_instr=backfill_instr
         )
-        response = self.model.respond(prompt)
+        response = self._respond(prompt)
         self.brain.remember(f"Planned for goal: {goal} with raw response: {response[:100]}...")
         try:
             plan = _aura_safe_loads(response, "planner_plan_response")
@@ -123,7 +134,7 @@ Provide the revised plan as a JSON array of strings, where each string is a step
 Example: ["Revised Step 1: ...", "Revised Step 2: ..."]
 Ensure your response contains ONLY the JSON array, with no conversational text or other explanations.
 """
-        response = self.model.respond(prompt)
+        response = self._respond(prompt)
         self.brain.remember(f"Revised plan based on feedback: {feedback}. Raw response: {response[:100]}...")
         try:
             plan = _aura_safe_loads(response, "planner_update_plan_response")

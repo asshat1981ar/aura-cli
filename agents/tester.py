@@ -1,3 +1,4 @@
+import inspect
 from agents.sandbox import SandboxAgent
 from core.logging_utils import log_json
 
@@ -19,6 +20,16 @@ class TesterAgent:
         self.brain = brain
         self.model = model
         self.sandbox = sandbox
+
+    def _respond(self, prompt: str) -> str:
+        try:
+            inspect.getattr_static(self.model, "respond_for_role")
+        except AttributeError:
+            return self.model.respond(prompt)
+        responder = getattr(self.model, "respond_for_role", None)
+        if callable(responder):
+            return responder("quality", prompt)
+        return self.model.respond(prompt)
 
     def generate_tests(self, code: str, context: str = "") -> str:
         """
@@ -47,7 +58,7 @@ class TesterAgent:
 
         Generate Python unit tests for the provided code. Ensure all functions and edge cases are covered. Use the 'unittest' or 'pytest' framework.
         """
-        response = self.model.respond(prompt)
+        response = self._respond(prompt)
         self.brain.remember(f"Generated tests for code: {code[:100]}...")
         self.brain.remember(response)
         return response
@@ -93,4 +104,3 @@ class TesterAgent:
                 "metadata": sandbox_result.metadata
             }
         }
-

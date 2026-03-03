@@ -1,3 +1,4 @@
+import inspect
 import re
 from core.logging_utils import log_json
 
@@ -17,6 +18,16 @@ class CoderAgent:
         self.brain = brain
         self.model = model
         self.tester = tester
+
+    def _respond(self, prompt: str) -> str:
+        try:
+            inspect.getattr_static(self.model, "respond_for_role")
+        except AttributeError:
+            return self.model.respond(prompt)
+        responder = getattr(self.model, "respond_for_role", None)
+        if callable(responder):
+            return responder("code_generation", prompt)
+        return self.model.respond(prompt)
 
     def implement(self, task):
         """
@@ -61,7 +72,7 @@ IMPORTANT: Respond with a single JSON object on one line (no markdown), like:
 Choose a path under agents/, core/, or memory/ that reflects the task.
 The "code" value must be a valid Python string (escape newlines as \\n).
 """
-            raw_response = self.model.respond(prompt)
+            raw_response = self._respond(prompt)
 
             # Try structured JSON first (preferred)
             parsed_target = None

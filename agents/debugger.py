@@ -1,3 +1,4 @@
+import inspect
 import json
 from core.file_tools import _aura_safe_loads
 from core.logging_utils import log_json
@@ -11,6 +12,16 @@ class DebuggerAgent:
     def __init__(self, brain, model):
         self.brain = brain
         self.model = model
+
+    def _respond(self, prompt: str) -> str:
+        try:
+            inspect.getattr_static(self.model, "respond_for_role")
+        except AttributeError:
+            return self.model.respond(prompt)
+        responder = getattr(self.model, "respond_for_role", None)
+        if callable(responder):
+            return responder("analysis", prompt)
+        return self.model.respond(prompt)
 
     def diagnose(self, error_message: str, current_goal: str = "", context: str = "", improve_plan: str = "", implement_details: dict = None) -> dict:
         """
@@ -58,7 +69,7 @@ Provide your response as a JSON object with the following keys:
 - "severity": "CRITICAL", "HIGH", "MEDIUM", "LOW"
 """
         try:
-            raw_llm_response = self.model.respond(diagnosis_prompt)
+            raw_llm_response = self._respond(diagnosis_prompt)
             parsed_diagnosis = _aura_safe_loads(raw_llm_response, "debugger_diagnosis")
             # Ensure the parsed response has expected keys and types if necessary
             if isinstance(parsed_diagnosis, dict) and all(k in parsed_diagnosis for k in ["summary", "diagnosis", "fix_strategy", "severity"]):

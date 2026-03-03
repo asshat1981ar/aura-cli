@@ -19,3 +19,4 @@ networkx
 pytest>=7.0
 httpx>=0.24
 anyio>=4.0
+python-dotenv

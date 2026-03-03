@@ -1,18 +1,19 @@
 import concurrent.futures
 import hashlib
 import os
+import shlex
 import subprocess
 import requests
 import json
 import time
 from pathlib import Path
-from typing import List
+from typing import Any, List
 import numpy as np
 
 from core.logging_utils import log_json # Import log_json
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
 from core.config_manager import config
-from core.runtime_auth import resolve_openai_api_key, resolve_openrouter_api_key
+from core.runtime_auth import resolve_local_model_profiles, resolve_openai_api_key, resolve_openrouter_api_key
 
 # Removed dangerous global IPv4-only monkeypatch for socket.getaddrinfo.
 # This monkeypatch forced all network connections to use IPv4, potentially
@@ -83,6 +84,122 @@ class ModelAdapter:
                 elif not os.access(path, os.X_OK):
                     log_json("WARN", f"{name}_cli_not_executable", details={"path": path})
                     setattr(self, f"{name}_cli_path", None)
+
+    def _get_local_profiles(self) -> dict[str, dict]:
+        return resolve_local_model_profiles()
+
+    def _get_local_routing(self) -> dict[str, str | None]:
+        raw = config.get("local_model_routing", {}) or {}
+        if not isinstance(raw, dict):
+            return {}
+        return {
+            name: value
+            for name, value in raw.items()
+            if isinstance(name, str) and (value is None or isinstance(value, str))
+        }
+
+    def _resolve_local_profile_name(self, route_key: str) -> str | None:
+        profile_name = self._get_local_routing().get(route_key)
+        if isinstance(profile_name, str) and profile_name in self._get_local_profiles():
+            return profile_name
+        return None
+
+    def _call_local_openai_compatible(self, profile: dict, prompt: str) -> str:
+        base_url = str(profile.get("base_url") or "http://127.0.0.1:8080/v1").rstrip("/")
+        if not base_url.endswith("/v1"):
+            base_url = f"{base_url}/v1"
+        url = f"{base_url}/chat/completions"
+        model = profile.get("model")
+        if not isinstance(model, str) or not model.strip():
+            raise ValueError("Local openai_compatible profile requires a non-empty `model`.")
+
+        headers = {"Content-Type": "application/json"}
+        api_key = profile.get("api_key")
+        if isinstance(api_key, str) and api_key.strip():
+            headers["Authorization"] = f"Bearer {api_key.strip()}"
+
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": float(profile.get("temperature", 0.2)),
+        }
+        if profile.get("max_tokens") is not None:
+            payload["max_tokens"] = int(profile["max_tokens"])
+        if isinstance(profile.get("extra_body"), dict):
+            payload.update(profile["extra_body"])
+
+        response = self._make_request_with_retries("POST", url, headers, payload)
+        data = response.json()
+        return data["choices"][0]["message"]["content"]
+
+    def _call_local_ollama(self, profile: dict, prompt: str) -> str:
+        base_url = str(profile.get("base_url") or "http://127.0.0.1:11434").rstrip("/")
+        url = f"{base_url}/api/generate"
+        model = profile.get("model")
+        if not isinstance(model, str) or not model.strip():
+            raise ValueError("Local ollama profile requires a non-empty `model`.")
+
+        payload: dict[str, Any] = {
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+        }
+        options: dict[str, Any] = {}
+        if profile.get("temperature") is not None:
+            options["temperature"] = float(profile["temperature"])
+        if profile.get("max_tokens") is not None:
+            options["num_predict"] = int(profile["max_tokens"])
+        if options:
+            payload["options"] = options
+        if isinstance(profile.get("system"), str) and profile["system"].strip():
+            payload["system"] = profile["system"]
+
+        response = self._make_request_with_retries("POST", url, {"Content-Type": "application/json"}, payload)
+        data = response.json()
+        return data.get("response", "")
+
+    def _call_local_command_profile(self, profile: dict, prompt: str) -> str:
+        command = profile.get("command")
+        if isinstance(command, str):
+            command_parts = shlex.split(command)
+        elif isinstance(command, list) and all(isinstance(part, str) for part in command):
+            command_parts = list(command)
+        else:
+            raise ValueError("Local command profile requires `command` as a string or string list.")
+
+        use_stdin = True
+        rendered_parts: list[str] = []
+        for part in command_parts:
+            if "{prompt}" in part:
+                use_stdin = False
+                rendered_parts.append(part.replace("{prompt}", prompt))
+            else:
+                rendered_parts.append(part)
+
+        result = subprocess.run(
+            rendered_parts,
+            input=prompt if use_stdin else None,
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=120,
+        )
+        return result.stdout.strip()
+
+    def call_local_profile(self, profile_name: str, prompt: str) -> str:
+        profiles = self._get_local_profiles()
+        profile = profiles.get(profile_name)
+        if not isinstance(profile, dict):
+            raise ValueError(f"Unknown local model profile: {profile_name}")
+
+        provider = str(profile.get("provider") or "openai_compatible")
+        if provider == "openai_compatible":
+            return self._call_local_openai_compatible(profile, prompt)
+        if provider == "ollama":
+            return self._call_local_ollama(profile, prompt)
+        if provider == "command":
+            return self._call_local_command_profile(profile, prompt)
+        raise ValueError(f"Unsupported local model provider: {provider}")
 
     # ... [Existing cache methods kept as is] ...
     def enable_cache(self, db_conn, ttl_seconds: int = 3600, momento=None):
@@ -368,6 +485,13 @@ class ModelAdapter:
         return data["choices"][0]["message"]["content"]
 
     def call_local(self, prompt: str) -> str:
+        default_profile = self._resolve_local_profile_name("fast")
+        if default_profile:
+            try:
+                return self.call_local_profile(default_profile, prompt)
+            except Exception as e:
+                log_json("WARN", "local_profile_call_failed", details={"profile": default_profile, "error": str(e), "fallback": "legacy_local_model_command"})
+
         local_model_command = config.get("local_model_command")
         if local_model_command:
             try:
@@ -389,6 +513,25 @@ class ModelAdapter:
                 return f"Error: An unexpected error occurred while calling local model: {e}"
         else:
             return "Local model not configured. Set 'local_model_command' in aura.config.json or AURA_LOCAL_MODEL_COMMAND env var."
+
+    def respond_for_role(self, route_key: str, prompt: str) -> str:
+        profile_name = self._resolve_local_profile_name(route_key)
+        if not profile_name:
+            return self.respond(prompt)
+
+        cache_key = f"[local-role:{route_key}|profile:{profile_name}] {prompt}"
+        cached = self._get_cached_response(cache_key)
+        if cached:
+            return cached
+
+        try:
+            model_response = self._call_with_timeout(self.call_local_profile, profile_name, prompt)
+        except Exception as e:
+            log_json("WARN", "local_role_call_failed", details={"route_key": route_key, "profile": profile_name, "error": str(e), "fallback": "default_model_path"})
+            return self.respond(prompt)
+
+        self._save_to_cache(cache_key, model_response)
+        return model_response
 
     # Default timeout (seconds) for a single LLM call
     @property

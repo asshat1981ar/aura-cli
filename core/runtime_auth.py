@@ -54,6 +54,13 @@ def resolve_local_model_command() -> str | None:
     return _clean_secret(config.get("local_model_command"))
 
 
+def resolve_local_model_profiles() -> dict[str, dict]:
+    raw = config.get("local_model_profiles", {})
+    if not isinstance(raw, dict):
+        return {}
+    return {name: profile for name, profile in raw.items() if isinstance(name, str) and isinstance(profile, dict)}
+
+
 def resolve_gemini_cli_path() -> str | None:
     raw_path = _clean_secret(config.get("gemini_cli_path"))
     if not raw_path:
@@ -73,7 +80,7 @@ def runtime_provider_status(
     openrouter_ready = bool(
         resolve_openrouter_api_key(config_api_key=config_api_key, cli_arg=openrouter_api_key_arg)
     )
-    local_ready = bool(resolve_local_model_command())
+    local_ready = bool(resolve_local_model_command() or resolve_local_model_profiles())
     gemini_ready = bool(resolve_gemini_cli_path())
     chat_ready = openai_ready or openrouter_ready or local_ready or gemini_ready
     return {
@@ -95,7 +102,7 @@ def runtime_provider_summary(status: dict[str, bool]) -> str:
     if status.get("gemini_cli"):
         chat_sources.append("GEMINI_CLI_PATH")
     if status.get("local_model"):
-        chat_sources.append("AURA_LOCAL_MODEL_COMMAND")
+        chat_sources.append("AURA_LOCAL_MODEL_COMMAND/local_model_profiles")
 
     chat_detail = ", ".join(chat_sources) if chat_sources else "none"
     embedding_detail = "OPENAI_API_KEY" if status.get("embedding_ready") else "disabled"
@@ -106,6 +113,7 @@ __all__ = [
     "resolve_config_api_key",
     "resolve_gemini_cli_path",
     "resolve_local_model_command",
+    "resolve_local_model_profiles",
     "resolve_openai_api_key",
     "resolve_openrouter_api_key",
     "runtime_provider_status",

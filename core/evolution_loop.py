@@ -11,7 +11,7 @@ class EvolutionLoop:
     driving continuous self-improvement of the AURA system.
     """
 
-    def __init__(self, planner, coder, critic, brain, vector_store, git_tools, mutator):
+    def __init__(self, planner, coder, critic, brain, vector_store, git_tools, mutator, improvement_service=None):
         """
         Initializes the EvolutionLoop with instances of various agents and core tools.
 
@@ -23,6 +23,7 @@ class EvolutionLoop:
             vector_store: An instance of the VectorStore for semantic search.
             git_tools: An instance of GitTools for repository operations.
             mutator: An instance of the MutatorAgent for applying changes.
+            improvement_service: Optional service for evaluating meta-improvements.
         """
         self.planner = planner
         self.coder = coder
@@ -31,6 +32,7 @@ class EvolutionLoop:
         self.vector = vector_store
         self.git = git_tools
         self.mutator = mutator
+        self.improvement_service = improvement_service
         self._cycle_count = 0
         self.TRIGGER_EVERY_N = 20
 
@@ -40,6 +42,16 @@ class EvolutionLoop:
         
         goal = entry.get("goal", "evolve and improve the AURA system")
         is_hotspot = "structural_hotspot" in str(entry.get("phase_outputs", {}).get("skill_context", {})) or "refactor hotspot" in goal.lower()
+        
+        # If we have an improvement service, evaluate recent history
+        if self.improvement_service and self.brain:
+            # Retrieve recent summaries for analysis
+            history = self.brain.recall_with_budget(max_tokens=2000)
+            # Flatten or parse history if needed — for now pass raw list
+            proposals = self.improvement_service.evaluate_candidates([{"goal": goal, "summary": str(h)} for h in history])
+            for p in proposals:
+                self.improvement_service.log_proposal(p)
+                # In the future, we could auto-enqueue these proposals as goals
         
         if self._cycle_count % self.TRIGGER_EVERY_N == 0 or is_hotspot:
             if is_hotspot:

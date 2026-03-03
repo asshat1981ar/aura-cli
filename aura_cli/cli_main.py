@@ -312,12 +312,18 @@ def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal
         _discovery = AutonomousDiscovery(goal_queue, memory_store, project_root=str(project_root))
         
         # Evolution Loop
-        _coder = orchestrator.agents.get("act")
-        _critic = orchestrator.agents.get("critique")
-        _planner = orchestrator.agents.get("plan")
+        from core.recursive_improvement import RecursiveImprovementService
+        _ri_service = RecursiveImprovementService()
+        # EvolutionLoop expects the raw agents, not the orchestrator's adapters
+        _coder_adapter = orchestrator.agents.get("act")
+        _critic_adapter = orchestrator.agents.get("critique")
+        _planner_adapter = orchestrator.agents.get("plan")
+        _coder = getattr(_coder_adapter, "agent", _coder_adapter)
+        _critic = getattr(_critic_adapter, "agent", _critic_adapter)
+        _planner = getattr(_planner_adapter, "agent", _planner_adapter)
         _git = GitTools(repo_path=str(project_root))
         _mutator = MutatorAgent(project_root)
-        _evo = EvolutionLoop(_planner, _coder, _critic, brain, getattr(brain, "vector_store", None), _git, _mutator)
+        _evo = EvolutionLoop(_planner, _coder, _critic, brain, getattr(brain, "vector_store", None), _git, _mutator, improvement_service=_ri_service)
 
         orchestrator.attach_caspa(
             adaptive_pipeline=_adaptive_pipeline,
@@ -866,12 +872,19 @@ def _handle_evolve_dispatch(ctx: DispatchContext) -> int:
     _brain = runtime.get("brain") or Brain()
     _model = runtime["model_adapter"]
     _planner = runtime["planner"]
-    _coder = default_agents(_brain, _model).get("act")
-    _critic = default_agents(_brain, _model).get("critique")
+    _agents = default_agents(_brain, _model)
+    _coder_adapter = _agents.get("act")
+    _critic_adapter = _agents.get("critique")
+    _planner_adapter = _agents.get("plan")
+    _coder = getattr(_coder_adapter, "agent", _coder_adapter)
+    _critic = getattr(_critic_adapter, "agent", _critic_adapter)
+    _planner = getattr(_planner_adapter, "agent", _planner_adapter)
     _git = GitTools(repo_path=str(ctx.project_root))
     _mutator = MutatorAgent(ctx.project_root)
     _vec = VectorStore(_model, _brain)
-    evo = EvolutionLoop(_planner, _coder, _critic, _brain, _vec, _git, _mutator)
+    from core.recursive_improvement import RecursiveImprovementService
+    _ri_service = RecursiveImprovementService()
+    evo = EvolutionLoop(_planner, _coder, _critic, _brain, _vec, _git, _mutator, improvement_service=_ri_service)
     goal = args.goal or args.workflow_goal or "evolve and improve the AURA system"
     result = evo.run(goal)
     _print_json_payload(result, parsed=ctx.parsed, indent=2, default=str)

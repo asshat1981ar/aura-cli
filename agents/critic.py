@@ -1,3 +1,4 @@
+import inspect
 from typing import List
 import json
 from core.file_tools import _aura_safe_loads
@@ -19,6 +20,16 @@ class CriticAgent:
         """
         self.brain = brain
         self.model = model
+
+    def _respond(self, route_key: str, prompt: str) -> str:
+        try:
+            inspect.getattr_static(self.model, "respond_for_role")
+        except AttributeError:
+            return self.model.respond(prompt)
+        responder = getattr(self.model, "respond_for_role", None)
+        if callable(responder):
+            return responder(route_key, prompt)
+        return self.model.respond(prompt)
 
     def critique_plan(self, task: str, plan: List[str]) -> str:
         """
@@ -47,7 +58,7 @@ Previous memory:
 Evaluate the plan for completeness, clarity, feasibility, and alignment with the high-level task.
 Suggest improvements or identify missing steps.
 """
-        response = self.model.respond(prompt)
+        response = self._respond("critique", prompt)
         self.brain.remember(f"Critiqued plan for task: {task}. Feedback: {response}")
         return response
 
@@ -84,7 +95,7 @@ Previous memory:
 Evaluate the code for correctness, efficiency, readability, maintainability, and adherence to requirements.
 Suggest improvements or identify potential issues.
 """
-        response = self.model.respond(prompt)
+        response = self._respond("critique", prompt)
         self.brain.remember(f"Critiqued code for task: {task}. Feedback: {response}")
         return response
 
@@ -120,7 +131,7 @@ Suggest improvements or identify potential issues.
         }}
         Ensure your response contains ONLY the JSON object, with no conversational text or other explanations.
         """
-        validation_response = self.model.respond(prompt)
+        validation_response = self._respond("analysis", prompt)
         self.brain.remember(f"Validated mutation: {mutation_proposal}. Raw response: {validation_response[:100]}...")
         
         try:

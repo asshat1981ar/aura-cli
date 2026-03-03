@@ -2,6 +2,12 @@
 # Keep this wrapper lazy so lightweight/help paths do not trigger full runtime imports.
 import json
 import sys
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables before any other imports
+load_dotenv()
 
 from aura_cli.cli_options import CLIParseError, attach_cli_warnings, parse_cli_args, render_help
 from aura_cli.cli_options import cli_parse_error_payload, unknown_command_help_topic_payload

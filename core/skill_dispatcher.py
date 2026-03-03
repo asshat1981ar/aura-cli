@@ -186,7 +186,7 @@ def dispatch_skills(
     goal_type: str,
     skills: Dict[str, Any],
     project_root: str,
-    timeout: float = 20.0,
+    timeout: float = 120.0,
 ) -> Dict[str, Any]:
     """Run goal-relevant skills concurrently and return their combined output.
 

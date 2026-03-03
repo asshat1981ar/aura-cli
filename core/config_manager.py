@@ -102,6 +102,15 @@ DEFAULT_CONFIG = {
     "copilot_cli_path": "/data/data/com.termux/files/usr/bin/copilot",
     "mcp_server_url": "http://localhost:8000",
     "local_model_command": None,
+    "local_model_profiles": {},
+    "local_model_routing": {
+        "planning": None,
+        "analysis": None,
+        "critique": None,
+        "code_generation": None,
+        "quality": None,
+        "fast": None,
+    },
     "llm_timeout": 60,
     "beads": {
         "enabled": True,
@@ -232,6 +241,18 @@ class ConfigManager:
         if routing_overrides:
             env_config["model_routing"] = {**DEFAULT_CONFIG["model_routing"], **routing_overrides}
             
+        # Handle nested local_model_routing overrides
+        local_routing_overrides = {}
+        for sub_key in DEFAULT_CONFIG["local_model_routing"]:
+            env_name = f"AURA_LOCAL_MODEL_ROUTING_{sub_key.upper()}"
+            if env_name in os.environ:
+                local_routing_overrides[sub_key] = os.environ[env_name]
+        if local_routing_overrides:
+            env_config["local_model_routing"] = {
+                **DEFAULT_CONFIG["local_model_routing"],
+                **local_routing_overrides,
+            }
+
         # Handle nested semantic_memory overrides
         sem_mem_overrides = {}
         for sub_key, default_val in DEFAULT_CONFIG["semantic_memory"].items():
@@ -266,10 +287,14 @@ class ConfigManager:
             merged["model_routing"].update(self.file_config["model_routing"])
         if "semantic_memory" in self.file_config:
             merged["semantic_memory"].update(self.file_config["semantic_memory"])
+        if "local_model_profiles" in self.file_config:
+            merged["local_model_profiles"].update(self.file_config["local_model_profiles"])
+        if "local_model_routing" in self.file_config:
+            merged["local_model_routing"].update(self.file_config["local_model_routing"])
             
         # Update other top-level keys
         for k, v in self.file_config.items():
-            if k not in ["beads", "model_routing", "semantic_memory"]:
+            if k not in ["beads", "model_routing", "semantic_memory", "local_model_profiles", "local_model_routing"]:
                 merged[k] = v
         
         # Merge ENV (env_config already has merged sub-dicts)
@@ -279,9 +304,11 @@ class ConfigManager:
             merged["model_routing"].update(env_config["model_routing"])
         if "semantic_memory" in env_config:
             merged["semantic_memory"].update(env_config["semantic_memory"])
+        if "local_model_routing" in env_config:
+            merged["local_model_routing"].update(env_config["local_model_routing"])
             
         for k, v in env_config.items():
-            if k not in ["beads", "model_routing", "semantic_memory"]:
+            if k not in ["beads", "model_routing", "semantic_memory", "local_model_routing"]:
                 merged[k] = v
                 
         merged.update(self.runtime_overrides)
@@ -322,7 +349,7 @@ class ConfigManager:
         Supports deep merging for nested config groups.
         """
         for k, v in updates.items():
-            if k in ["beads", "model_routing", "semantic_memory"] and isinstance(v, dict):
+            if k in ["beads", "model_routing", "semantic_memory", "local_model_profiles", "local_model_routing"] and isinstance(v, dict):
                 if k not in self.file_config:
                     self.file_config[k] = {}
                 self.file_config[k].update(v)

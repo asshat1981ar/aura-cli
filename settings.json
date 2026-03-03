@@ -1,6 +1,7 @@
 {
     "version": "2.0.0",
     "description": "AURA Autonomous Development Platform - Optimized Settings",
+    "llm_timeout": 120,
     "model_routing": {
         "code_generation": "google/gemini-2.0-flash-exp:free",
         "planning": "google/gemini-2.0-flash-exp:free",

@@ -1,6 +1,7 @@
 from unittest.mock import patch, MagicMock
 
 from core.runtime_auth import (
+    resolve_local_model_profiles,
     resolve_openai_api_key,
     resolve_openrouter_api_key,
     runtime_provider_status,
@@ -69,6 +70,43 @@ def test_runtime_provider_status_allows_local_only_chat():
             "openai_api_key": None,
             "api_key": None,
             "local_model_command": "ollama run llama2",
+        }.get(k, d)
+    mock_config.get.side_effect = mock_get
+
+    with patch("core.runtime_auth.config", mock_config), \
+         patch("core.runtime_auth.resolve_gemini_cli_path", return_value=None):
+        status = runtime_provider_status()
+
+    assert status["local_model"] is True
+    assert status["chat_ready"] is True
+    assert status["embedding_ready"] is False
+
+
+def test_resolve_local_model_profiles_ignores_non_dict_values():
+    mock_config = MagicMock()
+    mock_config.get.side_effect = lambda k, d=None: {
+        "local_model_profiles": {
+            "android_coder": {"provider": "openai_compatible", "model": "qwen"},
+            "bad": "oops",
+        }
+    }.get(k, d)
+
+    with patch("core.runtime_auth.config", mock_config):
+        profiles = resolve_local_model_profiles()
+
+    assert profiles == {"android_coder": {"provider": "openai_compatible", "model": "qwen"}}
+
+
+def test_runtime_provider_status_allows_profile_only_local_chat():
+    mock_config = MagicMock()
+    def mock_get(k, d=None):
+        return {
+            "openai_api_key": None,
+            "api_key": None,
+            "local_model_command": None,
+            "local_model_profiles": {
+                "android_coder": {"provider": "openai_compatible", "model": "qwen"}
+            },
         }.get(k, d)
     mock_config.get.side_effect = mock_get
 

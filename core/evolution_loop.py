@@ -186,5 +186,5 @@ class EvolutionLoop:
             "tasks": task_list,
             "implementation": implementation,
             "evaluation": evaluation,
-            "mutation": mutation_list
+            "mutation": mutation_str
         }

@@ -48,7 +48,7 @@
   "agents/skills/skill_failure_analyzer.py": "f089e6ce8e138c607f11605708dd2431496f99f3c30b3cc849c2b49651979460",
   "agents/skills/security_hardener.py": "3515363b13dde0f0e3bfd252e122db84742a0289876e0f2b3b266f4fbe8d4d76",
   "core/closed_loop.py": "645e7f872b08ea64491087fadd2507238abb1415fc7bc06afe7dec95c37ed60a",
-  "core/evolution_loop.py": "8f373fb0dd723c607df724566a88f2c58acc75b64230a41a64c6bf24b0f6b0c9",
+  "core/evolution_loop.py": "24b790a5ad5ef8c926f372fe895aeb1b049bc8e829705875dec471a4b16d14de",
   "core/file_tools.py": "e191fd3dc7d7ec5b34036215aa2ba9c6b4c83266f16c4724ab1a2850e34d115c",
   "core/git_tools.py": "ceaf1cacd88050d5c215fc0b895c56c8593504b3271ab0079b82e4ec34d5d80c",
   "core/goal_archive.py": "1768f3bc13b7c10cdabd43b706ab6aa2e25f5a054df9001ba2de985e70ef1518",

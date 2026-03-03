@@ -327,6 +327,7 @@ Agents now route by role:
 This repo now includes:
 
 - `scripts/run_android_local_models.sh`
+- `scripts/run_android_aura.sh`
 
 It starts two separate `llama.cpp` OpenAI-compatible servers by default:
 
@@ -405,6 +406,19 @@ AURA_REQUIRE_LOCAL_MODEL_HEALTH=1 \
 AURA_ANDROID_CONFIG_PATH="$PWD/aura.config.android.example.json" \
 ./run_aura.sh goal once "Summarize repo" --dry-run
 ```
+
+For the terminal UI flow, use the dedicated Android launcher:
+
+```bash
+bash scripts/run_android_aura.sh
+bash scripts/run_android_aura.sh watch --autonomous
+bash scripts/run_android_aura.sh studio --autonomous
+```
+
+That launcher defaults to `watch` and turns on
+`AURA_REQUIRE_LOCAL_MODEL_HEALTH=1` automatically, so it will refuse to start
+the UI until the configured local coder/planner/embedding endpoints are
+reachable.
 
 Example:
 

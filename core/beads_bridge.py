@@ -221,7 +221,7 @@ class BeadsBridge:
         command: Sequence[str] | None = None,
         timeout_seconds: float = 20.0,
         enabled: bool = True,
-        required: bool = True,
+        required: bool = False,
         persist_artifacts: bool = True,
         scope: str = "goal_run",
         env: Mapping[str, str] | None = None,

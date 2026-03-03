@@ -390,6 +390,22 @@ python3 scripts/check_android_local_models.py --host 127.0.0.1 --coder-port 8080
 `scripts/run_android_local_models.sh` now runs that health check automatically
 before it reports the local model servers as ready.
 
+If you want the main AURA launcher to refuse startup until those same local
+endpoints are healthy, use the wrapper gate:
+
+```bash
+AURA_REQUIRE_LOCAL_MODEL_HEALTH=1 ./run_aura.sh goal run --dry-run
+```
+
+The wrapper reads the active config from `aura.config.json` by default. You can
+point it at a different file with:
+
+```bash
+AURA_REQUIRE_LOCAL_MODEL_HEALTH=1 \
+AURA_ANDROID_CONFIG_PATH="$PWD/aura.config.android.example.json" \
+./run_aura.sh goal once "Summarize repo" --dry-run
+```
+
 Example:
 
 ```bash

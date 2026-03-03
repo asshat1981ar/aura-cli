@@ -1,6 +1,5 @@
 import contextlib
 import importlib.util
-import json
 import socket
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer

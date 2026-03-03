@@ -108,6 +108,7 @@ DEFAULT_CONFIG = {
         "analysis": None,
         "critique": None,
         "code_generation": None,
+        "embedding": None,
         "quality": None,
         "fast": None,
     },

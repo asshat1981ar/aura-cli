@@ -42,5 +42,5 @@ def integrate_feedback_loop(): return 'Feedback loop in place.'
 def document_upgrades_and_learnings(): return 'Documentation stored.'
 def conduct_testing(): return 'All tests passed.'
 
-# Run the verification
-verify_rsi_integration()
+if __name__ == "__main__":
+    verify_rsi_integration()

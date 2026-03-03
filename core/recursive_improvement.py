@@ -13,6 +13,34 @@ class RecursiveImprovementService:
     """
     def __init__(self, fitness_weights: Optional[Dict[str, float]] = None):
         self.fitness = FitnessFunction(weights=fitness_weights)
+        self._recent_cycles: List[Dict] = []
+
+    def normalize_cycle_entry(self, cycle_entry: Dict) -> Dict:
+        """Normalize a cycle entry into the fields used for proposal scoring."""
+        phase_outputs = cycle_entry.get("phase_outputs", {}) if isinstance(cycle_entry, dict) else {}
+        verification = phase_outputs.get("verification", {}) if isinstance(phase_outputs, dict) else {}
+        verification_status = cycle_entry.get("verification_status")
+        if verification_status is None and isinstance(verification, dict):
+            verification_status = verification.get("status")
+
+        retry_count = cycle_entry.get("retries")
+        if retry_count is None and isinstance(phase_outputs, dict):
+            retry_count = phase_outputs.get("retry_count", 0)
+
+        return {
+            "cycle_id": cycle_entry.get("cycle_id", "unknown"),
+            "goal": cycle_entry.get("goal", ""),
+            "verification_status": verification_status or "unknown",
+            "retries": int(retry_count or 0),
+        }
+
+    def observe_cycle(self, cycle_entry: Dict) -> List[Dict]:
+        """Append a normalized cycle entry and return recent history."""
+        normalized = self.normalize_cycle_entry(cycle_entry)
+        self._recent_cycles.append(normalized)
+        if len(self._recent_cycles) > 25:
+            self._recent_cycles = self._recent_cycles[-25:]
+        return list(self._recent_cycles)
 
     def evaluate_candidates(self, cycle_history: List[Dict]) -> List[Dict]:
         """

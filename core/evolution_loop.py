@@ -41,6 +41,71 @@ class EvolutionLoop:
         self._cycle_count = 0
         self.TRIGGER_EVERY_N = 20
 
+    def _get_mutation_response(self, prompt: str, memory_snapshot: str, similar_past_problems: str, known_weaknesses: str) -> str:
+        """Request a raw mutation plan instead of forcing planner list parsing."""
+        planner_respond = getattr(self.planner, "_respond", None)
+        if callable(planner_respond):
+            return planner_respond(prompt)
+
+        planner_model = getattr(self.planner, "model", None)
+        responder = getattr(planner_model, "respond_for_role", None)
+        if callable(responder):
+            return responder("analysis", prompt)
+        if planner_model is not None and callable(getattr(planner_model, "respond", None)):
+            return planner_model.respond(prompt)
+
+        # Last-resort compatibility path for non-standard planner stubs.
+        fallback = self.planner.plan(
+            goal=prompt,
+            memory_snapshot=memory_snapshot,
+            similar_past_problems=similar_past_problems,
+            known_weaknesses=known_weaknesses,
+        )
+        return "\n".join(fallback) if isinstance(fallback, list) else str(fallback)
+
+    def _mutation_plan_to_dsl(self, mutation_plan: dict) -> str:
+        """Convert a structured mutation plan into the MutatorAgent DSL."""
+        mutations = mutation_plan.get("mutations", [])
+        blocks: list[str] = []
+        for mutation in mutations:
+            if not isinstance(mutation, dict):
+                continue
+            file_path = str(mutation.get("file_path") or "").strip()
+            new_content = mutation.get("new_content")
+            if not file_path or new_content is None:
+                continue
+            old_content = mutation.get("old_content")
+            if old_content is not None:
+                block = "\n".join([
+                    f"REPLACE_IN_FILE {file_path}",
+                    "---OLD_CONTENT_START---",
+                    str(old_content),
+                    "---OLD_CONTENT_END---",
+                    "---NEW_CONTENT_START---",
+                    str(new_content),
+                    "---NEW_CONTENT_END---",
+                ])
+            else:
+                block = "\n".join([
+                    f"ADD_FILE {file_path}",
+                    str(new_content),
+                ])
+            blocks.append(block)
+        return "\n".join(blocks)
+
+    def _normalize_mutation_plan(self, raw_response: str) -> tuple[dict | None, str]:
+        """Return a parsed mutation plan and the corresponding mutator DSL."""
+        parsed = _aura_safe_loads(raw_response, "evolution_mutation_plan")
+        if not isinstance(parsed, dict):
+            raise ValueError("Mutation plan must be a JSON object.")
+        mutations = parsed.get("mutations")
+        if not isinstance(mutations, list):
+            raise ValueError("Mutation plan must include a `mutations` list.")
+        mutation_dsl = self._mutation_plan_to_dsl(parsed)
+        if not mutation_dsl.strip():
+            raise ValueError("Mutation plan did not contain any applicable file mutations.")
+        return parsed, mutation_dsl
+
     def on_cycle_complete(self, entry: dict) -> None:
         """Trigger evolution every N cycles, or immediately for structural hotspot signals."""
         self._cycle_count += 1
@@ -50,10 +115,8 @@ class EvolutionLoop:
         
         # If we have an improvement service, evaluate recent history
         if self.improvement_service and self.brain:
-            # Retrieve recent summaries for analysis
-            history = self.brain.recall_with_budget(max_tokens=2000)
-            # Flatten or parse history if needed — for now pass raw list
-            proposals = self.improvement_service.evaluate_candidates([{"goal": goal, "summary": str(h)} for h in history])
+            recent_history = self.improvement_service.observe_cycle(entry)
+            proposals = self.improvement_service.evaluate_candidates(recent_history)
             for p in proposals:
                 self.improvement_service.log_proposal(p)
                 # In the future, we could auto-enqueue these proposals as goals
@@ -126,19 +189,23 @@ class EvolutionLoop:
         evaluation_str = str(evaluation)
 
         # 5. Mutate (Self-Improvement)
-        mutation_str = self.planner.plan(
-            goal=EVOLUTION_MUTATION_PROMPT.replace("{evaluation}", evaluation_str)
-                                          .replace("{memory_snapshot}", memory_snapshot),
-            memory_snapshot=memory_snapshot,
-            similar_past_problems=similar_past_problems,
-            known_weaknesses=known_weaknesses
+        mutation_prompt = EVOLUTION_MUTATION_PROMPT.replace("{evaluation}", evaluation_str).replace("{memory_snapshot}", memory_snapshot)
+        raw_mutation_response = self._get_mutation_response(
+            mutation_prompt,
+            memory_snapshot,
+            similar_past_problems,
+            known_weaknesses,
         )
-        # Mutation result should be a single string for parsing, but plan() might return a list
-        if isinstance(mutation_str, list):
-            mutation_str = "\n".join(mutation_str)
+        mutation_plan = None
+        mutation_str = raw_mutation_response
+        try:
+            mutation_plan, mutation_str = self._normalize_mutation_plan(raw_mutation_response)
+        except Exception as e:
+            log_json("ERROR", "evolution_mutation_plan_invalid", details={"error": str(e), "raw_response_snippet": raw_mutation_response[:200]})
 
         # 6. Integrate mutation
-        raw_validation_result = self.critic.validate_mutation(mutation_str)
+        validation_target = json.dumps(mutation_plan) if mutation_plan is not None else mutation_str
+        raw_validation_result = self.critic.validate_mutation(validation_target)
         
         # Initialize with safe defaults
         decision = "REJECTED"
@@ -186,5 +253,5 @@ class EvolutionLoop:
             "tasks": task_list,
             "implementation": implementation,
             "evaluation": evaluation,
-            "mutation": mutation_str
+            "mutation": mutation_plan if mutation_plan is not None else mutation_str
         }

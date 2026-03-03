@@ -27,7 +27,7 @@ from core.git_tools import GitTools
 from agents.mutator import MutatorAgent
 
 def main():
-    max_cycles = 2
+    max_cycles = 10
     goal = "evolve and improve the AURA system via recursive self-improvement"
     
     print(f">>> Starting {max_cycles} cycles of autonomous evolution...")

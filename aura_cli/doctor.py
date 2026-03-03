@@ -56,8 +56,18 @@ def check_env_vars(openrouter_api_key_arg: str = None): # Add argument
         path = Path(gemini_cli)
         gemini_ready = path.is_file() and os.access(path, os.X_OK)
 
-    status = runtime_provider_status(openrouter_api_key_arg=openrouter_api_key_arg)
-    status["gemini_cli"] = gemini_ready
+    status = {
+        "openai": bool(_clean_secret(os.getenv("OPENAI_API_KEY"))),
+        "openrouter": bool(
+            _clean_secret(openrouter_api_key_arg)
+            or _clean_secret(os.getenv("OPENROUTER_API_KEY"))
+            or _clean_secret(os.getenv("AURA_API_KEY"))
+        ),
+        "local_model": bool(_clean_secret(os.getenv("AURA_LOCAL_MODEL_COMMAND"))),
+        "gemini_cli": gemini_ready,
+        "chat_ready": False,
+        "embedding_ready": bool(_clean_secret(os.getenv("OPENAI_API_KEY"))),
+    }
     status["chat_ready"] = any(
         [
             status["openai"],

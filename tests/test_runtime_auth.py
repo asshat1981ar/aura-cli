@@ -140,11 +140,13 @@ def test_runtime_provider_status_allows_local_embedding_profile():
     with patch("core.runtime_auth.config", mock_config), \
          patch("core.runtime_auth.resolve_gemini_cli_path", return_value=None):
         status = runtime_provider_status()
+        profile_name = resolve_local_embedding_profile_name()
+        summary = runtime_provider_summary(status)
 
     assert status["chat_ready"] is True
     assert status["embedding_ready"] is True
-    assert resolve_local_embedding_profile_name() == "android_embeddings"
-    assert runtime_provider_summary(status).endswith("embeddings: local:android_embeddings")
+    assert profile_name == "android_embeddings"
+    assert summary.endswith("embeddings: local:android_embeddings")
 
 
 def test_runtime_provider_status_allows_builtin_local_embeddings():
@@ -161,7 +163,9 @@ def test_runtime_provider_status_allows_builtin_local_embeddings():
     with patch("core.runtime_auth.config", mock_config), \
          patch("core.runtime_auth.resolve_gemini_cli_path", return_value=None):
         status = runtime_provider_status()
+        embedding_mode = resolve_local_embedding_mode()
+        summary = runtime_provider_summary(status)
 
     assert status["embedding_ready"] is True
-    assert resolve_local_embedding_mode() == "local-tfidf-svd-50d"
-    assert runtime_provider_summary(status).endswith("embeddings: local-tfidf-svd-50d")
+    assert embedding_mode == "local-tfidf-svd-50d"
+    assert summary.endswith("embeddings: local-tfidf-svd-50d")

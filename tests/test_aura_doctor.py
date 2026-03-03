@@ -1,8 +1,11 @@
 import unittest
 import sys
 import io
+import sqlite3
+import tempfile
+from pathlib import Path
 from unittest.mock import patch
-from aura_cli.doctor import check_env_vars, main as aura_doctor_main
+from aura_cli.doctor import check_env_vars, check_embedding_index, main as aura_doctor_main
 from aura_cli.commands import _handle_doctor
 
 class TestAuraDoctorOutputParsing(unittest.TestCase):
@@ -159,6 +162,76 @@ class TestAuraDoctorOutputParsing(unittest.TestCase):
         self.assertEqual(status, "PASS")
         self.assertIn("AURA_LOCAL_MODEL_COMMAND", message)
         self.assertIn("embeddings: disabled", message)
+
+    def test_check_embedding_index_warns_when_active_model_has_no_embeddings(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "memory" / "brain.db"
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(str(db_path), check_same_thread=False)
+            conn.execute("CREATE TABLE memory_records (id TEXT PRIMARY KEY, content TEXT)")
+            conn.execute(
+                "CREATE TABLE embeddings (record_id TEXT NOT NULL, model_id TEXT NOT NULL, dims INTEGER NOT NULL, data BLOB NOT NULL)"
+            )
+            conn.execute("INSERT INTO memory_records (id, content) VALUES (?, ?)", ("rec1", "hello"))
+            conn.execute(
+                "INSERT INTO embeddings (record_id, model_id, dims, data) VALUES (?, ?, ?, ?)",
+                ("rec1", "text-embedding-3-small", 3, b"123"),
+            )
+            conn.commit()
+            conn.close()
+
+            cfg = {
+                "brain_db_path": "memory/brain.db",
+                "semantic_memory": {"embedding_model": "local_profile:android_embeddings"},
+                "local_model_profiles": {
+                    "android_embeddings": {
+                        "provider": "openai_compatible",
+                        "embedding_model": "bge-small-en-v1.5-q8_0",
+                    }
+                },
+            }
+
+            status, detail = check_embedding_index(root, cfg)
+
+        self.assertEqual(status, "WARN")
+        self.assertIn("bge-small-en-v1.5-q8_0", detail)
+        self.assertIn("text-embedding-3-small", detail)
+        self.assertIn("memory reindex", detail)
+
+    def test_check_embedding_index_passes_when_active_model_is_present(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            db_path = root / "memory" / "brain.db"
+            db_path.parent.mkdir(parents=True, exist_ok=True)
+            conn = sqlite3.connect(str(db_path), check_same_thread=False)
+            conn.execute("CREATE TABLE memory_records (id TEXT PRIMARY KEY, content TEXT)")
+            conn.execute(
+                "CREATE TABLE embeddings (record_id TEXT NOT NULL, model_id TEXT NOT NULL, dims INTEGER NOT NULL, data BLOB NOT NULL)"
+            )
+            conn.execute("INSERT INTO memory_records (id, content) VALUES (?, ?)", ("rec1", "hello"))
+            conn.execute(
+                "INSERT INTO embeddings (record_id, model_id, dims, data) VALUES (?, ?, ?, ?)",
+                ("rec1", "bge-small-en-v1.5-q8_0", 3, b"123"),
+            )
+            conn.commit()
+            conn.close()
+
+            cfg = {
+                "brain_db_path": "memory/brain.db",
+                "semantic_memory": {"embedding_model": "local_profile:android_embeddings"},
+                "local_model_profiles": {
+                    "android_embeddings": {
+                        "provider": "openai_compatible",
+                        "embedding_model": "bge-small-en-v1.5-q8_0",
+                    }
+                },
+            }
+
+            status, detail = check_embedding_index(root, cfg)
+
+        self.assertEqual(status, "PASS")
+        self.assertIn("bge-small-en-v1.5-q8_0", detail)
 
     @patch("aura_cli.commands.capability_doctor_check", return_value=("PASS", "matched: docker_analysis"))
     @patch("aura_cli.doctor.check_pytest_and_run_tests", return_value=("WARN", "tests skipped"))

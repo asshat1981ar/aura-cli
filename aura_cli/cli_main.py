@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import io
+import copy
 import urllib.request
 import urllib.error
 from contextlib import redirect_stdout
@@ -14,7 +15,7 @@ try:
 except ImportError:
     readline = None
 
-from core.config_manager import DEFAULT_CONFIG, config
+from core.config_manager import ConfigManager, DEFAULT_CONFIG, config
 from core.goal_queue import GoalQueue
 from core.goal_archive import GoalArchive
 from memory.brain import Brain
@@ -202,8 +203,31 @@ class _ConvergenceEscapeLoop:
             self._escape.check_and_escape(goal, entry)
 
 
-def _resolve_runtime_paths(project_root: Path) -> dict:
+def _build_runtime_config(overrides: dict | None = None) -> dict:
+    """Build a runtime-local effective config without mutating global config state."""
+    base_config = ConfigManager(config_file=config.config_file).show_config()
+    merged = copy.deepcopy(base_config)
+    runtime_overrides = dict(overrides or {})
+
+    for nested_key in (
+        "beads",
+        "model_routing",
+        "semantic_memory",
+        "local_model_profiles",
+        "local_model_routing",
+    ):
+        nested_value = runtime_overrides.pop(nested_key, None)
+        if isinstance(nested_value, dict):
+            merged.setdefault(nested_key, {})
+            merged[nested_key].update(nested_value)
+
+    merged.update(runtime_overrides)
+    return merged
+
+
+def _resolve_runtime_paths(project_root: Path, runtime_config: dict | None = None) -> dict:
     """Resolve all required storage paths against the project root."""
+    runtime_config = runtime_config or config.show_config()
     paths = {}
     for key in [
         "goal_queue_path", "goal_archive_path", "brain_db_path",
@@ -211,7 +235,7 @@ def _resolve_runtime_paths(project_root: Path) -> dict:
     ]:
         paths[key] = resolve_project_path(
             project_root,
-            config.get(key, DEFAULT_CONFIG[key]),
+            runtime_config.get(key, DEFAULT_CONFIG[key]),
             DEFAULT_CONFIG[key]
         )
     return paths
@@ -346,15 +370,13 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     runtime_overrides = dict(overrides or {})
     runtime_mode = runtime_overrides.pop("runtime_mode", "full")
     beads_cli_override = runtime_overrides.pop("beads_cli_override", None)
+    runtime_config = _build_runtime_config(runtime_overrides)
 
-    for k, v in runtime_overrides.items():
-        config.set_runtime_override(k, v)
-
-    paths = _resolve_runtime_paths(project_root)
+    paths = _resolve_runtime_paths(project_root, runtime_config=runtime_config)
     goal_queue = GoalQueue(str(paths["goal_queue_path"]))
     goal_archive = GoalArchive(str(paths["goal_archive_path"]))
     
-    config_api_key = resolve_config_api_key(config.get("api_key", ""))
+    config_api_key = resolve_config_api_key(runtime_config.get("api_key", ""))
     provider_status = runtime_provider_status(config_api_key=config_api_key)
 
     if not provider_status["chat_ready"]:
@@ -413,7 +435,7 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     from memory.controller import memory_controller
     memory_controller.set_store(memory_store)
 
-    beads_config = config.get("beads", DEFAULT_CONFIG["beads"]) or {}
+    beads_config = runtime_config.get("beads", DEFAULT_CONFIG["beads"]) or {}
     bridge_command = beads_config.get("bridge_command")
     beads_bridge = BeadsBridge.from_defaults(
         project_root,
@@ -428,9 +450,9 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     orchestrator = LoopOrchestrator(
         agents=default_agents(brain_instance, model_adapter, context_manager=context_manager),
         memory_store=memory_store,
-        policy=Policy.from_config(config.effective_config.copy()),
+        policy=Policy.from_config(copy.deepcopy(runtime_config)),
         project_root=project_root,
-        strict_schema=config.get("strict_schema", False),
+        strict_schema=bool(runtime_config.get("strict_schema", False)),
         debugger=debugger_instance,
         goal_queue=goal_queue,
         goal_archive=goal_archive,

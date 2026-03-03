@@ -1,116 +1,274 @@
 # AURA Integration Map
 
-This document provides an overview of the AURA CLI's architecture, key components, and their interactions.
+This document describes the current AURA runtime architecture as it exists in
+the codebase today. It is intended as a practical orientation guide for
+developers working on the CLI, orchestrator, operator surfaces, local models,
+and BEADS integration.
 
-## Module Overview
+## Canonical Entrypoints
 
-*   **`core/`**: Contains the fundamental logic of the AURA system.
-    *   `closed_loop.py`: (Likely) Implements a closed-loop control mechanism.
-    *   `evolution_loop.py`: (Likely) Handles evolutionary algorithms or iterative refinement.
-    *   `file_tools.py`: Provides utilities for file system operations, including code replacement.
-    *   `git_tools.py`: Encapsulates all Git-related operations (commit, rollback, stash).
-    *   `goal_archive.py`: Manages the archiving of completed goals.
-    *   `goal_queue.py`: Manages the queue of active goals using a JSON file for persistence.
-    *   `hybrid_loop.py`: The core orchestrator that combines different loops and agents.
-    *   `model_adapter.py`: Interface for interacting with the AI model.
-    *   `vector_store.py`: (Likely) Handles vector embeddings for semantic search or similar.
+- [main.py](/data/data/com.termux/files/home/aura_cli/aura-cli/main.py)
+  Lightweight shim. It handles early CLI parsing, `help`, `--json-help`, and
+  error formatting, then delegates to the real CLI runtime.
+- [aura_cli/cli_main.py](/data/data/com.termux/files/home/aura_cli/aura-cli/aura_cli/cli_main.py)
+  Canonical entrypoint for runtime creation, dispatch, watch/studio flows,
+  queue operations, memory tools, doctor/config commands, and workflow runs.
+- [run_aura.sh](/data/data/com.termux/files/home/aura_cli/aura-cli/run_aura.sh)
+  Shell wrapper used for local startup and Android local-model health gating.
 
-*   **`memory/`**: Manages the system's persistent memory.
-    *   `brain.py`: Implements a "Brain" that stores general memories, identified weaknesses, and (potentially) vector store data using an SQLite database.
-    *   `brain.db`: SQLite database file for the `Brain` instance.
-    *   `goal_queue.json`: JSON file used by `core/goal_queue.py` for persisting the goal queue.
-    *   `goal_queue.db`: (Discrepancy noted: Not explicitly used by `core/goal_queue.py`'s current implementation, which uses JSON. May be a remnant or used by an unexamined component.)
+## Runtime Assembly
 
-*   **`agents/`**: Contains specialized agent modules that perform specific tasks within the AURA loop.
-    *   `applicator.py`: (Likely) Applies changes or solutions.
-    *   `coder.py`: (Likely) Generates or modifies code.
-    *   `critic.py`: (Likely) Evaluates solutions or code.
-    *   `debugger.py`: (Likely) Assists in debugging.
-    *   `mutator.py`: (Likely) Introduces variations or mutations.
-    *   `planner.py`: (Likely) Creates plans.
-    *   `router.py`: (Likely) Directs control flow or tasks.
-    *   `sandbox.py`: (Likely) Executes code in an isolated environment.
-    *   `scaffolder.py`: (Likely) Generates boilerplate or initial structures.
-    *   `tester.py`: (Likely) Runs tests.
+Runtime creation is centralized in
+[aura_cli/cli_main.py](/data/data/com.termux/files/home/aura_cli/aura-cli/aura_cli/cli_main.py)
+via `create_runtime(project_root, overrides=None)`.
 
-*   **`tests/`**: Unit and integration tests for various modules.
-    *   `core/test_goal_queue.py`: Tests the functionality of the `GoalQueue`.
+### Runtime modes
 
-## Entrypoints and Loop Invocation
+- `queue`
+  Queue-only runtime used for lightweight status/add/interactive flows.
+  It avoids full model, brain, vector-store, and orchestrator initialization.
+- `lean`
+  Minimal execution runtime used for some single-goal and dry-run flows.
+- `full`
+  Full runtime with brain, model adapter, vector store, memory store,
+  orchestrator, background sync, improvement loops, and optional BEADS bridge.
 
-The primary entrypoint for the AURA CLI is `main.py`.
+### Core runtime objects
 
-The `main()` function in `main.py` performs the following:
-1.  Initializes core components: `GoalQueue`, `GoalArchive`, `ModelAdapter`, `Brain`, and `GitTools`.
-2.  Instantiates the `HybridClosedLoop`.
-3.  Enters an infinite `while True` loop, waiting for user commands:
-    *   `add <goal>`: Adds a new goal to the `GoalQueue`.
-    *   `run`: Initiates the core iterative development loop. It dequeues goals from `GoalQueue` and processes them one by one.
-    *   `exit`: Terminates the CLI.
-    *   `status`: Displays the current state of the goal queue and completed goals.
+`create_runtime()` is responsible for wiring:
 
-The core iterative process is managed by `HybridClosedLoop.run(current_goal)`, which orchestrates the interaction between various agents and components.
+- [core/goal_queue.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/goal_queue.py)
+- [core/goal_archive.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/goal_archive.py)
+- [memory/brain.py](/data/data/com.termux/files/home/aura_cli/aura-cli/memory/brain.py)
+- [core/model_adapter.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/model_adapter.py)
+- [core/vector_store.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/vector_store.py)
+- [memory/store.py](/data/data/com.termux/files/home/aura_cli/aura-cli/memory/store.py)
+- [core/orchestrator.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/orchestrator.py)
+- [core/policy.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/policy.py)
+- [core/beads_bridge.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/beads_bridge.py)
 
-## Model I/O and `replace_code` Application
+## Command Dispatch
 
-*   **Model I/O**: The `core/model_adapter.py` module is responsible for handling communication with the AI model. It provides an interface for sending prompts to the model and receiving its responses. The `HybridClosedLoop.run()` method receives model responses, which are expected to be in JSON format.
-*   **`replace_code`**: The actual code modification logic resides in `core/file_tools.py` within the `replace_code` function. This function takes `file_path`, `old_code`, `new_code`, and an optional `dry_run` flag.
-    *   In `main.py`, after `HybridClosedLoop.run(current_goal)` returns its JSON result, the `IMPLEMENT` section of the JSON is parsed to extract `file_path`, `old_code`, and `new_code`.
-    *   Currently, `main.py` *simulates* the code replacement by printing a message: `SIMULATING: replace('{file_path}', old_code, new_code)`. The actual call to `file_tools.replace_code` is not directly made in `main.py` based on the current code, implying that the agents within the `HybridClosedLoop` or a later stage are responsible for invoking `file_tools.replace_code` if modifications are to be persisted.
+The dispatch layer also lives in
+[aura_cli/cli_main.py](/data/data/com.termux/files/home/aura_cli/aura-cli/aura_cli/cli_main.py).
 
-### Explicit Overwrite Safety Policy (Autonomous Apply Paths)
+### Main dispatch flow
 
-Autonomous apply paths in the repo (queue loop, orchestrator, hybrid loop, mutator, and atomic change application) use a stricter policy than raw `replace_code(...)` to avoid accidental full-file overwrites when an LLM supplies a stale `old_code` snippet.
+1. Parse args in [main.py](/data/data/com.termux/files/home/aura_cli/aura-cli/main.py).
+2. Call `aura_cli.cli_main.main(...)`.
+3. Resolve the action with `_resolve_dispatch_action(...)`.
+4. Build runtime only when required by the selected command.
+5. Execute the handler registered in `COMMAND_DISPATCH_REGISTRY`.
 
-*   **Blocked by default**: `overwrite_file=True` does **not** permit mismatch-overwrite fallback unless the change is expressed as an explicit full-file replacement.
-*   **Allowed explicit full-file form**:
-    *   `overwrite_file=True`
-    *   `old_code=""` (empty string)
-*   **Policy-block event**:
-    *   `old_code_mismatch_overwrite_blocked`
-    *   policy tag: `explicit_overwrite_file_required`
+### Major command families
 
-This behavior is centralized in `core/file_tools.py` through:
+- Help and reporting:
+  - `help`
+  - `json_help`
+  - `show_config`
+  - `contract_report`
+- Diagnostics:
+  - `doctor`
+  - `diag`
+  - `logs`
+- Goal and queue control:
+  - `goal_add`
+  - `goal_run`
+  - `goal_once`
+  - `goal_status`
+  - `queue_list`
+  - `queue_clear`
+- Runtime/operator surfaces:
+  - `watch`
+  - `studio`
+  - `workflow_run`
+- Memory tools:
+  - `memory_search`
+  - `memory_reindex`
+- Self-improvement:
+  - `evolve`
 
-*   `allow_mismatch_overwrite_for_change(...)`
-*   `apply_change_with_explicit_overwrite_policy(...)`
-*   `MismatchOverwriteBlockedError`
+Human-readable status rendering still lives in
+[aura_cli/commands.py](/data/data/com.termux/files/home/aura_cli/aura-cli/aura_cli/commands.py),
+but command selection and runtime setup are controlled by
+[aura_cli/cli_main.py](/data/data/com.termux/files/home/aura_cli/aura-cli/aura_cli/cli_main.py).
+
+## Orchestrator Pipeline
+
+The main execution engine is
+[core/orchestrator.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/orchestrator.py),
+implemented by `LoopOrchestrator`.
+
+### Single-cycle flow
+
+`run_cycle(goal, dry_run=False)` executes the canonical phase pipeline:
+
+1. ingest
+2. skill dispatch
+3. optional BEADS gate
+4. planning loop
+5. critique
+6. synthesize
+7. act
+8. sandbox
+9. apply
+10. verify
+11. reflect
+12. record cycle outcome
+
+### Multi-cycle flow
+
+`run_loop(goal, max_cycles=5, dry_run=False)` repeats `run_cycle(...)` until:
+
+- the cycle itself sets a stop reason
+- the policy stops execution
+- max cycles are reached
+
+### Improvement loops
+
+Optional loops are attached after construction and run from
+`_record_cycle_outcome(...)`. These include reflection, health monitoring,
+adaptive skill weighting, convergence escape, compaction, autonomous discovery,
+evolution, and periodic BEADS sync.
+
+The legacy [core/hybrid_loop.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/hybrid_loop.py)
+still exists, but the active runtime path for CLI/server/operator flows is the
+`LoopOrchestrator` in [core/orchestrator.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/orchestrator.py).
+
+## Operator Surfaces
+
+Shared operator-facing summaries are normalized in
+[core/operator_runtime.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/operator_runtime.py).
+
+### Shared summary helpers
+
+- `build_queue_summary(...)`
+- `build_cycle_summary(...)`
+- `build_beads_runtime_metadata(...)`
+- `build_operator_runtime_snapshot(...)`
+
+These helpers feed:
+
+- [aura_cli/commands.py](/data/data/com.termux/files/home/aura_cli/aura-cli/aura_cli/commands.py)
+  for `goal status`
+- [aura_cli/server.py](/data/data/com.termux/files/home/aura_cli/aura-cli/aura_cli/server.py)
+  for SSE event payloads
+- [aura_cli/tui/app.py](/data/data/com.termux/files/home/aura_cli/aura-cli/aura_cli/tui/app.py)
+  and [aura_cli/tui/panels/cycle_panel.py](/data/data/com.termux/files/home/aura_cli/aura-cli/aura_cli/tui/panels/cycle_panel.py)
+  for watch/studio rendering
+
+## BEADS Integration
+
+BEADS is integrated as a control-plane decision layer, not as the primary code
+executor.
+
+### Key files
+
+- [core/beads_contract.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/beads_contract.py)
+  defines the Python-side schema.
+- [core/beads_bridge.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/beads_bridge.py)
+  builds runtime input and invokes the Node bridge.
+- [scripts/beads_bridge.mjs](/data/data/com.termux/files/home/aura_cli/aura-cli/scripts/beads_bridge.mjs)
+  is the Node adapter around `@beads/bd`.
+- [core/orchestrator.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/orchestrator.py)
+  applies the BEADS gate before planning and records BEADS decisions into cycle
+  outputs and summaries.
+
+### BEADS responsibilities
+
+- build queue + context payloads
+- load PRD context from `plans/beads-orchestrator-prd.md`
+- load active conductor track metadata from `conductor/tracks/*/metadata.json`
+- return structured allow/block/revise decisions
+- expose runtime metadata for CLI, TUI, and SSE
+
+## Local Models And Android Path
+
+Local model routing and Android workflows are now first-class parts of the
+runtime.
+
+### Key files
+
+- [core/runtime_auth.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/runtime_auth.py)
+  resolves provider readiness and local embedding/chat availability.
+- [core/model_adapter.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/model_adapter.py)
+  handles provider calls, role routing, local model profiles, and embeddings.
+- [aura.config.json](/data/data/com.termux/files/home/aura_cli/aura-cli/aura.config.json)
+  contains real project config.
+- [aura.config.android.example.json](/data/data/com.termux/files/home/aura_cli/aura-cli/aura.config.android.example.json)
+  documents the Android local-model layout.
+- [scripts/setup_llama_cpp_termux.sh](/data/data/com.termux/files/home/aura_cli/aura-cli/scripts/setup_llama_cpp_termux.sh)
+- [scripts/run_android_local_models.sh](/data/data/com.termux/files/home/aura_cli/aura-cli/scripts/run_android_local_models.sh)
+- [scripts/check_android_local_models.py](/data/data/com.termux/files/home/aura_cli/aura-cli/scripts/check_android_local_models.py)
+- [scripts/run_android_aura.sh](/data/data/com.termux/files/home/aura_cli/aura-cli/scripts/run_android_aura.sh)
+- [docs/LOCAL_MODELS_ANDROID.md](/data/data/com.termux/files/home/aura_cli/aura-cli/docs/LOCAL_MODELS_ANDROID.md)
 
 ## Persistence
 
-AURA utilizes two primary mechanisms for persistence: SQLite databases and JSON files.
+There is no single persistence mechanism; AURA uses several:
 
-*   **SQLite Databases**:
-    *   **`memory/brain.db`**: Used by the `memory.brain.Brain` class.
-        *   **Tables**:
-            *   `memory`: Stores general textual content.
-            *   `weaknesses`: Records identified system weaknesses with descriptions and timestamps.
-            *   `vector_store_data`: Stores content and their embeddings, likely for semantic search or retrieval.
-*   **JSON Files**:
-    *   **`memory/goal_queue.json`**: Used by `core/goal_queue.py` to store the list of active goals. The `GoalQueue` class serializes its `deque` object to this file.
-    *   **`memory/goal_queue.db`**: (Discrepancy) A `.db` file with this name exists in the `memory/` directory, but the current `core/goal_queue.py` implementation uses `memory/goal_queue.json` for its persistence. This `.db` file may be a leftover from a previous implementation or used by an unexamined component.
+- queue/archive JSON:
+  - [memory/goal_queue.json](/data/data/com.termux/files/home/aura_cli/aura-cli/memory/goal_queue.json)
+  - [memory/goal_archive_v2.json](/data/data/com.termux/files/home/aura_cli/aura-cli/memory/goal_archive_v2.json)
+- brain SQLite:
+  - [memory/brain_v2.db](/data/data/com.termux/files/home/aura_cli/aura-cli/memory/brain_v2.db)
+- memory store log and project memory:
+  - [memory/store](/data/data/com.termux/files/home/aura_cli/aura-cli/memory/store)
+- semantic memory / project sync support:
+  - [core/vector_store.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/vector_store.py)
+  - [core/project_syncer.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/project_syncer.py)
+- task hierarchy persistence:
+  - [memory/task_hierarchy_v2.json](/data/data/com.termux/files/home/aura_cli/aura-cli/memory/task_hierarchy_v2.json)
 
-## Git Operations
+## Configuration
 
-All Git operations are centralized in `core/git_tools.py`, which leverages the `gitpython` library (imported as `git`). The `GitTools` class provides the following functionalities:
+The unified config layer is
+[core/config_manager.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/config_manager.py).
 
-*   **Initialization**: `GitTools(repo_path)` initializes a `git.Repo` object, detecting the repository root.
-*   **`commit_all(message)`**: Stages all changes (including untracked files) and creates a new commit with the provided message.
-*   **`rollback_last_commit()`**: Performs a hard reset to the previous commit (`HEAD~1`), effectively undoing the last commit.
-*   **`stash(message)`**: Stashes current modifications, both staged and unstaged.
-*   **`stash_pop()`**: Applies the most recently stashed changes and removes the stash entry.
-*   **Error Handling**: Custom exception classes (`GitToolsError`, `GitRepoError`, etc.) are defined for robust error management during Git operations.
+Precedence is:
 
-## Test Suite Overview
+1. runtime overrides
+2. environment variables
+3. config file (`settings.json` or `aura.config.json`)
+4. defaults
 
-The AURA project utilizes `unittest` for its testing framework.
+Notable nested config groups:
 
-*   **`core/test_goal_queue.py`**: This is the primary discovered test file, focusing on the `GoalQueue` functionality.
-    *   **`setUp` / `tearDown`**: Manages a temporary test database file (`test_goal_queue.db`) for isolated testing.
-    *   **Assertions**:
-        *   `test_init_db_and_load_empty`: Verifies that an empty queue is correctly initialized.
-        *   `test_add_goal`: Checks if goals are added correctly to the queue and persisted.
-        *   `test_next_goal`: Asserts that the `next()` method retrieves the correct goal and re-indexes remaining goals.
-        *   `test_next_with_empty_queue`: Confirms appropriate behavior when `next()` is called on an empty queue.
-        *   `test_persistence`: Verifies that goals are correctly loaded and saved across `GoalQueue` instances.
-    *   **Discrepancy**: This test file tests a version of `GoalQueue` that uses a SQLite database (`db_path`), while the current `core/goal_queue.py` implementation uses a JSON file (`queue_path`). This test is either outdated or pertains to an alternative `GoalQueue` implementation.
+- `beads`
+- `model_routing`
+- `local_model_profiles`
+- `local_model_routing`
+- `semantic_memory`
+
+## Testing
+
+Tests live primarily under [tests/](/data/data/com.termux/files/home/aura_cli/aura-cli/tests).
+
+Notable coverage areas:
+
+- CLI dispatch and snapshots:
+  - [tests/test_cli_main_dispatch.py](/data/data/com.termux/files/home/aura_cli/aura-cli/tests/test_cli_main_dispatch.py)
+  - [tests/test_cli_help_snapshots.py](/data/data/com.termux/files/home/aura_cli/aura-cli/tests/test_cli_help_snapshots.py)
+- orchestrator/runtime:
+  - [tests/test_orchestrator_phases.py](/data/data/com.termux/files/home/aura_cli/aura-cli/tests/test_orchestrator_phases.py)
+  - [tests/test_operator_runtime.py](/data/data/com.termux/files/home/aura_cli/aura-cli/tests/test_operator_runtime.py)
+- BEADS:
+  - [tests/test_beads_bridge.py](/data/data/com.termux/files/home/aura_cli/aura-cli/tests/test_beads_bridge.py)
+  - [tests/test_beads_skill.py](/data/data/com.termux/files/home/aura_cli/aura-cli/tests/test_beads_skill.py)
+- local models / Android:
+  - [tests/test_model_adapter_runtime.py](/data/data/com.termux/files/home/aura_cli/aura-cli/tests/test_model_adapter_runtime.py)
+  - [tests/test_android_local_models_healthcheck.py](/data/data/com.termux/files/home/aura_cli/aura-cli/tests/test_android_local_models_healthcheck.py)
+
+## Practical Debugging Order
+
+When debugging runtime behavior, start here:
+
+1. [main.py](/data/data/com.termux/files/home/aura_cli/aura-cli/main.py)
+2. [aura_cli/cli_main.py](/data/data/com.termux/files/home/aura_cli/aura-cli/aura_cli/cli_main.py)
+3. [core/orchestrator.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/orchestrator.py)
+4. [core/operator_runtime.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/operator_runtime.py)
+5. the specific subsystem:
+   - BEADS: [core/beads_bridge.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/beads_bridge.py)
+   - models: [core/model_adapter.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/model_adapter.py)
+   - memory: [core/vector_store.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/vector_store.py)
+   - queue/task flow: [core/task_handler.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/task_handler.py)

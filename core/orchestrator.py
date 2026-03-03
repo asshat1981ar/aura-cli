@@ -60,6 +60,8 @@ class BeadsSyncLoop:
         self._n = 0
 
     def on_cycle_complete(self, _entry):
+        if isinstance(_entry, dict) and bool(_entry.get("dry_run")):
+            return
         self._n += 1
         if self._n % self.EVERY_N == 0:
             log_json("INFO", "beads_sync_loop_starting")
@@ -951,6 +953,7 @@ class LoopOrchestrator:
             "goal": goal,
             "goal_type": goal_type,
             "phase_outputs": phase_outputs,
+            "dry_run": bool(phase_outputs.get("dry_run")),
             "beads": phase_outputs.get("beads_gate"),
             "stop_reason": None,
             "started_at": started_at,
@@ -1047,7 +1050,7 @@ class LoopOrchestrator:
         """Execute a single complete plan-act-verify cycle for *goal*."""
         cycle_id = f"cycle_{uuid.uuid4().hex[:12]}"
         started_at = time.time()
-        phase_outputs = {"retry_count": 0}
+        phase_outputs = {"retry_count": 0, "dry_run": dry_run}
         self._notify_ui("on_cycle_start", goal)
 
         bead_id = self._parse_bead_id(goal)

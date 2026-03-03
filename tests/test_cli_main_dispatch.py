@@ -1,6 +1,7 @@
 import json
 import io
 import os
+import copy
 import tempfile
 import unittest
 import builtins
@@ -247,20 +248,17 @@ class TestCLIMainDispatch(unittest.TestCase):
     def test_create_runtime_queue_mode_resolves_storage_paths_against_project_root(self):
         fake_goal_queue = MagicMock()
         fake_goal_archive = MagicMock()
-
-        def _config_get(key, default=None):
-            mapping = {
-                "goal_queue_path": "state/custom_queue.json",
-                "goal_archive_path": "state/custom_archive.json",
-                "api_key": None,
-            }
-            return mapping.get(key, default)
+        runtime_config = copy.deepcopy(cli_main.DEFAULT_CONFIG)
+        runtime_config["goal_queue_path"] = "state/custom_queue.json"
+        runtime_config["goal_archive_path"] = "state/custom_archive.json"
+        runtime_config["api_key"] = None
 
         with tempfile.TemporaryDirectory() as d, \
+             patch("aura_cli.cli_main.ConfigManager") as mock_config_manager, \
              patch("aura_cli.cli_main.GoalQueue", return_value=fake_goal_queue) as mock_goal_queue, \
              patch("aura_cli.cli_main.GoalArchive", return_value=fake_goal_archive) as mock_goal_archive, \
-             patch.object(cli_main.config, "get", side_effect=_config_get), \
              patch("aura_cli.cli_main.log_json"):
+            mock_config_manager.return_value.show_config.return_value = runtime_config
             cli_main.create_runtime(Path(d), overrides={"runtime_mode": "queue"})
 
         self.assertEqual(mock_goal_queue.call_args.args[0], str(Path(d) / "state" / "custom_queue.json"))
@@ -461,18 +459,16 @@ class TestCLIMainDispatch(unittest.TestCase):
                 raise ImportError(f"blocked optional import for test: {name}")
             return real_import(name, globals, locals, fromlist, level)
 
-        def _config_get(key, default=None):
-            mapping = {
-                "goal_queue_path": "state/custom_queue.json",
-                "goal_archive_path": "state/custom_archive.json",
-                "brain_db_path": "state/custom_brain.db",
-                "memory_store_path": "state/store",
-                "api_key": None,
-                "strict_schema": False,
-            }
-            return mapping.get(key, default)
+        runtime_config = copy.deepcopy(cli_main.DEFAULT_CONFIG)
+        runtime_config["goal_queue_path"] = "state/custom_queue.json"
+        runtime_config["goal_archive_path"] = "state/custom_archive.json"
+        runtime_config["brain_db_path"] = "state/custom_brain.db"
+        runtime_config["memory_store_path"] = "state/store"
+        runtime_config["api_key"] = None
+        runtime_config["strict_schema"] = False
 
         with tempfile.TemporaryDirectory() as d, \
+             patch("aura_cli.cli_main.ConfigManager") as mock_config_manager, \
              patch("aura_cli.cli_main.GoalQueue", return_value=fake_goal_queue), \
              patch("aura_cli.cli_main.GoalArchive", return_value=fake_goal_archive), \
              patch("aura_cli.cli_main.Brain", return_value=fake_brain) as mock_brain_cls, \
@@ -486,9 +482,9 @@ class TestCLIMainDispatch(unittest.TestCase):
              patch("aura_cli.cli_main.Policy.from_config", return_value=fake_policy), \
              patch("aura_cli.cli_main.LoopOrchestrator", return_value=fake_orchestrator), \
              patch("aura_cli.cli_main.GitTools", return_value=fake_git_tools), \
-             patch.object(cli_main.config, "get", side_effect=_config_get), \
              patch("aura_cli.cli_main.log_json"), \
              patch("builtins.__import__", side_effect=_guarded_import):
+            mock_config_manager.return_value.show_config.return_value = runtime_config
             cli_main.create_runtime(Path(d), overrides=None)
 
         mock_brain_cls.assert_called_once_with(db_path=str(Path(d) / "state" / "custom_brain.db"))
@@ -568,6 +564,73 @@ class TestCLIMainDispatch(unittest.TestCase):
 
         mock_brain_cls.assert_called_once_with(db_path=str(Path(d) / "env_state" / "runtime_brain.db"))
         mock_memory_store_cls.assert_called_once_with(Path(d) / "env_state" / "runtime_store")
+
+    def test_create_runtime_scopes_beads_overrides_to_a_single_call(self):
+        def _module(name, **attrs):
+            mod = ModuleType(name)
+            for key, value in attrs.items():
+                setattr(mod, key, value)
+            return mod
+
+        class _ContextManager:
+            def __init__(self, *args, **kwargs):
+                pass
+
+        fake_goal_queue = MagicMock()
+        fake_goal_archive = MagicMock()
+        fake_brain = MagicMock()
+        fake_brain.db = object()
+        fake_model_adapter = MagicMock()
+        fake_vector_store = MagicMock()
+        fake_router = MagicMock()
+        fake_debugger = MagicMock()
+        fake_planner = MagicMock()
+        fake_memory_store = MagicMock()
+        fake_policy = MagicMock()
+        fake_orchestrator = MagicMock()
+        fake_beads_bridge = MagicMock()
+
+        runtime_paths = {
+            "goal_queue_path": Path("memory/goal_queue.json"),
+            "goal_archive_path": Path("memory/goal_archive_v2.json"),
+            "brain_db_path": Path("memory/brain_v2.db"),
+            "memory_store_path": Path("memory/store"),
+            "memory_persistence_path": Path("memory/task_hierarchy_v2.json"),
+        }
+        base_runtime_config = copy.deepcopy(cli_main.DEFAULT_CONFIG)
+        original_runtime_overrides = dict(cli_main.config.runtime_overrides)
+
+        with tempfile.TemporaryDirectory() as d, \
+             patch("aura_cli.cli_main.ConfigManager") as mock_config_manager, \
+             patch("aura_cli.cli_main._resolve_runtime_paths", return_value=runtime_paths), \
+             patch("aura_cli.cli_main.GoalQueue", return_value=fake_goal_queue), \
+             patch("aura_cli.cli_main.GoalArchive", return_value=fake_goal_archive), \
+             patch("aura_cli.cli_main._init_memory_and_brain", return_value=(fake_brain, None)), \
+             patch("aura_cli.cli_main.ModelAdapter", return_value=fake_model_adapter), \
+             patch("aura_cli.cli_main.VectorStore", return_value=fake_vector_store), \
+             patch("aura_cli.cli_main.RouterAgent", return_value=fake_router), \
+             patch("aura_cli.cli_main.DebuggerAgent", return_value=fake_debugger), \
+             patch("aura_cli.cli_main.PlannerAgent", return_value=fake_planner), \
+             patch("aura_cli.cli_main.MemoryStore", return_value=fake_memory_store), \
+             patch("aura_cli.cli_main.default_agents", return_value={}), \
+             patch("aura_cli.cli_main.Policy.from_config", return_value=fake_policy), \
+             patch("aura_cli.cli_main.BeadsBridge.from_defaults", return_value=fake_beads_bridge), \
+             patch("aura_cli.cli_main.LoopOrchestrator", return_value=fake_orchestrator) as mock_orchestrator, \
+             patch("aura_cli.cli_main.GitTools", return_value=MagicMock()), \
+             patch("aura_cli.cli_main._attach_advanced_loops"), \
+             patch("aura_cli.cli_main._start_background_sync"), \
+             patch("aura_cli.cli_main.log_json"), \
+             patch.dict(sys.modules, {"core.context_manager": _module("core.context_manager", ContextManager=_ContextManager)}):
+            mock_config_manager.return_value.show_config.return_value = base_runtime_config
+
+            cli_main.create_runtime(Path(d), overrides={"beads": {"enabled": False, "required": False}})
+            cli_main.create_runtime(Path(d), overrides=None)
+
+        self.assertFalse(mock_orchestrator.call_args_list[0].kwargs["beads_enabled"])
+        self.assertFalse(mock_orchestrator.call_args_list[0].kwargs["beads_required"])
+        self.assertTrue(mock_orchestrator.call_args_list[1].kwargs["beads_enabled"])
+        self.assertTrue(mock_orchestrator.call_args_list[1].kwargs["beads_required"])
+        self.assertEqual(cli_main.config.runtime_overrides, original_runtime_overrides)
 
     def test_attach_advanced_loops_only_adds_beads_sync_when_enabled(self):
         def _module(name, **attrs):

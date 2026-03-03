@@ -5,7 +5,7 @@ import uuid
 from pathlib import Path
 from unittest.mock import MagicMock, patch, call
 
-from core.orchestrator import LoopOrchestrator
+from core.orchestrator import BeadsSyncLoop, LoopOrchestrator
 from core.policy import Policy
 from memory.controller import memory_controller
 
@@ -219,6 +219,16 @@ class TestOrchestratorPhases(unittest.TestCase):
                 call({"cmd": "close", "id": "bd-1", "args": ["--reason", "done"]}),
             ],
         )
+
+    def test_beads_sync_loop_skips_external_sync_for_dry_run_cycles(self):
+        beads_skill = MagicMock()
+        sync_loop = BeadsSyncLoop(beads_skill)
+        sync_loop._n = sync_loop.EVERY_N - 1
+        self.orchestrator.attach_improvement_loops(sync_loop)
+
+        self.orchestrator.run_cycle("test goal", dry_run=True)
+
+        beads_skill.run.assert_not_called()
 
     def test_poll_external_goals_reads_ready_dict_shape(self):
         beads_skill = MagicMock()

@@ -1,6 +1,5 @@
-# CLI Reference
-
-Generated from `aura_cli.options.help_schema`.
+Wrote docs/CLI_REFERENCE.md
+rom `aura_cli.options.help_schema`.
 
 Schema version: `3`
 Deterministic output: `true`
@@ -84,6 +83,7 @@ Known record codes:
   - [`aura queue clear`](#aura-queue-clear)
 - [`memory`](#memory)
   - [`aura memory search`](#aura-memory-search)
+  - [`aura memory reindex`](#aura-memory-reindex)
 - [`metrics`](#metrics)
 
 ## `help`
@@ -444,6 +444,18 @@ Perform a semantic search over brain entries.
 Examples:
 - `python3 main.py memory search "workflow engine"`
 - `python3 main.py memory search "workflow engine" --json`
+
+### `aura memory reindex`
+
+Rebuild semantic memory embeddings
+
+Rebuild semantic memory embeddings for the active model and force a project sync.
+
+`action`: `memory_reindex` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py memory reindex`
+- `python3 main.py memory reindex --json`
 
 ## `metrics`
 

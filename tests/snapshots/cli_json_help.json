@@ -505,6 +505,27 @@
       "summary": "Search semantic memory"
     },
     {
+      "action": "memory_reindex",
+      "description": "Rebuild semantic memory embeddings for the active model and force a project sync.",
+      "examples": [
+        "python3 main.py memory reindex",
+        "python3 main.py memory reindex --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "memory",
+        "reindex"
+      ],
+      "requires_runtime": true,
+      "summary": "Rebuild semantic memory embeddings"
+    },
+    {
       "action": "metrics_show",
       "description": "Display cycle success rates and timing stats.",
       "examples": [

@@ -387,6 +387,7 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("queue", "list"): "queue_list",
     ("queue", "clear"): "queue_clear",
     ("memory", "search"): "memory_search",
+    ("memory", "reindex"): "memory_reindex",
     ("metrics",): "metrics_show",
 }
 
@@ -488,7 +489,8 @@ def _ns_get(namespace: Any, name: str, default: Any = None) -> Any:
 def match_canonical_action(command: str | None, subcommand: str | None, namespace: Any) -> str:
     if _ns_get(namespace, "json_help", False):
         return "json_help"
-    path = tuple(part for part in (command, subcommand) if part)
+    cmd_path = tuple(getattr(namespace, "_cmd_path", ()) or ())
+    path = cmd_path or tuple(part for part in (command, subcommand) if part)
     if path == ("goal", "add"):
         return "goal_add_run" if _ns_get(namespace, "run_goals", False) else "goal_add"
     return _CANONICAL_PATH_TO_ACTION.get(path, "interactive")

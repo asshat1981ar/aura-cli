@@ -437,4 +437,8 @@ bash scripts/run_android_local_models.sh
 2. Start with `android_planner` + `android_coder`.
 3. Verify planner JSON stability first.
 4. Only then consider adding a third local reasoning model.
-5. Reindex semantic memory after switching the embedding model if you already have a populated store.
+5. Reindex semantic memory after switching the embedding model if you already have a populated store:
+
+```bash
+python3 main.py memory reindex --json
+```

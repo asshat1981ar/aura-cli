@@ -251,6 +251,116 @@ class VectorStore:
         emb_count = self.brain.db.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
         return {"records": rec_count, "record_count": rec_count, "embeddings": emb_count}
 
+    def rebuild(self, options: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        """
+        Rebuild embeddings for the active model.
+
+        Options:
+          - model_id: explicit target model id
+          - source_types: optional list of source_type values to include
+          - exclude_source_types: optional list of source_type values to exclude
+          - drop_existing_embeddings: delete existing rows for the target model first
+          - batch_size: embedding batch size
+        """
+        opts = dict(options or {})
+        target_model = str(opts.get("model_id") or self.model_adapter.model_id())
+        source_types = opts.get("source_types") or []
+        exclude_source_types = opts.get("exclude_source_types") or []
+        drop_existing_embeddings = bool(opts.get("drop_existing_embeddings", True))
+        batch_size = max(1, int(opts.get("batch_size", 16)))
+
+        clauses = []
+        params: list[Any] = []
+        if source_types:
+            placeholders = ",".join("?" for _ in source_types)
+            clauses.append(f"source_type IN ({placeholders})")
+            params.extend(source_types)
+        if exclude_source_types:
+            placeholders = ",".join("?" for _ in exclude_source_types)
+            clauses.append(f"source_type NOT IN ({placeholders})")
+            params.extend(exclude_source_types)
+        where_sql = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+
+        stats = {
+            "model_id": target_model,
+            "records_seen": 0,
+            "embeddings_written": 0,
+            "records_failed": 0,
+            "drop_existing_embeddings": drop_existing_embeddings,
+        }
+
+        try:
+            rows = self.brain.db.execute(
+                f"SELECT id, content FROM memory_records{where_sql} ORDER BY id",
+                params,
+            ).fetchall()
+            stats["records_seen"] = len(rows)
+            record_ids = [row["id"] if isinstance(row, sqlite3.Row) else row[0] for row in rows]
+
+            if drop_existing_embeddings and record_ids:
+                placeholders = ",".join("?" for _ in record_ids)
+                self.brain.db.execute(
+                    f"DELETE FROM embeddings WHERE model_id = ? AND record_id IN ({placeholders})",
+                    [target_model, *record_ids],
+                )
+                self.brain.db.execute(
+                    f"""
+                    UPDATE memory_records
+                    SET embedding_model = NULL, embedding_dims = NULL, embedding = NULL
+                    WHERE id IN ({placeholders}) AND embedding_model = ?
+                    """,
+                    [*record_ids, target_model],
+                )
+                self.brain.db.commit()
+
+            for start in range(0, len(rows), batch_size):
+                batch = rows[start:start + batch_size]
+                texts = [row["content"] if isinstance(row, sqlite3.Row) else row[1] for row in batch]
+                vectors = self.model_adapter.embed(texts)
+
+                self.brain.db.execute("BEGIN TRANSACTION")
+                try:
+                    for row, vec in zip(batch, vectors):
+                        record_id = row["id"] if isinstance(row, sqlite3.Row) else row[0]
+                        embedding_blob = np.array(vec, dtype=np.float32).tobytes()
+                        dims = int(len(vec))
+                        self.brain.db.execute(
+                            """
+                            INSERT OR REPLACE INTO embeddings (record_id, model_id, dims, data)
+                            VALUES (?, ?, ?, ?)
+                            """,
+                            (record_id, target_model, dims, embedding_blob),
+                        )
+                        self.brain.db.execute(
+                            """
+                            UPDATE memory_records
+                            SET embedding_model = ?, embedding_dims = ?, embedding = ?
+                            WHERE id = ?
+                            """,
+                            (target_model, dims, embedding_blob, record_id),
+                        )
+                        stats["embeddings_written"] += 1
+                    self.brain.db.commit()
+                except Exception:
+                    self.brain.db.rollback()
+                    raise
+
+            log_json("INFO", "vector_store_rebuild_complete", details=stats)
+            return stats
+        except Exception as exc:
+            stats["records_failed"] = stats["records_seen"] - stats["embeddings_written"]
+            stats["error"] = str(exc)
+            log_json("ERROR", "vector_store_rebuild_failed", details=stats)
+            return stats
+
+    def migrate_embedding_model(self, new_model_id: str) -> Dict[str, Any]:
+        """
+        Rebuild all current records under a new embedding model identifier.
+        The caller is responsible for configuring the adapter to actually emit
+        vectors for that model before invoking this method.
+        """
+        return self.rebuild({"model_id": new_model_id, "drop_existing_embeddings": True})
+
     def delete(self, ids: List[str]) -> int:
         cur = self.brain.db.execute("DELETE FROM memory_records WHERE id IN ({})".format(
             ",".join(["?"] * len(ids))

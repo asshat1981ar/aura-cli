@@ -51,9 +51,9 @@ class ProjectKnowledgeSyncer:
         except Exception as e:
             log_json("WARN", "project_sync_save_hashes_failed", details={"error": str(e)})
 
-    def sync_all(self) -> Dict[str, Any]:
+    def sync_all(self, *, force: bool = False) -> Dict[str, Any]:
         """Perform a full sync of the project knowledge. Never raises."""
-        log_json("INFO", "project_sync_start", details={"root": str(self.root)})
+        log_json("INFO", "project_sync_start", details={"root": str(self.root), "force": force})
         start_time = time.time()
         
         stats = {
@@ -79,7 +79,7 @@ class ProjectKnowledgeSyncer:
                         content = py_file.read_text(encoding="utf-8", errors="replace")
                         current_hash = hashlib.sha256(content.encode()).hexdigest()
                         
-                        if self._hashes.get(rel_path) == current_hash:
+                        if not force and self._hashes.get(rel_path) == current_hash:
                             stats["files_skipped"] += 1
                             continue
 

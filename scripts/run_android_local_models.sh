@@ -22,6 +22,7 @@ AURA_ANDROID_PLANNER_PORT="${AURA_ANDROID_PLANNER_PORT:-8081}"
 
 AURA_ANDROID_CODER_CTX="${AURA_ANDROID_CODER_CTX:-4096}"
 AURA_ANDROID_PLANNER_CTX="${AURA_ANDROID_PLANNER_CTX:-4096}"
+AURA_ANDROID_READY_TIMEOUT="${AURA_ANDROID_READY_TIMEOUT:-20}"
 
 LOG_DIR="${AURA_ANDROID_LOG_DIR:-logs/local_models}"
 CODER_LOG="${LOG_DIR}/coder.log"
@@ -89,6 +90,13 @@ CODER_PID="$(start_server "$AURA_ANDROID_CODER_MODEL" "$AURA_ANDROID_CODER_PORT"
 
 echo "Starting planner model on http://${AURA_ANDROID_HOST}:${AURA_ANDROID_PLANNER_PORT}/v1"
 PLANNER_PID="$(start_server "$AURA_ANDROID_PLANNER_MODEL" "$AURA_ANDROID_PLANNER_PORT" "$AURA_ANDROID_PLANNER_CTX" "$PLANNER_LOG")"
+
+echo "Waiting for local model health checks..."
+python3 scripts/check_android_local_models.py \
+  --host "$AURA_ANDROID_HOST" \
+  --coder-port "$AURA_ANDROID_CODER_PORT" \
+  --planner-port "$AURA_ANDROID_PLANNER_PORT" \
+  --timeout "$AURA_ANDROID_READY_TIMEOUT"
 
 echo "coder pid: $CODER_PID log: $CODER_LOG"
 echo "planner pid: $PLANNER_PID log: $PLANNER_LOG"

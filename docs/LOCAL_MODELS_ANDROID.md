@@ -339,6 +339,19 @@ That helper:
 - prints the `LLAMA_SERVER_BIN` export you can reuse with
   `scripts/run_android_local_models.sh`
 
+This repo also includes:
+
+- `scripts/check_android_local_models.py`
+
+Quick verification command:
+
+```bash
+python3 scripts/check_android_local_models.py --host 127.0.0.1 --coder-port 8080 --planner-port 8081
+```
+
+`scripts/run_android_local_models.sh` now runs that health check automatically
+before it reports the local model servers as ready.
+
 Example:
 
 ```bash

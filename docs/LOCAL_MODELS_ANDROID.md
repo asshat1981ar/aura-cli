@@ -170,11 +170,26 @@ Why it is not the Android default:
   practical everyday Termux default for most phones
 
 
+## Recommended Local Embedding Model
+
+### BGE-Small English v1.5
+
+Why it fits:
+
+- much smaller and cheaper than remote embedding APIs
+- good fit for on-device semantic retrieval
+- realistic for phone-class `llama.cpp` deployment
+
+Recommended AURA role:
+
+- `semantic_memory` embeddings
+
+
 ## Recommended AURA Deployment Strategy
 
 ### Baseline Android Stack
 
-Use two local profiles:
+Use three local profiles:
 
 1. `android_coder`
    Model: `Qwen2.5-Coder-3B-Instruct-GGUF`
@@ -193,6 +208,11 @@ Use two local profiles:
 If you need the most Android-native fallback, `Gemma 3n` remains a good
 alternative planner profile, but `Phi-4-mini-instruct` is the stronger default
 for software-development reasoning.
+
+3. `android_embeddings`
+   Model: `BGE-Small English v1.5`
+   Role targets:
+   - `embedding`
 
 ### Why Two Models Instead Of One
 
@@ -249,6 +269,12 @@ Example:
       "model": "phi-4-mini-instruct-q4",
       "temperature": 0.2,
       "max_tokens": 1536
+    },
+    "android_embeddings": {
+      "provider": "openai_compatible",
+      "base_url": "http://127.0.0.1:8082/v1",
+      "embedding_model": "bge-small-en-v1.5-q8_0",
+      "embedding_dims": 384
     }
   },
   "local_model_routing": {
@@ -256,8 +282,12 @@ Example:
     "analysis": "android_planner",
     "critique": "android_planner",
     "code_generation": "android_coder",
+    "embedding": "android_embeddings",
     "quality": "android_planner",
     "fast": "android_coder"
+  },
+  "semantic_memory": {
+    "embedding_model": "local_profile:android_embeddings"
   }
 }
 ```
@@ -298,16 +328,21 @@ This repo now includes:
 
 - `scripts/run_android_local_models.sh`
 
-It starts two separate `llama.cpp` OpenAI-compatible servers:
+It starts two separate `llama.cpp` OpenAI-compatible servers by default:
 
 - coder model on `127.0.0.1:8080`
 - planner model on `127.0.0.1:8081`
+
+If `AURA_ANDROID_EMBED_MODEL` is set, it also starts:
+
+- embedding model on `127.0.0.1:8082`
 
 Example:
 
 ```bash
 export AURA_ANDROID_CODER_MODEL="$HOME/models/qwen2.5-coder-3b-instruct-q4.gguf"
 export AURA_ANDROID_PLANNER_MODEL="$HOME/models/phi-4-mini-instruct-q4.gguf"
+export AURA_ANDROID_EMBED_MODEL="$HOME/models/bge-small-en-v1.5-q8_0.gguf"
 bash scripts/run_android_local_models.sh
 ```
 
@@ -317,9 +352,11 @@ You can override:
 - `AURA_ANDROID_HOST`
 - `AURA_ANDROID_CODER_PORT`
 - `AURA_ANDROID_PLANNER_PORT`
+- `AURA_ANDROID_EMBED_PORT`
 - `AURA_ANDROID_THREADS`
 - `AURA_ANDROID_CODER_CTX`
 - `AURA_ANDROID_PLANNER_CTX`
+- `AURA_ANDROID_EMBED_CTX`
 
 This two-port layout matches `aura.config.json` and
 `aura.config.android.example.json`.
@@ -347,6 +384,7 @@ Quick verification command:
 
 ```bash
 python3 scripts/check_android_local_models.py --host 127.0.0.1 --coder-port 8080 --planner-port 8081
+python3 scripts/check_android_local_models.py --host 127.0.0.1 --coder-port 8080 --planner-port 8081 --embedding-port 8082
 ```
 
 `scripts/run_android_local_models.sh` now runs that health check automatically
@@ -358,6 +396,7 @@ Example:
 bash scripts/setup_llama_cpp_termux.sh
 export AURA_ANDROID_CODER_MODEL="$HOME/models/qwen2.5-coder-3b-instruct-q4.gguf"
 export AURA_ANDROID_PLANNER_MODEL="$HOME/models/phi-4-mini-instruct-q4.gguf"
+export AURA_ANDROID_EMBED_MODEL="$HOME/models/bge-small-en-v1.5-q8_0.gguf"
 bash scripts/run_android_local_models.sh
 ```
 
@@ -368,4 +407,4 @@ bash scripts/run_android_local_models.sh
 2. Start with `android_planner` + `android_coder`.
 3. Verify planner JSON stability first.
 4. Only then consider adding a third local reasoning model.
-5. Add local embeddings later if semantic-memory quality becomes the next bottleneck.
+5. Reindex semantic memory after switching the embedding model if you already have a populated store.

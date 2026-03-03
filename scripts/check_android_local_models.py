@@ -57,11 +57,12 @@ def wait_for_model_endpoint(name: str, host: str, port: int, timeout: float) -> 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Check that the Android local coder and planner model servers are reachable."
+        description="Check that the Android local coder, planner, and optional embedding model servers are reachable."
     )
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--coder-port", type=int, default=8080)
     parser.add_argument("--planner-port", type=int, default=8081)
+    parser.add_argument("--embedding-port", type=int, default=None)
     parser.add_argument("--timeout", type=float, default=20.0)
     return parser.parse_args()
 
@@ -72,6 +73,8 @@ def main() -> int:
         ("coder", args.host, args.coder_port),
         ("planner", args.host, args.planner_port),
     ]
+    if args.embedding_port is not None:
+        checks.append(("embedding", args.host, args.embedding_port))
 
     all_ok = True
     for name, host, port in checks:

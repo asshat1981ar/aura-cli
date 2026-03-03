@@ -16,17 +16,21 @@ AURA_ANDROID_THREADS="${AURA_ANDROID_THREADS:-4}"
 
 AURA_ANDROID_CODER_MODEL="${AURA_ANDROID_CODER_MODEL:-}"
 AURA_ANDROID_PLANNER_MODEL="${AURA_ANDROID_PLANNER_MODEL:-}"
+AURA_ANDROID_EMBED_MODEL="${AURA_ANDROID_EMBED_MODEL:-}"
 
 AURA_ANDROID_CODER_PORT="${AURA_ANDROID_CODER_PORT:-8080}"
 AURA_ANDROID_PLANNER_PORT="${AURA_ANDROID_PLANNER_PORT:-8081}"
+AURA_ANDROID_EMBED_PORT="${AURA_ANDROID_EMBED_PORT:-8082}"
 
 AURA_ANDROID_CODER_CTX="${AURA_ANDROID_CODER_CTX:-4096}"
 AURA_ANDROID_PLANNER_CTX="${AURA_ANDROID_PLANNER_CTX:-4096}"
+AURA_ANDROID_EMBED_CTX="${AURA_ANDROID_EMBED_CTX:-2048}"
 AURA_ANDROID_READY_TIMEOUT="${AURA_ANDROID_READY_TIMEOUT:-20}"
 
 LOG_DIR="${AURA_ANDROID_LOG_DIR:-logs/local_models}"
 CODER_LOG="${LOG_DIR}/coder.log"
 PLANNER_LOG="${LOG_DIR}/planner.log"
+EMBED_LOG="${LOG_DIR}/embedding.log"
 
 if ! command -v "$LLAMA_SERVER_BIN" >/dev/null 2>&1; then
   if [ ! -x "$LLAMA_SERVER_BIN" ]; then
@@ -56,6 +60,11 @@ if [ ! -f "$AURA_ANDROID_PLANNER_MODEL" ]; then
   exit 1
 fi
 
+if [ -n "$AURA_ANDROID_EMBED_MODEL" ] && [ ! -f "$AURA_ANDROID_EMBED_MODEL" ]; then
+  echo "error: embedding model not found: $AURA_ANDROID_EMBED_MODEL" >&2
+  exit 1
+fi
+
 mkdir -p "$LOG_DIR"
 
 start_server() {
@@ -63,6 +72,7 @@ start_server() {
   local port="$2"
   local ctx="$3"
   local log_path="$4"
+  local extra_flag="$5"
 
   "$LLAMA_SERVER_BIN" \
     -m "$model_path" \
@@ -70,6 +80,7 @@ start_server() {
     --port "$port" \
     --ctx-size "$ctx" \
     --threads "$AURA_ANDROID_THREADS" \
+    ${extra_flag:+$extra_flag} \
     >"$log_path" 2>&1 &
   echo $!
 }
@@ -81,25 +92,40 @@ cleanup() {
   if [ -n "${PLANNER_PID:-}" ] && kill -0 "$PLANNER_PID" 2>/dev/null; then
     kill "$PLANNER_PID" 2>/dev/null || true
   fi
+  if [ -n "${EMBED_PID:-}" ] && kill -0 "$EMBED_PID" 2>/dev/null; then
+    kill "$EMBED_PID" 2>/dev/null || true
+  fi
 }
 
 trap cleanup INT TERM EXIT
 
 echo "Starting coder model on http://${AURA_ANDROID_HOST}:${AURA_ANDROID_CODER_PORT}/v1"
-CODER_PID="$(start_server "$AURA_ANDROID_CODER_MODEL" "$AURA_ANDROID_CODER_PORT" "$AURA_ANDROID_CODER_CTX" "$CODER_LOG")"
+CODER_PID="$(start_server "$AURA_ANDROID_CODER_MODEL" "$AURA_ANDROID_CODER_PORT" "$AURA_ANDROID_CODER_CTX" "$CODER_LOG" "")"
 
 echo "Starting planner model on http://${AURA_ANDROID_HOST}:${AURA_ANDROID_PLANNER_PORT}/v1"
-PLANNER_PID="$(start_server "$AURA_ANDROID_PLANNER_MODEL" "$AURA_ANDROID_PLANNER_PORT" "$AURA_ANDROID_PLANNER_CTX" "$PLANNER_LOG")"
+PLANNER_PID="$(start_server "$AURA_ANDROID_PLANNER_MODEL" "$AURA_ANDROID_PLANNER_PORT" "$AURA_ANDROID_PLANNER_CTX" "$PLANNER_LOG" "")"
+
+HEALTHCHECK_ARGS=(
+  --host "$AURA_ANDROID_HOST"
+  --coder-port "$AURA_ANDROID_CODER_PORT"
+  --planner-port "$AURA_ANDROID_PLANNER_PORT"
+  --timeout "$AURA_ANDROID_READY_TIMEOUT"
+)
+
+if [ -n "$AURA_ANDROID_EMBED_MODEL" ]; then
+  echo "Starting embedding model on http://${AURA_ANDROID_HOST}:${AURA_ANDROID_EMBED_PORT}/v1"
+  EMBED_PID="$(start_server "$AURA_ANDROID_EMBED_MODEL" "$AURA_ANDROID_EMBED_PORT" "$AURA_ANDROID_EMBED_CTX" "$EMBED_LOG" "--embedding")"
+  HEALTHCHECK_ARGS+=(--embedding-port "$AURA_ANDROID_EMBED_PORT")
+fi
 
 echo "Waiting for local model health checks..."
-python3 scripts/check_android_local_models.py \
-  --host "$AURA_ANDROID_HOST" \
-  --coder-port "$AURA_ANDROID_CODER_PORT" \
-  --planner-port "$AURA_ANDROID_PLANNER_PORT" \
-  --timeout "$AURA_ANDROID_READY_TIMEOUT"
+python3 scripts/check_android_local_models.py "${HEALTHCHECK_ARGS[@]}"
 
 echo "coder pid: $CODER_PID log: $CODER_LOG"
 echo "planner pid: $PLANNER_PID log: $PLANNER_LOG"
+if [ -n "${EMBED_PID:-}" ]; then
+  echo "embedding pid: $EMBED_PID log: $EMBED_LOG"
+fi
 echo "Press Ctrl+C to stop both local model servers."
 
 wait "$CODER_PID" "$PLANNER_PID"

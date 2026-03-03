@@ -34,5 +34,27 @@ class TestRecursiveImprovementService(unittest.TestCase):
         self.assertTrue(proposal["requires_operator_review"])
         self.assertIn("score", proposal["fitness_snapshot"])
 
+    def test_normalize_cycle_entry_uses_real_cycle_fields(self):
+        normalized = self.service.normalize_cycle_entry({
+            "cycle_id": "c9",
+            "goal": "stabilize parser",
+            "phase_outputs": {
+                "verification": {"status": "fail"},
+                "retry_count": 2,
+            },
+        })
+        self.assertEqual(normalized["cycle_id"], "c9")
+        self.assertEqual(normalized["verification_status"], "fail")
+        self.assertEqual(normalized["retries"], 2)
+
+    def test_observe_cycle_builds_recent_history(self):
+        history = self.service.observe_cycle({
+            "cycle_id": "c1",
+            "phase_outputs": {"verification": {"status": "pass"}, "retry_count": 1},
+        })
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["verification_status"], "pass")
+        self.assertEqual(history[0]["retries"], 1)
+
 if __name__ == "__main__":
     unittest.main()

@@ -734,6 +734,50 @@ def _handle_memory_search_dispatch(ctx: DispatchContext) -> int:
     return 0
 
 
+def _handle_memory_reindex_dispatch(ctx: DispatchContext) -> int:
+    from core.project_syncer import ProjectKnowledgeSyncer
+
+    runtime = ctx.runtime
+    vector_store = runtime["vector_store"]
+    model_adapter = runtime["model_adapter"]
+
+    rebuild_stats = vector_store.rebuild({
+        "exclude_source_types": ["file"],
+        "drop_existing_embeddings": True,
+    })
+    syncer = ProjectKnowledgeSyncer(vector_store, None, project_root=str(ctx.project_root))
+    sync_stats = syncer.sync_all(force=True)
+
+    payload = {
+        "status": "ok" if "error" not in rebuild_stats else "error",
+        "embedding_model": model_adapter.model_id(),
+        "embedding_dims": model_adapter.dimensions(),
+        "rebuild": rebuild_stats,
+        "project_sync": sync_stats,
+    }
+
+    if getattr(ctx.args, "json", False):
+        _print_json_payload(payload, parsed=ctx.parsed, indent=2)
+        return 0 if payload["status"] == "ok" else 1
+
+    print("Semantic memory reindex complete.")
+    print(f"Embedding model: {payload['embedding_model']} ({payload['embedding_dims']} dims)")
+    print(
+        "Non-file records rebuilt: "
+        f"{rebuild_stats.get('embeddings_written', 0)}/{rebuild_stats.get('records_seen', 0)}"
+    )
+    print(
+        "Project sync: "
+        f"{sync_stats.get('files_processed', 0)} files processed, "
+        f"{sync_stats.get('chunks_created', 0)} chunks created, "
+        f"{sync_stats.get('files_skipped', 0)} skipped"
+    )
+    if payload["status"] != "ok":
+        print(f"Error: {rebuild_stats.get('error')}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def _handle_metrics_show_dispatch(ctx: DispatchContext) -> int:
     memory_store = ctx.runtime["memory_store"]
     log_entries = memory_store.read_log(limit=100)
@@ -825,6 +869,8 @@ def _handle_metrics_show_dispatch(ctx: DispatchContext) -> int:
     print(f"Summary: {win_rate:.1f}% success rate | {successes} pass, {skipped} skip, {fails} fail")
     print(f"Avg duration: {avg_time:.1f}s")
     return 0
+
+
 def _handle_workflow_run_dispatch(ctx: DispatchContext) -> int:
     from core.operator_runtime import build_beads_runtime_metadata
 
@@ -1017,6 +1063,7 @@ COMMAND_DISPATCH_REGISTRY = {
     "queue_list": _dispatch_rule("queue_list", _handle_queue_list_dispatch),
     "queue_clear": _dispatch_rule("queue_clear", _handle_queue_clear_dispatch),
     "memory_search": _dispatch_rule("memory_search", _handle_memory_search_dispatch),
+    "memory_reindex": _dispatch_rule("memory_reindex", _handle_memory_reindex_dispatch),
     "metrics_show": _dispatch_rule("metrics_show", _handle_metrics_show_dispatch),
     "workflow_run": _dispatch_rule("workflow_run", _handle_workflow_run_dispatch),
     "scaffold": _dispatch_rule("scaffold", _handle_scaffold_dispatch),

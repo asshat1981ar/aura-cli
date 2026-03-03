@@ -354,6 +354,10 @@ def _customize_memory_search(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--limit", type=int, default=5, help="Max results to return.")
 
 
+def _customize_memory_reindex(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(memory_reindex=True)
+
+
 def _customize_metrics(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(metrics_show=True)
 
@@ -379,6 +383,7 @@ _PARSER_CUSTOMIZERS.update(
         ("queue", "list"): _customize_queue_list,
         ("queue", "clear"): _customize_queue_clear,
         ("memory", "search"): _customize_memory_search,
+        ("memory", "reindex"): _customize_memory_reindex,
         ("metrics",): _customize_metrics,
     }
 )

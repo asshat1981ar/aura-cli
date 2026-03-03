@@ -243,6 +243,15 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         ),
     ),
     CommandSpec(
+        path=("memory", "reindex"),
+        summary="Rebuild semantic memory embeddings",
+        description="Rebuild semantic memory embeddings for the active model and force a project sync.",
+        examples=(
+            "python3 main.py memory reindex",
+            "python3 main.py memory reindex --json",
+        ),
+    ),
+    CommandSpec(
         path=("metrics",),
         summary="Show performance metrics",
         description="Display cycle success rates and timing stats.",
@@ -286,6 +295,7 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("queue_list", True, ("queue", "list")),
     CLIActionSpec("queue_clear", True, ("queue", "clear")),
     CLIActionSpec("memory_search", True, ("memory", "search")),
+    CLIActionSpec("memory_reindex", True, ("memory", "reindex")),
     CLIActionSpec("metrics_show", True, ("metrics",)),
     CLIActionSpec("interactive", True, None),
 )

@@ -102,7 +102,7 @@ class TestOrchestratorPhases(unittest.TestCase):
         type(mock_discovery).__name__ = "AutonomousDiscovery"
         
         self.orchestrator.run_cycle("test goal", dry_run=True)
-        assert mock_discovery.run_scan.called
+        assert mock_discovery.on_cycle_complete.called
 
     def test_phase_11_evolve(self):
         mock_evolution = MagicMock()

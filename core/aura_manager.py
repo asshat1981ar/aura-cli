@@ -17,14 +17,14 @@ class AuraManager:
         Stub for integrating and executing a list of functions.
         Targeted by RSI for autonomous coordination logic.
         """
-        results = []
+        results = {}
         for func in func_list:
+            name = getattr(func, '__name__', 'unknown')
             try:
                 # Placeholder for coordination logic
-                result = func()
-                results.append(result)
+                results[name] = func()
             except Exception as e:
-                logger.error(f"Function {getattr(func, '__name__', 'unknown')} failed: {e}")
+                logger.error(f"Function {name} failed: {e}")
         return results
 
 def orchestration_manager():

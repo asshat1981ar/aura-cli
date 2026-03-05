@@ -6,6 +6,7 @@ from unittest.mock import patch
 from core.file_tools import apply_change_with_explicit_overwrite_policy as real_apply_change
 from core.orchestrator import LoopOrchestrator
 from core.policy import Policy
+from memory.controller import memory_controller
 from memory.store import MemoryStore
 
 
@@ -38,6 +39,12 @@ def _base_agents(*, change_set):
 
 
 class TestDryRunWorkflow(unittest.TestCase):
+    def setUp(self):
+        self._original_store = memory_controller.persistent_store
+
+    def tearDown(self):
+        memory_controller.persistent_store = self._original_store
+
     def _make_orchestrator(self, project_root: Path, *, change_set):
         return LoopOrchestrator(
             agents=_base_agents(change_set=change_set),

@@ -9,7 +9,6 @@ logger = logging.getLogger(__name__)
 class AuraManager:
     def __init__(self):
         self.performance_metrics = []
-    def __init__(self):
         self.registry = {}
 
     def integrate_functions(self, func_list):
@@ -17,12 +16,12 @@ class AuraManager:
         Stub for integrating and executing a list of functions.
         Targeted by RSI for autonomous coordination logic.
         """
-        results = []
+        results = {}
         for func in func_list:
             try:
                 # Placeholder for coordination logic
                 result = func()
-                results.append(result)
+                results[getattr(func, '__name__', 'unknown')] = result
             except Exception as e:
                 logger.error(f"Function {getattr(func, '__name__', 'unknown')} failed: {e}")
         return results

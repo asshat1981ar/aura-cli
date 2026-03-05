@@ -1,5 +1,6 @@
-Wrote docs/CLI_REFERENCE.md
-rom `aura_cli.options.help_schema`.
+# CLI Reference
+
+Generated from `aura_cli.options.help_schema`.
 
 Schema version: `3`
 Deterministic output: `true`

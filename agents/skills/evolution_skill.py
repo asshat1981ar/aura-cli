@@ -5,9 +5,8 @@ evolutionary updates as a first-class skill.
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from agents.skills.base import SkillBase
 from core.logging_utils import log_json
@@ -35,7 +34,6 @@ class EvolutionSkill(SkillBase):
         try:
             # Lazy import to avoid circular dependencies
             from core.evolution_loop import EvolutionLoop
-            from core.orchestrator import LoopOrchestrator
             from aura_cli.cli_main import create_runtime
             
             # Use the global runtime or create a temporary one

@@ -6,10 +6,9 @@ persists it to agents/skills/, and registers it in the skill registry.
 """
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from agents.skills.base import SkillBase
 from core.logging_utils import log_json

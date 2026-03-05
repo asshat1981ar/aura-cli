@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Any
 from pathlib import Path
 from core.logging_utils import log_json
-from core.config_manager import config
 from memory.controller import memory_controller, MemoryTier
 
 @dataclass

@@ -6,7 +6,7 @@ import tempfile
 import unittest
 import builtins
 import sys
-from contextlib import redirect_stdout, redirect_stderr
+from contextlib import redirect_stdout, redirect_stderr, ExitStack
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest.mock import MagicMock, patch, call
@@ -600,27 +600,27 @@ class TestCLIMainDispatch(unittest.TestCase):
         base_runtime_config = copy.deepcopy(cli_main.DEFAULT_CONFIG)
         original_runtime_overrides = dict(cli_main.config.runtime_overrides)
 
-        with tempfile.TemporaryDirectory() as d, \
-             patch("aura_cli.cli_main.ConfigManager") as mock_config_manager, \
-             patch("aura_cli.cli_main._resolve_runtime_paths", return_value=runtime_paths), \
-             patch("aura_cli.cli_main.GoalQueue", return_value=fake_goal_queue), \
-             patch("aura_cli.cli_main.GoalArchive", return_value=fake_goal_archive), \
-             patch("aura_cli.cli_main._init_memory_and_brain", return_value=(fake_brain, None)), \
-             patch("aura_cli.cli_main.ModelAdapter", return_value=fake_model_adapter), \
-             patch("aura_cli.cli_main.VectorStore", return_value=fake_vector_store), \
-             patch("aura_cli.cli_main.RouterAgent", return_value=fake_router), \
-             patch("aura_cli.cli_main.DebuggerAgent", return_value=fake_debugger), \
-             patch("aura_cli.cli_main.PlannerAgent", return_value=fake_planner), \
-             patch("aura_cli.cli_main.MemoryStore", return_value=fake_memory_store), \
-             patch("aura_cli.cli_main.default_agents", return_value={}), \
-             patch("aura_cli.cli_main.Policy.from_config", return_value=fake_policy), \
-             patch("aura_cli.cli_main.BeadsBridge.from_defaults", return_value=fake_beads_bridge), \
-             patch("aura_cli.cli_main.LoopOrchestrator", return_value=fake_orchestrator) as mock_orchestrator, \
-             patch("aura_cli.cli_main.GitTools", return_value=MagicMock()), \
-             patch("aura_cli.cli_main._attach_advanced_loops"), \
-             patch("aura_cli.cli_main._start_background_sync"), \
-             patch("aura_cli.cli_main.log_json"), \
-             patch.dict(sys.modules, {"core.context_manager": _module("core.context_manager", ContextManager=_ContextManager)}):
+        with tempfile.TemporaryDirectory() as d, ExitStack() as stack:
+            mock_config_manager = stack.enter_context(patch("aura_cli.cli_main.ConfigManager"))
+            stack.enter_context(patch("aura_cli.cli_main._resolve_runtime_paths", return_value=runtime_paths))
+            stack.enter_context(patch("aura_cli.cli_main.GoalQueue", return_value=fake_goal_queue))
+            stack.enter_context(patch("aura_cli.cli_main.GoalArchive", return_value=fake_goal_archive))
+            stack.enter_context(patch("aura_cli.cli_main._init_memory_and_brain", return_value=(fake_brain, None)))
+            stack.enter_context(patch("aura_cli.cli_main.ModelAdapter", return_value=fake_model_adapter))
+            stack.enter_context(patch("aura_cli.cli_main.VectorStore", return_value=fake_vector_store))
+            stack.enter_context(patch("aura_cli.cli_main.RouterAgent", return_value=fake_router))
+            stack.enter_context(patch("aura_cli.cli_main.DebuggerAgent", return_value=fake_debugger))
+            stack.enter_context(patch("aura_cli.cli_main.PlannerAgent", return_value=fake_planner))
+            stack.enter_context(patch("aura_cli.cli_main.MemoryStore", return_value=fake_memory_store))
+            stack.enter_context(patch("aura_cli.cli_main.default_agents", return_value={}))
+            stack.enter_context(patch("aura_cli.cli_main.Policy.from_config", return_value=fake_policy))
+            stack.enter_context(patch("aura_cli.cli_main.BeadsBridge.from_defaults", return_value=fake_beads_bridge))
+            mock_orchestrator = stack.enter_context(patch("aura_cli.cli_main.LoopOrchestrator", return_value=fake_orchestrator))
+            stack.enter_context(patch("aura_cli.cli_main.GitTools", return_value=MagicMock()))
+            stack.enter_context(patch("aura_cli.cli_main._attach_advanced_loops"))
+            stack.enter_context(patch("aura_cli.cli_main._start_background_sync"))
+            stack.enter_context(patch("aura_cli.cli_main.log_json"))
+            stack.enter_context(patch.dict(sys.modules, {"core.context_manager": _module("core.context_manager", ContextManager=_ContextManager)}))
             mock_config_manager.return_value.show_config.return_value = base_runtime_config
 
             cli_main.create_runtime(Path(d), overrides={"beads": {"enabled": False, "required": False}})

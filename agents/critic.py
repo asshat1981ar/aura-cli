@@ -50,7 +50,7 @@ High-level Task:
 {task}
 
 Plan to critique:
-{"\n".join(plan)}
+{chr(10).join(plan)}
 
 Previous memory:
 {chr(10).join(self.brain.recall_with_budget(max_tokens=1500))}

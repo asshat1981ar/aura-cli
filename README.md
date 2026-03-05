@@ -2,10 +2,10 @@
 
 Developer entry points:
 
-- CLI reference (generated): `docs/CLI_REFERENCE.md`
-- Integration map: `docs/INTEGRATION_MAP.md`
-- Primary entrypoint: `main.py`
-- Shell wrapper: `run_aura.sh`
+- CLI reference (generated): [docs/CLI_REFERENCE.md](docs/CLI_REFERENCE.md)
+- Integration map: [docs/INTEGRATION_MAP.md](docs/INTEGRATION_MAP.md)
+- Primary entrypoint: [main.py](main.py)
+- Shell wrapper: [run_aura.sh](run_aura.sh)
 
 ## Wrapper Usage
 

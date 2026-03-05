@@ -6,7 +6,6 @@ from typing import Any, Dict, Optional
 try:
     from rich.panel import Panel
     from rich.table import Table
-    from rich.text import Text
     from rich import box
     _RICH_AVAILABLE = True
 except ImportError:

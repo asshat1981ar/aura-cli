@@ -12,7 +12,7 @@ import json
 import hashlib
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List
 
 from core.logging_utils import log_json
 from core.memory_types import MemoryRecord

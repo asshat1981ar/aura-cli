@@ -4,7 +4,6 @@ Security Hardener Skill — Scans for and remediates hardcoded secrets.
 from __future__ import annotations
 
 import re
-import os
 from pathlib import Path
 from typing import Any, Dict, List
 

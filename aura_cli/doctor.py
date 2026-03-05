@@ -310,7 +310,6 @@ def run_doctor_v2(
     """
     import importlib.util
     import json
-    import time
 
     if project_root is None:
         project_root = Path(__file__).resolve().parent.parent

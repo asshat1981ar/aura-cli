@@ -49,7 +49,7 @@ from aura_cli.cli_options import (
     render_help,
     unknown_command_help_topic_payload,
 )
-from aura_cli.options import action_runtime_required, action_default_canonical_path
+from aura_cli.options import action_runtime_required
 
 
 def _mcp_headers():

@@ -213,7 +213,29 @@ There is no single persistence mechanism; AURA uses several:
 - brain SQLite:
   - [memory/brain_v2.db](/data/data/com.termux/files/home/aura_cli/aura-cli/memory/brain_v2.db)
 - memory store log and project memory:
-  - [memory/store](/data/data/com.termux/files/home/aura_cli/aura-cli/memory/store)
+  - [memory/store.py](/data/data/com.termux/files/home/aura_cli/aura-cli/memory/store.py)
+    `MemoryStore` exposes a structured decision log (`decision_log.jsonl`) and
+    per-tier JSON stores under the `memory/store/` directory.
+
+    **Key API**:
+
+    | Method | Signature | Description |
+    |--------|-----------|-------------|
+    | `put` | `put(tier, record)` | Append a record to a named tier JSON file. |
+    | `query` | `query(tier, limit=100)` | Return the last `limit` records from a tier file. |
+    | `append_log` | `append_log(entry)` | Append a structured entry to `decision_log.jsonl`, rotating the file if it exceeds `AURA_LOG_MAX_BYTES` (default 10 MB). |
+    | `read_log` | `read_log(limit=0)` | Read entries from `decision_log.jsonl`. When `limit=0` (default), all entries are returned. When `limit > 0`, only the last `limit` entries are returned. |
+
+    **Log rotation**: `decision_log.jsonl` is rotated to numbered suffixes
+    (`.1`, `.2`, `.3`) when it exceeds the byte threshold. Older rotations
+    beyond `_LOG_KEEP_ROTATIONS` (default 3) are deleted automatically.
+
+    **Callers that use `read_log` with explicit limits**:
+    - `core/reflection_loop.py` — `read_log(limit=100)`
+    - `core/convergence_escape.py` — `read_log(limit=20)`
+    - `core/memory_compaction.py` — `read_log(limit=MAX_ENTRIES + 1)` and `read_log(limit=10_000)`
+    - `aura_cli/cli_main.py` (`metrics` command) — `read_log(limit=100)`
+
 - semantic memory / project sync support:
   - [core/vector_store.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/vector_store.py)
   - [core/project_syncer.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/project_syncer.py)

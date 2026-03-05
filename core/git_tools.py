@@ -1,5 +1,17 @@
-from git import Repo
-from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError
+try:
+    from git import Repo
+    from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError
+except ImportError:
+    Repo = None  # type: ignore[assignment,misc]
+
+    class InvalidGitRepositoryError(OSError):  # type: ignore[no-redef]
+        pass
+
+    class GitCommandError(OSError):  # type: ignore[no-redef]
+        pass
+
+    class NoSuchPathError(OSError):  # type: ignore[no-redef]
+        pass
 from core.logging_utils import log_json  # Import the new logging utility
 
 # R2: Exception classes are now canonical in core/exceptions.py — import from there.

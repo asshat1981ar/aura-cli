@@ -90,13 +90,10 @@ jobs:
         if: github.event.inputs.dry_run != 'true'
         run: |
           git add -A
-          git diff --staged --quiet || \
-            git commit -m "chore(aura-loop): apply autonomous loop changes [skip ci]
-
-Cycles completed: ${{ steps.loop.outputs.cycles }}
-Errors: ${{ steps.loop.outputs.errors }}
-
-Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+          MSG=$(printf 'chore(aura-loop): apply autonomous loop changes [skip ci]\n\nCycles completed: %s\nErrors: %s\n\nCo-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>' \
+            "${{ steps.loop.outputs.cycles }}" \
+            "${{ steps.loop.outputs.errors }}")
+          git diff --staged --quiet || git commit -m "$MSG"
           git push || true
 
       - name: Create issue on error

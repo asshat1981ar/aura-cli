@@ -616,7 +616,7 @@ def _render_text_help_for_path(path: tuple[str, ...]) -> str:
 
 def _render_top_level_help() -> str:
     top_level = [spec for spec in COMMAND_SPECS if len(spec.path) == 1]
-    lines = ["AURA CLI", "", "Commands:"]
+    lines = ["AURA CLI", "Autonomous AI development loop.", "", "Commands:"]
     for spec in top_level:
         lines.append(f"  {spec.path[0]:<12} {spec.summary}")
     lines.extend(

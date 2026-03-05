@@ -1,4 +1,5 @@
 AURA CLI
+Autonomous AI development loop.
 
 Commands:
   help         Show CLI help

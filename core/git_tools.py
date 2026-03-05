@@ -34,6 +34,9 @@ class GitTools:
     
     def commit_all(self, message: str):
         """Commits all changes in the repository."""
+        if message is None or not message.strip():
+            raise GitCommitError("Commit message must not be empty or whitespace-only.")
+        message = message.strip()
         try:
             # Check for untracked files and add them
             untracked_files = self.repo.untracked_files

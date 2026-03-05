@@ -102,5 +102,38 @@ class TestGitToolsEnhancements(unittest.TestCase):
         log_entries = self.get_log_entries()
         self.assertTrue(any(e.get("event") == "git_commit_failed" and e.get("level") == "ERROR" for e in log_entries))
 
+    @patch('core.git_tools.Repo')
+    def test_commit_all_empty_message_raises(self, MockRepo):
+        git_tools_instance = GitTools(repo_path=".")
+        with self.assertRaises(GitCommitError):
+            git_tools_instance.commit_all("")
+
+    @patch('core.git_tools.Repo')
+    def test_commit_all_whitespace_message_raises(self, MockRepo):
+        git_tools_instance = GitTools(repo_path=".")
+        with self.assertRaises(GitCommitError):
+            git_tools_instance.commit_all("   ")
+
+    @patch('core.git_tools.Repo')
+    def test_commit_all_none_message_raises(self, MockRepo):
+        git_tools_instance = GitTools(repo_path=".")
+        with self.assertRaises(GitCommitError):
+            git_tools_instance.commit_all(None)
+
+    @patch('core.git_tools.Repo')
+    def test_commit_all_strips_message_whitespace(self, MockRepo):
+        mock_repo_instance = MockRepo.return_value
+        mock_repo_instance.is_dirty.return_value = True
+        mock_repo_instance.untracked_files = []
+
+        mock_git_cmd = MagicMock()
+        mock_repo_instance.git = mock_git_cmd
+        mock_repo_instance.index.commit.return_value = None
+
+        git_tools_instance = GitTools(repo_path=".")
+        git_tools_instance.commit_all("  trimmed message  ")
+
+        mock_repo_instance.index.commit.assert_called_once_with("trimmed message")
+
 if __name__ == '__main__':
     unittest.main()

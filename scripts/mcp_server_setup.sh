@@ -2,7 +2,7 @@
 # Setup helper for MCP servers (aura-mcp + mcpcodeserver + stdio helpers).
 # - Validates configs and auto-corrects common issues (port drift, missing entries).
 # - Starts servers only when their ports are free.
-# - Adds light diagnostics and error reporting.
+# - Runs active readiness probes and reports actionable diagnostics.
 
 set -euo pipefail
 
@@ -15,6 +15,9 @@ MCP_CODE_PORT="${MCP_CODE_PORT:-3000}"   # mcpcodeserver ignores mcp.json port; 
 MCP_CONFIG="${MCP_CONFIG:-$HOME/mcp.json}"
 CODEX_CONFIG="${CODEX_CONFIG:-$HOME/codex.mcp.config.json}"
 GEMINI_CONFIG="${GEMINI_CONFIG:-$HOME/.gemini/settings.json}"
+CURL_BIN="${CURL_BIN:-curl}"
+WAIT_TRIES="${WAIT_TRIES:-20}"
+WAIT_SLEEP="${WAIT_SLEEP:-1}"
 
 NO_START="${MCP_SETUP_NO_START:-0}"
 
@@ -33,14 +36,29 @@ require_cmd() {
   fi
 }
 
+require_python_modules() {
+  if ! python3 - <<'PY' >/dev/null 2>&1
+import importlib.util
+missing = [m for m in ("uvicorn", "fastapi") if importlib.util.find_spec(m) is None]
+raise SystemExit(0 if not missing else 1)
+PY
+  then
+    warn "python3 is missing required modules: uvicorn and/or fastapi."
+    warn "Install with: python3 -m pip install --user 'fastapi<0.100' 'pydantic<2' 'uvicorn<0.25'"
+    exit 1
+  fi
+}
+
 is_listening() {
   local port=$1
   if command -v ss >/dev/null 2>&1; then
     ss -ltn "( sport = :$port )" | grep -q LISTEN
   elif command -v lsof >/dev/null 2>&1; then
     lsof -i ":$port" -sTCP:LISTEN >/dev/null 2>&1
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -ltn 2>/dev/null | grep -q ":$port "
   else
-    warn "Neither ss nor lsof found; cannot check port $port."
+    warn "No port-check tool found (ss/lsof/netstat); cannot check port $port."
     return 1
   fi
 }
@@ -51,6 +69,79 @@ print_port_owner() {
     lsof -i ":$port" -sTCP:LISTEN || true
   elif command -v ss >/dev/null 2>&1; then
     ss -ltnp "( sport = :$port )" || true
+  elif command -v netstat >/dev/null 2>&1; then
+    netstat -ltn 2>/dev/null | grep ":$port " || true
+  fi
+}
+
+wait_http_get() {
+  local label=$1
+  local url=$2
+  local i
+  for i in $(seq 1 "$WAIT_TRIES"); do
+    if "$CURL_BIN" -sS -m 3 "$url" >/dev/null 2>&1; then
+      info "$label reachable: $url"
+      return 0
+    fi
+    sleep "$WAIT_SLEEP"
+  done
+  warn "$label not reachable after ${WAIT_TRIES} tries: $url"
+  return 1
+}
+
+probe_aura_mcp() {
+  local base="http://127.0.0.1:${AURA_PORT}"
+  if ! wait_http_get "aura-mcp /health" "$base/health"; then
+    return 1
+  fi
+  if "$CURL_BIN" -sS -m 3 "$base/tools" >/dev/null 2>&1; then
+    info "aura-mcp /tools reachable"
+  else
+    warn "aura-mcp /tools probe failed"
+  fi
+  if "$CURL_BIN" -sS -m 3 -X POST "$base/call" \
+    -H "content-type: application/json" \
+    --data '{"tool_name":"limits","args":{}}' >/dev/null 2>&1; then
+    info "aura-mcp /call limits probe passed"
+  else
+    warn "aura-mcp /call limits probe failed"
+  fi
+}
+
+probe_mcpcodeserver() {
+  local url="http://127.0.0.1:${MCP_CODE_PORT}/mcp"
+  local init_payload='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"mcp-setup","version":"1.0"}}}'
+  local tools_payload='{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}'
+  local tools_resp=""
+  local i
+  for i in $(seq 1 "$WAIT_TRIES"); do
+    if "$CURL_BIN" -sS -m 4 -X POST "$url" \
+      -H "content-type: application/json" \
+      --data "$init_payload" >/dev/null 2>&1; then
+      info "mcpcodeserver /mcp initialize probe passed"
+      break
+    fi
+    sleep "$WAIT_SLEEP"
+  done
+  if [[ "$i" -gt "$WAIT_TRIES" ]]; then
+    warn "mcpcodeserver /mcp not reachable after ${WAIT_TRIES} tries"
+    return 1
+  fi
+  for i in $(seq 1 "$WAIT_TRIES"); do
+    tools_resp=$("$CURL_BIN" -sS -m 4 -X POST "$url" \
+      -H "content-type: application/json" \
+      --data "$tools_payload" || true)
+    if [[ -n "$tools_resp" ]]; then
+      break
+    fi
+    sleep "$WAIT_SLEEP"
+  done
+  if [[ -z "$tools_resp" ]]; then
+    warn "mcpcodeserver tools/list probe failed"
+  elif printf '%s' "$tools_resp" | grep -q '"error"'; then
+    warn "mcpcodeserver tools/list returned JSON-RPC error, but endpoint is reachable"
+  else
+    info "mcpcodeserver tools/list probe passed"
   fi
 }
 
@@ -106,6 +197,17 @@ data["mcpServers"].setdefault("gh", {
     "stdio": True,
     "env": {"GITHUB_TOKEN": "${GITHUB_TOKEN}"}
 })
+# Normalize npx servers to non-interactive mode so startup cannot block on prompts.
+for server_cfg in data.get("mcpServers", {}).values():
+    if not isinstance(server_cfg, dict):
+        continue
+    if server_cfg.get("command") != "npx":
+        continue
+    args = server_cfg.get("args") or []
+    if not args:
+        server_cfg["args"] = ["-y"]
+    elif args[0] != "-y":
+        server_cfg["args"] = ["-y"] + list(args)
 data["http"] = {"enabled": True, "port": port}
 PY
 )"
@@ -179,8 +281,11 @@ start_aura_mcp() {
     return
   fi
   banner "Starting aura-mcp on :$AURA_PORT"
-  MCP_PORT="$AURA_PORT" MCP_HOST="127.0.0.1" \
-    nohup "$ROOT_DIR/scripts/run_mcp_server.sh" >>"$LOG_FILE" 2>&1 &
+  (
+    cd "$ROOT_DIR" || exit 1
+    MCP_PORT="$AURA_PORT" MCP_HOST="127.0.0.1" \
+      nohup "$ROOT_DIR/scripts/run_mcp_server.sh" >>"$LOG_FILE" 2>&1
+  ) &
   info "aura-mcp pid $! (logs: $LOG_FILE)"
 }
 
@@ -197,7 +302,7 @@ start_mcpcodeserver() {
   banner "Starting mcpcodeserver on :$MCP_CODE_PORT"
   (
     cd "$HOME" || exit 1
-    PORT="$MCP_CODE_PORT" nohup npx mcpcodeserver --http --config "$MCP_CONFIG" >>"$LOG_FILE" 2>&1
+    PORT="$MCP_CODE_PORT" nohup npx -y mcpcodeserver --http --config "$MCP_CONFIG" >>"$LOG_FILE" 2>&1
   ) &
   info "mcpcodeserver pid $! (logs: $LOG_FILE)"
 }
@@ -212,13 +317,18 @@ discovery_probe() {
       warn "Port $p not listening yet (may still be starting)"
     fi
   done
+  if [[ "$NO_START" != "1" ]]; then
+    probe_aura_mcp || true
+    probe_mcpcodeserver || true
+  fi
 }
 
 main() {
   banner "MCP server setup"
   require_cmd python3
   require_cmd npx
-  require_cmd uvicorn
+  require_cmd "$CURL_BIN"
+  require_python_modules
   if [[ -z "${GITHUB_TOKEN:-}" ]]; then
     warn "GITHUB_TOKEN is not set; github MCP calls will fail until you export it."
   fi
@@ -238,6 +348,7 @@ main() {
   info "- $CODEX_CONFIG"
   info "- $GEMINI_CONFIG"
   info "Log: $LOG_FILE"
+  info "Check: $ROOT_DIR/scripts/mcp_server_check.sh"
   info "Set MCP_SETUP_NO_START=1 to only patch configs."
 }
 

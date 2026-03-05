@@ -187,6 +187,8 @@ def _add_root_legacy_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--mcp-tools", dest="mcp_tools", action="store_true", help="Legacy: list MCP tools.")
     parser.add_argument("--mcp-call", dest="mcp_call", help="Legacy: MCP tool name to call.")
     parser.add_argument("--mcp-args", dest="mcp_args", help="Legacy: JSON args for MCP call.")
+    parser.add_argument("--mcp-check", dest="mcp_check", action="store_true", help="Legacy: check MCP servers.")
+    parser.add_argument("--mcp-setup", dest="mcp_setup", action="store_true", help="Legacy: setup MCP servers.")
 
     parser.add_argument("--diag", action="store_true", help="Legacy: run MCP diagnostics.")
     parser.add_argument("--bootstrap", action="store_true", help="Legacy: bootstrap config.")
@@ -288,6 +290,14 @@ def _customize_mcp_call(parser: argparse.ArgumentParser) -> None:
 
 
 
+def _customize_mcp_check(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(mcp_check=True)
+
+
+def _customize_mcp_setup(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(mcp_setup=True)
+
+
 def _customize_diag(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(diag=True)
 
@@ -362,6 +372,10 @@ def _customize_metrics(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(metrics_show=True)
 
 
+def _customize_skills(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(skills_list=True)
+
+
 _PARSER_CUSTOMIZERS.update(
     {
         ("help",): _customize_help,
@@ -377,6 +391,8 @@ _PARSER_CUSTOMIZERS.update(
         ("workflow", "run"): _customize_workflow_run,
         ("mcp", "tools"): _customize_mcp_tools,
         ("mcp", "call"): _customize_mcp_call,
+        ("mcp", "check"): _customize_mcp_check,
+        ("mcp", "setup"): _customize_mcp_setup,
         ("scaffold",): _customize_scaffold,
         ("evolve",): _customize_evolve,
         ("logs",): _customize_logs,
@@ -385,6 +401,7 @@ _PARSER_CUSTOMIZERS.update(
         ("memory", "search"): _customize_memory_search,
         ("memory", "reindex"): _customize_memory_reindex,
         ("metrics",): _customize_metrics,
+        ("skills",): _customize_skills,
     }
 )
 

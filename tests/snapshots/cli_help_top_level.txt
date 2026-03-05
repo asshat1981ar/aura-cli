@@ -18,6 +18,7 @@ Commands:
   queue        Goal queue management
   memory       Semantic memory operations
   metrics      Show performance metrics
+  skills       List registered skills
 
 Examples:
   python3 main.py goal add "Refactor queue" --run

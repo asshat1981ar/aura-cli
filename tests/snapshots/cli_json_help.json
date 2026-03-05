@@ -368,6 +368,50 @@
       "summary": "Call an MCP tool"
     },
     {
+      "action": "mcp_check",
+      "description": "Run local MCP readiness checks for aura-mcp and mcpcodeserver.",
+      "examples": [
+        "python3 main.py mcp check"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [
+        "--mcp-check"
+      ],
+      "path": [
+        "mcp",
+        "check"
+      ],
+      "requires_runtime": false,
+      "summary": "Check MCP server readiness"
+    },
+    {
+      "action": "mcp_setup",
+      "description": "Patch MCP configs, start servers, and run readiness probes.",
+      "examples": [
+        "python3 main.py mcp setup"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [
+        "--mcp-setup"
+      ],
+      "path": [
+        "mcp",
+        "setup"
+      ],
+      "requires_runtime": false,
+      "summary": "Setup MCP servers"
+    },
+    {
       "action": "scaffold",
       "description": "Run the scaffolder agent for a named project type.",
       "examples": [
@@ -544,6 +588,21 @@
       ],
       "requires_runtime": true,
       "summary": "Show performance metrics"
+    },
+    {
+      "action": null,
+      "description": "Show all skills registered in the skill registry, including their names.",
+      "examples": [
+        "python3 main.py skills",
+        "python3 main.py skills --json"
+      ],
+      "flags": [],
+      "legacy_flags": [],
+      "path": [
+        "skills"
+      ],
+      "requires_runtime": null,
+      "summary": "List registered skills"
     }
   ],
   "deterministic": true,

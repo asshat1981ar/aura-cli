@@ -178,6 +178,20 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         legacy_flags=("--mcp-call",),
     ),
     CommandSpec(
+        path=("mcp", "check"),
+        summary="Check MCP server readiness",
+        description="Run local MCP readiness checks for aura-mcp and mcpcodeserver.",
+        examples=("python3 main.py mcp check",),
+        legacy_flags=("--mcp-check",),
+    ),
+    CommandSpec(
+        path=("mcp", "setup"),
+        summary="Setup MCP servers",
+        description="Patch MCP configs, start servers, and run readiness probes.",
+        examples=("python3 main.py mcp setup",),
+        legacy_flags=("--mcp-setup",),
+    ),
+    CommandSpec(
         path=("scaffold",),
         summary="Scaffold a project",
         description="Run the scaffolder agent for a named project type.",
@@ -260,6 +274,15 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
             "python3 main.py metrics --json",
         ),
     ),
+    CommandSpec(
+        path=("skills",),
+        summary="List registered skills",
+        description="Show all skills registered in the skill registry, including their names.",
+        examples=(
+            "python3 main.py skills",
+            "python3 main.py skills --json",
+        ),
+    ),
 )
 
 COMMAND_SPECS_BY_PATH: dict[tuple[str, ...], CommandSpec] = {spec.path: spec for spec in COMMAND_SPECS}
@@ -274,6 +297,8 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("contract_report", False, ("contract-report",)),
     CLIActionSpec("mcp_tools", False, ("mcp", "tools"), legacy_primary_flags=("mcp_tools",)),
     CLIActionSpec("mcp_call", False, ("mcp", "call"), legacy_primary_flags=("mcp_call",)),
+    CLIActionSpec("mcp_check", False, ("mcp", "check"), legacy_primary_flags=("mcp_check",)),
+    CLIActionSpec("mcp_setup", False, ("mcp", "setup"), legacy_primary_flags=("mcp_setup",)),
     CLIActionSpec("diag", False, ("diag",), legacy_primary_flags=("diag",)),
     CLIActionSpec("logs", False, ("logs",)),
     CLIActionSpec("watch", True, ("watch",)),
@@ -297,6 +322,7 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("memory_search", True, ("memory", "search")),
     CLIActionSpec("memory_reindex", True, ("memory", "reindex")),
     CLIActionSpec("metrics_show", True, ("metrics",)),
+    CLIActionSpec("skills_list", False, ("skills",)),
     CLIActionSpec("interactive", True, None),
 )
 
@@ -379,6 +405,8 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("workflow", "run"): "workflow_run",
     ("mcp", "tools"): "mcp_tools",
     ("mcp", "call"): "mcp_call",
+    ("mcp", "check"): "mcp_check",
+    ("mcp", "setup"): "mcp_setup",
     ("scaffold",): "scaffold",
     ("evolve",): "evolve",
     ("goal", "status"): "goal_status",
@@ -395,6 +423,8 @@ _LEGACY_PRIMARY_FLAGS: tuple[str, ...] = (
     "bootstrap",
     "mcp_tools",
     "mcp_call",
+    "mcp_check",
+    "mcp_setup",
     "diag",
     "workflow_goal",
     "scaffold",
@@ -505,6 +535,10 @@ def match_legacy_action(namespace: Any) -> str:
         return "mcp_tools"
     if _ns_get(namespace, "mcp_call", None):
         return "mcp_call"
+    if _ns_get(namespace, "mcp_check", False):
+        return "mcp_check"
+    if _ns_get(namespace, "mcp_setup", False):
+        return "mcp_setup"
     if _ns_get(namespace, "diag", False):
         return "diag"
     if _ns_get(namespace, "workflow_goal", None):

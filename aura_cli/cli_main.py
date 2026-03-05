@@ -3,6 +3,7 @@ import sys
 import json
 import io
 import copy
+import subprocess
 import urllib.request
 import urllib.error
 from contextlib import redirect_stdout
@@ -113,6 +114,38 @@ def cmd_diag():
         "linter_capabilities": {"status": lcap[0], "data": lcap[1]},
         "tail_logs": {"status": tail[0], "data": tail[1]},
     }, indent=2))
+
+
+def _run_local_script(script_name: str) -> dict:
+    script = Path(__file__).resolve().parent.parent / "scripts" / script_name
+    if not script.exists():
+        return {"status": 1, "ok": False, "error": f"script not found: {script}"}
+
+    proc = subprocess.run(
+        [str(script)],
+        capture_output=True,
+        text=True,
+        env=os.environ.copy(),
+        cwd=str(script.parent.parent),
+        check=False,
+    )
+    return {
+        "status": proc.returncode,
+        "ok": proc.returncode == 0,
+        "stdout": proc.stdout,
+        "stderr": proc.stderr,
+        "script": str(script),
+    }
+
+
+def cmd_mcp_check():
+    """Run local MCP readiness checker script and print structured results."""
+    print(json.dumps(_run_local_script("mcp_server_check.sh"), indent=2))
+
+
+def cmd_mcp_setup():
+    """Run local MCP setup script and print structured results."""
+    print(json.dumps(_run_local_script("mcp_server_setup.sh"), indent=2))
 
 def cli_interaction_loop(args, runtime):
     def _get_runtime_part(key):
@@ -668,6 +701,16 @@ def _handle_diag_dispatch(ctx: DispatchContext) -> int:
     return 0
 
 
+def _handle_mcp_check_dispatch(ctx: DispatchContext) -> int:
+    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_check)
+    return 0
+
+
+def _handle_mcp_setup_dispatch(ctx: DispatchContext) -> int:
+    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_setup)
+    return 0
+
+
 def _handle_logs_dispatch(ctx: DispatchContext) -> int:
     from aura_cli.tui.log_streamer import LogStreamer
 
@@ -797,6 +840,29 @@ def _handle_memory_reindex_dispatch(ctx: DispatchContext) -> int:
     if payload["status"] != "ok":
         print(f"Error: {rebuild_stats.get('error')}", file=sys.stderr)
         return 1
+    return 0
+
+
+def _handle_skills_list_dispatch(ctx: DispatchContext) -> int:
+    """List all registered skills by name."""
+    try:
+        from agents.skills.registry import all_skills
+        skills = all_skills()
+        skill_names = sorted(skills.keys())
+    except Exception as exc:
+        if getattr(ctx.args, "json", False):
+            _print_json_payload({"error": str(exc), "skills": []}, parsed=ctx.parsed, indent=2)
+        else:
+            print(f"Error loading skills: {exc}", file=sys.stderr)
+        return 1
+
+    if getattr(ctx.args, "json", False):
+        _print_json_payload({"skills": skill_names, "count": len(skill_names)}, parsed=ctx.parsed, indent=2)
+        return 0
+
+    print(f"Registered skills ({len(skill_names)}):")
+    for name in skill_names:
+        print(f"  {name}")
     return 0
 
 
@@ -1078,6 +1144,8 @@ COMMAND_DISPATCH_REGISTRY = {
     "contract_report": _dispatch_rule("contract_report", _handle_contract_report_dispatch),
     "mcp_tools": _dispatch_rule("mcp_tools", _handle_mcp_tools_dispatch),
     "mcp_call": _dispatch_rule("mcp_call", _handle_mcp_call_dispatch),
+    "mcp_check": _dispatch_rule("mcp_check", _handle_mcp_check_dispatch),
+    "mcp_setup": _dispatch_rule("mcp_setup", _handle_mcp_setup_dispatch),
     "diag": _dispatch_rule("diag", _handle_diag_dispatch),
     "logs": _dispatch_rule("logs", _handle_logs_dispatch),
     "watch": _dispatch_rule("watch", _handle_watch_dispatch),
@@ -1087,6 +1155,7 @@ COMMAND_DISPATCH_REGISTRY = {
     "memory_search": _dispatch_rule("memory_search", _handle_memory_search_dispatch),
     "memory_reindex": _dispatch_rule("memory_reindex", _handle_memory_reindex_dispatch),
     "metrics_show": _dispatch_rule("metrics_show", _handle_metrics_show_dispatch),
+    "skills_list": _dispatch_rule("skills_list", _handle_skills_list_dispatch),
     "workflow_run": _dispatch_rule("workflow_run", _handle_workflow_run_dispatch),
     "scaffold": _dispatch_rule("scaffold", _handle_scaffold_dispatch),
     "evolve": _dispatch_rule("evolve", _handle_evolve_dispatch),

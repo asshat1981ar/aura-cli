@@ -761,6 +761,30 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertEqual(mock_tools.call_count, 2)
         runtime_factory.assert_not_called()
 
+    def test_legacy_and_canonical_mcp_check_use_same_handler_without_runtime(self):
+        runtime_factory = MagicMock()
+
+        with patch("aura_cli.cli_main.cmd_mcp_check") as mock_check:
+            code1, *_ = self._dispatch(["mcp", "check"], runtime_factory=runtime_factory)
+            code2, *_ = self._dispatch(["--mcp-check"], runtime_factory=runtime_factory)
+
+        self.assertEqual(code1, 0)
+        self.assertEqual(code2, 0)
+        self.assertEqual(mock_check.call_count, 2)
+        runtime_factory.assert_not_called()
+
+    def test_legacy_and_canonical_mcp_setup_use_same_handler_without_runtime(self):
+        runtime_factory = MagicMock()
+
+        with patch("aura_cli.cli_main.cmd_mcp_setup") as mock_setup:
+            code1, *_ = self._dispatch(["mcp", "setup"], runtime_factory=runtime_factory)
+            code2, *_ = self._dispatch(["--mcp-setup"], runtime_factory=runtime_factory)
+
+        self.assertEqual(code1, 0)
+        self.assertEqual(code2, 0)
+        self.assertEqual(mock_setup.call_count, 2)
+        runtime_factory.assert_not_called()
+
     def test_legacy_warning_stderr_text_is_unchanged(self):
         runtime_factory = MagicMock()
 

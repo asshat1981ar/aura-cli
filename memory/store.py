@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 
 class MemoryStore:
@@ -39,6 +39,16 @@ class MemoryStore:
     def __init__(self, root: Path) -> None:
         self._root = Path(root)
         self._root.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def root(self) -> Path:
+        """The directory in which tier files and the decision log are kept."""
+        return self._root
+
+    @property
+    def log_path(self) -> Path:
+        """Path to the append-only decision log file."""
+        return self._root / self._LOG_FILE
 
     # ── Tier store ────────────────────────────────────────────────────────────
 
@@ -58,17 +68,20 @@ class MemoryStore:
 
     def append_log(self, entry: Dict[str, Any]) -> None:
         """Append *entry* as a single JSON line to the decision log."""
-        log_path = self._root / self._LOG_FILE
-        with log_path.open("a", encoding="utf-8") as fh:
+        with self.log_path.open("a", encoding="utf-8") as fh:
             fh.write(json.dumps(entry) + "\n")
 
-    def read_log(self) -> List[Dict[str, Any]]:
-        """Return all entries in the decision log."""
-        log_path = self._root / self._LOG_FILE
-        if not log_path.exists():
+    def read_log(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Return entries from the decision log.
+
+        Args:
+            limit: Maximum number of entries to return, taken from the end of
+                   the log (most recent).  ``None`` returns all entries.
+        """
+        if not self.log_path.exists():
             return []
         entries: List[Dict[str, Any]] = []
-        for lineno, line in enumerate(log_path.read_text(encoding="utf-8").splitlines(), 1):
+        for lineno, line in enumerate(self.log_path.read_text(encoding="utf-8").splitlines(), 1):
             line = line.strip()
             if line:
                 try:
@@ -77,6 +90,8 @@ class MemoryStore:
                     from core.logging_utils import log_json
                     log_json("WARN", "decision_log_parse_error",
                              details={"line": lineno, "error": str(exc)})
+        if limit is not None:
+            return entries[-limit:] if limit > 0 else []
         return entries
 
     # ── Helpers ───────────────────────────────────────────────────────────────

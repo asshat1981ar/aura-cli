@@ -102,7 +102,10 @@ def dispatch_skills(
         skills:       Dict mapping skill name to callable
                       ``(project_root: str) -> dict``.
         project_root: Path passed as the first positional argument to each skill.
-        timeout:      Per-skill wall-clock timeout in seconds (``None`` = no limit).
+        timeout:      Total wall-clock timeout in seconds for all skills to
+                      complete (``None`` = no limit).  Skills still running when
+                      the timeout expires are cancelled (if not yet started) and
+                      their result is recorded as ``{"error": "timeout"}``.
 
     Returns:
         Dict mapping skill name to its result dict, or
@@ -121,11 +124,20 @@ def dispatch_skills(
         try:
             for future in concurrent.futures.as_completed(future_to_name, timeout=timeout):
                 name = future_to_name[future]
-                results[name] = future.result()
+                try:
+                    results[name] = future.result()
+                except Exception as exc:
+                    log_json("WARN", "skill_dispatch_error",
+                             details={"skill": name, "goal_type": goal_type,
+                                      "error": str(exc)})
+                    results[name] = {"error": str(exc)}
         except concurrent.futures.TimeoutError:
-            # Mark any skills that didn't finish within the batch timeout
+            # Cancel and mark any skills that didn't finish within the timeout.
+            # future.cancel() only prevents execution for futures not yet started;
+            # already-running futures will continue until they complete naturally.
             for future, name in future_to_name.items():
                 if name not in results:
+                    future.cancel()
                     log_json("WARN", "skill_dispatch_timeout",
                              details={"skill": name, "goal_type": goal_type})
                     results[name] = {"error": "timeout"}

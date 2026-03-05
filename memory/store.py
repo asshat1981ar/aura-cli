@@ -1,5 +1,6 @@
 import json
 import os
+from collections import deque
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -73,9 +74,28 @@ class MemoryStore:
             handle.write(json.dumps(entry) + "\n")
 
     def read_log(self, limit: int = 0) -> List[Dict[str, Any]]:
+        """Read parsed log entries from ``decision_log.jsonl``.
+
+        Parameters
+        ----------
+        limit:
+            If 0 (the default), return all log entries. If greater than 0,
+            return only the last ``limit`` entries. Negative values raise
+            ``ValueError``.
+
+        Raises
+        ------
+        ValueError
+            If ``limit`` is negative.
+        """
+        if limit < 0:
+            raise ValueError("limit must be non-negative")
         if not self.log_path.exists():
             return []
-        entries = []
+        if limit > 0:
+            entries: Any = deque(maxlen=limit)
+        else:
+            entries = []
         with self.log_path.open("r", encoding="utf-8") as handle:
             for line in handle:
                 line = line.strip()
@@ -85,4 +105,4 @@ class MemoryStore:
                     entries.append(json.loads(line))
                 except json.JSONDecodeError:
                     continue
-        return entries[-limit:] if limit > 0 else entries
+        return list(entries)

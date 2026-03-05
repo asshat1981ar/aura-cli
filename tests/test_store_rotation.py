@@ -114,6 +114,11 @@ class TestStoreRotation(unittest.TestCase):
         self.assertEqual(len(result), 5)
 
     def test_read_log_empty_log(self):
-        """read_log on a missing log file returns an empty list."""
+        """read_log on a missing or empty log file returns an empty list."""
         result = self.store.read_log()
         self.assertEqual(result, [])
+
+    def test_read_log_negative_limit_raises(self):
+        """read_log raises ValueError for negative limit values."""
+        with self.assertRaises(ValueError):
+            self.store.read_log(limit=-1)

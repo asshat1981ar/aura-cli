@@ -7,7 +7,7 @@ from agents.skills.base import SkillBase
 
 def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
     """
-    Return a dict mapping skill_name -> skill_instance for all 23 skills.
+    Return a dict mapping skill_name -> skill_instance for all registered skills.
 
     Args:
         brain: Optional Brain instance (currently unused by skills; reserved for future use).
@@ -49,6 +49,7 @@ def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
     from agents.skills.structural_analyzer import StructuralAnalyzerSkill
     from agents.skills.evolution_skill import EvolutionSkill
     from agents.skills.skill_generator import SkillGeneratorSkill
+    from agents.skills.test_and_observe import TestAndObserveSkill
 
     return {
         "beads_skill": BeadsSkill(brain=brain, model=model),
@@ -84,4 +85,5 @@ def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
         "structural_analyzer": StructuralAnalyzerSkill(brain=brain, model=model),
         "evolution_skill": EvolutionSkill(brain=brain, model=model),
         "skill_generator": SkillGeneratorSkill(brain=brain, model=model),
+        "test_and_observe": TestAndObserveSkill(),
     }

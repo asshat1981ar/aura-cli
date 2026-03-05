@@ -20,13 +20,14 @@ Typical flow:
 4. Review logs and `memory/` artifacts.
 
 Examples:
-- `python3 main.py --add-goal "Refactor goal queue" --run-goals`
-- `./run_aura.sh --dry-run`
+- `python3 main.py goal add "Refactor goal queue" --run`
+- `./run_aura.sh run --dry-run`
 
 Tip: set `AURA_SKIP_CHDIR=1` to keep the current working directory when running locally or in tests.
 
 ## Agent & Loop Overview
-- Loop orchestrator: `core/hybrid_loop.py`.
+- Loop orchestrator: `core/orchestrator.py` (`LoopOrchestrator`).
+- Legacy wrapper: `core/hybrid_loop.py` (prefer `LoopOrchestrator` directly).
 - Model interface: `core/model_adapter.py`.
 - Goal queue/archive: `core/goal_queue.py`, `core/goal_archive.py`.
 - Agents: see `agents/` (planner, debugger, and others).
@@ -34,7 +35,7 @@ Tip: set `AURA_SKIP_CHDIR=1` to keep the current working directory when running 
 The loop selects and coordinates agents per goal. Agent behavior evolves as the loop iterates.
 
 ## Build, Test, and Development Commands
-- `python3 main.py --help`: show CLI options.
+- `python3 main.py help`: show CLI options.
 - `./run_aura.sh --help`: wrapper help and usage.
 - `python3 -m pytest`: run the test suite.
 

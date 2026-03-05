@@ -69,6 +69,7 @@ class MemoryStore:
 
     def append_log(self, entry: Dict[str, Any]) -> None:
         self._rotate_log_if_needed()
+        self.log_path.parent.mkdir(parents=True, exist_ok=True)
         with self.log_path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(entry) + "\n")
 

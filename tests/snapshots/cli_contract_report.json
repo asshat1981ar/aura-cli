@@ -16,6 +16,7 @@
     "logs",
     "mcp_call",
     "mcp_tools",
+    "memory_reindex",
     "memory_search",
     "metrics_show",
     "queue_clear",
@@ -75,6 +76,10 @@
     ],
     [
       "memory",
+      "reindex"
+    ],
+    [
+      "memory",
       "search"
     ],
     [
@@ -120,6 +125,7 @@
     "logs",
     "mcp_call",
     "mcp_tools",
+    "memory_reindex",
     "memory_search",
     "metrics_show",
     "queue_clear",
@@ -149,6 +155,7 @@
     "logs",
     "mcp_call",
     "mcp_tools",
+    "memory_reindex",
     "memory_search",
     "metrics_show",
     "queue_clear",
@@ -217,6 +224,10 @@
     ],
     [
       "memory"
+    ],
+    [
+      "memory",
+      "reindex"
     ],
     [
       "memory",
@@ -301,6 +312,10 @@
     [
       "mcp",
       "tools"
+    ],
+    [
+      "memory",
+      "reindex"
     ],
     [
       "memory",
@@ -414,6 +429,10 @@
     ],
     [
       "memory",
+      "reindex"
+    ],
+    [
+      "memory",
       "search"
     ],
     [
@@ -524,6 +543,10 @@
     ],
     [
       "memory"
+    ],
+    [
+      "memory",
+      "reindex"
     ],
     [
       "memory",

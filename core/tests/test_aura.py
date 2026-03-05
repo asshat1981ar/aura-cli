@@ -10,9 +10,7 @@ class TestAuraManager(unittest.TestCase):
             return "Hello, World!"
         
         results = self.aura_manager.integrate_functions([dummy_function])
-        self.assertEqual(results["dummy_function"], "Hello, World!")
+        self.assertEqual(results[0], "Hello, World!")
 
 if __name__ == '__main__':
     unittest.main()
----END_FILE---
-```

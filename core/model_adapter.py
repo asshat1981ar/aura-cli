@@ -3,12 +3,43 @@ import hashlib
 import os
 import shlex
 import subprocess
-import requests
 import json
 import time
 from pathlib import Path
 from typing import Any, List
-import numpy as np
+
+
+class _MissingPackage:
+    """Proxy that raises a clear ImportError when a missing package is used."""
+    def __init__(self, name: str, install_hint: str = "") -> None:
+        object.__setattr__(self, "_name", name)
+        object.__setattr__(self, "_hint", install_hint or f"pip install {name}")
+
+    def _raise(self) -> None:
+        raise ImportError(
+            f"Package '{object.__getattribute__(self, '_name')}' is required but not installed. "
+            f"Install it with: {object.__getattribute__(self, '_hint')}"
+        )
+
+    def __getattr__(self, item: str):  # type: ignore[override]
+        self._raise()
+
+    def __call__(self, *args, **kwargs):
+        self._raise()
+
+    def __bool__(self) -> bool:
+        return False
+
+
+try:
+    import requests
+except ImportError:  # pragma: no cover
+    requests = _MissingPackage("requests")  # type: ignore[assignment]
+
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover
+    np = _MissingPackage("numpy")  # type: ignore[assignment]
 
 from core.logging_utils import log_json # Import log_json
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads

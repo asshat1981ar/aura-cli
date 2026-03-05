@@ -42,6 +42,8 @@ class CriticAgent:
         Returns:
             str: The LLM's feedback and suggestions for improving the plan.
         """
+        plan_str = "\n".join(plan)
+        memory_str = "\n".join(self.brain.recall_with_budget(max_tokens=1500))
         prompt = f"""
 You are an autonomous critic agent. Your task is to evaluate a given plan against a high-level task.
 Provide constructive feedback to improve the plan.
@@ -50,10 +52,10 @@ High-level Task:
 {task}
 
 Plan to critique:
-{"\n".join(plan)}
+{plan_str}
 
 Previous memory:
-{chr(10).join(self.brain.recall_with_budget(max_tokens=1500))}
+{memory_str}
 
 Evaluate the plan for completeness, clarity, feasibility, and alignment with the high-level task.
 Suggest improvements or identify missing steps.
@@ -74,6 +76,7 @@ Suggest improvements or identify missing steps.
         Returns:
             str: The LLM's feedback and suggestions for improving the code.
         """
+        memory_str = "\n".join(self.brain.recall_with_budget(max_tokens=1500))
         prompt = f"""
 You are an autonomous critic agent. Your task is to evaluate provided code against a given task and requirements.
 Provide constructive feedback to improve the code.
@@ -90,7 +93,7 @@ Requirements:
 {requirements if requirements else "No specific requirements provided beyond the task."}
 
 Previous memory:
-{chr(10).join(self.brain.recall_with_budget(max_tokens=1500))}
+{memory_str}
 
 Evaluate the code for correctness, efficiency, readability, maintainability, and adherence to requirements.
 Suggest improvements or identify potential issues.

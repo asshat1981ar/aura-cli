@@ -70,3 +70,4 @@ changed.txt
 
 # Dolt database files (added by bd init)
 .dolt/
+cli/__pycache__/

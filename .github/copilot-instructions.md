@@ -32,7 +32,7 @@ python3 main.py --bootstrap
 # Start the HTTP API server (FastAPI on port 8001)
 uvicorn aura_cli.server:app --port 8001
 
-# Start the MCP Skills Server (all 23 skills as HTTP tools, port 8002)
+# Start the MCP Skills Server (all 33 skills as HTTP tools, port 8002)
 uvicorn tools.aura_mcp_skills_server:app --port 8002
 # Or directly:
 python3 tools/aura_mcp_skills_server.py
@@ -95,7 +95,7 @@ SSE streaming is supported on `/run`. Protect all endpoints with `AGENT_API_TOKE
 
 **File:** `tools/aura_mcp_skills_server.py` — FastAPI on port **8002**
 
-Exposes all 23 skills as MCP-compatible HTTP tools.
+Exposes all 33 skills as MCP-compatible HTTP tools.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -178,7 +178,7 @@ All AURA variables are prefixed `AURA_`:
 
 ## Skills System
 
-23 pluggable skill modules live in `agents/skills/`. Each has `run(input_data: dict) -> dict` and **never raises** — errors are returned as `{"error": "..."}`.
+33 pluggable skill modules live in `agents/skills/`. Each has `run(input_data: dict) -> dict` and **never raises** — errors are returned as `{"error": "..."}`.
 
 **Invoke any skill:**
 
@@ -215,6 +215,16 @@ result = skills["security_scanner"].run({"project_root": "."})
 | 21 | `web_fetcher` | `url` or `query` | `text`, `title`, `source`, `truncated` |
 | 22 | `symbol_indexer` | `project_root` | `symbols`, `symbol_count`, `name_index`, `import_graph` |
 | 23 | `multi_file_editor` | `goal`, `project_root?`, `symbol_map?` | `change_plan`, `affected_count`, `warnings` |
+| 24 | `beads_skill` | `cmd`, `id?`, `args?` | `result` (BEADS task management via `bd` CLI) |
+| 25 | `changelog_generator` | `project_root`, `from_ref?`, `to_ref?` | `version_bump`, `commit_count`, `categories` |
+| 26 | `database_query_analyzer` | `code`/`project_root`, `file_path?` | `findings`, `antipattern_count` |
+| 27 | `dockerfile_analyzer` | `content`/`project_root`, `file_path?` | `findings`, `score` |
+| 28 | `evolution_skill` | `goal`, `project_root?` | `hypothesis`, `tasks`, `mutation` |
+| 29 | `observability_checker` | `code`/`project_root`, `file_path?` | `issues`, `logging_coverage_pct` |
+| 30 | `security_hardener` | `content`/`project_root`, `file_path?` | `findings`, `findings_count` |
+| 31 | `skill_failure_analyzer` | `summaries_path?` | `failing_skills`, `most_problematic` |
+| 32 | `skill_generator` | `capability`, `description?`, `project_root?` | `skill_name`, `file_path` |
+| 33 | `structural_analyzer` | `project_root` | `hotspots`, `circular_dependencies` |
 
 **Adding a new skill:** Create `agents/skills/your_skill.py` extending `SkillBase`, set `name`, implement `_run()`. Register in `agents/skills/registry.py`.
 

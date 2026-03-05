@@ -97,12 +97,13 @@ class TestOrchestratorPhases(unittest.TestCase):
         mock_discovery = MagicMock()
         mock_discovery.run_scan.return_value = {"suggestions": []}
         self.orchestrator.attach_improvement_loops(mock_discovery)
-        
+
         # We need to make sure the loop is recognized as AutonomousDiscovery
         type(mock_discovery).__name__ = "AutonomousDiscovery"
-        
+
         self.orchestrator.run_cycle("test goal", dry_run=True)
-        assert mock_discovery.run_scan.called
+        # Discovery now triggers via on_cycle_complete (TRIGGER_EVERY_N pattern)
+        assert mock_discovery.on_cycle_complete.called
 
     def test_phase_11_evolve(self):
         mock_evolution = MagicMock()

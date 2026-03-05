@@ -208,7 +208,7 @@ runtime.
 There is no single persistence mechanism; AURA uses several:
 
 - queue/archive JSON (runtime-generated; not committed to the repo):
-  - `memory/goal_queue_v2.json` — managed by [core/goal_queue.py](../core/goal_queue.py)
+  - `memory/goal_queue.json` — managed by [core/goal_queue.py](../core/goal_queue.py)
   - `memory/goal_archive_v2.json` — managed by [core/goal_archive.py](../core/goal_archive.py)
 - brain SQLite (runtime-generated; not committed to the repo):
   - `memory/brain_v2.db` — managed by [memory/brain.py](../memory/brain.py)
@@ -218,7 +218,7 @@ There is no single persistence mechanism; AURA uses several:
   - [core/vector_store.py](../core/vector_store.py)
   - [core/project_syncer.py](../core/project_syncer.py)
 - task hierarchy persistence (runtime-generated; not committed to the repo):
-  - `memory/task_hierarchy_v2.json` — managed by [core/config_manager.py](../core/config_manager.py)
+  - `memory/task_hierarchy_v2.json` — managed by [core/task_manager.py](../core/task_manager.py)
 
 ## Configuration
 

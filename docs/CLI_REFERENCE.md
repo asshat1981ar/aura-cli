@@ -107,7 +107,7 @@ Examples:
 
 Run system diagnostics
 
-Run the AURA doctor checks for local environment health.
+Check local environment health: Python dependencies, config file validity, model adapter availability, and tool connectivity.
 
 `action`: `doctor` `requires_runtime`: `false`
 
@@ -120,7 +120,7 @@ Examples:
 
 Create default config
 
-Bootstrap local configuration files for AURA.
+Create a default aura.config.json in the current directory with placeholder values to get started.
 
 `action`: `bootstrap` `requires_runtime`: `false`
 
@@ -136,7 +136,7 @@ Examples:
 
 Show effective config
 
-Print the resolved effective runtime configuration.
+Print the resolved effective configuration, merging aura.config.json with any AURA_* environment variable overrides.
 
 `action`: `show_config` `requires_runtime`: `false`
 
@@ -149,7 +149,7 @@ Examples:
 
 Print CLI contract report
 
-Print aggregated parser/help/schema/dispatch contract checks as JSON.
+Run all CLI contract checks (parser, help schema, dispatch consistency) and print the results as JSON.
 
 `action`: `contract_report` `requires_runtime`: `false`
 
@@ -163,7 +163,7 @@ Examples:
 
 MCP diagnostics snapshot
 
-Fetch MCP health, metrics, limits, and recent logs via HTTP.
+Fetch a diagnostics snapshot from the running MCP server, including health status, metrics, request limits, and recent log entries.
 
 `action`: `diag` `requires_runtime`: `false`
 
@@ -193,7 +193,7 @@ Examples:
 
 Launch TUI monitor
 
-Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.
+Launch the AuraStudio terminal UI monitor. Pass --autonomous to automatically start the goal loop.
 
 `action`: `watch` `requires_runtime`: `true`
 
@@ -207,7 +207,7 @@ Examples:
 
 Launch AURA Studio
 
-Launch the rich real-time dashboard. Use --autonomous to start the goal loop.
+Launch the AURA Studio rich real-time dashboard. Pass --autonomous to automatically start the goal loop.
 
 `action`: `studio` `requires_runtime`: `true`
 
@@ -231,7 +231,7 @@ Examples:
 
 Add a goal to the queue
 
-Add a goal, optionally running the queue immediately.
+Add a goal to the queue, optionally triggering queued goals to run immediately after.
 
 `action`: `goal_add` `requires_runtime`: `true`
 
@@ -302,7 +302,7 @@ Examples:
 
 Run a workflow goal
 
-Run the orchestrator loop for a single workflow goal.
+Run the AURA orchestrator pipeline for a single workflow goal, stopping after the specified number of cycles.
 
 `action`: `workflow_run` `requires_runtime`: `true`
 
@@ -341,7 +341,7 @@ Examples:
 
 Call an MCP tool
 
-Invoke an MCP tool with optional JSON args.
+Invoke a named MCP skill tool, passing optional JSON arguments as a string.
 
 `action`: `mcp_call` `requires_runtime`: `false`
 
@@ -375,7 +375,7 @@ Examples:
 
 Run evolution loop
 
-Autonomous self-improvement loop for AURA core.
+Run the autonomous self-improvement loop, allowing AURA to refactor and enhance its own agent and core code.
 
 `action`: `evolve` `requires_runtime`: `true`
 
@@ -438,7 +438,7 @@ Examples:
 
 Search semantic memory
 
-Perform a semantic search over brain entries.
+Search the AURA brain using a natural language query and return semantically matching memory entries.
 
 `action`: `memory_search` `requires_runtime`: `true`
 
@@ -450,7 +450,7 @@ Examples:
 
 Rebuild semantic memory embeddings
 
-Rebuild semantic memory embeddings for the active model and force a project sync.
+Rebuild all semantic memory embeddings for the active model and force a full project sync.
 
 `action`: `memory_reindex` `requires_runtime`: `true`
 

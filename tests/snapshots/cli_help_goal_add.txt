@@ -1,6 +1,6 @@
 aura goal add
 
-Add a goal, optionally running the queue immediately.
+Add a goal to the queue, optionally triggering queued goals to run immediately after.
 
 Legacy flags:
   --add-goal --run-goals

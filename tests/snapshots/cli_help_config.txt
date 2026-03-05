@@ -1,6 +1,6 @@
 aura config
 
-Print the resolved effective runtime configuration.
+Print the resolved effective configuration, merging aura.config.json with any AURA_* environment variable overrides.
 
 Examples:
   python3 main.py config

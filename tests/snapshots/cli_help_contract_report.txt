@@ -1,6 +1,6 @@
 aura contract-report
 
-Print aggregated parser/help/schema/dispatch contract checks as JSON.
+Run all CLI contract checks (parser, help schema, dispatch consistency) and print the results as JSON.
 
 Examples:
   python3 main.py contract-report --check

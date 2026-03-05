@@ -36,26 +36,26 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("doctor",),
         summary="Run system diagnostics",
-        description="Run the AURA doctor checks for local environment health.",
+        description="Check local environment health: Python dependencies, config file validity, model adapter availability, and tool connectivity.",
         examples=("python3 main.py doctor",),
     ),
     CommandSpec(
         path=("bootstrap",),
         summary="Create default config",
-        description="Bootstrap local configuration files for AURA.",
+        description="Create a default aura.config.json in the current directory with placeholder values to get started.",
         examples=("python3 main.py bootstrap",),
         legacy_flags=("--bootstrap",),
     ),
     CommandSpec(
         path=("config",),
         summary="Show effective config",
-        description="Print the resolved effective runtime configuration.",
+        description="Print the resolved effective configuration, merging aura.config.json with any AURA_* environment variable overrides.",
         examples=("python3 main.py config",),
     ),
     CommandSpec(
         path=("contract-report",),
         summary="Print CLI contract report",
-        description="Print aggregated parser/help/schema/dispatch contract checks as JSON.",
+        description="Run all CLI contract checks (parser, help schema, dispatch consistency) and print the results as JSON.",
         examples=(
             "python3 main.py contract-report --check",
             "python3 main.py contract-report --compact",
@@ -64,7 +64,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("diag",),
         summary="MCP diagnostics snapshot",
-        description="Fetch MCP health, metrics, limits, and recent logs via HTTP.",
+        description="Fetch a diagnostics snapshot from the running MCP server, including health status, metrics, request limits, and recent log entries.",
         examples=("python3 main.py diag",),
         legacy_flags=("--diag",),
     ),
@@ -80,7 +80,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("watch",),
         summary="Launch TUI monitor",
-        description="Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.",
+        description="Launch the AuraStudio terminal UI monitor. Pass --autonomous to automatically start the goal loop.",
         examples=(
             "python3 main.py watch",
             "python3 main.py watch --autonomous",
@@ -89,7 +89,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("studio",),
         summary="Launch AURA Studio",
-        description="Launch the rich real-time dashboard. Use --autonomous to start the goal loop.",
+        description="Launch the AURA Studio rich real-time dashboard. Pass --autonomous to automatically start the goal loop.",
         examples=(
             "python3 main.py studio",
             "python3 main.py studio --autonomous",
@@ -107,7 +107,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("goal", "add"),
         summary="Add a goal to the queue",
-        description="Add a goal, optionally running the queue immediately.",
+        description="Add a goal to the queue, optionally triggering queued goals to run immediately after.",
         examples=(
             "python3 main.py goal add \"Fix tests\"",
             "python3 main.py goal add \"Fix tests\" --run",
@@ -150,7 +150,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("workflow", "run"),
         summary="Run a workflow goal",
-        description="Run the orchestrator loop for a single workflow goal.",
+        description="Run the AURA orchestrator pipeline for a single workflow goal, stopping after the specified number of cycles.",
         examples=("python3 main.py workflow run \"Summarize repo\" --max-cycles 3",),
         legacy_flags=("--workflow-goal",),
     ),
@@ -170,7 +170,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("mcp", "call"),
         summary="Call an MCP tool",
-        description="Invoke an MCP tool with optional JSON args.",
+        description="Invoke a named MCP skill tool, passing optional JSON arguments as a string.",
         examples=(
             "python3 main.py mcp call limits",
             "python3 main.py mcp call tail_logs --args '{\"lines\": 10}'",
@@ -190,7 +190,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("evolve",),
         summary="Run evolution loop",
-        description="Autonomous self-improvement loop for AURA core.",
+        description="Run the autonomous self-improvement loop, allowing AURA to refactor and enhance its own agent and core code.",
         examples=(
             "python3 main.py evolve",
             "python3 main.py evolve --json",
@@ -236,7 +236,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("memory", "search"),
         summary="Search semantic memory",
-        description="Perform a semantic search over brain entries.",
+        description="Search the AURA brain using a natural language query and return semantically matching memory entries.",
         examples=(
             "python3 main.py memory search \"workflow engine\"",
             "python3 main.py memory search \"workflow engine\" --json",
@@ -245,7 +245,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("memory", "reindex"),
         summary="Rebuild semantic memory embeddings",
-        description="Rebuild semantic memory embeddings for the active model and force a project sync.",
+        description="Rebuild all semantic memory embeddings for the active model and force a full project sync.",
         examples=(
             "python3 main.py memory reindex",
             "python3 main.py memory reindex --json",

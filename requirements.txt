@@ -4,19 +4,19 @@
 #   pip install -r requirements.txt
 #
 # Runtime (same as tools/requirements.txt)
-fastapi==0.129.0
-uvicorn==0.40.0
-requests==2.32.3
+fastapi==0.135.1
+uvicorn==0.41.0
+requests==2.32.5
 pydantic==2.12.5
-python-dotenv
-numpy
-gitpython
-rich
-textblob
-networkx
+python-dotenv==1.2.2
+numpy==2.4.2
+gitpython==3.1.46
+rich==14.3.3
+textblob==0.19.0
+networkx==3.6.1
 
 # Development / testing
-pytest>=7.0
-httpx>=0.24
+pytest>=8.0
+httpx>=0.27
 anyio>=4.0
-python-dotenv
+python-dotenv==1.2.2

@@ -14,5 +14,3 @@ class TestAuraManager(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
----END_FILE---
-```

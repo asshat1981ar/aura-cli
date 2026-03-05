@@ -5,11 +5,12 @@ import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, patch
 
-# Set environment variables for testing
-os.environ["AGENT_API_TOKEN"] = "test-token"
-os.environ["AGENT_API_ENABLE_RUN"] = "1"
-
 from aura_cli.server import app
+
+@pytest.fixture(autouse=True)
+def api_env(monkeypatch):
+    monkeypatch.setenv("AGENT_API_TOKEN", "test-token")
+    monkeypatch.setenv("AGENT_API_ENABLE_RUN", "1")
 
 @pytest.fixture
 def client():

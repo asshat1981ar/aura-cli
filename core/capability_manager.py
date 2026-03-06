@@ -415,6 +415,7 @@ def record_capability_status(
         "matched_capabilities": list(capability_plan.get("matched_capabilities", [])),
         "recommended_skills": list(capability_plan.get("recommended_skills", [])),
         "missing_skills": list(capability_plan.get("missing_skills", [])),
+        "mcp_tools": list(capability_plan.get("mcp_tools", [])),
         "provisioning_actions": list(capability_plan.get("provisioning_actions", [])),
         "queued_goals": list((capability_goal_queue or {}).get("queued", [])),
         "skipped_goals": list((capability_goal_queue or {}).get("skipped", [])),
@@ -491,6 +492,7 @@ def build_capability_status_report(
         ],
         "recommended_skills": list(stored.get("recommended_skills", [])),
         "missing_skills": list(stored.get("missing_skills", [])),
+        "mcp_tools": list(stored.get("mcp_tools", [])),
         "queued_goals": list(stored.get("queued_goals", [])),
         "skipped_goals": list(stored.get("skipped_goals", [])),
         "queue_strategy": stored.get("queue_strategy"),
@@ -520,6 +522,7 @@ def capability_doctor_check(
     matched = ", ".join(report["matched_capability_ids"]) or "none recorded"
     pending = ", ".join(report["pending_bootstrap_actions"]) or "none"
     running = ", ".join(report["running_bootstrap_actions"]) or "none"
+    mcp_tools = ", ".join(report["mcp_tools"]) or "none"
     last_goal = report["last_goal"] or "none recorded"
     detail = (
         f"last goal: {last_goal}; "
@@ -528,6 +531,7 @@ def capability_doctor_check(
         f"auto_provision={'on' if configured['auto_provision_mcp'] else 'off'}; "
         f"auto_start={'on' if configured['auto_start_mcp_servers'] else 'off'}; "
         f"matched: {matched}; "
+        f"mcp_tools: {mcp_tools}; "
         f"pending skill goals: {len(report['pending_self_development_goals'])}; "
         f"bootstrap pending: {pending}; "
         f"bootstrap running: {running}"

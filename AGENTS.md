@@ -50,8 +50,33 @@ Note: `package.json` exists but no npm scripts are defined.
 - Tests live in `tests/` and some core tests in `core/`.
 
 ## Commit & Pull Request Guidelines
-- Commit messages follow imperative, sentence-case summaries (see `git log`).
-- PRs should include a clear description, rationale, and test results.
+
+### Commit messages
+- Use the **imperative mood** and **sentence case**: `Fix broken imports in model_adapter` not `fixed broken imports` or `Fixes broken imports`.
+- Keep the subject line under **72 characters**.
+- Do **not** end the subject line with a period.
+- If a commit needs more context, leave a blank line after the subject and add a body (wrap at 72 characters).
+- Reference related issues or PRs in the body when relevant: `Closes #42` or `See #69`.
+
+Good examples:
+```
+Add lazy import guards for requests and numpy
+
+Guards heavy optional deps behind try/except ImportError so the
+cli_docs_and_help_contracts CI job can collect tests without a full
+requirements.txt install.
+
+Closes #69
+```
+
+```
+Fix OldCodeNotFoundError when old_code is an empty string
+```
+
+### Pull requests
+- Fill in the `.github/PULL_REQUEST_TEMPLATE.md` sections: Summary, Changes, Motivation, Testing, and Checklist.
+- Include the specific files changed and a one-line description of each change.
+- List every test command run and confirm all tests pass.
 - Screenshots are only needed for UI changes (rare in this repo).
 
 ## Security & Configuration Tips

@@ -1,5 +1,19 @@
-from git import Repo
-from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError
+try:
+    from git import Repo
+    from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError
+except ImportError:  # pragma: no cover
+    class _MissingGitRepo:
+        """Proxy that raises a clear ImportError when gitpython is not installed."""
+        def __init__(self, *args, **kwargs):
+            raise ImportError(
+                "Package 'gitpython' is required but not installed. "
+                "Install it with: pip install gitpython"
+            )
+
+    Repo = _MissingGitRepo  # type: ignore[assignment,misc]
+    InvalidGitRepositoryError = Exception  # type: ignore[assignment,misc]
+    GitCommandError = Exception  # type: ignore[assignment,misc]
+    NoSuchPathError = Exception  # type: ignore[assignment,misc]
 from core.logging_utils import log_json  # Import the new logging utility
 
 # R2: Exception classes are now canonical in core/exceptions.py — import from there.

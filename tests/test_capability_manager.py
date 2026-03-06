@@ -151,6 +151,80 @@ def test_recorded_capability_status_reports_pending_and_running_actions(tmp_path
     assert "bootstrap pending: ensure_mcp_servers" in doctor_detail
 
 
+def test_recorded_capability_status_persists_mcp_tools(tmp_path: Path):
+    stored = record_capability_status(
+        project_root=tmp_path,
+        goal="Investigate GitHub pull request history",
+        capability_plan={
+            "matched_capabilities": [{"capability_id": "github_mcp", "reason": "github"}],
+            "recommended_skills": ["git_history_analyzer"],
+            "missing_skills": [],
+            "mcp_tools": ["gh", "git", "fs"],
+            "provisioning_actions": [{"action": "ensure_mcp_servers"}],
+        },
+        goal_queue=MagicMock(queue=[]),
+    )
+
+    assert stored["mcp_tools"] == ["gh", "git", "fs"]
+
+
+def test_build_capability_status_report_returns_mcp_tools(tmp_path: Path):
+    record_capability_status(
+        project_root=tmp_path,
+        goal="Investigate GitHub pull request history",
+        capability_plan={
+            "matched_capabilities": [],
+            "recommended_skills": [],
+            "missing_skills": [],
+            "mcp_tools": ["gh", "git", "fs"],
+            "provisioning_actions": [],
+        },
+        goal_queue=MagicMock(queue=[]),
+    )
+
+    report = build_capability_status_report(tmp_path)
+    assert report["mcp_tools"] == ["gh", "git", "fs"]
+
+
+def test_capability_doctor_check_surfaces_mcp_tools(tmp_path: Path):
+    record_capability_status(
+        project_root=tmp_path,
+        goal="Investigate GitHub pull request history",
+        capability_plan={
+            "matched_capabilities": [{"capability_id": "github_mcp", "reason": "github"}],
+            "recommended_skills": [],
+            "missing_skills": [],
+            "mcp_tools": ["gh", "git", "fs"],
+            "provisioning_actions": [],
+        },
+        goal_queue=MagicMock(queue=[]),
+    )
+
+    _, detail = capability_doctor_check(tmp_path)
+    assert "mcp_tools: gh, git, fs" in detail
+
+
+def test_recorded_capability_status_persists_empty_mcp_tools_when_none_required(tmp_path: Path):
+    stored = record_capability_status(
+        project_root=tmp_path,
+        goal="Refactor helper functions",
+        capability_plan={
+            "matched_capabilities": [],
+            "recommended_skills": [],
+            "missing_skills": [],
+            "mcp_tools": [],
+            "provisioning_actions": [],
+        },
+        goal_queue=MagicMock(queue=[]),
+    )
+
+    assert stored["mcp_tools"] == []
+    report = build_capability_status_report(tmp_path)
+    assert report["mcp_tools"] == []
+    _, detail = capability_doctor_check(tmp_path)
+    assert "mcp_tools: none" in detail
+
+
 def test_provision_capability_actions_skips_when_auto_provision_disabled(tmp_path: Path):
     result = provision_capability_actions(
         project_root=tmp_path,

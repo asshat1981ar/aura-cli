@@ -55,7 +55,7 @@
   "core/goal_queue.py": "b6c29b552018ef9c739c7ea10c47e1f252c1b09c55697ab67ae6d8d849f4d684",
   "core/hybrid_loop.py": "b544d31f0cec603a8b419b282ee4118bbeb3ae0759c32615890dddd2930d9178",
   "core/logging_utils.py": "0c0b16b916b850f7b1da6c95068a4c023673b6e3e0720e152cab72066d4e6469",
-  "core/model_adapter.py": "5047eeb1456c3560ae4c048b89971e33657acfd8d48ba5f29e7fed6c86536aed",
+  "core/model_adapter.py": "f15e8976bd9fdf18766ef9e1faf9a88b0e124f2d6bd7bd7cc8ec62d07cf9a2d2",
   "core/prompts.py": "f10963e2ee0a7f67a3763f3ae8a24240a9584355c17a97259b66d5ce2c157264",
   "core/task_handler.py": "7c5ba5d95ac4c4ecbc4d4b08a508c21cc2d20ccc468a21aa6b2493ea3c699d05",
   "core/task_queue.py": "18d5e83b19b3d391335b03733221c8dae16cb5e3918ff9dc5fddfccd60bdf549",

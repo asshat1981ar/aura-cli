@@ -17,22 +17,28 @@ python3 -m pytest tests/test_file_tools.py::TestClassName::test_method_name
 # Start the CLI
 python3 main.py --help
 
-# Add a goal and run it non-interactively
-python3 main.py --add-goal "Fix the goal queue" --run-goals
+# Add a goal and run it non-interactively (canonical form)
+python3 main.py goal add "Fix the goal queue" --run
 
 # Run a one-off goal (bypasses queue)
-python3 main.py --goal "Refactor core/model_adapter.py"
+python3 main.py goal once "Refactor core/model_adapter.py"
+
+# Run queued goals
+python3 main.py goal run --dry-run
+
+# Show queue status
+python3 main.py goal status
 
 # Dry run (no file writes, no memory writes)
 ./run_aura.sh --dry-run
 
 # Bootstrap config
-python3 main.py --bootstrap
+python3 main.py bootstrap
 
 # Start the HTTP API server (FastAPI on port 8001)
 uvicorn aura_cli.server:app --port 8001
 
-# Start the MCP Skills Server (all 23 skills as HTTP tools, port 8002)
+# Start the MCP Skills Server (all 33 skills as HTTP tools, port 8002)
 uvicorn tools.aura_mcp_skills_server:app --port 8002
 # Or directly:
 python3 tools/aura_mcp_skills_server.py
@@ -47,12 +53,15 @@ Constructs all shared objects — `GoalQueue`, `ModelAdapter`, `Brain`, `VectorS
 Each `run_cycle()` call executes these phases in order, with schema validation after each:
 
 1. `ingest` — gathers project context and memory hints
-2. `plan` — `PlannerAgent` produces a list of steps
-3. `critique` — `CriticAgent` flags issues in the plan
-4. `synthesize` — `SynthesizerAgent` builds a `task_bundle` from plan + critique
-5. `act` — `CoderAgent` generates code; on schema failure, `DebuggerAgent` retries once
-6. `verify` — `VerifierAgent` checks the change set
-7. `reflect` — `ReflectorAgent` records a cycle summary to `MemoryStore`
+2. `skill_dispatch` — runs adaptive static-analysis skills via `core/skill_dispatcher.py`
+3. `plan` — `PlannerAgent` produces a list of steps
+4. `critique` — `CriticAgent` flags issues in the plan
+5. `synthesize` — `SynthesizerAgent` builds a `task_bundle` from plan + critique
+6. `act` — `CoderAgent` generates code; on schema failure, `DebuggerAgent` retries once
+7. `sandbox` — executes the snippet in an isolated subprocess before applying
+8. `apply` — writes file changes atomically via `core/file_tools.py`
+9. `verify` — `VerifierAgent` checks the change set
+10. `reflect` — `ReflectorAgent` records a cycle summary to `MemoryStore`
 
 `HybridClosedLoop` (`core/hybrid_loop.py`) is a **legacy wrapper** around `LoopOrchestrator`; prefer `LoopOrchestrator` directly.
 
@@ -95,7 +104,7 @@ SSE streaming is supported on `/run`. Protect all endpoints with `AGENT_API_TOKE
 
 **File:** `tools/aura_mcp_skills_server.py` — FastAPI on port **8002**
 
-Exposes all 23 skills as MCP-compatible HTTP tools.
+Exposes all 33 skills as MCP-compatible HTTP tools.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -178,7 +187,7 @@ All AURA variables are prefixed `AURA_`:
 
 ## Skills System
 
-23 pluggable skill modules live in `agents/skills/`. Each has `run(input_data: dict) -> dict` and **never raises** — errors are returned as `{"error": "..."}`.
+33 pluggable skill modules live in `agents/skills/`. Each has `run(input_data: dict) -> dict` and **never raises** — errors are returned as `{"error": "..."}`.
 
 **Invoke any skill:**
 
@@ -215,6 +224,16 @@ result = skills["security_scanner"].run({"project_root": "."})
 | 21 | `web_fetcher` | `url` or `query` | `text`, `title`, `source`, `truncated` |
 | 22 | `symbol_indexer` | `project_root` | `symbols`, `symbol_count`, `name_index`, `import_graph` |
 | 23 | `multi_file_editor` | `goal`, `project_root?`, `symbol_map?` | `change_plan`, `affected_count`, `warnings` |
+| 24 | `dockerfile_analyzer` | `content`/`file_path`/`project_root` | `findings`, `critical_count`, `high_count` |
+| 25 | `observability_checker` | `code`/`file_path`/`project_root` | `functions_without_logging`, `bare_print_count`, `issue_count` |
+| 26 | `changelog_generator` | `project_root`, `from_ref?`, `to_ref?` | `changelog`, `suggested_bump`, `sections` |
+| 27 | `database_query_analyzer` | `code`/`file_path`/`project_root` | `antipatterns`, `n1_risks`, `finding_count` |
+| 28 | `skill_failure_analyzer` | `summaries_path?` | `failing_skills`, `total_cycles_analyzed`, `most_problematic` |
+| 29 | `security_hardener` | `content`/`file_path`/`project_root` | `findings_count`, `findings` |
+| 30 | `structural_analyzer` | `project_root` | `circular_deps`, `bottlenecks`, `hotspots` |
+| 31 | `evolution_skill` | `goal`, `project_root` | `mutations_applied`, `cycle_result` |
+| 32 | `skill_generator` | `capability`, `description?`, `project_root?` | `skill_name`, `file_path`, `registered` |
+| 33 | `beads_skill` | `cmd`, `id?`, `args?` | varies by command (`ready`, `show`, `update`, `close`, `prime`, `sync`) |
 
 **Adding a new skill:** Create `agents/skills/your_skill.py` extending `SkillBase`, set `name`, implement `_run()`. Register in `agents/skills/registry.py`.
 

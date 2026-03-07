@@ -1,14 +1,28 @@
+from __future__ import annotations
+
 import concurrent.futures
 import hashlib
 import os
 import shlex
 import subprocess
-import requests
 import json
 import time
 from pathlib import Path
 from typing import Any, List
-import numpy as np
+
+try:
+    import numpy as np
+    _has_numpy = True
+except ImportError:
+    np = None  # type: ignore[assignment]
+    _has_numpy = False
+
+try:
+    import requests
+    _RequestException = requests.exceptions.RequestException
+except ImportError:
+    requests = None  # type: ignore[assignment]
+    _RequestException = Exception
 
 from core.logging_utils import log_json # Import log_json
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
@@ -661,10 +675,12 @@ class ModelAdapter:
             if tool_name in ["get_repo", "create_issue", "get_issue_details", "update_file", "get_pull_request_details"]:
                 mcp_tool_url = f"{self.mcp_server_url}/tool/{tool_name}"
                 try:
+                    if requests is None:
+                        raise _RequestException("requests package is not installed")
                     response = requests.post(mcp_tool_url, json=args, timeout=60)
                     response.raise_for_status() 
                     return json.dumps(response.json()) 
-                except requests.exceptions.RequestException as e:
+                except _RequestException as e:
                     return f"MCP Server tool execution failed for {tool_name}: {e}"
             else:
                 args_str = json.dumps(args)
@@ -698,10 +714,12 @@ class ModelAdapter:
         # [Retry logic unchanged]
         for attempt in range(retries):
             try:
+                if requests is None:
+                    raise _RequestException("requests package is not installed")
                 response = requests.request(method, url, headers=headers, json=json_payload, timeout=timeout)
                 response.raise_for_status()
                 return response
-            except requests.exceptions.RequestException as e:
+            except _RequestException as e:
                 if attempt < retries - 1:
                     sleep_time = backoff_factor * (2 ** attempt)
                     log_json(

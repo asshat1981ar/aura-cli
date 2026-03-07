@@ -14,8 +14,8 @@ def setup():
 if __name__ == "__main__":
     setup()
     try:
-        from main import main  # noqa: E402
-        main()
+        from aura_cli.cli_main import main as cli_main  # noqa: E402
+        raise SystemExit(cli_main())
     except ImportError as e:
         print(
             f"Error: {e}\n"

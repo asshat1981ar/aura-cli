@@ -12,6 +12,14 @@ from core.memory_types import MemoryRecord, RetrievalQuery
 from memory.brain import Brain
 import sqlite3
 
+
+class NumpyBlocker:
+    """sys.meta_path finder that blocks numpy by raising ModuleNotFoundError."""
+    def find_spec(self, fullname, path, target=None):
+        if fullname == "numpy":
+            raise ModuleNotFoundError(f"No module named '{fullname}'")
+        return None
+
 class MockModelAdapter:
     def __init__(self):
         self._embedding_model = "test-model"
@@ -135,6 +143,75 @@ class TestVectorStore:
         ).fetchone()
         assert emb_row[0] == "new-local-model"
         assert emb_row[1] == 4
+
+    def test_migrate_embedding_model(self, vector_store, mock_adapter, mock_brain):
+        rec1 = MemoryRecord(
+            id="1", content="hello", source_type="test", source_ref="ref",
+            created_at=0, updated_at=0, content_hash="h1"
+        )
+        vector_store.upsert([rec1])
+
+        # Migrate embeddings to a new model without removing embeddings for other model_ids.
+        mock_adapter._embedding_model = "migrated-model"
+        stats = vector_store.migrate_embedding_model("migrated-model")
+
+        assert stats["records_seen"] == 1
+        assert stats["embeddings_written"] == 1
+
+        # There should be exactly one embedding for the migrated model_id
+        migrated_count = mock_brain.db.execute(
+            "SELECT COUNT(*) FROM embeddings WHERE record_id = ? AND model_id = ?",
+            ("1", "migrated-model"),
+        ).fetchone()[0]
+        assert migrated_count == 1
+
+        # The original embedding for the old model_id should still be present
+        original_count = mock_brain.db.execute(
+            "SELECT COUNT(*) FROM embeddings WHERE record_id = ? AND model_id = ?",
+            ("1", "test-model"),
+        ).fetchone()[0]
+        assert original_count == 1
+
+        # And in total we should now have both old and new embeddings
+        total_count = mock_brain.db.execute(
+            "SELECT COUNT(*) FROM embeddings WHERE record_id = ?",
+            ("1",),
+        ).fetchone()[0]
+        assert total_count == 2
+
+
+class TestNumpyImportGuard:
+    def test_numpy_unavailable_import_does_not_raise(self):
+        """Verify the graceful numpy import guard: np=None when numpy raises ImportError."""
+        import sys
+
+        real_np = sys.modules.get("numpy")
+        real_core_vs = sys.modules.get("core.vector_store")
+
+        try:
+            blocker = NumpyBlocker()
+            sys.meta_path.insert(0, blocker)
+            sys.modules.pop("numpy", None)
+            sys.modules.pop("core.vector_store", None)
+
+            # Force reimport with numpy blocked
+            import core.vector_store as vs_mod
+
+            # Module should load and np should be None due to try/except guard
+            assert vs_mod.np is None
+        finally:
+            # Cleanup: restore sys.meta_path and sys.modules to original state
+            if blocker in sys.meta_path:
+                sys.meta_path.remove(blocker)
+            if real_np is not None:
+                sys.modules["numpy"] = real_np
+            else:
+                sys.modules.pop("numpy", None)
+            if real_core_vs is not None:
+                sys.modules["core.vector_store"] = real_core_vs
+            else:
+                sys.modules.pop("core.vector_store", None)
+
 
 class TestContextManager:
     def test_budget_allocation(self, vector_store):

@@ -62,9 +62,9 @@ Task:
 Previous memory:
 {chr(10).join(self.brain.recall_with_budget(max_tokens=2000))}
 
-{"Current code:\\n```python\\n" + code + "\\n```" if code else ""}
-{"Tests:\\n```python\\n" + tests + "\\n```" if tests else ""}
-{"Sandbox feedback:\\n" + feedback if feedback else ""}
+{"Current code:" + chr(10) + "```python" + chr(10) + code + chr(10) + "```" if code else ""}
+{"Tests:" + chr(10) + "```python" + chr(10) + tests + chr(10) + "```" if tests else ""}
+{"Sandbox feedback:" + chr(10) + feedback if feedback else ""}
 
 IMPORTANT: Respond with a single JSON object on one line (no markdown), like:
 {{"aura_target": "path/to/file.py", "code": "<full python code>"}}

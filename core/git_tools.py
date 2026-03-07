@@ -1,5 +1,11 @@
-from git import Repo
-from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError
+try:
+    from git import Repo
+    from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError
+except ImportError:
+    Repo = None  # type: ignore[assignment,misc]
+    InvalidGitRepositoryError = Exception  # type: ignore[assignment,misc]
+    GitCommandError = Exception  # type: ignore[assignment,misc]
+    NoSuchPathError = Exception  # type: ignore[assignment,misc]
 from core.logging_utils import log_json  # Import the new logging utility
 
 # R2: Exception classes are now canonical in core/exceptions.py — import from there.
@@ -17,6 +23,8 @@ from core.exceptions import (  # noqa: F401 (re-exported for backward-compat)
 
 class GitTools:
     def __init__(self, repo_path: str = None):
+        if Repo is None:
+            raise ImportError("Install gitpython: pip install gitpython")
         try:
             if repo_path:
                 self.repo = Repo(repo_path, search_parent_directories=True)

@@ -38,38 +38,54 @@ jobs:
 
       - name: Extract goal
         id: goal
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_GOAL: ${{ github.event.inputs.goal }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "goal=${{ github.event.inputs.goal }}" >> $GITHUB_OUTPUT
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "goal<<EOF" >> $GITHUB_OUTPUT
+            echo "$INPUT_GOAL" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
           else
-            TITLE="${{ github.event.issue.title }}"
-            echo "goal=${TITLE}" >> $GITHUB_OUTPUT
+            echo "goal<<EOF" >> $GITHUB_OUTPUT
+            echo "$ISSUE_TITLE" >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
           fi
 
       - name: Add goal to AURA queue (dry run)
         env:
           AURA_SKIP_CHDIR: "1"
           AURA_DRY_RUN: "1"
+          GOAL: ${{ steps.goal.outputs.goal }}
         run: |
-          python3 main.py --add-goal "${{ steps.goal.outputs.goal }}" || true
-          echo "Goal queued: ${{ steps.goal.outputs.goal }}"
+          python3 main.py --add-goal "$GOAL" || true
+          echo "Goal queued: $GOAL"
 
       - name: Acknowledge issue
         if: github.event_name == 'issues'
         uses: actions/github-script@v7
         with:
           script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '🤖 **Copilot Workspace**: Goal queued in AURA loop.\n\n> ' +
-                    context.payload.issue.title +
-                    '\n\n_AURA will process this goal in the next cycle._',
-            });
-            github.rest.issues.addLabels({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              labels: ['aura-queued'],
-            });
+            try {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: '🤖 **Copilot Workspace**: Goal queued in AURA loop.\n\n> ' +
+                      context.payload.issue.title +
+                      '\n\n_AURA will process this goal in the next cycle._',
+              });
+            } catch (err) {
+              core.warning(`Failed to post acknowledgement comment: ${err.message}`);
+            }
+            try {
+              await github.rest.issues.addLabels({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: ['aura-queued'],
+              });
+            } catch (err) {
+              core.warning(`Failed to add aura-queued label: ${err.message}`);
+            }

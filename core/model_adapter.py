@@ -1,14 +1,39 @@
+from __future__ import annotations
+
 import concurrent.futures
 import hashlib
 import os
 import shlex
 import subprocess
-import requests
 import json
 import time
 from pathlib import Path
 from typing import Any, List
-import numpy as np
+
+
+class _MissingPackage:
+    class exceptions:
+        RequestException = ImportError
+        HTTPError = ImportError
+
+    def __init__(self, package_name: str):
+        self.package_name = package_name
+
+    def __getattr__(self, name: str):
+        raise ImportError(
+            f"Optional dependency '{self.package_name}' is required for this feature."
+        )
+
+
+try:
+    import requests
+except ImportError:
+    requests = _MissingPackage("requests")
+
+try:
+    import numpy as np
+except ImportError:
+    np = _MissingPackage("numpy")
 
 from core.logging_utils import log_json # Import log_json
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads

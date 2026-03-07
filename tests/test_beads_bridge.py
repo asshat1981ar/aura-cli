@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
+from core.beads_cli import resolve_beads_cli
 from core.beads_bridge import BeadsBridge, build_beads_input, build_beads_runtime_input
 from core.beads_contract import BEADS_SCHEMA_VERSION
 
@@ -177,6 +178,20 @@ def test_beads_bridge_defaults_pin_local_bd_binary(tmp_path: Path):
     bridge = BeadsBridge.from_defaults(tmp_path)
 
     assert bridge.config.env["BEADS_CLI"] == str(local_bd)
+
+
+def test_resolve_beads_cli_does_not_fall_back_to_cwd_when_project_root_is_explicit(tmp_path: Path):
+    cwd_root = tmp_path / "cwd"
+    cwd_local_bd = cwd_root / "node_modules" / ".bin" / "bd"
+    cwd_local_bd.parent.mkdir(parents=True)
+    cwd_local_bd.write_text("#!/bin/sh\n", encoding="utf-8")
+    cwd_local_bd.chmod(0o755)
+
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+
+    with patch("core.beads_cli.Path.cwd", return_value=cwd_root):
+        assert resolve_beads_cli(project_root) == "bd"
 
 
 def test_beads_bridge_defaults_respect_explicit_bd_override(tmp_path: Path):

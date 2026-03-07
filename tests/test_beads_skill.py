@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+from pathlib import Path
 from unittest.mock import patch
 
 from agents.skills.beads_skill import BeadsSkill
@@ -69,3 +70,24 @@ def test_beads_skill_prefers_resolved_cli_path():
         skill.run({"cmd": "ready"})
 
     assert mock_run.call_args.args[0] == ["/tmp/project/node_modules/.bin/bd", "--no-daemon", "--json", "ready"]
+
+
+def test_beads_skill_uses_explicit_project_root_for_resolution_and_cwd(tmp_path: Path):
+    local_bd = tmp_path / "node_modules" / ".bin" / "bd"
+    local_bd.parent.mkdir(parents=True)
+    local_bd.write_text("#!/bin/sh\n", encoding="utf-8")
+    local_bd.chmod(0o755)
+
+    skill = BeadsSkill()
+    proc = subprocess.CompletedProcess(
+        args=[str(local_bd), "--no-daemon", "--json", "ready"],
+        returncode=0,
+        stdout="[]",
+        stderr="",
+    )
+
+    with patch("agents.skills.beads_skill.subprocess.run", return_value=proc) as mock_run:
+        skill.run({"cmd": "ready", "project_root": str(tmp_path)})
+
+    assert mock_run.call_args.args[0] == [str(local_bd), "--no-daemon", "--json", "ready"]
+    assert mock_run.call_args.kwargs["cwd"] == tmp_path

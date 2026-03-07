@@ -55,9 +55,18 @@ class BeadsSyncLoop:
     """Triggers beads synchronization (dolt push/pull) periodically."""
     EVERY_N = 5
 
-    def __init__(self, beads_skill):
+    def __init__(self, beads_skill, project_root: Path | None = None):
         self._skill = beads_skill
+        self._project_root = Path(project_root) if project_root is not None else None
         self._n = 0
+
+    def _skill_input(self, *, cmd: str, args: list[str] | None = None) -> dict[str, Any]:
+        payload: dict[str, Any] = {"cmd": cmd}
+        if self._project_root is not None:
+            payload["project_root"] = str(self._project_root)
+        if args:
+            payload["args"] = list(args)
+        return payload
 
     def on_cycle_complete(self, _entry):
         if isinstance(_entry, dict) and bool(_entry.get("dry_run")):
@@ -66,9 +75,9 @@ class BeadsSyncLoop:
         if self._n % self.EVERY_N == 0:
             log_json("INFO", "beads_sync_loop_starting")
             # Try to pull latest changes from remote
-            self._skill.run({"cmd": "dolt", "args": ["pull"]})
+            self._skill.run(self._skill_input(cmd="dolt", args=["pull"]))
             # Push local changes to remote
-            self._skill.run({"cmd": "dolt", "args": ["push"]})
+            self._skill.run(self._skill_input(cmd="dolt", args=["push"]))
 
 
 class LoopOrchestrator:
@@ -198,6 +207,20 @@ class LoopOrchestrator:
         if not self.beads_enabled:
             return None
         return self.skills.get("beads_skill")
+
+    def _beads_skill_input(
+        self,
+        *,
+        cmd: str,
+        bead_id: str | None = None,
+        args: list[str] | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {"cmd": cmd, "project_root": str(self.project_root)}
+        if bead_id:
+            payload["id"] = bead_id
+        if args:
+            payload["args"] = list(args)
+        return payload
 
     def attach_ui_callback(self, callback) -> None:
         """Register a UI callback (e.g., AuraStudio) to receive real-time updates."""
@@ -1029,22 +1052,14 @@ class LoopOrchestrator:
         beads_skill = self._get_beads_skill()
         if beads_skill is not None:
             log_json("INFO", "orchestrator_claiming_bead", details={"bead_id": bead_id})
-            beads_skill.run({
-                "cmd": "update",
-                "id": bead_id,
-                "args": ["--status", "in_progress"]
-            })
+            beads_skill.run(self._beads_skill_input(cmd="update", bead_id=bead_id, args=["--status", "in_progress"]))
 
     def _close_bead(self, bead_id: str, reason: str):
         """Close a bead using BeadsSkill."""
         beads_skill = self._get_beads_skill()
         if beads_skill is not None:
             log_json("INFO", "orchestrator_closing_bead", details={"bead_id": bead_id})
-            beads_skill.run({
-                "cmd": "close",
-                "id": bead_id,
-                "args": ["--reason", reason]
-            })
+            beads_skill.run(self._beads_skill_input(cmd="close", bead_id=bead_id, args=["--reason", reason]))
 
     def run_cycle(self, goal: str, dry_run: bool = False) -> Dict:
         """Execute a single complete plan-act-verify cycle for *goal*."""
@@ -1166,7 +1181,7 @@ class LoopOrchestrator:
         if beads_skill is not None:
             try:
                 log_json("INFO", "orchestrator_polling_beads")
-                result = beads_skill.run({"cmd": "ready"})
+                result = beads_skill.run(self._beads_skill_input(cmd="ready"))
                 
                 # 'bd ready --json' returns a list of beads or an object with a list
                 beads = []

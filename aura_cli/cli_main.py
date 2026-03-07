@@ -311,7 +311,7 @@ def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal
         # 1.1 Beads Sync Loop
         if getattr(orchestrator, "beads_enabled", False) and "beads_skill" in orchestrator.skills:
             from core.orchestrator import BeadsSyncLoop
-            _beads_sync = BeadsSyncLoop(orchestrator.skills["beads_skill"])
+            _beads_sync = BeadsSyncLoop(orchestrator.skills["beads_skill"], project_root=project_root)
             orchestrator.attach_improvement_loops(_beads_sync)
     except Exception as _exc:
         log_json("WARN", "improvement_loops_setup_failed", details={"error": str(_exc)})

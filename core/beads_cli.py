@@ -24,18 +24,15 @@ def resolve_beads_cli(
         if value and value.strip():
             return value.strip()
 
-    roots: list[Path] = []
     if project_root is not None:
-        roots.append(Path(project_root))
-
-    cwd = Path.cwd()
-    if cwd not in roots:
-        roots.append(cwd)
-
-    for root in roots:
-        candidate = local_beads_cli_path(root)
+        candidate = local_beads_cli_path(project_root)
         if candidate.exists():
             return str(candidate)
+        return "bd"
+
+    candidate = local_beads_cli_path(Path.cwd())
+    if candidate.exists():
+        return str(candidate)
 
     return "bd"
 

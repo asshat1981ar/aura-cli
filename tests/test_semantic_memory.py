@@ -136,6 +136,93 @@ class TestVectorStore:
         assert emb_row[0] == "new-local-model"
         assert emb_row[1] == 4
 
+    def test_rebuild_with_source_type_filter(self, vector_store):
+        rec_a = MemoryRecord(
+            id="a", content="keep me", source_type="typeA", source_ref="ref",
+            created_at=0, updated_at=0, content_hash="ha"
+        )
+        rec_b = MemoryRecord(
+            id="b", content="skip me", source_type="typeB", source_ref="ref",
+            created_at=0, updated_at=0, content_hash="hb"
+        )
+        vector_store.upsert([rec_a, rec_b])
+        stats = vector_store.rebuild({"source_types": ["typeA"]})
+        assert stats["records_seen"] == 1
+        assert stats["embeddings_written"] == 1
+
+    def test_rebuild_with_exclude_source_type(self, vector_store):
+        rec_a = MemoryRecord(
+            id="a", content="keep me", source_type="typeA", source_ref="ref",
+            created_at=0, updated_at=0, content_hash="ha"
+        )
+        rec_b = MemoryRecord(
+            id="b", content="skip me", source_type="typeB", source_ref="ref",
+            created_at=0, updated_at=0, content_hash="hb"
+        )
+        vector_store.upsert([rec_a, rec_b])
+        stats = vector_store.rebuild({"exclude_source_types": ["typeB"]})
+        assert stats["records_seen"] == 1
+        assert stats["embeddings_written"] == 1
+
+    def test_rebuild_drop_existing_false_preserves_old_embeddings(self, vector_store, mock_adapter, mock_brain):
+        rec1 = MemoryRecord(
+            id="1", content="hello", source_type="test", source_ref="ref",
+            created_at=0, updated_at=0, content_hash="h1"
+        )
+        vector_store.upsert([rec1])
+
+        mock_adapter._embedding_model = "model-v2"
+        stats = vector_store.rebuild({"drop_existing_embeddings": False})
+        assert stats["embeddings_written"] == 1
+        # Both the old "test-model" and new "model-v2" embeddings should be present
+        count = mock_brain.db.execute(
+            "SELECT COUNT(*) FROM embeddings WHERE record_id = ?", ("1",)
+        ).fetchone()[0]
+        assert count == 2
+
+    def test_migrate_embedding_model(self, vector_store, mock_adapter, mock_brain):
+        rec1 = MemoryRecord(
+            id="1", content="hello", source_type="test", source_ref="ref",
+            created_at=0, updated_at=0, content_hash="h1"
+        )
+        vector_store.upsert([rec1])
+
+        mock_adapter._embedding_model = "migrated-model"
+        stats = vector_store.migrate_embedding_model("migrated-model")
+
+        assert stats["records_seen"] == 1
+        assert stats["embeddings_written"] == 1
+
+        emb_row = mock_brain.db.execute(
+            "SELECT model_id FROM embeddings WHERE record_id = ?", ("1",)
+        ).fetchone()
+        assert emb_row[0] == "migrated-model"
+
+    def test_numpy_unavailable_import_does_not_raise(self):
+        """Verify the graceful numpy import guard: np=None is set when numpy is absent."""
+        import sys
+        # Save real state
+        real_np = sys.modules.get("numpy")
+        real_core_vs = sys.modules.get("core.vector_store")
+        try:
+            # Setting sys.modules["numpy"] = None makes Python raise ImportError on
+            # subsequent 'import numpy' calls, accurately simulating numpy being absent.
+            sys.modules["numpy"] = None  # type: ignore[assignment]
+            sys.modules.pop("core.vector_store", None)
+            import core.vector_store as vs_mod
+            # The module should load without error and np should be None
+            assert vs_mod.np is None
+        finally:
+            # Restore original state
+            if real_np is not None:
+                sys.modules["numpy"] = real_np
+            else:
+                sys.modules.pop("numpy", None)
+            if real_core_vs is not None:
+                sys.modules["core.vector_store"] = real_core_vs
+            else:
+                sys.modules.pop("core.vector_store", None)
+
 class TestContextManager:
     def test_budget_allocation(self, vector_store):
         cm = ContextManager(vector_store=vector_store, max_tokens=100)

@@ -69,6 +69,37 @@ class TestCoderAgent:
         result = self.agent.implement("do something")
         assert isinstance(result, str)
 
+    def test_coder_retry_prompt_includes_code_tests_and_feedback_sections(self):
+        prompts = []
+        model = MagicMock()
+
+        def respond(prompt):
+            prompts.append(prompt)
+            return '{"aura_target": "core/out.py", "code": "x = 1"}'
+
+        model.respond.side_effect = respond
+        tester = MagicMock()
+        tester.generate_tests.return_value = "def test_x():\n    assert True"
+        tester.evaluate_code.side_effect = [
+            {"summary": "needs improvement"},
+            {"summary": "likely pass"},
+        ]
+
+        from agents.coder import CoderAgent
+
+        agent = CoderAgent(_make_brain(), model, tester=tester)
+        result = agent.implement("do something")
+
+        assert result.splitlines()[0] == "# AURA_TARGET: core/out.py"
+        assert result.splitlines()[1] == "x = 1"
+        assert "Current code:" in prompts[1]
+        assert "# AURA_TARGET: core/out.py" in prompts[1]
+        assert "x = 1" in prompts[1]
+        assert "Tests:" in prompts[1]
+        assert "def test_x():\n    assert True" in prompts[1]
+        assert "Sandbox feedback:" in prompts[1]
+        assert "needs improvement" in prompts[1]
+
     def test_coder_max_iterations_constant(self):
         from agents.coder import CoderAgent
         assert CoderAgent.MAX_ITERATIONS == 3

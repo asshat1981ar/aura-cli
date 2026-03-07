@@ -53,6 +53,18 @@ class CoderAgent:
         feedback = ""
 
         for i in range(self.MAX_ITERATIONS):
+            current_code_section = ""
+            if code:
+                current_code_section = f"Current code:\n```python\n{code}\n```"
+
+            tests_section = ""
+            if tests:
+                tests_section = f"Tests:\n```python\n{tests}\n```"
+
+            feedback_section = ""
+            if feedback:
+                feedback_section = f"Sandbox feedback:\n{feedback}"
+
             prompt = f"""
 You are an autonomous coding agent inside AURA.
 
@@ -62,9 +74,9 @@ Task:
 Previous memory:
 {chr(10).join(self.brain.recall_with_budget(max_tokens=2000))}
 
-{"Current code:\\n```python\\n" + code + "\\n```" if code else ""}
-{"Tests:\\n```python\\n" + tests + "\\n```" if tests else ""}
-{"Sandbox feedback:\\n" + feedback if feedback else ""}
+{current_code_section}
+{tests_section}
+{feedback_section}
 
 IMPORTANT: Respond with a single JSON object on one line (no markdown), like:
 {{"aura_target": "path/to/file.py", "code": "<full python code>"}}

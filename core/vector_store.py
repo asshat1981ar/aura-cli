@@ -2,11 +2,15 @@ import json
 import time
 import uuid
 import hashlib
-import numpy as np
 import sqlite3
 from typing import List, Dict, Any, Optional, Union
 from core.logging_utils import log_json
 from core.memory_types import MemoryRecord, RetrievalQuery, SearchHit
+
+try:
+    import numpy as np
+except ImportError:
+    np = None
 
 class VectorStore:
     """
@@ -14,6 +18,8 @@ class VectorStore:
     Implements ASCM v2 VectorStoreV2 protocol with multi-model embedding support.
     """
     def __init__(self, model_adapter, brain):
+        if np is None:
+            raise ImportError("numpy is required to use VectorStore")
         self.model_adapter = model_adapter
         self.brain = brain
         # ASCM v2: use Row factory for name-based access in search results

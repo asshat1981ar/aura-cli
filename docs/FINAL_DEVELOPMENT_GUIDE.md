@@ -435,9 +435,9 @@ From `tools/requirements.txt`:
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| `fastapi` | `0.129.0` | HTTP API servers (ports 8001, 8002) |
-| `uvicorn` | `0.40.0` | ASGI server |
-| `requests` | `2.32.3` | HTTP client (OpenRouter, MCP calls) |
+| `fastapi` | `0.135.1` | HTTP API servers (ports 8001, 8002) |
+| `uvicorn` | `0.41.0` | ASGI server |
+| `requests` | `2.32.5` | HTTP client (OpenRouter, MCP calls) |
 | `pydantic` | `2.12.5` | Schema validation |
 | `python-dotenv` | latest | `.env` file loading |
 | `numpy` | latest | Vector math for embeddings |

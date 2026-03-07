@@ -1,0 +1,25 @@
+Verification Report: BEADS-Orchestrator track checkpoint
+
+Automated verification:
+- python3 -m pytest -q tests/test_beads_bridge.py tests/test_beads_skill.py tests/test_cli_main_dispatch.py -k beads tests/test_orchestrator_phases.py -k beads tests/test_commands_status.py -k beads tests/test_operator_runtime.py -k beads
+  Result: 30 passed, 71 deselected
+- node scripts/beads_bridge.mjs with canonical BEADS payload
+  Result: ok=true, status=ok, allow decision returned via repo-local BEADS CLI
+- node_modules/.bin/bd --no-daemon info --json / ready --json / doctor --json
+  Result: local SQLite BEADS store healthy for repo fingerprint, config, role, hooks, merge driver, and sync-branch setup
+- AURA_SKIP_CHDIR=1 python3 main.py goal once "Verify BEADS runtime metadata" --max-cycles 1 --dry-run --json --beads-required
+  Result: live logs showed beads_gate_complete status=allow before later unrelated model timeout
+
+Manual verification plan presented:
+1. Run the bridge adapter with canonical JSON input and confirm ok=true with a BEADS decision.
+2. Run bd doctor --json and confirm fingerprint/config/role health.
+3. Run a dry-run goal_once with --beads-required and confirm beads_gate_complete allow logs.
+
+User confirmation:
+- User replied: yes
+
+Checkpoint scope:
+- BEADS bridge foundation
+- Orchestrator gating
+- Runtime surfaces and rollout metadata
+- Local BEADS workflow cleanup (hooks, merge driver, sync-branch, project Claude setup)

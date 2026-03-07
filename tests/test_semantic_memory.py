@@ -187,33 +187,62 @@ class TestVectorStore:
         )
         vector_store.upsert([rec1])
 
+        # Migrate embeddings to a new model without removing embeddings for other model_ids.
         mock_adapter._embedding_model = "migrated-model"
         stats = vector_store.migrate_embedding_model("migrated-model")
 
         assert stats["records_seen"] == 1
         assert stats["embeddings_written"] == 1
 
-        emb_row = mock_brain.db.execute(
-            "SELECT model_id FROM embeddings WHERE record_id = ?", ("1",)
-        ).fetchone()
-        assert emb_row[0] == "migrated-model"
+        # There should be exactly one embedding for the migrated model_id
+        migrated_count = mock_brain.db.execute(
+            "SELECT COUNT(*) FROM embeddings WHERE record_id = ? AND model_id = ?",
+            ("1", "migrated-model"),
+        ).fetchone()[0]
+        assert migrated_count == 1
+
+        # The original embedding for the old model_id should still be present
+        original_count = mock_brain.db.execute(
+            "SELECT COUNT(*) FROM embeddings WHERE record_id = ? AND model_id = ?",
+            ("1", "test-model"),
+        ).fetchone()[0]
+        assert original_count == 1
+
+        # And in total we should now have both old and new embeddings
+        total_count = mock_brain.db.execute(
+            "SELECT COUNT(*) FROM embeddings WHERE record_id = ?",
+            ("1",),
+        ).fetchone()[0]
+        assert total_count == 2
 
     def test_numpy_unavailable_import_does_not_raise(self):
-        """Verify the graceful numpy import guard: np=None is set when numpy is absent."""
+        """Verify the graceful numpy import guard: np=None when numpy raises ImportError."""
         import sys
-        # Save real state
+
         real_np = sys.modules.get("numpy")
         real_core_vs = sys.modules.get("core.vector_store")
+
+        class NumpyBlocker:
+            """Module finder that blocks numpy imports by raising ModuleNotFoundError."""
+            def find_spec(self, fullname, path, target=None):
+                if fullname == "numpy" or fullname.startswith("numpy."):
+                    raise ModuleNotFoundError(f"No module named '{fullname}'")
+                return None
+
         try:
-            # Setting sys.modules["numpy"] = None makes Python raise ImportError on
-            # subsequent 'import numpy' calls, accurately simulating numpy being absent.
-            sys.modules["numpy"] = None  # type: ignore[assignment]
+            blocker = NumpyBlocker()
+            sys.meta_path.insert(0, blocker)
+            sys.modules.pop("numpy", None)
             sys.modules.pop("core.vector_store", None)
+
+            # Force reimport with numpy blocked
             import core.vector_store as vs_mod
-            # The module should load without error and np should be None
+
+            # Module should load and np should be None due to try/except guard
             assert vs_mod.np is None
         finally:
-            # Restore original state
+            # Cleanup
+            sys.meta_path.remove(blocker)
             if real_np is not None:
                 sys.modules["numpy"] = real_np
             else:

@@ -95,7 +95,7 @@
   "core/policies/time_bound.py": "56d7f694051a0f459d03c88d2be518821e6ee4ce3247cf7388ff3956fd424827",
   "core/policies/resource_bound.py": "489ba59748f8d5245a65065dca02620da221bc0e89d8e975b8f7dd10ef20c3f4",
   "aura_cli/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-  "aura_cli/cli_main.py": "f625741aaea6fe8384d49bbd662019f94111a53303bc076b085816198930b1ea",
+  "aura_cli/cli_main.py": "fd4841b954aef8465c3f4e31ccfca07c32b1288fdb5defb783cfbf1d113fecb8",
   "aura_cli/commands.py": "0cbd38268972b2e542ac63ea1fb89f3152eb37dbe9128e0430d53c29f2e484f3",
   "aura_cli/doctor.py": "940e066ea805a03dd26f2a249f70742c8e8f16c3f5b3a4b7bbc1b988f89b242e",
   "aura_cli/server.py": "e5b4a21b032e46850a363fb726e7812a1a898d7af5eec35e9d495265a744d4dd",

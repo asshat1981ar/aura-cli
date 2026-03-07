@@ -60,7 +60,7 @@ Task:
 {task}
 
 Previous memory:
-{"\n".join(self.brain.recall_with_budget(max_tokens=2000))}
+{chr(10).join(self.brain.recall_with_budget(max_tokens=2000))}
 
 {"Current code:\\n```python\\n" + code + "\\n```" if code else ""}
 {"Tests:\\n```python\\n" + tests + "\\n```" if tests else ""}

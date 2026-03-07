@@ -1,1 +1,3 @@
 db: .beads/beads.db
+
+sync-branch: "beads-sync"

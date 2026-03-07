@@ -1,2 +1,2 @@
 # Refactored for clarity and performance
-setup();
+# Entry point — run `python main.py` from the repository root instead.

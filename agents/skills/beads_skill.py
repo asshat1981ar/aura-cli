@@ -9,6 +9,7 @@ import subprocess
 from typing import Any, Dict, List, Optional
 
 from agents.skills.base import SkillBase
+from core.beads_cli import resolve_beads_cli, uses_repo_local_beads_cli
 from core.logging_utils import log_json
 
 
@@ -44,8 +45,11 @@ class BeadsSkill(SkillBase):
         if not cmd:
             return {"error": "Provide 'cmd' (ready, show, update, close, prime, sync)"}
 
-        # Base command
-        full_cmd = ["bd", "--json", cmd]
+        beads_cli = resolve_beads_cli()
+        full_cmd = [beads_cli]
+        if uses_repo_local_beads_cli(beads_cli):
+            full_cmd.append("--no-daemon")
+        full_cmd.extend(["--json", cmd])
         
         # Add ID if applicable
         if bead_id:

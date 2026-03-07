@@ -16,6 +16,7 @@ from core.beads_contract import (
     BeadsInput,
     BeadsResult,
 )
+from core.beads_cli import resolve_beads_cli
 from core.logging_utils import log_json
 from core.operator_runtime import build_queue_summary
 
@@ -226,6 +227,11 @@ class BeadsBridge:
         scope: str = "goal_run",
         env: Mapping[str, str] | None = None,
     ) -> "BeadsBridge":
+        resolved_env = dict(env or {})
+        if not any(resolved_env.get(key, "").strip() for key in ("BEADS_CLI", "BD_COMMAND")):
+            resolved_cli = resolve_beads_cli(project_root)
+            if resolved_cli != "bd":
+                resolved_env["BEADS_CLI"] = resolved_cli
         cfg = BeadsBridgeConfig(
             command=tuple(command or default_beads_command(project_root)),
             timeout_seconds=timeout_seconds,
@@ -233,7 +239,7 @@ class BeadsBridge:
             required=required,
             persist_artifacts=persist_artifacts,
             scope=scope,
-            env=dict(env or {}),
+            env=resolved_env,
         )
         return cls(cfg, project_root=project_root)
 

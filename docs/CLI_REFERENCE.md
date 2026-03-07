@@ -35,6 +35,7 @@ Optional fields:
 Known record codes:
 - `cli_parse_error`: CLI argument parsing or validation failed.
 - `unknown_command_help_topic`: Help topic path was not recognized.
+- `missing_dependency`: A required optional dependency is not installed.
 
 ### `cli_warnings`
 

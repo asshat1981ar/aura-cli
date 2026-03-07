@@ -142,6 +142,7 @@ class TestCLIContract(unittest.TestCase):
             {
                 cli_options_meta.CLI_PARSE_ERROR_CODE,
                 cli_options_meta.UNKNOWN_COMMAND_HELP_TOPIC_CODE,
+                cli_options_meta.MISSING_DEPENDENCY_ERROR_CODE,
             },
         )
 

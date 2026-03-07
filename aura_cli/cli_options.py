@@ -8,6 +8,7 @@ from typing import Any, Mapping, Sequence
 
 from aura_cli.options import (
     CLI_PARSE_ERROR_CODE,
+    MISSING_DEPENDENCY_ERROR_CODE,
     CLI_WARNINGS_CODE_LEGACY_FLAGS_DEPRECATED,
     CLI_ACTION_SPECS_BY_ACTION,
     COMMAND_SPECS,
@@ -117,6 +118,14 @@ def unknown_command_help_topic_payload(message: str) -> dict[str, Any]:
         "status": "error",
         "code": UNKNOWN_COMMAND_HELP_TOPIC_CODE,
         "message": message,
+    }
+
+
+def missing_dependency_error_payload(exc: BaseException) -> dict[str, Any]:
+    return {
+        "status": "error",
+        "code": MISSING_DEPENDENCY_ERROR_CODE,
+        "message": str(exc),
     }
 
 
@@ -853,7 +862,9 @@ def cli_contract_report(dispatch_registry: Mapping[str, Any] | None = None) -> d
 __all__ = [
     "attach_cli_warnings",
     "cli_parse_error_payload",
+    "missing_dependency_error_payload",
     "CLI_PARSE_ERROR_CODE",
+    "MISSING_DEPENDENCY_ERROR_CODE",
     "AuraArgumentParser",
     "CLIWarningRecord",
     "CLIParseError",

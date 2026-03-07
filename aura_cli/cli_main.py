@@ -45,6 +45,7 @@ from aura_cli.cli_options import (
     CLIParseError,
     attach_cli_warnings,
     cli_parse_error_payload,
+    missing_dependency_error_payload,
     parse_cli_args,
     render_help,
     unknown_command_help_topic_payload,
@@ -1121,7 +1122,13 @@ def dispatch_command(parsed, *, project_root: Path, runtime_factory=create_runti
         if prep_rc is not None:
             return prep_rc
 
-    return rule.handler(ctx)
+    try:
+        return rule.handler(ctx)
+    except ImportError as exc:
+        if getattr(parsed.namespace, "json", False):
+            raise
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
 
 def main(project_root_override=None, argv=None):
@@ -1167,6 +1174,12 @@ def main(project_root_override=None, argv=None):
 
     try:
         return dispatch_command(parsed, project_root=project_root)
+    except ImportError as exc:
+        if getattr(parsed.namespace, "json", False):
+            print(json.dumps(attach_cli_warnings(missing_dependency_error_payload(exc), parsed)))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return 1
     finally:
         if readline:
             try:

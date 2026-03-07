@@ -44,6 +44,10 @@ memory/store/
 *.db-shm
 *.db-wal
 
+# Auto-generated memory state files
+memory/capability_status.json
+memory/project_sync_hashes.json
+
 # ── Node / npm ────────────────────────────────────────────────────────────
 node_modules/
 package-lock.json

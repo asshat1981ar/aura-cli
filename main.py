@@ -4,10 +4,13 @@ import json
 import sys
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 
-# Load environment variables before any other imports
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    # Load environment variables before any other imports
+    load_dotenv()
+except ImportError:  # pragma: no cover
+    pass  # python-dotenv not installed; .env files will not be loaded. Set environment variables manually or via system configuration.
 
 from aura_cli.cli_options import CLIParseError, attach_cli_warnings, parse_cli_args, render_help
 from aura_cli.cli_options import cli_parse_error_payload, unknown_command_help_topic_payload

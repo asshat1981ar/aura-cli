@@ -4,8 +4,10 @@ Data types and interfaces for Advanced Semantic Context Manager (ASCM) v2.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol, Union
-import numpy as np
+from typing import Any, Dict, List, Optional, Protocol, TYPE_CHECKING, Union
+
+if TYPE_CHECKING:
+    import numpy as np
 
 @dataclass
 class MemoryRecord:

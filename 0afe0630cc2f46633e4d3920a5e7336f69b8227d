@@ -1,0 +1,26 @@
+Task: BEADS runtime stabilization and local BEADS health repair
+
+Summary:
+- Added repo-local BEADS CLI resolution and pinned runtime bridge defaults.
+- Hardened the Node BEADS bridge to use the local CLI, direct mode, and real ready-work fallback behavior.
+- Repaired local BEADS metadata/config for SQLite + sync-branch workflow.
+- Added regression coverage for bridge and skill invocation behavior.
+- Wrote conductor verification report for BEADS-Orchestrator track.
+
+Files:
+- .beads/.gitignore
+- .beads/config.yaml
+- .beads/metadata.json
+- .gitattributes
+- agents/skills/beads_skill.py
+- conductor/tracks/beads_orchestrator_20260302/metadata.json
+- conductor/tracks/beads_orchestrator_20260302/plan.md
+- conductor/tracks/beads_orchestrator_20260302/verification_20260307.md
+- core/beads_bridge.py
+- core/beads_cli.py
+- scripts/beads_bridge.mjs
+- tests/test_beads_bridge.py
+- tests/test_beads_skill.py
+
+Why:
+The repository had a split-brain BEADS environment: the global CLI was newer and Dolt-only, while the repo-pinned CLI and local SQLite store were the actual working runtime. This change makes AURA consistently use the pinned BEADS runtime, restores real ready/info/doctor behavior, and documents verification for the conductor track.

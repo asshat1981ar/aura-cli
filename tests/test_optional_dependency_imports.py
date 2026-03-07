@@ -8,7 +8,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
-def _run_blocked_import(module_name: str, *blocked_modules: str) -> subprocess.CompletedProcess[str]:
+def run_blocked_import(module_name: str, *blocked_modules: str) -> subprocess.CompletedProcess[str]:
     blocked = ", ".join(repr(name) for name in blocked_modules)
     script = f"""
 import builtins
@@ -37,14 +37,14 @@ print("IMPORT_OK")
 
 
 def test_model_adapter_import_succeeds_without_requests_or_numpy():
-    result = _run_blocked_import("core.model_adapter", "requests", "numpy")
+    result = run_blocked_import("core.model_adapter", "requests", "numpy")
 
     assert result.returncode == 0, result.stderr
     assert "IMPORT_OK" in result.stdout
 
 
 def test_cli_main_import_succeeds_without_optional_runtime_dependencies():
-    result = _run_blocked_import(
+    result = run_blocked_import(
         "aura_cli.cli_main",
         "requests",
         "numpy",

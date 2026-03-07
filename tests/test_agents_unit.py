@@ -90,10 +90,15 @@ class TestCoderAgent:
         agent = CoderAgent(_make_brain(), model, tester=tester)
         result = agent.implement("do something")
 
-        assert result.startswith("# AURA_TARGET: core/out.py\nx = 1")
-        assert "Current code:\n```python\n# AURA_TARGET: core/out.py\nx = 1\n```" in prompts[1]
-        assert "Tests:\n```python\ndef test_x():\n    assert True\n```" in prompts[1]
-        assert "Sandbox feedback:\nneeds improvement" in prompts[1]
+        assert result.splitlines()[0] == "# AURA_TARGET: core/out.py"
+        assert result.splitlines()[1] == "x = 1"
+        assert "Current code:" in prompts[1]
+        assert "# AURA_TARGET: core/out.py" in prompts[1]
+        assert "x = 1" in prompts[1]
+        assert "Tests:" in prompts[1]
+        assert "def test_x():\n    assert True" in prompts[1]
+        assert "Sandbox feedback:" in prompts[1]
+        assert "needs improvement" in prompts[1]
 
     def test_coder_max_iterations_constant(self):
         from agents.coder import CoderAgent

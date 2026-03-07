@@ -12,7 +12,11 @@ from typing import Any, List
 
 
 class _MissingPackage:
+    """Proxy missing optional dependencies while preserving expected attribute access."""
+
     class exceptions:
+        """Fallback exception namespace for code paths that expect requests.exceptions."""
+
         RequestException = ImportError
         HTTPError = ImportError
 

@@ -1,14 +1,40 @@
+# from __future__ import annotations defers evaluation of type annotations so that
+# references like List[np.ndarray] are not evaluated at import time when numpy is absent.
+from __future__ import annotations
+
 import concurrent.futures
 import hashlib
 import os
 import shlex
 import subprocess
-import requests
 import json
 import time
 from pathlib import Path
 from typing import Any, List
-import numpy as np
+
+
+class _MissingPackage:
+    """Stub returned when an optional package is not installed."""
+
+    def __init__(self, package_name: str) -> None:
+        self._package_name = package_name
+
+    def __getattr__(self, name: str):
+        raise ImportError(
+            f"'{self._package_name}' is required but not installed. "
+            f"Run: pip install {self._package_name}"
+        )
+
+
+try:
+    import requests
+except ImportError:
+    requests = _MissingPackage("requests")  # type: ignore[assignment]
+
+try:
+    import numpy as np
+except ImportError:
+    np = _MissingPackage("numpy")  # type: ignore[assignment]
 
 from core.logging_utils import log_json # Import log_json
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads

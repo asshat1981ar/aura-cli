@@ -1121,7 +1121,11 @@ def dispatch_command(parsed, *, project_root: Path, runtime_factory=create_runti
         if prep_rc is not None:
             return prep_rc
 
-    return rule.handler(ctx)
+    try:
+        return rule.handler(ctx)
+    except ImportError as exc:
+        print(f"Error: A required module is not installed: {exc}", file=sys.stderr)
+        return 1
 
 
 def main(project_root_override=None, argv=None):
@@ -1165,14 +1169,26 @@ def main(project_root_override=None, argv=None):
                 print(exc.usage, file=sys.stderr)
         return exc.code
 
+    _rc = 0
     try:
-        return dispatch_command(parsed, project_root=project_root)
+        _rc = dispatch_command(parsed, project_root=project_root)
+    except ImportError as exc:
+        if "--json" in raw_argv:
+            print(json.dumps(attach_cli_warnings({
+                "status": "error",
+                "code": "missing_dependency",
+                "message": str(exc),
+            })))
+        else:
+            print(f"Error: A required module is not installed: {exc}", file=sys.stderr)
+        _rc = 1
     finally:
         if readline:
             try:
                 readline.write_history_file(str(project_root / "memory" / ".aura_history"))
             except Exception:
                 pass
+    return _rc
 
 if __name__ == "__main__":
     raise SystemExit(main())

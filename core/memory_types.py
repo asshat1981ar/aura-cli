@@ -5,7 +5,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol, Union
-import numpy as np
+
+try:
+    import numpy as np
+    _has_numpy = True
+except ImportError:
+    np = None  # type: ignore[assignment]
+    _has_numpy = False
 
 @dataclass
 class MemoryRecord:

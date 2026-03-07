@@ -1121,7 +1121,16 @@ def dispatch_command(parsed, *, project_root: Path, runtime_factory=create_runti
         if prep_rc is not None:
             return prep_rc
 
-    return rule.handler(ctx)
+    try:
+        return rule.handler(ctx)
+    except ImportError as exc:
+        msg = f"Error: An optional dependency is not available: {exc}"
+        if getattr(ctx.args, "json", False):
+            print(json.dumps({"error": str(exc), "type": "missing_dependency"}))
+        else:
+            print(msg, file=sys.stderr)
+            print("Run `pip install -r requirements.txt` to install missing dependencies.", file=sys.stderr)
+        return 1
 
 
 def main(project_root_override=None, argv=None):

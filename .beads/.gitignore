@@ -7,6 +7,8 @@ bd.sock
 bd.sock.startlock
 sync-state.json
 last-touched
+.jsonl.lock
+.beads/
 
 # Local version tracking (prevents upgrade notification spam after git ops)
 .local_version
@@ -43,6 +45,13 @@ daemon.lock
 daemon.log
 daemon-*.log.gz
 daemon.pid
+beads.base.jsonl
+beads.left.jsonl
+beads.right.jsonl
+beads.base.meta.json
+beads.left.meta.json
+beads.right.meta.json
+sync_base.jsonl
 # NOTE: Do NOT add negation patterns here.
 # They would override fork protection in .git/info/exclude.
 # Config files (metadata.json, config.yaml) are tracked by git by default

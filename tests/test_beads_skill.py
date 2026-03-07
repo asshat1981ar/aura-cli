@@ -51,3 +51,21 @@ def test_beads_skill_wraps_scalar_json_in_dict():
         result = skill.run({"cmd": "prime"})
 
     assert result == {"value": "ok"}
+
+
+def test_beads_skill_prefers_resolved_cli_path():
+    skill = BeadsSkill()
+    proc = subprocess.CompletedProcess(
+        args=["/tmp/project/node_modules/.bin/bd", "--no-daemon", "--json", "ready"],
+        returncode=0,
+        stdout="[]",
+        stderr="",
+    )
+
+    with patch("agents.skills.beads_skill.resolve_beads_cli", return_value="/tmp/project/node_modules/.bin/bd"), patch(
+        "agents.skills.beads_skill.uses_repo_local_beads_cli",
+        return_value=True,
+    ), patch("agents.skills.beads_skill.subprocess.run", return_value=proc) as mock_run:
+        skill.run({"cmd": "ready"})
+
+    assert mock_run.call_args.args[0] == ["/tmp/project/node_modules/.bin/bd", "--no-daemon", "--json", "ready"]

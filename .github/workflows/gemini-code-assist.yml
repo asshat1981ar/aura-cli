@@ -56,7 +56,7 @@ jobs:
           tail -40 pylint-out.txt >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Run AURA skills: complexity + security scan
+      - name: "Run AURA skills: complexity + security scan"
         id: skills
         env:
           AURA_SKIP_CHDIR: "1"
@@ -93,11 +93,15 @@ jobs:
       - name: Post Gemini Code Assist summary
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
+        env:
+          CHANGED_FILES: ${{ steps.changed.outputs.files }}
+          ANALYSIS_OUTPUT: ${{ steps.analysis.outputs.analysis }}
+          SKILLS_OUTPUT: ${{ steps.skills.outputs.skills }}
         with:
           script: |
-            const changed = `${{ steps.changed.outputs.files }}`;
-            const analysis = `${{ steps.analysis.outputs.analysis }}`;
-            const skills = `${{ steps.skills.outputs.skills }}`;
+            const changed = process.env.CHANGED_FILES || '';
+            const analysis = process.env.ANALYSIS_OUTPUT || '';
+            const skills = process.env.SKILLS_OUTPUT || '';
             const body = [
               '## ✨ Gemini Code Assist Review',
               '',
@@ -118,7 +122,7 @@ jobs:
               '',
               '_Powered by Gemini Code Assist + AURA Skills_',
             ].join('\n');
-            github.rest.issues.createComment({
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,

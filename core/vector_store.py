@@ -2,9 +2,13 @@ import json
 import time
 import uuid
 import hashlib
-import numpy as np
 import sqlite3
 from typing import List, Dict, Any, Optional, Union
+
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover
+    np = None  # type: ignore[assignment]
 from core.logging_utils import log_json
 from core.memory_types import MemoryRecord, RetrievalQuery, SearchHit
 

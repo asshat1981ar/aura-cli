@@ -342,6 +342,7 @@ CLI_WARNINGS_RECORD_CODES: tuple[dict[str, str], ...] = (
 
 CLI_PARSE_ERROR_CODE = "cli_parse_error"
 UNKNOWN_COMMAND_HELP_TOPIC_CODE = "unknown_command_help_topic"
+MISSING_DEPENDENCY_ERROR_CODE = "missing_dependency"
 CLI_ERRORS_JSON_CONTRACT_NAME = "cli_errors"
 CLI_ERRORS_JSON_CONTRACT_VERSION = 1
 CLI_ERRORS_RECORD_FIELDS: tuple[str, ...] = (
@@ -362,6 +363,11 @@ CLI_ERRORS_RECORD_CODES: tuple[dict[str, str], ...] = (
         "code": UNKNOWN_COMMAND_HELP_TOPIC_CODE,
         "status": "error",
         "description": "Help topic path was not recognized.",
+    },
+    {
+        "code": MISSING_DEPENDENCY_ERROR_CODE,
+        "status": "error",
+        "description": "A required optional dependency is not installed.",
     },
 )
 
@@ -607,6 +613,7 @@ __all__ = [
     "CLI_ERRORS_RECORD_CODES",
     "CLI_ERRORS_RECORD_FIELDS",
     "CLI_PARSE_ERROR_CODE",
+    "MISSING_DEPENDENCY_ERROR_CODE",
     "CLI_WARNINGS_JSON_CONTRACT_VERSION",
     "CLI_WARNINGS_CODE_LEGACY_FLAGS_DEPRECATED",
     "CLI_WARNINGS_JSON_FIELD",

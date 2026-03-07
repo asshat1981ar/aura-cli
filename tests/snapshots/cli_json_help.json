@@ -565,6 +565,11 @@
           "code": "unknown_command_help_topic",
           "description": "Help topic path was not recognized.",
           "status": "error"
+        },
+        {
+          "code": "missing_dependency",
+          "description": "A required optional dependency is not installed.",
+          "status": "error"
         }
       ],
       "record_fields": [

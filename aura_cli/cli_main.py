@@ -1121,7 +1121,11 @@ def dispatch_command(parsed, *, project_root: Path, runtime_factory=create_runti
         if prep_rc is not None:
             return prep_rc
 
-    return rule.handler(ctx)
+    try:
+        return rule.handler(ctx)
+    except ImportError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
 
 
 def main(project_root_override=None, argv=None):
@@ -1167,6 +1171,12 @@ def main(project_root_override=None, argv=None):
 
     try:
         return dispatch_command(parsed, project_root=project_root)
+    except ImportError as exc:
+        if getattr(parsed.namespace, "json", False):
+            print(json.dumps({"error": str(exc), "code": 1}))
+        else:
+            print(f"Error: {exc}", file=sys.stderr)
+        return 1
     finally:
         if readline:
             try:

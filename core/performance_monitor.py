@@ -7,4 +7,4 @@ def monitor_performance(performance_metrics):
     # Example tracking logic
     for metric in performance_metrics:
         # Process and log metrics
-        log_json("info", "performance_metric", {"metric": metric})
+        log_json("INFO", "performance_metric", None, details={"metric": metric})

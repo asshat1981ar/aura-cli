@@ -1,6 +1,5 @@
 """End-to-end smoke test: dry-run cycle through the full orchestrator pipeline."""
 import os
-import sys
 import unittest
 from pathlib import Path
 

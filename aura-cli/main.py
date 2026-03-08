@@ -1,2 +1,2 @@
 # Refactored for clarity and performance
-setup();
+setup()

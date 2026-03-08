@@ -1,13 +1,10 @@
 """Unit tests for individual orchestrator phases (Phase 1-11)."""
 import unittest
-import time
-import uuid
 from pathlib import Path
 from unittest.mock import MagicMock, patch, call
 
 from core.orchestrator import BeadsSyncLoop, LoopOrchestrator
 from core.policy import Policy
-from memory.controller import memory_controller
 
 class TestOrchestratorPhases(unittest.TestCase):
     def setUp(self):

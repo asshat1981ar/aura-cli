@@ -4,8 +4,7 @@ Tests for StructuralAnalyzerSkill coverage reporting enhancement.
 from __future__ import annotations
 
 import pytest
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from agents.skills.structural_analyzer import StructuralAnalyzerSkill
 
 @pytest.fixture

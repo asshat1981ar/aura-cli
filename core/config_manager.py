@@ -1,7 +1,7 @@
 import os
 import json
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 from core.logging_utils import log_json
 from core.exceptions import ConfigurationError
 

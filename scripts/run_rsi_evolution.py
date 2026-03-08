@@ -6,7 +6,6 @@ Logs results to logs/rsi_evolution_50.log.
 from __future__ import annotations
 
 import os
-import json
 import time
 import sys
 from pathlib import Path

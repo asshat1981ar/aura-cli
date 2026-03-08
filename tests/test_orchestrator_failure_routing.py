@@ -1,9 +1,8 @@
 """Tests for orchestrator failure routing and act-loop retry/replan/stash."""
-import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 from core.orchestrator import LoopOrchestrator
 from memory.store import MemoryStore

@@ -1,9 +1,7 @@
 import json
 import unittest
-from unittest.mock import patch
 
 from tests.cli_contract_report_test_utils import (
-    REPO_ROOT,
     compact_json_text,
     normalized_json_text,
     run_dispatch_with_report,

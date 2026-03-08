@@ -615,7 +615,7 @@ class LoopOrchestrator:
         self._notify_ui("on_phase_complete", "act", (time.time() - t0_act) * 1000)
 
         if validate_phase_output("change_set", act) and self.debugger:
-            debug_hint = self.debugger.diagnose(error=f"CoderAgent produced invalid change_set", context={"goal": goal, "plan": plan, "task_bundle": task_bundle})
+            debug_hint = self.debugger.diagnose(error="CoderAgent produced invalid change_set", context={"goal": goal, "plan": plan, "task_bundle": task_bundle})
             act = self._run_phase("act", {"task": goal, "task_bundle": task_bundle, "dry_run": dry_run, "project_root": str(self.project_root), "debug_hint": debug_hint})
         
         phase_outputs["change_set"] = act

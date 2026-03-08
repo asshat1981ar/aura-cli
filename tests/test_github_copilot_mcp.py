@@ -146,7 +146,6 @@ class TestIssueAnalyze:
 
 class TestPRReview:
     def test_returns_review_and_verdict(self, client):
-        import tools.github_copilot_mcp as mod
         # patch requests.get for diff fetch
         with patch("tools.github_copilot_mcp._req") as mock_req:
             mock_req_inst = MagicMock()

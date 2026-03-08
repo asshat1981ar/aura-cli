@@ -20,7 +20,7 @@ import concurrent.futures
 import threading
 import time
 from functools import lru_cache
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.logging_utils import log_json
 

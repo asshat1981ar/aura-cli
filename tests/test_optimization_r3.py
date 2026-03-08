@@ -310,7 +310,7 @@ class TestGoalQueueBatchAdd(unittest.TestCase):
     def test_batch_add_single_flush_count(self):
         """batch_add must call _save_queue exactly once regardless of N."""
         from core.goal_queue import GoalQueue
-        from unittest.mock import patch, call
+        from unittest.mock import patch
         gq = GoalQueue(queue_path=self.tmp.name)
         goals = [{"description": f"g{i}"} for i in range(10)]
         with patch.object(gq, "_save_queue") as mock_save:

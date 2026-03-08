@@ -81,7 +81,6 @@ def _handle_status(
     log_json("INFO", "aura_status_requested")
     
     from core.operator_runtime import build_beads_runtime_metadata, build_operator_runtime_snapshot
-    from core.capability_manager import build_capability_status_report
 
     active_cycle = getattr(orchestrator, "active_cycle_summary", None)
     last_cycle = getattr(orchestrator, "last_cycle_summary", None)

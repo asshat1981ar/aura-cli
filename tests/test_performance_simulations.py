@@ -14,13 +14,11 @@ Covers:
 from __future__ import annotations
 
 import hashlib
-import os
-import sys
 import tempfile
 import threading
 import time
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Dict, List
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -238,7 +236,7 @@ class TestAtomicChangeSetPerformance:
         for fp, orig in original_contents.items():
             current = (tmp_path / fp).read_text()
             assert current == orig, f"File {fp} was not rolled back correctly"
-        print(f"\n  [PASS] AtomicChangeSet rollback: files restored after missing-old-code failure")
+        print("\n  [PASS] AtomicChangeSet rollback: files restored after missing-old-code failure")
 
     def test_concurrent_apply_isolation(self, tmp_path):
         """Two concurrent AtomicChangeSets on different files don't interfere."""
@@ -298,14 +296,14 @@ class TestOscillationDetectorSimulation:
         for _ in range(10):
             d.record(0.85)
         assert not d.is_oscillating(), "Steady pass should NOT trigger oscillation"
-        print(f"\n  [PASS] No false positive on steady passing scores")
+        print("\n  [PASS] No false positive on steady passing scores")
 
     def test_no_false_positive_on_steady_fail(self):
         d = self._get_detector()
         for _ in range(10):
             d.record(0.2)
         assert not d.is_oscillating(), "Steady fail should NOT trigger oscillation"
-        print(f"\n  [PASS] No false positive on steady failing scores")
+        print("\n  [PASS] No false positive on steady failing scores")
 
     def test_detects_after_minimum_transitions(self):
         d = self._get_detector()
@@ -342,7 +340,7 @@ class TestOscillationDetectorSimulation:
             d.record(s)
         d.reset()
         assert not d.is_oscillating(), "After reset, should not be oscillating"
-        print(f"\n  [PASS] reset() clears oscillation detection")
+        print("\n  [PASS] reset() clears oscillation detection")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -432,7 +430,6 @@ class TestGoalClassifierCache:
 
     def test_llm_classifier_cache_hit_rate(self):
         """Verify classify_goal_llm() only calls LLM once per unique goal."""
-        from core.skill_dispatcher import _classify_goal_cache
         import core.skill_dispatcher as sd
 
         # Clear cache
@@ -455,11 +452,10 @@ class TestGoalClassifierCache:
 
         assert call_count == 1, f"LLM called {call_count}x for 50 identical goals (expected 1)"
         assert all(r == "bug_fix" for r in results)
-        print(f"\n  [PASS] LLM classifier cache: 50 calls → 1 LLM call (49 cache hits)")
+        print("\n  [PASS] LLM classifier cache: 50 calls → 1 LLM call (49 cache hits)")
 
     def test_llm_classifier_unique_goals_all_call_llm(self):
         """Each unique goal makes exactly one LLM call."""
-        from core.skill_dispatcher import _classify_goal_cache
         import core.skill_dispatcher as sd
 
         sd._classify_goal_cache.clear()
@@ -478,7 +474,7 @@ class TestGoalClassifierCache:
             sd.classify_goal_llm(g, mock_model)
 
         assert call_count == 20
-        print(f"\n  [PASS] 20 unique goals → exactly 20 LLM calls")
+        print("\n  [PASS] 20 unique goals → exactly 20 LLM calls")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -550,7 +546,7 @@ class TestFuzzyHistoryRecovery:
             result = find_historical_match(old_code, "myfile.py", tmp_path)
 
         assert result == content_with_code, f"Expected recovered content, got: {result!r}"
-        print(f"\n  [PASS] find_historical_match recovered content from mocked git")
+        print("\n  [PASS] find_historical_match recovered content from mocked git")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -572,7 +568,7 @@ class TestHumanGatePerformance:
         skill = {"security_scanner": {"critical_count": 0, "findings": []}}
         blocked, reason = gate.should_block(verify, skill)
         assert not blocked
-        print(f"\n  [PASS] HumanGate: clean results → not blocked")
+        print("\n  [PASS] HumanGate: clean results → not blocked")
 
     def test_blocks_on_security_critical(self):
         gate = self._make_gate(80.0)
@@ -615,7 +611,7 @@ class TestHumanGatePerformance:
         gate = HumanGate()
         approved = gate.request_approval("security critical found", {"file": "auth.py"})
         assert approved is True
-        print(f"\n  [PASS] HumanGate: AURA_AUTO_APPROVE=1 → auto-approved")
+        print("\n  [PASS] HumanGate: AURA_AUTO_APPROVE=1 → auto-approved")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -646,14 +642,14 @@ class TestSkillChainerSimulation:
         queued = chainer.maybe_chain("security_scanner", result, queue)
         assert len(queued) == 0
         assert not queue.add.called
-        print(f"\n  [PASS] SkillChainer: 0 criticals → no goal queued")
+        print("\n  [PASS] SkillChainer: 0 criticals → no goal queued")
 
     def test_no_chain_for_other_skills(self):
         chainer, queue = self._make_chainer_and_queue()
         result = {"critical_count": 5}
         queued = chainer.maybe_chain("complexity_scorer", result, queue)
         assert len(queued) == 0
-        print(f"\n  [PASS] SkillChainer: non-security skill → no goal queued")
+        print("\n  [PASS] SkillChainer: non-security skill → no goal queued")
 
     def test_chain_skill_results_helper(self):
         from core.skill_dispatcher import chain_skill_results
@@ -679,7 +675,6 @@ class TestOrchestratorCycleTiming:
     def _make_orchestrator(self):
         from core.orchestrator import LoopOrchestrator
         from memory.store import MemoryStore
-        import tempfile
 
         tmp = tempfile.mkdtemp()
         memory_store = MemoryStore(Path(tmp) / "store")

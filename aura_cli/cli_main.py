@@ -49,7 +49,7 @@ from aura_cli.cli_options import (
     render_help,
     unknown_command_help_topic_payload,
 )
-from aura_cli.options import action_runtime_required, action_default_canonical_path
+from aura_cli.options import action_runtime_required
 
 
 def _mcp_headers():
@@ -1023,7 +1023,7 @@ def _handle_goal_once_dispatch(ctx: DispatchContext) -> int:
             indent=2,
         )
     else:
-        print(f"\n--- Goal Result Summary ---")
+        print("\n--- Goal Result Summary ---")
         print(f"Goal: {args.goal}")
         print(f"Stop Reason: {result.get('stop_reason')}")
         print(f"Cycles Completed: {len(history)}")

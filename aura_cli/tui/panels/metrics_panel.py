@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import statistics
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 try:
     from rich.panel import Panel

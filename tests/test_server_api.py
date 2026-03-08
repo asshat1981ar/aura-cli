@@ -13,7 +13,6 @@ Always sets AURA_SKIP_CHDIR=1 to prevent os.chdir() side-effects.
 """
 from __future__ import annotations
 
-import json
 import os
 import sys
 from pathlib import Path
@@ -72,7 +71,6 @@ def server_module():
     """Import aura_cli.server with a fake runtime, return the module."""
     fake_rt = _make_fake_runtime()
     with patch("aura_cli.cli_main.create_runtime", return_value=fake_rt):
-        import importlib
         import aura_cli.server as _srv
         # Patch module-level objects in case module was already imported
         _srv.runtime = fake_rt

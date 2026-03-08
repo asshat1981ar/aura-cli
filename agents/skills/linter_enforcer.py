@@ -219,7 +219,8 @@ class LinterEnforcerSkill(SkillBase):
 
         # --- Inline code ---
         if code and file_path:
-            import tempfile, os
+            import tempfile
+            import os
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".py", delete=False, encoding="utf-8"
             ) as tmp:

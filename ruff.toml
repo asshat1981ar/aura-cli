@@ -1,0 +1,50 @@
+# Ruff configuration for AURA CLI
+# See https://docs.astral.sh/ruff/configuration/
+
+exclude = [
+    ".git",
+    "__pycache__",
+    "*.pyc",
+    "archive",        # archived/dead code
+    "aura-cli",       # stray subdirectory
+    "plans",
+    "conductor",
+    "projects",
+    ".pytest_cache",
+    ".venv",
+    "venv",
+    "build",
+    "dist",
+]
+
+# Use a generous line length to match existing codebase style
+line-length = 300
+
+[lint]
+# Select only the meaningful rules
+select = ["E", "F", "W"]
+
+# Ignore intentional patterns used throughout this codebase
+ignore = [
+    "E402",   # module level import not at top of file (conditional imports are intentional)
+    "E501",   # line too long (existing codebase has many long lines, especially in prompts)
+    "E701",   # multiple statements on one line (colon — used intentionally in many places)
+    "E702",   # multiple statements on one line (semicolon — used intentionally in many places)
+    "E711",   # comparison to None (style preference)
+    "E712",   # comparison to True/False (style preference)
+    "E731",   # lambda assignment (existing pattern)
+    "E741",   # ambiguous variable name (l, O, I — existing code uses these)
+    "W291",   # trailing whitespace
+    "W293",   # whitespace before block comment
+]
+
+# Per-file ignores for known intentional patterns
+[lint.per-file-ignores]
+# TUI uses conditional try/except imports for optional rich library
+"aura_cli/tui/app.py" = ["F401", "E402"]
+"aura_cli/tui/panels/cycle_panel.py" = ["F401"]
+# Scripts are utility runners, relaxed rules
+"scripts/*" = ["F401", "F841", "E402"]
+# Tests often import for side effects or future use
+"tests/*" = ["F401", "F841"]
+"core/tests/*" = ["F401", "F841"]

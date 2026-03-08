@@ -5,7 +5,6 @@ import io
 from unittest.mock import MagicMock, patch
 from pathlib import Path
 import os
-import tempfile
 
 # Ensure the project root is on the path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))

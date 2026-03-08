@@ -2,8 +2,6 @@
 # Keep this wrapper lazy so lightweight/help paths do not trigger full runtime imports.
 import json
 import sys
-import os
-from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables before any other imports

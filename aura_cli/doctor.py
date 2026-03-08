@@ -199,7 +199,7 @@ def check_pytest_and_run_tests(repo_root: Path, run_tests: bool, openrouter_api_
         return "WARN", "Pytest is available, but tests were not run (use --run-tests)."
 
     # Find all test files in the repo_root
-    test_files = [str(f) for f in repo_root.glob('**/test_*.py') if not 'env' in f.parts] # Exclude virtual environments
+    test_files = [str(f) for f in repo_root.glob('**/test_*.py') if 'env' not in f.parts] # Exclude virtual environments
 
     if not test_files:
         return "WARN", "No test files (test_*.py) found in the repository."
@@ -310,7 +310,6 @@ def run_doctor_v2(
     """
     import importlib.util
     import json
-    import time
 
     if project_root is None:
         project_root = Path(__file__).resolve().parent.parent
@@ -409,7 +408,7 @@ def run_doctor_v2(
 
     # 8. rich available (for TUI)
     if importlib.util.find_spec("rich") is not None:
-        _add("TUI (rich)", "PASS", f"rich available — run: aura watch")
+        _add("TUI (rich)", "PASS", "rich available — run: aura watch")
     else:
         _add("TUI (rich)", "WARN", "pip install rich (for TUI dashboard)")
 

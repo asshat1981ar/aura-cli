@@ -4,8 +4,6 @@ Verifies AuraStudio callbacks and panel builders without live display.
 """
 from __future__ import annotations
 
-import os
-import pytest
 from unittest.mock import MagicMock
 from aura_cli.tui.app import AuraStudio
 

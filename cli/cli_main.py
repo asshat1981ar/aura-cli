@@ -100,7 +100,7 @@ def main(project_root_override=None):
     planner_instance = PlannerAgent(brain_instance, model_adapter)
     
     try:
-        git_tools_instance = GitTools(repo_path=str(project_root))
+        GitTools(repo_path=str(project_root))
     except GitToolsError as e:
         log_json("ERROR", "git_tools_init_failed", details={"error": str(e)})
         return

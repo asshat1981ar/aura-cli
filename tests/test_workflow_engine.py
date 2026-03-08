@@ -6,7 +6,7 @@ import sys
 import time
 import threading
 from pathlib import Path
-from typing import Any, Dict
+from typing import Dict
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -22,7 +22,6 @@ from core.workflow_engine import (
     WorkflowDefinition,
     WorkflowStep,
     RetryPolicy,
-    get_engine,
 )
 
 # ---------------------------------------------------------------------------

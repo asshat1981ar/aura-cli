@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import json
 import sys
 from pathlib import Path
 
@@ -11,7 +10,7 @@ if str(REPO_ROOT) not in sys.path:
 from agents.skills.registry import all_skills
 
 def main():
-    print(f"--- AURA Architectural Audit ---")
+    print("--- AURA Architectural Audit ---")
     print(f"Project root: {REPO_ROOT}")
     
     skills = all_skills()

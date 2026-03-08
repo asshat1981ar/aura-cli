@@ -5,12 +5,10 @@ schema-valid responses without hitting any external service.
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 from typing import Any, Dict
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from core.orchestrator import LoopOrchestrator
 from core.policy import Policy

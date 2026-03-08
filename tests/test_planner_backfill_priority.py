@@ -4,8 +4,7 @@ Tests for PlannerAgent backfill prioritization.
 from __future__ import annotations
 
 import pytest
-import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from agents.planner import PlannerAgent
 
 @pytest.fixture

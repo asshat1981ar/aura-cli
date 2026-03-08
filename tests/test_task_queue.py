@@ -1,8 +1,6 @@
 import unittest
-import json
-from collections import deque
 from pathlib import Path
-from unittest.mock import patch, mock_open
+from unittest.mock import patch
 
 from core.task_queue import TaskQueue
 

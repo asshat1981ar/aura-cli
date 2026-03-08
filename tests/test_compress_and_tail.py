@@ -1,4 +1,3 @@
-import base64
 from fastapi.testclient import TestClient
 from tools import mcp_server as server
 

@@ -1,5 +1,5 @@
-from git import Repo
-from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError
+from __future__ import annotations
+
 from core.logging_utils import log_json  # Import the new logging utility
 
 # R2: Exception classes are now canonical in core/exceptions.py — import from there.
@@ -14,9 +14,27 @@ from core.exceptions import (  # noqa: F401 (re-exported for backward-compat)
     GitStashPopError,
 )
 
+# Guard optional gitpython dependency
+try:
+    from git import Repo
+    from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError
+    GIT_AVAILABLE = True
+except ImportError:
+    GIT_AVAILABLE = False
+    # Create placeholder exceptions that will be raised if git features are used
+    class InvalidGitRepositoryError(Exception):
+        pass
+    class GitCommandError(Exception):
+        pass
+    class NoSuchPathError(Exception):
+        pass
+    Repo = None
+
 
 class GitTools:
     def __init__(self, repo_path: str = None):
+        if not GIT_AVAILABLE:
+            raise ImportError("GitPython is not installed. Install it with: pip install gitpython")
         try:
             if repo_path:
                 self.repo = Repo(repo_path, search_parent_directories=True)

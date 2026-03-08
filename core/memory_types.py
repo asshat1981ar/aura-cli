@@ -4,8 +4,29 @@ Data types and interfaces for Advanced Semantic Context Manager (ASCM) v2.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Protocol
-import numpy as np
+from typing import Any, Dict, List, Optional, Protocol, TYPE_CHECKING
+
+
+class _MissingPackage:
+    """Placeholder for optional dependencies that are not installed."""
+
+    def __init__(self, name: str):
+        self._name = name
+
+    def __getattr__(self, attr):
+        raise ImportError(f"Optional dependency '{self._name}' is required for this operation.")
+
+    def __call__(self, *args, **kwargs):
+        raise ImportError(f"Optional dependency '{self._name}' is required for this operation.")
+
+
+if TYPE_CHECKING:
+    import numpy as np  # type: ignore
+else:  # pragma: no cover - exercised via optional-deps tests
+    try:
+        import numpy as np  # type: ignore
+    except ImportError:
+        np = _MissingPackage("numpy")  # type: ignore
 
 @dataclass
 class MemoryRecord:

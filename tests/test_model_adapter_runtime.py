@@ -18,7 +18,6 @@ def test_model_adapter_normalizes_openai_embedding_model_from_config():
 
 
 def test_embed_disables_remote_provider_after_failure(monkeypatch):
-    import requests
     from unittest.mock import MagicMock
     monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
     

@@ -9,7 +9,6 @@ import numpy as np
 from core.vector_store import VectorStore
 from core.context_manager import ContextManager
 from core.memory_types import MemoryRecord, RetrievalQuery
-from memory.brain import Brain
 import sqlite3
 
 class MockModelAdapter:

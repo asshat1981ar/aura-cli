@@ -1,4 +1,3 @@
-import os
 from fastapi.testclient import TestClient
 from aura_cli import server
 

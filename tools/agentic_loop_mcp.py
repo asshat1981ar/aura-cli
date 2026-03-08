@@ -58,7 +58,6 @@ if str(_ROOT) not in sys.path:
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 
 from fastapi import Depends, FastAPI, Header, HTTPException
-from pydantic import BaseModel, Field
 
 from core.logging_utils import log_json
 from core.workflow_engine import (

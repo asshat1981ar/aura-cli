@@ -3,9 +3,7 @@ Tests for backfill configuration in ConfigManager.
 """
 from __future__ import annotations
 
-import pytest
 import os
-from pathlib import Path
 from unittest.mock import patch
 from core.config_manager import ConfigManager
 

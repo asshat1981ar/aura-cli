@@ -62,7 +62,6 @@ class MutatorAgent:
 
         # Try JSON first
         from core.file_tools import _aura_safe_loads
-        import json
         try:
             parsed = _aura_safe_loads(mutation_proposal, "mutator_json_apply")
             if isinstance(parsed, dict) and "mutations" in parsed:

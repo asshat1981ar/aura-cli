@@ -8,7 +8,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -369,7 +369,6 @@ class TestScaffolderAgent:
 class TestTesterAgent:
     def setup_method(self):
         from agents.tester import TesterAgent
-        from agents.sandbox import SandboxAgent
         self.brain = _make_brain()
         self.model = _make_model("def test_foo(): assert 1==1")
         self.sandbox = MagicMock()
@@ -430,7 +429,6 @@ class TestApplicatorAgent:
         assert a is not None
 
     def test_applicator_apply_no_code_block(self):
-        from agents.applicator import ApplyResult
         result = self.agent.apply("no code block here")
         assert result.success is False
         assert result.error is not None

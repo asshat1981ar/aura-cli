@@ -3,7 +3,6 @@
 Autonomous RSI Multi-Cycle Run.
 Uses the established EvolutionLoop to drive continuous self-improvement.
 """
-import os
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
@@ -19,7 +18,6 @@ sys.path.insert(0, str(project_root))
 from aura_cli.cli_main import default_agents
 from core.evolution_loop import EvolutionLoop
 from core.recursive_improvement import RecursiveImprovementService
-from core.config_manager import config
 from core.model_adapter import ModelAdapter
 from core.vector_store import VectorStore
 from memory.brain import Brain

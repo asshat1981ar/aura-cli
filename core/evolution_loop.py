@@ -1,5 +1,4 @@
 import json
-import dataclasses
 from core.logging_utils import log_json # Import the new logging utility
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
 from core.evolution_prompts import (

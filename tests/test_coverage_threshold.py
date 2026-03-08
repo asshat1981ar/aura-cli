@@ -3,9 +3,8 @@ Tests for coverage threshold logic in core/quality_snapshot.py.
 """
 from __future__ import annotations
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from core.quality_snapshot import check_coverage_thresholds
 
 def test_check_coverage_thresholds_identifies_gaps():

@@ -4,13 +4,6 @@ import re
 import time
 from pathlib import Path
 
-from core.file_tools import (
-    MISMATCH_OVERWRITE_BLOCK_EVENT,
-    MismatchOverwriteBlockedError,
-    OldCodeNotFoundError,
-    apply_change_with_explicit_overwrite_policy,
-    mismatch_overwrite_block_log_details,
-)
 from core.logging_utils import log_json
 from core.task_manager import TaskManager, Task
 
@@ -401,8 +394,7 @@ def run_goals_loop(args, goal_queue, orchestrator, debugger_instance, planner_in
             )
             
             history = result.get("history", [])
-            last_entry = history[-1] if history else {}
-            
+
             # Update task status based on orchestrator result
             if result.get("stop_reason") == "PASS":
                 task.status = "completed"

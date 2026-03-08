@@ -2,10 +2,7 @@ import contextlib
 import importlib
 import io
 import json
-import tempfile
 import unittest
-from pathlib import Path
-from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 from core.evolution_loop import EvolutionLoop

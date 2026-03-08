@@ -5,10 +5,8 @@ Patches the model response parsing to handle markdown-wrapped JSON
 """
 
 import os
-import sys
 import re
 import shutil
-from core.file_tools import _aura_safe_loads # Import the robust JSON loader
 
 def clean_and_patch_file(filepath):
     print(f"[INFO] Checking: {filepath}")

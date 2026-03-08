@@ -5,12 +5,10 @@ import os
 import subprocess
 import sys
 from contextlib import redirect_stderr, redirect_stdout
-from pathlib import Path
 from unittest.mock import patch
 
 from aura_cli.cli_options import parse_cli_args
 from tests.cli_entrypoint_test_utils import REPO_ROOT, run_main_subprocess as _run_main_subprocess
-from tests.cli_snapshot_utils import normalized_json_text
 
 SCRIPT_PATH = REPO_ROOT / "scripts" / "print_cli_contract_report.py"
 
@@ -24,6 +22,13 @@ def load_script_module():
 
 def compact_json_text(raw_json: str) -> str:
     return json.dumps(json.loads(raw_json), sort_keys=True, separators=(",", ":")) + "\n"
+
+
+def normalized_json_text(raw_text: str) -> str:
+    """Strip AURA log lines then return pretty-printed, sorted JSON for snapshot comparison."""
+    cleaned = strip_aura_logs(raw_text).strip()
+    return json.dumps(json.loads(cleaned), sort_keys=True, indent=2) + "\n"
+
 
 def strip_aura_logs(text: str) -> str:
     """Removes JSON log lines (like config_loaded_from_file) from the text."""

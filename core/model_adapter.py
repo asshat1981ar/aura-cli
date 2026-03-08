@@ -1,14 +1,36 @@
+from __future__ import annotations
+
 import concurrent.futures
 import hashlib
 import os
 import shlex
 import subprocess
-import requests
 import json
 import time
 from pathlib import Path
 from typing import Any, List
-import numpy as np
+
+# Guard optional dependencies to allow import in minimal environments (e.g., CI)
+class _MissingPackage:
+    """Proxy for missing optional packages that raises on access."""
+    def __init__(self, name: str):
+        self._name = name
+
+    def __getattr__(self, item):
+        raise ImportError(f"Optional dependency '{self._name}' is not installed. Install it to use this feature.")
+
+    def __call__(self, *args, **kwargs):
+        raise ImportError(f"Optional dependency '{self._name}' is not installed. Install it to use this feature.")
+
+try:
+    import requests
+except ImportError:
+    requests = _MissingPackage("requests")
+
+try:
+    import numpy as np
+except ImportError:
+    np = _MissingPackage("numpy")
 
 from core.logging_utils import log_json # Import log_json
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads

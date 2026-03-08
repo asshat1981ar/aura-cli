@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import os
 import re
-import threading
 
 def fix_sqlite_connections():
     """Patch SQLite connections to allow cross-thread usage"""

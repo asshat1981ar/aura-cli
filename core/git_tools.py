@@ -1,6 +1,33 @@
-from git import Repo
-from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError
+from __future__ import annotations
+
 from core.logging_utils import log_json  # Import the new logging utility
+
+
+class _MissingPackage:
+    def __init__(self, name: str):
+        self._name = name
+
+    def __getattr__(self, item):
+        raise ImportError(f"Optional dependency '{self._name}' is required for this feature. "
+                          f"Install it with 'pip install {self._name}'.")
+
+    def __call__(self, *args, **kwargs):
+        raise ImportError(f"Optional dependency '{self._name}' is required for this feature. "
+                          f"Install it with 'pip install {self._name}'.")
+
+    def __repr__(self) -> str:
+        return f"<missing package: {self._name}>"
+
+
+try:
+    from git import Repo
+    from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError
+except ImportError:
+    class _GitPythonNotInstalled(Exception):
+        pass
+
+    Repo = _MissingPackage("GitPython")
+    InvalidGitRepositoryError = GitCommandError = NoSuchPathError = _GitPythonNotInstalled
 
 # R2: Exception classes are now canonical in core/exceptions.py — import from there.
 from core.exceptions import (  # noqa: F401 (re-exported for backward-compat)
@@ -31,6 +58,9 @@ class GitTools:
             raise GitRepoError(
                 f"Git repository not found. Start AURA inside a repo or pass repo_path. ({e})"
             )
+        except ImportError as e:
+            log_json("ERROR", "git_repo_init_dependency_missing", details={"error": str(e)})
+            raise GitRepoError(f"GitPython is required for GitTools. Install it with 'pip install gitpython'.")
     
     def commit_all(self, message: str):
         """Commits all changes in the repository."""

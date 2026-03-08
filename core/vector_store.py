@@ -1,12 +1,36 @@
+from __future__ import annotations
+
 import json
 import time
 import uuid
 import hashlib
-import numpy as np
 import sqlite3
 from typing import List, Dict, Any, Union
+
 from core.logging_utils import log_json
 from core.memory_types import MemoryRecord, RetrievalQuery, SearchHit
+
+
+class _MissingPackage:
+    def __init__(self, name: str):
+        self._name = name
+
+    def __getattr__(self, item):
+        raise ImportError(f"Optional dependency '{self._name}' is required for this feature. "
+                          f"Install it with 'pip install {self._name}'.")
+
+    def __call__(self, *args, **kwargs):
+        raise ImportError(f"Optional dependency '{self._name}' is required for this feature. "
+                          f"Install it with 'pip install {self._name}'.")
+
+    def __repr__(self) -> str:
+        return f"<missing package: {self._name}>"
+
+
+try:
+    import numpy as np
+except ImportError:
+    np = _MissingPackage("numpy")
 
 class VectorStore:
     """

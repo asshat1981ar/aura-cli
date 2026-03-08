@@ -5,7 +5,28 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol
-import numpy as np
+
+
+class _MissingPackage:
+    def __init__(self, name: str):
+        self._name = name
+
+    def __getattr__(self, item):
+        raise ImportError(f"Optional dependency '{self._name}' is required for this feature. "
+                          f"Install it with 'pip install {self._name}'.")
+
+    def __call__(self, *args, **kwargs):
+        raise ImportError(f"Optional dependency '{self._name}' is required for this feature. "
+                          f"Install it with 'pip install {self._name}'.")
+
+    def __repr__(self) -> str:
+        return f"<missing package: {self._name}>"
+
+
+try:
+    import numpy as np
+except ImportError:
+    np = _MissingPackage("numpy")
 
 @dataclass
 class MemoryRecord:

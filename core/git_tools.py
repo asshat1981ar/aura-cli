@@ -14,7 +14,8 @@ def _require_gitpython(repo_path: str | None = None):
     if Repo is None:
         raise ImportError(
             "Optional dependency 'gitpython' is required for Git operations. "
-            "Install it with `pip install gitpython`."
+            "Install it with `pip install gitpython`. "
+            f"(repo_path={repo_path})"
         )
 
 # R2: Exception classes are now canonical in core/exceptions.py — import from there.

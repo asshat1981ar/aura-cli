@@ -2,6 +2,8 @@
 Tests for Advanced Semantic Context Manager (ASCM) v2.
 Covers VectorStore, ContextManager, and Data Models.
 """
+import importlib
+import sys
 import time
 import pytest
 from unittest.mock import MagicMock
@@ -116,6 +118,76 @@ class TestVectorStore:
         hits = vector_store.search(query)
         assert len(hits) == 1
         assert hits[0].record_id == "1"
+
+    def test_migrate_embedding_model(self, vector_store, mock_adapter, mock_brain):
+        rec1 = MemoryRecord(
+            id="1", content="hello", source_type="test", source_ref="ref",
+            created_at=0, updated_at=0, content_hash="h1"
+        )
+        vector_store.upsert([rec1])
+
+        # Migrate embeddings to a new model without removing embeddings for other model_ids.
+        mock_adapter._embedding_model = "migrated-model"
+        stats = vector_store.migrate_embedding_model("migrated-model")
+
+        assert stats["records_seen"] == 1
+        assert stats["embeddings_written"] == 1
+
+        # There should be exactly one embedding for the migrated model_id
+        migrated_count = mock_brain.db.execute(
+            "SELECT COUNT(*) FROM embeddings WHERE record_id = ? AND model_id = ?",
+            ("1", "migrated-model"),
+        ).fetchone()[0]
+        assert migrated_count == 1
+
+        # The original embedding for the old model_id should still be present
+        original_count = mock_brain.db.execute(
+            "SELECT COUNT(*) FROM embeddings WHERE record_id = ? AND model_id = ?",
+            ("1", "test-model"),
+        ).fetchone()[0]
+        assert original_count == 1
+
+        # And in total we should now have both old and new embeddings
+        total_count = mock_brain.db.execute(
+            "SELECT COUNT(*) FROM embeddings WHERE record_id = ?",
+            ("1",),
+        ).fetchone()[0]
+        assert total_count == 2
+
+    def test_numpy_unavailable_sets_np_to_none(self):
+        """Verify the graceful numpy import guard: np=None when numpy raises ImportError."""
+        real_np = sys.modules.get("numpy")
+        real_core_vs = sys.modules.get("core.vector_store")
+
+        class NumpyBlocker:
+            """Module finder that blocks numpy imports via the modern find_spec API."""
+            def find_spec(self, fullname, path, target=None):
+                if fullname == "numpy":
+                    raise ModuleNotFoundError(f"No module named '{fullname}'")
+                return None
+
+        try:
+            blocker = NumpyBlocker()
+            sys.meta_path.insert(0, blocker)
+            sys.modules.pop("numpy", None)
+            sys.modules.pop("core.vector_store", None)
+
+            # Force reimport with numpy blocked
+            vs_mod = importlib.import_module("core.vector_store")
+
+            # Module should load and np should be None due to try/except guard
+            assert vs_mod.np is None
+        finally:
+            # Cleanup
+            sys.meta_path.remove(blocker)
+            if real_np is not None:
+                sys.modules["numpy"] = real_np
+            else:
+                sys.modules.pop("numpy", None)
+            if real_core_vs is not None:
+                sys.modules["core.vector_store"] = real_core_vs
+            else:
+                sys.modules.pop("core.vector_store", None)
 
     def test_rebuild_rewrites_embeddings_for_active_model(self, vector_store, mock_adapter, mock_brain):
         rec1 = MemoryRecord(

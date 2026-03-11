@@ -437,11 +437,11 @@ From `tools/requirements.txt`:
 |---------|---------|---------|
 | `fastapi` | `0.129.0` | HTTP API servers (ports 8001, 8002) |
 | `uvicorn` | `0.40.0` | ASGI server |
-| `requests` | `2.32.3` | HTTP client (OpenRouter, MCP calls) |
+| `requests` | `2.32.3` | HTTP client (OpenRouter, MCP calls) — optional; lazily imported in `core/model_adapter.py` |
 | `pydantic` | `2.12.5` | Schema validation |
 | `python-dotenv` | latest | `.env` file loading |
-| `numpy` | latest | Vector math for embeddings |
-| `gitpython` | latest | `GitTools` — git operations |
+| `numpy` | latest | Vector math for embeddings — optional; lazily imported in `core/model_adapter.py`, `core/vector_store.py` |
+| `gitpython` | latest | `GitTools` — git operations — optional; lazily imported in `core/git_tools.py` |
 | `rich` | latest | TUI rendering (aura_cli/tui/) |
 | `textblob` | latest | NLP for brain lazy-load optimization |
 | `networkx` | latest | Brain knowledge graph (`brain.relate()`) |
@@ -509,6 +509,7 @@ uvicorn tools.aura_mcp_skills_server:app --port 8002
 4. **Schema validation**: all phase outputs must pass `core/schema.validate_phase_output(phase_name, output)`.
 5. **Skills never raise**: every skill's `_run()` must return `{"error": "..."}` on failure, not raise an exception.
 6. **Tests use `AURA_SKIP_CHDIR=1`**: set this env var to prevent `os.chdir()` from changing the working directory during test runs.
+7. **Optional imports (lazy-load pattern)**: `requests`, `numpy`, and `gitpython` are optional at module level. Guard them with `try/except ImportError` and use the `_MissingPackage` proxy from `core/model_adapter.py` (or the `_MissingGitRepo` stub in `core/git_tools.py`) so the CLI stays importable in minimal environments. When a module uses numpy **only in type annotations**, add `from __future__ import annotations` at the top and place the `import numpy as np` under `if TYPE_CHECKING:` (see `core/memory_types.py` for the pattern).
 
 ### Adding a New Skill
 

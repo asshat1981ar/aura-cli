@@ -133,6 +133,16 @@ All log output uses `core/logging_utils.log_json(level, event_name, **kwargs)` w
 **Schema validation**:
 `core/schema.py::validate_phase_output(phase_name, output)` validates each phase output. With `strict_schema=True` the cycle aborts on validation failure; default is lenient (logs error, continues).
 
+**Optional dependencies (lazy imports)**:
+`requests`, `numpy`, and `gitpython` are optional at the module level. They are guarded with `try/except ImportError`:
+
+- `core/model_adapter.py` defines a `_MissingPackage` proxy that raises a descriptive `ImportError` (with an install hint) on first attribute access, rather than crashing at import time. Both `requests` and `numpy` use this proxy.
+- `core/git_tools.py` provides a `_MissingGitRepo` stub for `gitpython` that raises on instantiation.
+- `core/vector_store.py` falls back to `np = None` when numpy is absent.
+- `core/memory_types.py` places `import numpy as np` under `if TYPE_CHECKING:` because numpy is only referenced in type annotations in that file (which is safe when `from __future__ import annotations` is present at the top).
+
+When adding new code that imports any of these packages, follow the same lazy-import pattern so that the CLI remains importable in environments where only `pytest` is installed (e.g., the `cli_docs_and_help_contracts` CI job).
+
 **Tests and `AURA_SKIP_CHDIR`**:
 Set `AURA_SKIP_CHDIR=1` in tests to prevent `cli_main.main()` from calling `os.chdir()`. Tests live in `tests/` and some in `core/`.
 

@@ -68,6 +68,8 @@ function runBdJson(args, timeoutMs = 1500) {
     env: process.env,
     timeout: timeoutMs,
   });
+  let effectiveCommand = command;
+  let effectiveArgs = commandArgs;
   const fallbackCommand = localBdCommand();
   if (
     proc.error instanceof Error &&
@@ -75,8 +77,9 @@ function runBdJson(args, timeoutMs = 1500) {
     command === "bd" &&
     fs.existsSync(fallbackCommand)
   ) {
-    const fallbackArgs = ["--no-daemon", ...args];
-    proc = spawnSync(fallbackCommand, fallbackArgs, {
+    effectiveCommand = fallbackCommand;
+    effectiveArgs = ["--no-daemon", ...args];
+    proc = spawnSync(effectiveCommand, effectiveArgs, {
       encoding: "utf8",
       cwd: process.cwd(),
       env: process.env,
@@ -90,8 +93,8 @@ function runBdJson(args, timeoutMs = 1500) {
   const json = safeParseJson(stdout);
 
   return {
-    command,
-    args: commandArgs,
+    command: effectiveCommand,
+    args: effectiveArgs,
     ok: status === 0 && json !== null,
     status,
     stdout,

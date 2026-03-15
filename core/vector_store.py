@@ -1,10 +1,32 @@
+from __future__ import annotations
+
 import json
 import time
 import uuid
 import hashlib
-import numpy as np
 import sqlite3
 from typing import List, Dict, Any, Union
+
+try:
+    import numpy as np
+except ImportError:
+    class _MissingPackage:
+        def __init__(self, name: str) -> None:
+            self._name = name
+
+        def __getattr__(self, item: str):
+            raise RuntimeError(
+                f"Optional dependency '{self._name}' is not installed. "
+                f"Run: pip install {self._name}"
+            )
+
+        def __call__(self, *args, **kwargs):
+            raise RuntimeError(
+                f"Optional dependency '{self._name}' is not installed. "
+                f"Run: pip install {self._name}"
+            )
+
+    np = _MissingPackage("numpy")  # type: ignore[assignment]
 from core.logging_utils import log_json
 from core.memory_types import MemoryRecord, RetrievalQuery, SearchHit
 

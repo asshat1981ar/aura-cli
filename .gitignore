@@ -30,6 +30,8 @@ build/
 .eggs/
 
 # ── Database / runtime state (auto-generated) ─────────────────────────────
+memory/capability_status.json
+memory/project_sync_hashes.json
 memory/brain.db
 memory/brain_v2.db
 memory/local_cache.db

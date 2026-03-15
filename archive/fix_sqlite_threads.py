@@ -91,13 +91,9 @@ def patch_vector_store():
     
     for path in paths:
         if os.path.exists(path):
-        import threading
-        if hasattr(self, "_conn") and threading.current_thread().ident != getattr(self, "_thread_id", None):
-            self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
-            self._thread_id = threading.current_thread().ident
             with open(path, 'r') as f:
                 content = f.read()
-            
+
             # Add thread safety
             if 'sqlite3' in content:
                 content = re.sub(

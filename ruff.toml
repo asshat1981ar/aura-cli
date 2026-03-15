@@ -35,7 +35,7 @@ ignore = [
     "E731",   # lambda assignment (existing pattern)
     "E741",   # ambiguous variable name (l, O, I — existing code uses these)
     "W291",   # trailing whitespace
-    "W293",   # whitespace before block comment
+    "W293",   # whitespace on blank lines inside indented blocks
 ]
 
 # Per-file ignores for known intentional patterns

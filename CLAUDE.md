@@ -325,14 +325,14 @@ AURA can expand its skill set mid-cycle and provision MCP servers:
 | Skill weights | `memory/skill_weights.json` | JSON |
 | Distributed cache | `memory/momento_adapter.py` | Momento |
 
-Memory files (`*.db`, `*.json`, `.aura_history`) are git-ignored.
+Runtime memory files are git-ignored. See `.gitignore` for the exact list — only specific named files are excluded (e.g. `memory/brain.db`, `memory/capability_status.json`), not all `memory/*.json` files.
 
 ---
 
 ## Security & Secrets
 
 - `aura.config.json` contains an API key placeholder — **never commit real keys**
-- `.gitignore` excludes `.env`, `memory/*.db`, `memory/*.json`, `.aura_history`, `secrets/`
+- `.gitignore` excludes `.env`, specific `memory/*.db` and `memory/*.json` runtime files, `.aura_history`, `secrets/` — see `.gitignore` for the exact list
 - Logging automatically masks secrets via `core/logging_utils.py`
 - Runtime auth managed by `core/runtime_auth.py`
 - Use environment variables for all API keys

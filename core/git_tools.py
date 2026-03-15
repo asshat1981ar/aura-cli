@@ -1,6 +1,22 @@
-from git import Repo
-from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError
+from __future__ import annotations
+
 from core.logging_utils import log_json  # Import the new logging utility
+
+try:
+    from git import Repo  # type: ignore
+    from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError  # type: ignore
+except ImportError:  # pragma: no cover - exercised via optional-deps tests
+    Repo = None  # type: ignore
+    InvalidGitRepositoryError = GitCommandError = NoSuchPathError = Exception  # type: ignore
+
+
+def _require_gitpython(repo_path: str | None = None):
+    if Repo is None:
+        raise ImportError(
+            "Optional dependency 'gitpython' is required for Git operations. "
+            "Install it with `pip install gitpython`. "
+            f"(repo_path={repo_path})"
+        )
 
 # R2: Exception classes are now canonical in core/exceptions.py — import from there.
 from core.exceptions import (  # noqa: F401 (re-exported for backward-compat)
@@ -18,6 +34,7 @@ from core.exceptions import (  # noqa: F401 (re-exported for backward-compat)
 class GitTools:
     def __init__(self, repo_path: str = None):
         try:
+            _require_gitpython(repo_path)
             if repo_path:
                 self.repo = Repo(repo_path, search_parent_directories=True)
             else:
@@ -26,6 +43,13 @@ class GitTools:
 
             self.repo_root = self.repo.working_tree_dir
 
+        except ImportError as e:
+            log_json(
+                "ERROR",
+                "gitpython_missing",
+                details={"error": str(e), "repo_path": str(repo_path)},
+            )
+            raise
         except (InvalidGitRepositoryError, NoSuchPathError) as e:
             log_json("ERROR", "git_repo_init_failed", details={"error": str(e), "repo_path": str(repo_path)})
             raise GitRepoError(

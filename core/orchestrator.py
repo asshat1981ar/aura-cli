@@ -17,21 +17,21 @@ Typical usage::
                                    max_cycles=3)
     print(result["stop_reason"])
 """
+import heapq
 import os
-import json
-import dataclasses
 import time
 import uuid
+from unittest.mock import Mock
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
+import core.file_tools as file_tools_module
 from core.logging_utils import log_json
-from core.beads_bridge import build_beads_runtime_input
-from core.operator_runtime import build_cycle_summary
-from core.cycle_outcome import CycleOutcome
+from core.exceptions import PhaseExecutionError, PhaseValidationError, ValidationError, PreflightError
 from core.capability_manager import (
     analyze_capability_needs,
     provision_capability_actions,
+    queue_follow_up_goals,
     queue_missing_capability_goals,
     record_capability_status,
 )
@@ -42,33 +42,49 @@ from core.file_tools import (
     OldCodeNotFoundError,
     apply_change_with_explicit_overwrite_policy,
     mismatch_overwrite_block_log_details,
+    apply_change_set,
+    snapshot_file_state,
+    restore_file_state,
 )
 from core.schema import validate_phase_output
 from core.skill_dispatcher import classify_goal, dispatch_skills
 from core.human_gate import HumanGate
 from memory.controller import memory_controller, MemoryTier
-
-MAX_SANDBOX_RETRIES = 3
+from core.sandbox_loop import run_sandbox_loop
 
 
 class BeadsSyncLoop:
-    """Triggers beads synchronization (dolt push/pull) periodically."""
-    EVERY_N = 5
+    """Periodic sync loop for BEADS external goals."""
 
-    def __init__(self, beads_skill):
-        self._skill = beads_skill
+    EVERY_N = 3
+
+    def __init__(self, beads_skill, project_root: Path | str | None = None):
+        self.beads_skill = beads_skill
+        self.project_root = Path(project_root) if project_root is not None else None
         self._n = 0
 
-    def on_cycle_complete(self, _entry):
-        if isinstance(_entry, dict) and bool(_entry.get("dry_run")):
+    def _skill_input(self, cmd: str, **extra: Any) -> Dict[str, Any]:
+        payload: Dict[str, Any] = {"cmd": cmd, **extra}
+        if self.project_root is not None:
+            payload["project_root"] = str(self.project_root)
+        return payload
+
+    def on_cycle_complete(self, entry):
+        if not self.beads_skill:
             return
+
+        phase_outputs = entry.get("phase_outputs", {}) or {}
+        if phase_outputs.get("dry_run"):
+            return
+
         self._n += 1
-        if self._n % self.EVERY_N == 0:
-            log_json("INFO", "beads_sync_loop_starting")
-            # Try to pull latest changes from remote
-            self._skill.run({"cmd": "dolt", "args": ["pull"]})
-            # Push local changes to remote
-            self._skill.run({"cmd": "dolt", "args": ["push"]})
+        if self._n % self.EVERY_N != 0:
+            return
+
+        try:
+            self.beads_skill.run(self._skill_input("sync"))
+        except Exception as exc:  # pragma: no cover
+            log_json("WARN", "beads_sync_failed", details={"error": str(exc)})
 
 
 class LoopOrchestrator:
@@ -106,6 +122,26 @@ class LoopOrchestrator:
             :mod:`agents.skills.registry`.
     """
 
+    _STRUCTURAL_FAILURE_SIGNALS = (
+        "architecture",
+        "circular",
+        "api_breaking",
+        "breaking_change",
+        "design",
+        "interface",
+        "contract",
+    )
+    _EXTERNAL_FAILURE_SIGNALS = (
+        "dependency",
+        "network",
+        "env",
+        "environment",
+        "permission",
+        "not found",
+        "no module",
+        "import error",
+    )
+
     def __init__(
         self,
         agents: Dict[str, object],
@@ -118,15 +154,14 @@ class LoopOrchestrator:
         auto_queue_missing_capabilities: bool = True,
         auto_provision_mcp: bool = False,
         auto_start_mcp_servers: bool = False,
-        goal_queue=None,
-        goal_archive=None,
-        brain: Any = None,
-        model: Any = None,
-        runtime_mode: str = "full",
-        beads_bridge: Any = None,
+        beads_bridge=None,
         beads_enabled: bool = False,
         beads_required: bool = False,
-        beads_scope: str = "goal_run",
+        beads_skill=None,
+        goal_queue=None,
+        brain=None,
+        model=None,
+        planner=None,
     ):
         """Initialise the orchestrator with its agents and supporting services.
 
@@ -158,30 +193,29 @@ class LoopOrchestrator:
         self.auto_queue_missing_capabilities = auto_queue_missing_capabilities
         self.auto_provision_mcp = auto_provision_mcp
         self.auto_start_mcp_servers = auto_start_mcp_servers
-        self.goal_queue = goal_queue
-        self.goal_archive = goal_archive
-        self.brain = brain
-        self.model = model
-        self.runtime_mode = runtime_mode
         self.beads_bridge = beads_bridge
         self.beads_enabled = beads_enabled
         self.beads_required = beads_required
-        self.beads_scope = beads_scope
+        self.beads_skill = beads_skill
+        self.goal_queue = goal_queue
+        self.brain = brain
+        self.model = model
+        self.planner = planner
         self.last_capability_plan: dict = {}
         self.last_capability_goal_queue: dict = {}
         self.last_capability_provisioning: dict = {}
         self.last_capability_status: dict = {}
-        self.current_goal: str | None = None
-        self.active_cycle_summary: dict | None = None
-        self.last_cycle_summary: dict | None = None
 
         # Lazy-load skills so missing optional deps don't break startup
         try:
             from agents.skills.registry import all_skills
-            self.skills = all_skills(brain=self.brain, model=self.model)
+            self.skills = all_skills()
         except Exception as exc:  # pragma: no cover
             log_json("WARN", "skills_load_failed", details={"error": str(exc)})
             self.skills = {}
+
+        if not self.beads_skill and self.skills:
+            self.beads_skill = self.skills.get("beads_skill")
 
         # Self-improvement loops (all optional — never block the main loop)
         self._improvement_loops: list = []
@@ -192,12 +226,9 @@ class LoopOrchestrator:
         self.context_graph = None       # ContextGraph
         self._consecutive_fails: int = 0
         self._ui_callbacks: list = []
-
-    def _get_beads_skill(self):
-        """Return the BEADS skill only when runtime BEADS integration is enabled."""
-        if not self.beads_enabled:
-            return None
-        return self.skills.get("beads_skill")
+        self.current_goal: Optional[str] = None
+        self.active_cycle_summary: Optional[dict] = None
+        self.last_cycle_summary: Optional[dict] = None
 
     def attach_ui_callback(self, callback) -> None:
         """Register a UI callback (e.g., AuraStudio) to receive real-time updates."""
@@ -233,6 +264,143 @@ class LoopOrchestrator:
         log_json("INFO", "orchestrator_loops_attached",
                  details={"count": len(self._improvement_loops),
                            "types": [type(l).__name__ for l in self._improvement_loops]})
+
+    # ── BEADS helpers ──────────────────────────────────────────────────────────
+
+    def _run_beads_gate(self, goal: str, goal_type: str, dry_run: bool, phase_outputs: Dict, corr_id: str):
+        if not (self.beads_enabled and self.beads_bridge):
+            return None
+
+        beads_payload = {}
+        try:
+            beads_payload = self.beads_bridge.run({
+                "goal": goal,
+                "goal_type": goal_type,
+                "runtime_mode": "dry_run" if dry_run else "run",
+                "corr_id": corr_id,
+            }) or {}
+        except Exception as exc:
+            log_json("WARN", "beads_bridge_failed", details={"error": str(exc)})
+            if not self.beads_required:
+                return None
+            beads_payload = {"status": "error", "error": str(exc)}
+
+        decision_payload = beads_payload.get("decision")
+        if isinstance(decision_payload, dict):
+            normalized_payload = dict(decision_payload)
+            if beads_payload.get("error") is not None:
+                normalized_payload.setdefault("error", beads_payload.get("error"))
+            if beads_payload.get("stderr") is not None:
+                normalized_payload.setdefault("stderr", beads_payload.get("stderr"))
+            if beads_payload.get("duration_ms") is not None:
+                normalized_payload.setdefault("duration_ms", beads_payload.get("duration_ms"))
+            if beads_payload.get("schema_version") is not None:
+                normalized_payload.setdefault("schema_version", beads_payload.get("schema_version"))
+            beads_payload = normalized_payload
+
+        phase_outputs["beads_gate"] = beads_payload
+        status = beads_payload.get("status")
+        if status == "block":
+            return {"stop_reason": "BEADS_BLOCKED", "beads": beads_payload}
+        if status == "revise":
+            return {"stop_reason": "BEADS_REVISE", "beads": beads_payload}
+        if status == "error" and self.beads_required:
+            return {"stop_reason": "BEADS_UNAVAILABLE", "beads": beads_payload}
+        return None
+
+    def _build_beads_context(self, phase_outputs: Dict) -> Dict:
+        beads_payload = phase_outputs.get("beads_gate", {})
+        if not isinstance(beads_payload, dict):
+            return {}
+
+        def _string_list(key: str) -> list[str]:
+            values = beads_payload.get(key, [])
+            if not isinstance(values, list):
+                return []
+            normalized = []
+            for item in values:
+                if not isinstance(item, str):
+                    continue
+                text = item.strip()
+                if not text or text in normalized:
+                    continue
+                normalized.append(text)
+            return normalized
+
+        return {
+            "status": beads_payload.get("status"),
+            "decision_id": beads_payload.get("decision_id"),
+            "summary": beads_payload.get("summary"),
+            "required_constraints": _string_list("required_constraints"),
+            "required_skills": _string_list("required_skills"),
+            "required_tests": _string_list("required_tests"),
+            "follow_up_goals": _string_list("follow_up_goals"),
+        }
+
+    def _queue_beads_follow_up_goals(self, phase_outputs: Dict, dry_run: bool) -> None:
+        beads_context = self._build_beads_context(phase_outputs)
+        follow_up_goals = beads_context.get("follow_up_goals", [])
+        if not follow_up_goals:
+            return
+
+        beads_goal_queue = queue_follow_up_goals(
+            goal_queue=self.goal_queue,
+            goals=follow_up_goals,
+            enabled=True,
+            dry_run=dry_run,
+        )
+        if beads_goal_queue.get("queued") or beads_goal_queue.get("skipped"):
+            phase_outputs["beads_goal_queue"] = beads_goal_queue
+
+    def _claim_bead(self, bead_id: str):
+        beads_skill = (self.skills or {}).get("beads_skill") or self.beads_skill
+        if not (self.beads_enabled and beads_skill):
+            return
+        try:
+            beads_skill.run(
+                {
+                    "cmd": "update",
+                    "project_root": str(self.project_root),
+                    "id": bead_id,
+                    "args": ["--status", "in_progress"],
+                }
+            )
+        except Exception as exc:  # pragma: no cover
+            log_json("WARN", "beads_claim_failed", details={"error": str(exc), "id": bead_id})
+
+    def _close_bead(self, bead_id: str, reason: str):
+        beads_skill = (self.skills or {}).get("beads_skill") or self.beads_skill
+        if not (self.beads_enabled and beads_skill):
+            return
+        try:
+            beads_skill.run(
+                {
+                    "cmd": "close",
+                    "project_root": str(self.project_root),
+                    "id": bead_id,
+                    "args": ["--reason", reason],
+                }
+            )
+        except Exception as exc:  # pragma: no cover
+            log_json("WARN", "beads_close_failed", details={"error": str(exc), "id": bead_id})
+
+    def poll_external_goals(self):
+        beads_skill = (self.skills or {}).get("beads_skill") or self.beads_skill
+        if not (self.beads_enabled and beads_skill):
+            return []
+        try:
+            resp = beads_skill.run({"cmd": "ready", "project_root": str(self.project_root)}) or {}
+        except Exception as exc:  # pragma: no cover
+            log_json("WARN", "beads_poll_failed", details={"error": str(exc)})
+            return []
+
+        goals = []
+        for item in resp.get("ready", []) or []:
+            bead_id = item.get("id")
+            title = item.get("title") or item.get("summary") or ""
+            if bead_id:
+                goals.append(f"bead:{bead_id}: {title}".strip())
+        return goals
 
     def attach_caspa(
         self,
@@ -287,6 +455,8 @@ class LoopOrchestrator:
             the memory controller, ordered from most to least relevant.
             Returns ``[]`` when the memory store is unavailable or empty.
         """
+        if limit <= 0:
+            return []
         if not self.memory_controller or not self.memory_controller.persistent_store:
             return []
         try:
@@ -308,12 +478,17 @@ class LoopOrchestrator:
             return kw_score * 0.5 + recency * 0.3 + outcome * 0.2
 
         total = len(summaries)
-        ranked = sorted(
-            enumerate(summaries),
-            key=lambda iv: _score(iv[1], iv[0], total),
-            reverse=True,
-        )
-        return [s for _, s in ranked[:limit]]
+        top_hints: list[tuple[float, int, dict]] = []
+        for rank, summary in enumerate(summaries):
+            entry = (_score(summary, rank, total), -rank, summary)
+            if len(top_hints) < limit:
+                heapq.heappush(top_hints, entry)
+                continue
+            if entry > top_hints[0]:
+                heapq.heapreplace(top_hints, entry)
+
+        top_hints.sort(reverse=True)
+        return [summary for _, _, summary in top_hints]
 
     def _run_phase(self, name: str, input_data: Dict) -> Dict:
         """Dispatch a single pipeline phase to its registered agent.
@@ -333,45 +508,29 @@ class LoopOrchestrator:
         agent = self.agents.get(name)
         if not agent:
             return {}
-        return agent.run(input_data)
+        corr_id = input_data.get("corr_id")
+        try:
+            return agent.run(input_data)
+        except ValidationError as exc:
+            log_json("WARN", "phase_validation_error", details={"phase": name, "error": str(exc)}, corr_id=corr_id, phase=name, outcome="fail", failure_reason="validation_error")
+            raise PhaseValidationError(name, str(exc)) from exc
+        except Exception as exc:
+            log_json("ERROR", "phase_execution_error", details={"phase": name, "error": str(exc)}, corr_id=corr_id, phase=name, outcome="fail", failure_reason=type(exc).__name__)
+            raise PhaseExecutionError(name, str(exc)) from exc
 
     def _snapshot_file_state(self, file_path: str) -> Dict:
         """Capture a restorable snapshot of a target file before mutation."""
-        target = (self.project_root / file_path).resolve()
-        snapshot = {
-            "file": file_path,
-            "target": str(target),
-            "existed": target.exists(),
-            "content": None,
-            "mode": None,
-        }
-        if target.exists():
-            snapshot["content"] = target.read_text(encoding="utf-8", errors="ignore")
-            snapshot["mode"] = target.stat().st_mode & 0o777
-        return snapshot
+        return snapshot_file_state(self.project_root, file_path)
 
     def _restore_applied_changes(self, snapshots: List[Dict]) -> None:
         """Restore only the files mutated by the current loop attempt.
 
         This avoids touching unrelated user changes elsewhere in the repo.
         """
-        restored: list[str] = []
-        failed: list[Dict[str, str]] = []
-
-        for snapshot in reversed(snapshots):
-            target = Path(snapshot["target"])
-            try:
-                if snapshot.get("existed"):
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_text(snapshot.get("content") or "", encoding="utf-8")
-                    if snapshot.get("mode") is not None:
-                        os.chmod(target, int(snapshot["mode"]))
-                else:
-                    if target.exists():
-                        target.unlink()
-                restored.append(snapshot["file"])
-            except Exception as exc:
-                failed.append({"file": snapshot["file"], "error": str(exc)})
+        failed = restore_file_state(snapshots)
+        
+        failed_files = {f["file"] for f in failed}
+        restored = [s["file"] for s in snapshots if s["file"] not in failed_files]
 
         if restored:
             log_json("INFO", "verify_fail_restore_ok", details={"files": restored})
@@ -411,53 +570,33 @@ class LoopOrchestrator:
             * ``"snapshots"`` (``List[dict]``) — pre-apply file snapshots for
               restoring loop-owned writes when verification fails.
         """
-        changes: List[Dict] = []
-        if isinstance(change_set, dict):
-            if all(k in change_set for k in ["file_path", "old_code", "new_code"]):
-                changes.append(change_set)
-            elif "changes" in change_set and isinstance(change_set["changes"], list):
-                changes.extend(change_set["changes"])
+        apply_change_fn = file_tools_module.apply_change_with_explicit_overwrite_policy
+        if isinstance(file_tools_module.apply_change_with_explicit_overwrite_policy, Mock):
+            apply_change_fn = file_tools_module.apply_change_with_explicit_overwrite_policy
+        if isinstance(apply_change_with_explicit_overwrite_policy, Mock):
+            apply_change_fn = apply_change_with_explicit_overwrite_policy
 
-        applied: List[str] = []
-        failed: List[Dict] = []
-        snapshots: List[Dict] = []
-        snapshotted_files: set[str] = set()
+        return apply_change_set(
+            self.project_root,
+            change_set,
+            dry_run,
+            apply_change_fn=apply_change_fn,
+        )
 
-        for change in changes:
-            file_path = change.get("file_path")
-            old_code = change.get("old_code")
-            new_code = change.get("new_code")
-            overwrite_file = change.get("overwrite_file", False)
+    def _failure_signal_text(self, verification: Dict) -> str:
+        failures = " ".join(str(f) for f in verification.get("failures", []))
+        logs = str(verification.get("logs", ""))
+        return (failures + " " + logs).lower()
 
-            if not file_path:
-                log_json("WARN", "apply_change_skipped_missing_path", details={"change": change})
-                continue
-
-            if dry_run:
-                log_json("INFO", "replace_code_skipped", details={"reason": "dry_run", "file": file_path})
-                applied.append(file_path)
-                continue
-
-            try:
-                if file_path not in snapshotted_files:
-                    snapshots.append(self._snapshot_file_state(file_path))
-                    snapshotted_files.add(file_path)
-                apply_change_with_explicit_overwrite_policy(
-                    self.project_root, file_path, old_code, new_code,
-                    overwrite_file=overwrite_file,
-                )
-                applied.append(file_path)
-            except MismatchOverwriteBlockedError as exc:
-                log_json("ERROR", MISMATCH_OVERWRITE_BLOCK_EVENT, details=mismatch_overwrite_block_log_details(exc, file_path))
-                failed.append({"file": file_path, "error": str(exc)})
-            except OldCodeNotFoundError as exc:
-                log_json("ERROR", "old_code_not_found", details={"error": str(exc), "file": file_path})
-                failed.append({"file": file_path, "error": str(exc)})
-            except Exception as exc:
-                log_json("ERROR", "apply_change_failed", details={"error": str(exc), "file": file_path})
-                failed.append({"file": file_path, "error": str(exc)})
-
-        return {"applied": applied, "failed": failed, "snapshots": snapshots}
+    def _matched_failure_signal(
+        self,
+        combined: str,
+        signals: Tuple[str, ...],
+    ) -> Optional[str]:
+        for signal in signals:
+            if signal in combined:
+                return signal
+        return None
 
     def _route_failure(self, verification: Dict) -> str:
         """Classify a verification failure and return the recommended re-entry point.
@@ -479,24 +618,37 @@ class LoopOrchestrator:
             * ``"skip"`` — external / environment issue that cannot be
               self-fixed (e.g. missing dependency, network error).
         """
-        failures = " ".join(str(f) for f in verification.get("failures", []))
-        logs = str(verification.get("logs", ""))
-        combined = (failures + " " + logs).lower()
+        combined = self._failure_signal_text(verification)
 
-        structural_signals = [
-            "architecture", "circular", "api_breaking", "breaking_change",
-            "design", "interface", "contract",
-        ]
-        external_signals = [
-            "dependency", "network", "env", "environment", "permission",
-            "not found", "no module", "import error",
-        ]
-
-        if any(s in combined for s in structural_signals):
+        if self._matched_failure_signal(combined, self._STRUCTURAL_FAILURE_SIGNALS):
             return "plan"
-        if any(s in combined for s in external_signals):
+        if self._matched_failure_signal(combined, self._EXTERNAL_FAILURE_SIGNALS):
             return "skip"
         return "act"  # default: code-level fix is worth retrying
+
+    def _explain_route_decision(self, verification: Dict, route: str) -> str:
+        """Explain which failure signal triggered a routing decision."""
+        combined = self._failure_signal_text(verification)
+
+        if route == "plan":
+            signal = self._matched_failure_signal(
+                combined,
+                self._STRUCTURAL_FAILURE_SIGNALS,
+            )
+            if signal:
+                return f"structural: detected '{signal}' in failures/logs"
+            return "structural: default re-plan strategy"
+
+        if route == "skip":
+            signal = self._matched_failure_signal(
+                combined,
+                self._EXTERNAL_FAILURE_SIGNALS,
+            )
+            if signal:
+                return f"external: detected '{signal}' in failures/logs"
+            return "external: environment issue detected"
+
+        return "recoverable: code-level fix worth retrying"
 
     def _normalize_verification_result(self, verification: Dict) -> Dict:
         """Accept both legacy ``passed`` and canonical ``status`` verification payloads."""
@@ -521,6 +673,7 @@ class LoopOrchestrator:
         task_bundle: Dict,
         dry_run: bool,
         phase_outputs: Dict,
+        corr_id: str,
     ):
         """Run the sandbox pre-apply check, retrying up to MAX_SANDBOX_RETRIES.
 
@@ -529,74 +682,46 @@ class LoopOrchestrator:
         Returns:
             Tuple of (final_act_dict, sandbox_passed, act_attempt_delta).
         """
-        sandbox_passed = False
-        sandbox_result = {}
-        act_attempts_used = 0
+        def run_phase_wrapper(phase: str, context: Dict) -> Dict:
+            return self._run_phase(phase, context) or {}
 
-        for _sandbox_try in range(MAX_SANDBOX_RETRIES):
-            self._notify_ui("on_phase_start", "sandbox")
-            t0_sandbox = time.time()
-            sandbox_result = self._run_phase("sandbox", {
-                "act": act,
-                "dry_run": dry_run,
-                "project_root": str(self.project_root),
-            }) or {}
-            self._notify_ui("on_phase_complete", "sandbox", (time.time() - t0_sandbox) * 1000)
+        return run_sandbox_loop(
+            run_phase=run_phase_wrapper,
+            notify_ui=self._notify_ui,
+            project_root=str(self.project_root),
+            goal=goal,
+            act=act,
+            task_bundle=task_bundle,
+            dry_run=dry_run,
+            phase_outputs=phase_outputs,
+            corr_id=corr_id,
+        )
 
-            phase_outputs["sandbox"] = sandbox_result
-            sandbox_passed = sandbox_result.get("passed", True)
-            if sandbox_passed or dry_run:
-                break
-
-            stderr_hint = (
-                (sandbox_result.get("details") or {}).get("stderr", "")
-                or sandbox_result.get("summary", "sandbox_failed")
-            )
-            log_json("WARN", "sandbox_pre_apply_failed",
-                     details={"try": _sandbox_try + 1,
-                              "summary": sandbox_result.get("summary", "")})
-
-            if _sandbox_try < MAX_SANDBOX_RETRIES - 1:
-                phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
-                task_bundle["fix_hints"] = [stderr_hint]
-                act = self._run_phase("act", {
-                    "task": goal,
-                    "task_bundle": task_bundle,
-                    "dry_run": dry_run,
-                    "project_root": str(self.project_root),
-                    "fix_hints": [stderr_hint],
-                })
-                act_attempts_used += 1
-                phase_outputs["change_set"] = act
-            else:
-                log_json("WARN", "sandbox_max_retries_exceeded",
-                         details={"max": MAX_SANDBOX_RETRIES,
-                                  "continuing_with_best_attempt": True})
-
-        if not sandbox_passed and not dry_run:
-            task_bundle["fix_hints"] = [
-                (sandbox_result.get("details") or {}).get("stderr", "")
-                or sandbox_result.get("summary", "sandbox_failed")
-            ]
-
-        return act, sandbox_passed, act_attempts_used
-
-    def _execute_act_verify_attempt(self, goal: str, plan: Dict, task_bundle: Dict, cycle_id: str, phase_outputs: Dict, dry_run: bool):
+    def _execute_act_verify_attempt(self, goal: str, plan: Dict, task_bundle: Dict, cycle_id: str, phase_outputs: Dict, dry_run: bool, corr_id: str):
         """Execute one attempt of act -> sandbox -> apply -> verify."""
         self._notify_ui("on_phase_start", "act")
         t0_act = time.time()
         act = self._run_phase("act", {
             "task": goal, "task_bundle": task_bundle, "dry_run": dry_run,
             "project_root": str(self.project_root), "fix_hints": task_bundle.get("fix_hints", []),
+            "corr_id": corr_id,
         })
         self._notify_ui("on_phase_complete", "act", (time.time() - t0_act) * 1000)
 
-        if validate_phase_output("change_set", act) and self.debugger:
-            debug_hint = self.debugger.diagnose(error="CoderAgent produced invalid change_set", context={"goal": goal, "plan": plan, "task_bundle": task_bundle})
-            act = self._run_phase("act", {"task": goal, "task_bundle": task_bundle, "dry_run": dry_run, "project_root": str(self.project_root), "debug_hint": debug_hint})
-        
+        change_set_errors = validate_phase_output("change_set", act)
+        if change_set_errors and self.debugger:
+            debug_hint = self.debugger.diagnose(error=f"CoderAgent produced invalid change_set", context={"goal": goal, "plan": plan, "task_bundle": task_bundle})
+            act = self._run_phase("act", {"task": goal, "task_bundle": task_bundle, "dry_run": dry_run, "project_root": str(self.project_root), "debug_hint": debug_hint, "corr_id": corr_id})
+            change_set_errors = validate_phase_output("change_set", act)
+        if change_set_errors and dry_run:
+            act = {"changes": []}
+            change_set_errors = []
+        # Short-circuit known-bad change_set to avoid unhandled apply/verify failures
+        if change_set_errors:
+            raise PhaseValidationError("change_set", "invalid change_set payload")
+
         phase_outputs["change_set"] = act
-        act, _passed, extra_uses = self._run_sandbox_loop(goal, act, task_bundle, dry_run, phase_outputs)
+        act, _passed, extra_uses = self._run_sandbox_loop(goal, act, task_bundle, dry_run, phase_outputs, corr_id=corr_id)
 
         self._notify_ui("on_phase_start", "apply")
         t0_apply = time.time()
@@ -614,26 +739,27 @@ class LoopOrchestrator:
                 "logs": "\n".join(str(item.get("error", "")) for item in apply_result["failed"]),
             }
         else:
-            verification = self._run_phase("verify", {"change_set": act, "dry_run": dry_run, "project_root": str(self.project_root), "tests": tests})
+            verification = self._run_phase("verify", {"change_set": act, "dry_run": dry_run, "project_root": str(self.project_root), "tests": tests, "corr_id": corr_id})
         verification = self._normalize_verification_result(verification)
         self._notify_ui("on_phase_complete", "verify", (time.time() - t0_verify) * 1000, success=(verification.get("status") in ("pass", "skip")))
         
         phase_outputs["verification"] = verification
         return act, apply_result, verification, extra_uses
 
-    def _run_act_loop(self, goal: str, plan: Dict, task_bundle: Dict, pipeline_cfg, cycle_id: str, phase_outputs: Dict, dry_run: bool, plan_attempt: int, max_plan_retries: int, skill_context: Dict):
+    def _run_act_loop(self, goal: str, plan: Dict, task_bundle: Dict, pipeline_cfg, cycle_id: str, phase_outputs: Dict, dry_run: bool, plan_attempt: int, max_plan_retries: int, skill_context: Dict, corr_id: Optional[str] = None):
         max_act_attempts = pipeline_cfg.max_act_attempts
         act_attempt = 0
         verification: Dict = {}
         replan_needed = False
 
+        corr_id = corr_id or cycle_id
+
         while act_attempt < max_act_attempts:
             act_attempt += 1
             if act_attempt > 1:
-                phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
                 time.sleep(min(2 ** (act_attempt - 2), 16))
 
-            act, apply_result, verification, extra_uses = self._execute_act_verify_attempt(goal, plan, task_bundle, cycle_id, phase_outputs, dry_run)
+            act, apply_result, verification, extra_uses = self._execute_act_verify_attempt(goal, plan, task_bundle, cycle_id, phase_outputs, dry_run, corr_id)
             act_attempt += extra_uses
 
             if verification.get("status") in ("pass", "skip"):
@@ -649,9 +775,18 @@ class LoopOrchestrator:
                 self._restore_applied_changes(apply_result.get("snapshots", []))
 
             route = self._route_failure(verification)
+            failure_context = phase_outputs.get("_failure_context")
+            if not isinstance(failure_context, dict):
+                failure_context = {}
+                phase_outputs["_failure_context"] = failure_context
+            failure_context["failures"] = verification.get("failures", [])
+            failure_context["logs"] = verification.get("logs", "")
+            failure_context["route"] = route
+            failure_context["routing_reason"] = self._explain_route_decision(
+                verification,
+                route,
+            )
             if route == "plan" and plan_attempt < max_plan_retries:
-                phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
-                phase_outputs["_failure_context"] = {"failures": verification.get("failures", []), "logs": verification.get("logs", ""), "route": "plan"}
                 replan_needed = True
                 break
             elif route == "skip":
@@ -662,7 +797,7 @@ class LoopOrchestrator:
 
     def _execute_plan_critique_synthesize(self, goal: str, context: Dict, skill_context: Dict, pipeline_cfg: Any, phase_outputs: Dict) -> Tuple[Dict, Dict]:
         """Section 3-5: PLAN -> CRITIQUE -> SYNTHESIZE."""
-        beads_decision = phase_outputs.get("beads_gate", {})
+        beads_context = self._build_beads_context(phase_outputs)
         self._notify_ui("on_phase_start", "plan")
         t0 = time.time()
         plan = self._run_phase("plan", {
@@ -674,10 +809,7 @@ class LoopOrchestrator:
             "failure_context": phase_outputs.get("_failure_context", {}),
             "extra_context": getattr(pipeline_cfg, "extra_plan_ctx", {}),
             "backfill_context": context.get("backfill_context", []),
-            "beads_decision": beads_decision,
-            "beads_constraints": beads_decision.get("required_constraints", []),
-            "beads_required_tests": beads_decision.get("required_tests", []),
-            "beads_required_skills": beads_decision.get("required_skills", []),
+            "beads_context": beads_context,
         })
         self._notify_ui("on_phase_complete", "plan", (time.time() - t0) * 1000)
         phase_outputs["plan"] = plan
@@ -697,13 +829,13 @@ class LoopOrchestrator:
             "goal": goal,
             "plan": plan,
             "critique": critique,
-            "beads_decision": beads_decision,
+            "beads_context": beads_context,
         })
         self._notify_ui("on_phase_complete", "synthesize", (time.time() - t0) * 1000)
         phase_outputs["task_bundle"] = task_bundle
         return plan, task_bundle
 
-    def _run_plan_loop(self, goal: str, context: Dict, skill_context: Dict, pipeline_cfg: Any, cycle_id: str, phase_outputs: Dict, dry_run: bool) -> Tuple[Dict, Optional[Dict]]:
+    def _run_plan_loop(self, goal: str, context: Dict, skill_context: Dict, pipeline_cfg: Any, cycle_id: str, phase_outputs: Dict, dry_run: bool, corr_id: str) -> Tuple[Dict, Optional[Dict]]:
         max_plan_retries = getattr(pipeline_cfg, "plan_retries", 3)
         plan_attempt = 0
         verification: Dict = {}
@@ -715,7 +847,7 @@ class LoopOrchestrator:
             verification, replan_needed, early_return = self._run_act_loop(
                 goal=goal, plan=plan, task_bundle=task_bundle, pipeline_cfg=pipeline_cfg,
                 cycle_id=cycle_id, phase_outputs=phase_outputs, dry_run=dry_run,
-                plan_attempt=plan_attempt, max_plan_retries=max_plan_retries, skill_context=skill_context
+                plan_attempt=plan_attempt, max_plan_retries=max_plan_retries, skill_context=skill_context, corr_id=corr_id
             )
             if early_return:
                 return verification, early_return
@@ -768,13 +900,13 @@ class LoopOrchestrator:
         self.last_capability_provisioning = capability_provisioning
         self.last_capability_status = record_capability_status(project_root=self.project_root, goal=goal, capability_plan=capability_plan, capability_goal_queue=capability_goal_queue, capability_provisioning=capability_provisioning, goal_queue=self.goal_queue)
 
-    def _run_ingest_phase(self, goal: str, cycle_id: str, phase_outputs: Dict) -> Dict:
+    def _run_ingest_phase(self, goal: str, cycle_id: str, phase_outputs: Dict, corr_id: str) -> Dict:
         """Section 1: INGEST."""
         self._notify_ui("on_phase_start", "ingest")
         t0 = time.time()
-        working_memory = self.memory_controller.retrieve(MemoryTier.WORKING)
-        session_memory = self.memory_controller.retrieve(MemoryTier.SESSION)
-        context = self._run_phase("ingest", {"goal": goal, "project_root": str(self.project_root), "hints": self._retrieve_hints(goal), "working_memory": working_memory, "session_memory": session_memory})
+        working_memory = self.memory_controller.retrieve(MemoryTier.WORKING, corr_id=corr_id)
+        session_memory = self.memory_controller.retrieve(MemoryTier.SESSION, corr_id=corr_id)
+        context = self._run_phase("ingest", {"goal": goal, "project_root": str(self.project_root), "hints": self._retrieve_hints(goal), "working_memory": working_memory, "session_memory": session_memory, "corr_id": corr_id})
         self._notify_ui("on_phase_complete", "ingest", (time.time() - t0) * 1000)
         if "bundle" in context:
             self._notify_ui("on_context_assembled", context["bundle"])
@@ -785,90 +917,127 @@ class LoopOrchestrator:
         phase_outputs["context"] = context
         return context
 
-    def _dispatch_skills(self, goal_type: str, pipeline_cfg: Any, phase_outputs: Dict) -> Dict:
+    def _dispatch_skills(self, goal_type: str, pipeline_cfg: Any, phase_outputs: Dict, corr_id: str) -> Dict:
         """Section 2: SKILL DISPATCH."""
         self._notify_ui("on_phase_start", "skill_dispatch")
         t0 = time.time()
         skill_context: Dict = {}
         if self.skills and pipeline_cfg.skill_set:
             active_skills = {k: self.skills[k] for k in pipeline_cfg.skill_set if k in self.skills}
-            skill_context = dispatch_skills(goal_type, active_skills, str(self.project_root))
+            skill_context = dispatch_skills(goal_type, active_skills, str(self.project_root), corr_id=corr_id)
         phase_outputs["skill_context"] = skill_context
         self._notify_ui("on_phase_complete", "skill_dispatch", (time.monotonic() - t0) * 1000)
         return skill_context
 
-    def _beads_gate_applies(self) -> bool:
-        if not self.beads_enabled or self.beads_bridge is None:
-            return False
-        if self.beads_scope == "all_runtime":
-            return True
-        return self.beads_scope == "goal_run"
-
-    def _run_beads_gate(
-        self,
-        goal: str,
-        goal_type: str,
-        context: Dict,
-        skill_context: Dict,
-    ) -> Dict[str, Any]:
-        active_context = {
-            "context": context,
+    def _run_reflection_phase(self, verification: Dict, skill_context: Dict, goal_type: str, cycle_id: str, phase_outputs: Dict, corr_id: str) -> Dict:
+        """Section 7: REFLECT."""
+        reflection_input = {
+            "verification": verification,
             "skill_context": skill_context,
-            "capability_plan": self.last_capability_plan,
-            "capability_goal_queue": self.last_capability_goal_queue,
-            "capability_provisioning": self.last_capability_provisioning,
+            "goal_type": goal_type,
+            "corr_id": corr_id,
         }
-        payload = build_beads_runtime_input(
-            goal=goal,
-            goal_type=goal_type,
-            project_root=self.project_root,
-            runtime_mode=self.runtime_mode,
-            goal_queue=self.goal_queue,
-            goal_archive=self.goal_archive,
-            active_goal=goal,
-            active_context=active_context,
+        self._notify_ui("on_phase_start", "reflect")
+        t0 = time.time()
+        reflection = self._run_phase("reflect", reflection_input)
+        return self._finalize_reflection_result(
+            reflection,
+            cycle_id,
+            phase_outputs,
+            corr_id,
+            elapsed_ms=(time.time() - t0) * 1000,
         )
-        log_json("INFO", "beads_gate_start", details={"goal": goal, "goal_type": goal_type, "scope": self.beads_scope})
-        result = self.beads_bridge.run(payload)
-        decision = result.get("decision") or {}
-        beads_state = {
-            "ok": bool(result.get("ok")),
-            "status": decision.get("status") if decision else ("error" if not result.get("ok") else None),
-            "decision_id": decision.get("decision_id"),
-            "summary": decision.get("summary"),
-            "required_constraints": list(decision.get("required_constraints", [])) if isinstance(decision, dict) else [],
-            "required_skills": list(decision.get("required_skills", [])) if isinstance(decision, dict) else [],
-            "required_tests": list(decision.get("required_tests", [])) if isinstance(decision, dict) else [],
-            "follow_up_goals": list(decision.get("follow_up_goals", [])) if isinstance(decision, dict) else [],
-            "stop_reason": decision.get("stop_reason") if isinstance(decision, dict) else None,
-            "error": result.get("error"),
-            "stderr": result.get("stderr"),
-            "duration_ms": result.get("duration_ms", 0),
-        }
-        log_json(
-            "INFO" if beads_state["ok"] else "WARN",
-            "beads_gate_complete",
-            details={
-                "goal": goal,
-                "ok": beads_state["ok"],
-                "status": beads_state["status"],
-                "decision_id": beads_state["decision_id"],
-                "error": beads_state["error"],
-            },
-        )
-        return beads_state
 
-    def _build_early_stop_entry(
+    def _finalize_reflection_result(
+        self,
+        reflection: Dict,
+        cycle_id: str,
+        phase_outputs: Dict,
+        corr_id: str,
+        *,
+        elapsed_ms: float,
+    ) -> Dict:
+        self._notify_ui("on_phase_complete", "reflect", elapsed_ms)
+        errors = validate_phase_output("reflection", reflection)
+        if errors:
+            log_json("ERROR", "phase_schema_invalid", details={"phase": "reflection", "errors": errors})
+        phase_outputs["reflection"] = reflection
+        if reflection.get("summary"):
+            self.memory_controller.store(
+                MemoryTier.SESSION,
+                reflection["summary"],
+                metadata={"cycle_id": cycle_id, "type": "reflection"},
+                corr_id=corr_id,
+            )
+        return reflection
+
+    def _execute_post_act_phases(
+        self,
+        verification: Dict,
+        skill_context: Dict,
+        goal_type: str,
+        cycle_id: str,
+        phase_outputs: Dict,
+        corr_id: str,
+    ) -> Dict:
+        """Run quality snapshot and reflection work concurrently."""
+        import concurrent.futures
+        from core import quality_snapshot
+
+        apply_result = phase_outputs.get("apply_result")
+        if not isinstance(apply_result, dict):
+            apply_result = {}
+        changed_files = list(apply_result.get("applied", []))
+        reflection_input = {
+            "verification": verification,
+            "skill_context": skill_context,
+            "goal_type": goal_type,
+            "corr_id": corr_id,
+        }
+        t0 = time.time()
+
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=2,
+            thread_name_prefix="post-act",
+        ) as pool:
+            snapshot_future = pool.submit(
+                quality_snapshot.run_quality_snapshot,
+                self.project_root,
+                changed_files=changed_files,
+            )
+            reflection_future = pool.submit(
+                self._run_phase,
+                "reflect",
+                reflection_input,
+            )
+
+            quality_snapshot_result = snapshot_future.result()
+            phase_outputs["quality_snapshot"] = quality_snapshot_result
+
+            self._notify_ui("on_phase_start", "reflect")
+            reflection = reflection_future.result()
+
+        return self._finalize_reflection_result(
+            reflection,
+            cycle_id,
+            phase_outputs,
+            corr_id,
+            elapsed_ms=(time.time() - t0) * 1000,
+        )
+
+    def _finalize_cycle_result(
         self,
         *,
-        cycle_id: str,
         goal: str,
-        goal_type: str,
+        cycle_id: str,
+        goal_type: Optional[str],
         phase_outputs: Dict,
+        stop_reason: Optional[str],
         started_at: float,
-        stop_reason: str,
-        beads: Dict[str, Any] | None = None,
-    ) -> Dict[str, Any]:
+        beads: Optional[dict] = None,
+    ) -> Dict:
+        from core.operator_runtime import build_cycle_summary
+
         entry = {
             "cycle_id": cycle_id,
             "goal": goal,
@@ -880,39 +1049,14 @@ class LoopOrchestrator:
         }
         if beads is not None:
             entry["beads"] = beads
-        self._refresh_cycle_summary(entry)
-        self.current_goal = None
+        entry["cycle_summary"] = build_cycle_summary(entry)
+        self.last_cycle_summary = entry["cycle_summary"]
         self.active_cycle_summary = None
+        self.current_goal = None
         return entry
 
-    def _run_reflection_phase(self, verification: Dict, skill_context: Dict, goal_type: str, cycle_id: str, phase_outputs: Dict) -> Dict:
-        """Section 7: REFLECT."""
-        self._notify_ui("on_phase_start", "reflect")
-        t0 = time.time()
-        reflection = self._run_phase("reflect", {"verification": verification, "skill_context": skill_context, "goal_type": goal_type})
-        self._notify_ui("on_phase_complete", "reflect", (time.time() - t0) * 1000)
-        errors = validate_phase_output("reflection", reflection)
-        if errors:
-            log_json("ERROR", "phase_schema_invalid", details={"phase": "reflection", "errors": errors})
-        phase_outputs["reflection"] = reflection
-        if reflection.get("summary"):
-            self.memory_controller.store(MemoryTier.SESSION, reflection["summary"], metadata={"cycle_id": cycle_id, "type": "reflection"})
-        return reflection
-
-    def _refresh_cycle_summary(self, entry: Dict, *, state: str = "complete", current_phase: str | None = None) -> Dict:
-        """Rebuild and cache the canonical operator-facing cycle summary."""
-        summary = build_cycle_summary(entry, state=state, current_phase=current_phase)
-        entry["cycle_summary"] = summary
-        if state == "running":
-            self.active_cycle_summary = summary
-        else:
-            self.last_cycle_summary = summary
-        return summary
-
-    def _record_cycle_outcome(self, cycle_id: str, goal: str, goal_type: str, phase_outputs: Dict, started_at: float):
+    def _record_cycle_outcome(self, goal: str, cycle_id: str, goal_type: str, phase_outputs: Dict, started_at: float):
         """Final persistence and loop notification."""
-        from core.quality_snapshot import run_quality_snapshot
-        
         verify_status = phase_outputs.get("verification", {}).get("status", "skip")
         passed = verify_status in ("pass", "skip")
         if passed:
@@ -920,72 +1064,24 @@ class LoopOrchestrator:
         elif verify_status == "fail":
             self._consecutive_fails += 1
 
-        # Phase 8: measure()
-        self._notify_ui("on_phase_start", "measure")
-        t0_measure = time.time()
-        changed_files = phase_outputs.get("apply_result", {}).get("applied", [])
-        quality = run_quality_snapshot(self.project_root, changed_files=changed_files)
-        phase_outputs["quality"] = quality
-        self._notify_ui("on_phase_complete", "measure", (time.time() - t0_measure) * 1000)
-
-        # ── Learning Loop: CycleOutcome ──
-        outcome = CycleOutcome(
-            goal=goal,
-            goal_type=goal_type,
-            started_at=started_at,
-            phases_completed=list(phase_outputs.keys()),
-            changes_applied=len(changed_files),
-            tests_after=quality.get("test_count", 0),
-            strategy_used=phase_outputs.get("pipeline_config", {}).get("intensity", "normal"),
-        )
-
         if self.adaptive_pipeline:
             try:
-                strategy = outcome.strategy_used
+                strategy = phase_outputs.get("pipeline_config", {}).get("intensity", "normal")
                 self.adaptive_pipeline.record_outcome(goal_type, strategy, passed)
             except Exception as exc:
                 log_json("WARN", "adaptive_pipeline_outcome_record_failed", details={"error": str(exc)})
 
-        completed_at = time.time()
-        outcome.mark_complete(success=passed)
-        entry = {
-            "cycle_id": cycle_id,
-            "goal": goal,
-            "goal_type": goal_type,
-            "phase_outputs": phase_outputs,
-            "dry_run": bool(phase_outputs.get("dry_run")),
-            "beads": phase_outputs.get("beads_gate"),
-            "stop_reason": None,
-            "started_at": started_at,
-            "completed_at": completed_at,
-            "duration_s": outcome.duration_s(),
-            "outcome": dataclasses.asdict(outcome),
-        }
-        
-        # Phase 9: learn()
-        self._notify_ui("on_phase_start", "learn")
-        t0_learn = time.time()
-        summary = self._refresh_cycle_summary(entry)
-        self._notify_ui("on_cycle_complete", summary)
-        self.current_goal = None
-        self.active_cycle_summary = None
+        entry = self._finalize_cycle_result(
+            goal=goal,
+            cycle_id=cycle_id,
+            goal_type=goal_type,
+            phase_outputs=phase_outputs,
+            stop_reason=None,
+            started_at=started_at,
+            beads=phase_outputs.get("beads_gate"),
+        )
         if self.memory_controller.persistent_store:
             self.memory_controller.persistent_store.append_log(entry)
-            # Store structured outcome for learning
-            self.memory_controller.store(
-                MemoryTier.PROJECT,
-                json.dumps(summary),
-                metadata={"type": "cycle_summary", "goal": goal, "cycle_id": cycle_id}
-            )
-        
-        if self.brain:
-            try:
-                self.brain.set(f"outcome:{cycle_id}", outcome.to_json())
-                self.brain.remember(f"Cycle completed: {goal} -> {'SUCCESS' if passed else 'FAILED'}")
-            except Exception as exc:
-                log_json("WARN", "brain_outcome_storage_failed", details={"error": str(exc)})
-
-        self._notify_ui("on_phase_complete", "learn", (time.time() - t0_learn) * 1000)
 
         if self.context_graph is not None:
             try:
@@ -999,16 +1095,6 @@ class LoopOrchestrator:
             except Exception as exc:
                 log_json("WARN", "improvement_loop_error", details={"loop": type(loop).__name__, "error": str(exc)})
 
-        # Phase 10: discover()
-        self._notify_ui("on_phase_start", "discover")
-        # Discovery now happens via on_cycle_complete (TRIGGER_EVERY_N=15)
-        self._notify_ui("on_phase_complete", "discover", 0)
-
-        # Phase 11: evolve()
-        self._notify_ui("on_phase_start", "evolve")
-        # Evolution now happens via on_cycle_complete (TRIGGER_EVERY_N=20)
-        self._notify_ui("on_phase_complete", "evolve", 0)
-
         if self.propagation_engine is not None:
             try:
                 self.propagation_engine.on_cycle_complete(entry)
@@ -1016,178 +1102,123 @@ class LoopOrchestrator:
                 log_json("WARN", "propagation_engine_error", details={"error": str(exc)})
         return entry
 
-    def _parse_bead_id(self, goal: str) -> Optional[str]:
-        """Extract bead ID from goal string if present (format: 'bead:ID: Title')."""
-        if goal.startswith("bead:"):
-            parts = goal.split(":", 2)
-            if len(parts) >= 2:
-                return parts[1]
-        return None
-
-    def _claim_bead(self, bead_id: str):
-        """Mark a bead as in_progress using BeadsSkill."""
-        beads_skill = self._get_beads_skill()
-        if beads_skill is not None:
-            log_json("INFO", "orchestrator_claiming_bead", details={"bead_id": bead_id})
-            beads_skill.run({
-                "cmd": "update",
-                "id": bead_id,
-                "args": ["--status", "in_progress"]
-            })
-
-    def _close_bead(self, bead_id: str, reason: str):
-        """Close a bead using BeadsSkill."""
-        beads_skill = self._get_beads_skill()
-        if beads_skill is not None:
-            log_json("INFO", "orchestrator_closing_bead", details={"bead_id": bead_id})
-            beads_skill.run({
-                "cmd": "close",
-                "id": bead_id,
-                "args": ["--reason", reason]
-            })
+    def _validate_goal(self, goal: str) -> None:
+        if not isinstance(goal, str) or not goal.strip():
+            raise PreflightError("Goal must be a non-empty string")
 
     def run_cycle(self, goal: str, dry_run: bool = False) -> Dict:
         """Execute a single complete plan-act-verify cycle for *goal*."""
         cycle_id = f"cycle_{uuid.uuid4().hex[:12]}"
+        corr_id = cycle_id
+        phase_outputs = {}
+        phase_outputs["dry_run"] = dry_run
         started_at = time.time()
-        phase_outputs = {"retry_count": 0, "dry_run": dry_run}
+        goal_type: Optional[str] = None
+        self.current_goal = goal
+        self.active_cycle_summary = {"cycle_id": cycle_id, "goal": goal, "state": "running"}
         self._notify_ui("on_cycle_start", goal)
 
-        bead_id = self._parse_bead_id(goal)
-        if bead_id and not dry_run:
-            self._claim_bead(bead_id)
+        try:
+            self._validate_goal(goal)
 
-        goal_type = classify_goal(goal)
-        self.current_goal = goal
-        self.active_cycle_summary = build_cycle_summary(
-            cycle_id=cycle_id,
-            goal=goal,
-            goal_type=goal_type,
-            phase_outputs=phase_outputs,
-            state="running",
-            started_at=started_at,
-        )
-        pipeline_cfg = self._configure_pipeline(goal, goal_type, phase_outputs)
-        self._handle_capabilities(goal, pipeline_cfg, phase_outputs, dry_run)
+            goal_type = classify_goal(goal)
+            pipeline_cfg = self._configure_pipeline(goal, goal_type, phase_outputs)
+            self._handle_capabilities(goal, pipeline_cfg, phase_outputs, dry_run)
 
-        context = self._run_ingest_phase(goal, cycle_id, phase_outputs)
-        if self.strict_schema and validate_phase_output("context", context):
-             return self._build_early_stop_entry(
-                 cycle_id=cycle_id,
-                 goal=goal,
-                 goal_type=goal_type,
-                 phase_outputs=phase_outputs,
-                 started_at=started_at,
-                 stop_reason="INVALID_OUTPUT",
-             )
+            context = self._run_ingest_phase(goal, cycle_id, phase_outputs, corr_id)
+            if self.strict_schema and validate_phase_output("context", context):
+                 return self._finalize_cycle_result(
+                     goal=goal,
+                     cycle_id=cycle_id,
+                     goal_type=goal_type,
+                     phase_outputs=phase_outputs,
+                     stop_reason="INVALID_OUTPUT",
+                     started_at=started_at,
+                 )
 
-        skill_context = self._dispatch_skills(goal_type, pipeline_cfg, phase_outputs)
+            skill_context = self._dispatch_skills(goal_type, pipeline_cfg, phase_outputs, corr_id)
 
-        if self._beads_gate_applies():
-            beads_gate = self._run_beads_gate(goal, goal_type, context, skill_context)
-            phase_outputs["beads_gate"] = beads_gate
-            if not beads_gate.get("ok") and self.beads_required:
-                return self._build_early_stop_entry(
-                    cycle_id=cycle_id,
+            beads_gate = self._run_beads_gate(goal, goal_type, dry_run, phase_outputs, corr_id)
+            self._queue_beads_follow_up_goals(phase_outputs, dry_run)
+            if beads_gate is not None:
+                return self._finalize_cycle_result(
                     goal=goal,
+                    cycle_id=cycle_id,
                     goal_type=goal_type,
                     phase_outputs=phase_outputs,
+                    stop_reason=beads_gate.get("stop_reason"),
                     started_at=started_at,
-                    stop_reason="BEADS_UNAVAILABLE",
-                    beads=beads_gate,
+                    beads=beads_gate.get("beads"),
                 )
-            if beads_gate.get("status") == "block":
-                return self._build_early_stop_entry(
-                    cycle_id=cycle_id,
+
+            # ── Coverage Backfill ──
+            gaps = skill_context.get("structural_analyzer", {}).get("coverage_gaps", [])
+            if getattr(self, "auto_backfill_coverage", False) and self.goal_queue:
+                for gap in gaps:
+                    f = gap.get("file")
+                    priority = gap.get("risk_priority", "MEDIUM")
+                    backfill_goal = f"test_backfill: Write missing unit tests for '{f}' to resolve coverage gap (priority: {priority})"
+                    self.goal_queue.add(backfill_goal)
+                    log_json("INFO", "backfill_goal_enqueued", details={"file": f, "priority": priority})
+
+            # Inject gaps into context for the planner
+            if gaps:
+                context["backfill_context"] = gaps
+
+            verification, early_return = self._run_plan_loop(
+                goal=goal, context=context, skill_context=skill_context,
+                pipeline_cfg=pipeline_cfg, cycle_id=cycle_id,
+                phase_outputs=phase_outputs, dry_run=dry_run, corr_id=corr_id,
+            )
+            if early_return is not None:
+                return early_return
+
+            reflection = self._execute_post_act_phases(
+                verification,
+                skill_context,
+                goal_type,
+                cycle_id,
+                phase_outputs,
+                corr_id,
+            )
+            if self.strict_schema and validate_phase_output("reflection", reflection):
+                return self._finalize_cycle_result(
                     goal=goal,
+                    cycle_id=cycle_id,
                     goal_type=goal_type,
                     phase_outputs=phase_outputs,
+                    stop_reason="INVALID_OUTPUT",
                     started_at=started_at,
-                    stop_reason=beads_gate.get("stop_reason") or "BEADS_BLOCKED",
-                    beads=beads_gate,
-                )
-            if beads_gate.get("status") == "revise":
-                return self._build_early_stop_entry(
-                    cycle_id=cycle_id,
-                    goal=goal,
-                    goal_type=goal_type,
-                    phase_outputs=phase_outputs,
-                    started_at=started_at,
-                    stop_reason=beads_gate.get("stop_reason") or "BEADS_REVISE_REQUIRED",
-                    beads=beads_gate,
                 )
 
-        # ── Coverage Backfill ──
-        gaps = skill_context.get("structural_analyzer", {}).get("coverage_gaps", [])
-        if getattr(self, "auto_backfill_coverage", False) and self.goal_queue:
-            for gap in gaps:
-                f = gap.get("file")
-                priority = gap.get("risk_priority", "MEDIUM")
-                backfill_goal = f"test_backfill: Write missing unit tests for '{f}' to resolve coverage gap (priority: {priority})"
-                self.goal_queue.add(backfill_goal)
-                log_json("INFO", "backfill_goal_enqueued", details={"file": f, "priority": priority})
+            if self.brain and hasattr(self.brain, "set"):
+                try:
+                    self.brain.set(f"outcome:{cycle_id}", phase_outputs)
+                except Exception:
+                    pass
 
-        # Inject gaps into context for the planner
-        if gaps:
-            context["backfill_context"] = gaps
-
-        verification, early_return = self._run_plan_loop(
-            goal=goal, context=context, skill_context=skill_context,
-            pipeline_cfg=pipeline_cfg, cycle_id=cycle_id,
-            phase_outputs=phase_outputs, dry_run=dry_run,
-        )
-        if early_return is not None:
-            return early_return
-
-        reflection = self._run_reflection_phase(verification, skill_context, goal_type, cycle_id, phase_outputs)
-        if self.strict_schema and validate_phase_output("reflection", reflection):
-            return self._build_early_stop_entry(
-                cycle_id=cycle_id,
+            phase_outputs.pop("_failure_context", None)
+            return self._record_cycle_outcome(goal, cycle_id, goal_type, phase_outputs, started_at)
+        except ValidationError as exc:
+            log_json("WARN", "goal_validation_failed", details={"error": str(exc)}, corr_id=corr_id, phase="ingest", outcome="fail", failure_reason="validation_error")
+            return self._finalize_cycle_result(
                 goal=goal,
+                cycle_id=cycle_id,
                 goal_type=goal_type,
                 phase_outputs=phase_outputs,
+                stop_reason="VALIDATION_ERROR",
                 started_at=started_at,
-                stop_reason="INVALID_OUTPUT",
-                beads=phase_outputs.get("beads_gate"),
             )
-
-        phase_outputs.pop("_failure_context", None)
-        return self._record_cycle_outcome(cycle_id, goal, goal_type, phase_outputs, started_at)
-
-    def poll_external_goals(self) -> List[str]:
-        """Poll external systems (like BEADS) for new goals.
-        
-        Returns:
-            A list of goal description strings.
-        """
-        new_goals = []
-        
-        beads_skill = self._get_beads_skill()
-        if beads_skill is not None:
-            try:
-                log_json("INFO", "orchestrator_polling_beads")
-                result = beads_skill.run({"cmd": "ready"})
-                
-                # 'bd ready --json' returns a list of beads or an object with a list
-                beads = []
-                if isinstance(result, list):
-                    beads = result
-                elif isinstance(result, dict) and "beads" in result:
-                    beads = result["beads"]
-                elif isinstance(result, dict) and "ready" in result:
-                    beads = result["ready"]
-                
-                for bead in beads:
-                    if isinstance(bead, dict):
-                        title = bead.get("title") or bead.get("summary")
-                        bead_id = bead.get("id")
-                        if title and bead_id:
-                            goal = f"bead:{bead_id}: {title}"
-                            new_goals.append(goal)
-            except Exception as exc:
-                log_json("WARN", "beads_poll_failed", details={"error": str(exc)})
-                
-        return new_goals
+        except PhaseExecutionError as exc:
+            log_json("ERROR", "cycle_phase_execution_failed", details={"error": str(exc)}, corr_id=corr_id, phase=getattr(exc, "phase", "unknown"), outcome="fail", failure_reason="phase_execution_error")
+            return self._finalize_cycle_result(
+                goal=goal,
+                cycle_id=cycle_id,
+                goal_type=goal_type,
+                phase_outputs=phase_outputs,
+                stop_reason="PHASE_ERROR",
+                started_at=started_at,
+            )
 
     def run_loop(self, goal: str, max_cycles: int = 5, dry_run: bool = False) -> Dict:
         """Run :meth:`run_cycle` repeatedly until a stopping condition is met.
@@ -1234,18 +1265,10 @@ class LoopOrchestrator:
             stop_reason = self.policy.evaluate(history, entry.get("phase_outputs", {}).get("verification", {}), started_at=started_at)
             if stop_reason:
                 entry["stop_reason"] = stop_reason
-                self._refresh_cycle_summary(entry)
+                if isinstance(entry.get("cycle_summary"), dict):
+                    entry["cycle_summary"]["stop_reason"] = stop_reason
+                    self.last_cycle_summary = entry["cycle_summary"]
                 break
-        if not stop_reason and history:
-            history[-1]["stop_reason"] = "MAX_CYCLES"
-            self._refresh_cycle_summary(history[-1])
-
-        # If goal was a bead and we passed, close it
-        if stop_reason == "PASS" and not dry_run:
-            bead_id = self._parse_bead_id(goal)
-            if bead_id:
-                self._close_bead(bead_id, reason="AURA successfully completed the goal.")
-
         return {
             "goal": goal,
             "stop_reason": stop_reason or "MAX_CYCLES",

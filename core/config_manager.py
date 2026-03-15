@@ -89,7 +89,7 @@ DEFAULT_CONFIG = {
     "memory_store_path": "memory/store",
     # R8: standardised path — no v2 suffix
     "goal_queue_path": "memory/goal_queue.json",
-    "goal_archive_path": "memory/goal_archive_v2.json",
+    "goal_archive_path": "memory/goal_archive.json",
     "brain_db_path": "memory/brain_v2.db",
     "auto_add_capabilities": True,
     "auto_queue_missing_capabilities": True,
@@ -137,6 +137,13 @@ DEFAULT_CONFIG = {
         "control": 8003,
         "agentic_loop": 8006,
         "copilot": 8007,
+    },
+    "mcp_tool_bindings": {
+        "get_repo": {"server": "copilot"},
+        "create_issue": {"server": "copilot"},
+        "get_issue_details": {"server": "copilot"},
+        "update_file": {"server": "copilot"},
+        "get_pull_request_details": {"server": "copilot"},
     },
     # ASCM v2 Configuration
     "semantic_memory": {
@@ -350,7 +357,14 @@ class ConfigManager:
         Supports deep merging for nested config groups.
         """
         for k, v in updates.items():
-            if k in ["beads", "model_routing", "semantic_memory", "local_model_profiles", "local_model_routing"] and isinstance(v, dict):
+            if k in [
+                "beads",
+                "model_routing",
+                "semantic_memory",
+                "local_model_profiles",
+                "local_model_routing",
+                "mcp_tool_bindings",
+            ] and isinstance(v, dict):
                 if k not in self.file_config:
                     self.file_config[k] = {}
                 self.file_config[k].update(v)

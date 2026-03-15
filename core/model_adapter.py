@@ -1,14 +1,30 @@
+from __future__ import annotations
+
 import concurrent.futures
 import hashlib
 import os
 import shlex
 import subprocess
-import requests
 import json
 import time
 from pathlib import Path
 from typing import Any, List
-import numpy as np
+
+try:
+    import requests
+except ImportError:
+    class _MissingPackage:  # type: ignore[no-redef]
+        def __getattr__(self, name: str):
+            raise ImportError("requests is required for HTTP model calls. Install it with: pip install requests")
+    requests = _MissingPackage()  # type: ignore[assignment]
+
+try:
+    import numpy as np
+except ImportError:
+    class _MissingPackage:  # type: ignore[no-redef]
+        def __getattr__(self, name: str):
+            raise ImportError("numpy is required for embedding operations. Install it with: pip install numpy")
+    np = _MissingPackage()  # type: ignore[assignment]
 
 from core.logging_utils import log_json # Import log_json
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads

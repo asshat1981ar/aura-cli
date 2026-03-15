@@ -1,13 +1,21 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from core.beads_cli import resolve_beads_cli
 from core.beads_bridge import BeadsBridge, build_beads_input, build_beads_runtime_input
 from core.beads_contract import BEADS_SCHEMA_VERSION
+
+_node_available = pytest.mark.skipif(
+    not shutil.which("node"),
+    reason="node is not available in this environment",
+)
 
 
 def _make_bridge(tmp_path: Path) -> BeadsBridge:
@@ -333,6 +341,7 @@ def test_beads_bridge_preserves_structured_error_from_nonzero_process(tmp_path: 
     assert result["error"] == "beads_database_missing"
 
 
+@_node_available
 def test_live_bridge_script_returns_allow_and_imports_ready_followups(tmp_path: Path):
     fake_bd = _write_fake_bd(
         tmp_path,
@@ -363,6 +372,7 @@ def test_live_bridge_script_returns_allow_and_imports_ready_followups(tmp_path: 
     assert "lint" in result["decision"]["required_skills"]
 
 
+@_node_available
 def test_live_bridge_script_revises_when_capabilities_are_missing(tmp_path: Path):
     fake_bd = _write_fake_bd(
         tmp_path,
@@ -403,6 +413,7 @@ def test_live_bridge_script_revises_when_capabilities_are_missing(tmp_path: Path
     assert any(goal.startswith("Add AURA skill 'github_bridge'") for goal in result["decision"]["follow_up_goals"])
 
 
+@_node_available
 def test_live_bridge_script_prefers_repo_pinned_bd_without_env_override(tmp_path: Path):
     local_bd = tmp_path / "node_modules" / ".bin" / "bd"
     local_bd.parent.mkdir(parents=True)

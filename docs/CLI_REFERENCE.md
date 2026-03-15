@@ -9,10 +9,26 @@ Deterministic output: `true`
 
 This file is generated. Update CLI docs and snapshots together when CLI behavior changes.
 
-Recommended update steps:
-- `python3 scripts/generate_cli_reference.py`
-- `python3 -m pytest -q tests/test_cli_docs_generator.py tests/test_cli_help_snapshots.py tests/test_cli_error_snapshots.py tests/test_cli_main_dispatch.py -k snapshot`
-- If output changes intentionally, update `tests/snapshots/*` in the same change.
+### Generating Documentation
+Run the generator script to update this file:
+```bash
+python3 scripts/generate_cli_reference.py
+```
+
+### Verifying Snapshots
+Run the snapshot tests to verify CLI output stability:
+```bash
+python3 -m pytest -q tests/test_cli_docs_generator.py tests/test_cli_help_snapshots.py \
+    tests/test_cli_error_snapshots.py tests/test_cli_main_dispatch.py -k snapshot
+python3 -m pytest -q tests/test_cli_json_snapshots.py -k snapshot
+```
+
+### Updating Snapshots
+If you intentionally changed CLI behavior, update the snapshots:
+1.  Run the tests (they will fail if output changed).
+2.  Inspect the diffs.
+3.  If changes are correct, update the snapshot files in `tests/snapshots/`.
+    *   For `test_cli_json_snapshots.py`, delete the mismatched snapshot file and re-run the test to regenerate it.
 
 ## JSON Output Contracts
 
@@ -74,6 +90,7 @@ Known record codes:
   - [`aura goal once`](#aura-goal-once)
 - [`workflow`](#workflow)
   - [`aura workflow run`](#aura-workflow-run)
+- [`loop`](#loop)
 - [`mcp`](#mcp)
   - [`aura mcp tools`](#aura-mcp-tools)
   - [`aura mcp call`](#aura-mcp-call)
@@ -311,6 +328,19 @@ Legacy flags:
 
 Examples:
 - `python3 main.py workflow run "Summarize repo" --max-cycles 3`
+
+## `loop`
+
+### `aura loop`
+
+Run agentic loop
+
+Run an autonomous agentic loop (Goal -> Plan -> Act -> Observe).
+
+`action`: `loop` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py loop "Refactor auth module"`
 
 ## `mcp`
 

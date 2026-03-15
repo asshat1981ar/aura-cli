@@ -7,16 +7,36 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional, Union
 
+class _MissingPackage:
+    """Sentinel for optional packages that are not installed."""
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    def __getattr__(self, item: str):
+        raise ImportError(
+            f"'{self._name}' is not installed. Install it with: pip install {self._name}"
+        )
+
+    def __call__(self, *args, **kwargs):
+        raise ImportError(
+            f"'{self._name}' is not installed. Install it with: pip install {self._name}"
+        )
+
+    def __bool__(self) -> bool:
+        return False
+
+
 try:
     import numpy as np
 except ImportError:  # pragma: no cover - exercised in subprocess-based CLI contract tests
-    np = None
+    np = _MissingPackage("numpy")
 from core.logging_utils import log_json
 from core.memory_types import MemoryRecord, RetrievalQuery, SearchHit
 
 
 def _require_numpy():
-    if np is None:
+    if not np:
         raise ImportError(
             "VectorStore requires the optional 'numpy' package for embedding storage and search. "
             "Install it with `pip install numpy` or `pip install -r requirements.txt`."

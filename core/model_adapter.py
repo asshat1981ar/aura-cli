@@ -9,15 +9,35 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List
 
+class _MissingPackage:
+    """Sentinel for optional packages that are not installed."""
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    def __getattr__(self, item: str):
+        raise ImportError(
+            f"'{self._name}' is not installed. Install it with: pip install {self._name}"
+        )
+
+    def __call__(self, *args, **kwargs):
+        raise ImportError(
+            f"'{self._name}' is not installed. Install it with: pip install {self._name}"
+        )
+
+    def __bool__(self) -> bool:
+        return False
+
+
 try:
     import requests
 except ImportError:  # pragma: no cover - exercised in subprocess-based CLI contract tests
-    requests = None
+    requests = _MissingPackage("requests")
 
 try:
     import numpy as np
 except ImportError:  # pragma: no cover - exercised in subprocess-based CLI contract tests
-    np = None
+    np = _MissingPackage("numpy")
 
 from core.logging_utils import log_json # Import log_json
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
@@ -28,7 +48,7 @@ from core.model_cache import ModelCache
 
 
 def _require_requests():
-    if requests is None:
+    if not requests:
         raise ImportError(
             "ModelAdapter requires the optional 'requests' package for HTTP-backed model calls. "
             "Install it with `pip install requests` or `pip install -r requirements.txt`."
@@ -37,7 +57,7 @@ def _require_requests():
 
 
 def _require_numpy():
-    if np is None:
+    if not np:
         raise ImportError(
             "ModelAdapter requires the optional 'numpy' package for embedding operations. "
             "Install it with `pip install numpy` or `pip install -r requirements.txt`."

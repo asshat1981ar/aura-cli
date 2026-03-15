@@ -4,10 +4,33 @@ Data types and interfaces for Advanced Semantic Context Manager (ASCM) v2.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Protocol, Union
+from typing import Any, Dict, List, Optional, Protocol, Union
 
-if TYPE_CHECKING:
+
+class _MissingPackage:
+    """Sentinel for optional packages that are not installed."""
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    def __getattr__(self, item: str):
+        raise ImportError(
+            f"'{self._name}' is not installed. Install it with: pip install {self._name}"
+        )
+
+    def __call__(self, *args, **kwargs):
+        raise ImportError(
+            f"'{self._name}' is not installed. Install it with: pip install {self._name}"
+        )
+
+    def __bool__(self) -> bool:
+        return False
+
+
+try:
     import numpy as np
+except ImportError:  # pragma: no cover - exercised in subprocess-based CLI contract tests
+    np = _MissingPackage("numpy")
 
 @dataclass
 class MemoryRecord:

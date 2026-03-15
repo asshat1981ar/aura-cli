@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+import datetime
 from collections import OrderedDict
 from pathlib import Path
 
@@ -52,10 +53,26 @@ def _render_contributor_notes() -> list[str]:
         "",
         "This file is generated. Update CLI docs and snapshots together when CLI behavior changes.",
         "",
-        "Recommended update steps:",
-        "- `python3 scripts/generate_cli_reference.py`",
-        "- `python3 -m pytest -q tests/test_cli_docs_generator.py tests/test_cli_help_snapshots.py tests/test_cli_error_snapshots.py tests/test_cli_main_dispatch.py -k snapshot`",
-        "- If output changes intentionally, update `tests/snapshots/*` in the same change.",
+        "### Generating Documentation",
+        "Run the generator script to update this file:",
+        "```bash",
+        "python3 scripts/generate_cli_reference.py",
+        "```",
+        "",
+        "### Verifying Snapshots",
+        "Run the snapshot tests to verify CLI output stability:",
+        "```bash",
+        "python3 -m pytest -q tests/test_cli_docs_generator.py tests/test_cli_help_snapshots.py \\",
+        "    tests/test_cli_error_snapshots.py tests/test_cli_main_dispatch.py -k snapshot",
+        "python3 -m pytest -q tests/test_cli_json_snapshots.py -k snapshot",
+        "```",
+        "",
+        "### Updating Snapshots",
+        "If you intentionally changed CLI behavior, update the snapshots:",
+        "1.  Run the tests (they will fail if output changed).",
+        "2.  Inspect the diffs.",
+        "3.  If changes are correct, update the snapshot files in `tests/snapshots/`.",
+        "    *   For `test_cli_json_snapshots.py`, delete the mismatched snapshot file and re-run the test to regenerate it.",
         "",
     ]
 

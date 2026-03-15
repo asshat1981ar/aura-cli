@@ -2,6 +2,7 @@
 import os
 import sys
 from pathlib import Path
+from unittest.mock import patch
 import pytest
 
 # Ensure project root is on path
@@ -12,6 +13,7 @@ if str(ROOT) not in sys.path:
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 
 from agents.skills.registry import all_skills
+from agents.skills.linter_enforcer import LinterEnforcerSkill
 
 
 @pytest.fixture(scope="module")
@@ -155,6 +157,17 @@ def test_linter_enforcer_returns_dict(skills, project_root):
     result = skills["linter_enforcer"].run({"project_root": project_root})
     assert isinstance(result, dict)
     assert "violations" in result or "error" in result
+
+
+def test_linter_enforcer_skips_flake8_for_empty_project(tmp_path):
+    skill = LinterEnforcerSkill()
+
+    with patch("agents.skills.linter_enforcer._run_flake8") as mock_flake8:
+        result = skill.run({"project_root": str(tmp_path)})
+
+    mock_flake8.assert_not_called()
+    assert result["violation_count"] == 0
+    assert result["violations"] == []
 
 
 def test_incremental_differ_basic(skills):
@@ -481,4 +494,3 @@ def test_all_28_skills_have_name_attribute(skills):
     for name, skill in skills.items():
         assert hasattr(skill, "name"), f"Skill '{name}' missing .name attribute"
         assert isinstance(skill.name, str), f"Skill '{name}'.name is not a string"
-

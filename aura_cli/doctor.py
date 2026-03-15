@@ -199,7 +199,7 @@ def check_pytest_and_run_tests(repo_root: Path, run_tests: bool, openrouter_api_
         return "WARN", "Pytest is available, but tests were not run (use --run-tests)."
 
     # Find all test files in the repo_root
-    test_files = [str(f) for f in repo_root.glob('**/test_*.py') if 'env' not in f.parts] # Exclude virtual environments
+    test_files = [str(f) for f in repo_root.glob('**/test_*.py') if not 'env' in f.parts] # Exclude virtual environments
 
     if not test_files:
         return "WARN", "No test files (test_*.py) found in the repository."
@@ -266,6 +266,10 @@ def main():
     status, msg = check_git_status(repo_root)
     results.append(f"Git Status: {status} - {msg}")
 
+    # Capability Bootstrap
+    capability_status, capability_detail = capability_doctor_check(repo_root)
+    results.append(f"Capability Bootstrap: {capability_status} - {capability_detail}")
+
     # Pytest and Test Run (pass the argument)
     status, msg = check_pytest_and_run_tests(repo_root, args.run_tests, args.openrouter_api_key)
     results.append(f"Pytest Tests: {status} - {msg}")
@@ -297,7 +301,7 @@ if __name__ == "__main__":
 def run_doctor_v2(
     project_root: Path = None,
     rich_output: bool = True,
-    capability_check=capability_doctor_check,
+    capability_check=None,
 ) -> list:
     """
     Run all AURA health checks and return results as a list of dicts.
@@ -310,9 +314,12 @@ def run_doctor_v2(
     """
     import importlib.util
     import json
+    import time
 
     if project_root is None:
         project_root = Path(__file__).resolve().parent.parent
+    if capability_check is None:
+        capability_check = capability_doctor_check
 
     results = []
 
@@ -395,9 +402,14 @@ def run_doctor_v2(
     required = {
         "fastapi": "fastapi",
         "uvicorn": "uvicorn",
+        "requests": "requests",
         "pydantic": "pydantic",
+        "dotenv": "python-dotenv",
         "numpy": "numpy",
+        "git": "gitpython",
         "rich": "rich",
+        "textblob": "textblob",
+        "networkx": "networkx"
     }
     missing = [pkg for mod, pkg in required.items()
                if importlib.util.find_spec(mod) is None]
@@ -406,13 +418,26 @@ def run_doctor_v2(
     else:
         _add("Dependencies", "PASS", "All core packages present")
 
-    # 8. rich available (for TUI)
-    if importlib.util.find_spec("rich") is not None:
-        _add("TUI (rich)", "PASS", "rich available — run: aura watch")
-    else:
-        _add("TUI (rich)", "WARN", "pip install rich (for TUI dashboard)")
+    # 8. SQLite Write Access
+    test_db_path = project_root / "test_write_access.db"
+    try:
+        conn = sqlite3.connect(str(test_db_path), check_same_thread=False)
+        conn.execute("CREATE TABLE IF NOT EXISTS test (id INTEGER)")
+        conn.commit()
+        conn.close()
+        if test_db_path.exists():
+            test_db_path.unlink()
+        _add("Filesystem", "PASS", "Write access confirmed")
+    except Exception as e:
+        _add("Filesystem", "FAIL", f"Write access denied: {e}")
 
-    # 9. Git repo
+    # 9. Pytest availability
+    if importlib.util.find_spec("pytest") is not None:
+         _add("Test Suite", "PASS", "pytest available")
+    else:
+         _add("Test Suite", "WARN", "pytest not installed (dev tools missing)")
+
+    # 10. Git repo
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],

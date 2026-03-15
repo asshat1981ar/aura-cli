@@ -1,3 +1,6 @@
+import os
+import json
+from pathlib import Path
 from core.task_manager import TaskManager, Task
 
 def test_task_hierarchy_persistence(tmp_path):

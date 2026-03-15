@@ -53,6 +53,13 @@ from agents.skills.adaptive_strategy_selector import AdaptiveStrategySelectorSki
 from agents.skills.web_fetcher import WebFetcherSkill
 from agents.skills.symbol_indexer import SymbolIndexerSkill
 from agents.skills.multi_file_editor import MultiFileEditorSkill
+from agents.skills.changelog_generator import ChangelogGeneratorSkill
+from agents.skills.dockerfile_analyzer import DockerfileAnalyzerSkill
+from agents.skills.evolution_skill import EvolutionSkill
+from agents.skills.observability_checker import ObservabilityCheckerSkill
+from agents.skills.security_hardener import SecurityHardenerSkill
+from agents.skills.skill_failure_analyzer import SkillFailureAnalyzerSkill
+from agents.skills.structural_analyzer import StructuralAnalyzerSkill
 
 __all__ = [
     "DependencyAnalyzerSkill",
@@ -78,4 +85,11 @@ __all__ = [
     "WebFetcherSkill",
     "SymbolIndexerSkill",
     "MultiFileEditorSkill",
+    "ChangelogGeneratorSkill",
+    "DockerfileAnalyzerSkill",
+    "EvolutionSkill",
+    "ObservabilityCheckerSkill",
+    "SecurityHardenerSkill",
+    "SkillFailureAnalyzerSkill",
+    "StructuralAnalyzerSkill",
 ]

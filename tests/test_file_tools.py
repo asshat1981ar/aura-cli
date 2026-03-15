@@ -181,5 +181,93 @@ Line 3""")
 
         self.assertTrue(mock_safe.call_args.kwargs["allow_mismatch_overwrite"])
 
+
+class TestApplyChangeSet(unittest.TestCase):
+    def setUp(self):
+        self.test_dir = Path(tempfile.mkdtemp())
+        self.file_a = self.test_dir / "a.txt"
+        self.file_b = self.test_dir / "b.txt"
+        self.file_a.write_text("content a")
+        self.file_b.write_text("content b")
+
+    def tearDown(self):
+        for item in self.test_dir.iterdir():
+            item.unlink()
+        self.test_dir.rmdir()
+
+    def test_apply_single_change(self):
+        from core.file_tools import apply_change_set
+        change = {
+            "file_path": "a.txt",
+            "old_code": "content a",
+            "new_code": "new a"
+        }
+        result = apply_change_set(self.test_dir, change, dry_run=False)
+        self.assertEqual(result["applied"], ["a.txt"])
+        self.assertEqual(self.file_a.read_text(), "new a")
+        self.assertEqual(len(result["snapshots"]), 1)
+        self.assertEqual(result["snapshots"][0]["content"], "content a")
+
+    def test_apply_batch_changes(self):
+        from core.file_tools import apply_change_set
+        changes = {
+            "changes": [
+                {"file_path": "a.txt", "old_code": "content a", "new_code": "new a"},
+                {"file_path": "b.txt", "old_code": "content b", "new_code": "new b"}
+            ]
+        }
+        result = apply_change_set(self.test_dir, changes, dry_run=False)
+        self.assertEqual(sorted(result["applied"]), ["a.txt", "b.txt"])
+        self.assertEqual(self.file_a.read_text(), "new a")
+        self.assertEqual(self.file_b.read_text(), "new b")
+
+    def test_apply_failure_does_not_stop_others(self):
+        from core.file_tools import apply_change_set
+        changes = {
+            "changes": [
+                {"file_path": "a.txt", "old_code": "wrong", "new_code": "new a"}, # Should fail
+                {"file_path": "b.txt", "old_code": "content b", "new_code": "new b"}
+            ]
+        }
+        result = apply_change_set(self.test_dir, changes, dry_run=False)
+        self.assertEqual(result["applied"], ["b.txt"])
+        self.assertEqual(len(result["failed"]), 1)
+        self.assertEqual(result["failed"][0]["file"], "a.txt")
+        self.assertEqual(self.file_b.read_text(), "new b")
+        self.assertEqual(self.file_a.read_text(), "content a") # Unchanged
+
+    def test_restore_file_state(self):
+        from core.file_tools import restore_file_state, snapshot_file_state
+        
+        # Snapshot state
+        snap_a = snapshot_file_state(self.test_dir, "a.txt")
+        
+        # Modify file
+        self.file_a.write_text("modified")
+        
+        # Restore
+        failures = restore_file_state([snap_a])
+        self.assertEqual(failures, [])
+        self.assertEqual(self.file_a.read_text(), "content a")
+
+    def test_snapshot_nonexistent_file(self):
+        from core.file_tools import snapshot_file_state
+        snap = snapshot_file_state(self.test_dir, "missing.txt")
+        self.assertFalse(snap["existed"])
+        self.assertIsNone(snap["content"])
+
+    def test_restore_created_file(self):
+        from core.file_tools import restore_file_state, snapshot_file_state
+        
+        # Snapshot missing file
+        snap = snapshot_file_state(self.test_dir, "new.txt")
+        
+        # Create file
+        (self.test_dir / "new.txt").write_text("created")
+        
+        # Restore (should delete)
+        restore_file_state([snap])
+        self.assertFalse((self.test_dir / "new.txt").exists())
+
 if __name__ == '__main__':
     unittest.main()

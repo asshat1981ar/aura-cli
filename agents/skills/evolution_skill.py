@@ -5,8 +5,9 @@ evolutionary updates as a first-class skill.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from agents.skills.base import SkillBase
 from core.logging_utils import log_json
@@ -17,6 +18,12 @@ class EvolutionSkill(SkillBase):
     Enables AURA to hypothesize and mutate its own codebase.
     """
     name = "evolution_skill"
+    _runtime_factory = None
+
+    @classmethod
+    def set_runtime_factory(cls, factory):
+        """Inject the runtime factory function to avoid circular imports."""
+        cls._runtime_factory = factory
 
     def _run(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -34,10 +41,18 @@ class EvolutionSkill(SkillBase):
         try:
             # Lazy import to avoid circular dependencies
             from core.evolution_loop import EvolutionLoop
-            from aura_cli.cli_main import create_runtime
             
+            # Use the injected factory or fail gracefully
+            if self._runtime_factory:
+                factory = self._runtime_factory
+            else:
+                # Fallback to dynamic import to avoid static cycle detection
+                import importlib
+                module = importlib.import_module("aura_cli.cli_main")
+                factory = getattr(module, "create_runtime")
+
             # Use the global runtime or create a temporary one
-            runtime = create_runtime(project_root)
+            runtime = factory(project_root)
             
             evo = EvolutionLoop(
                 planner=runtime["planner"],

@@ -6,6 +6,7 @@ Configurable via: max_line_length, ignore_codes, paths (multi-project).
 from __future__ import annotations
 
 import ast
+import functools
 import re
 import subprocess
 from pathlib import Path
@@ -28,7 +29,7 @@ _FIX_HINTS: Dict[str, str] = {
     "E501": "Break line to stay under max_line_length.",
     "E711": "Use `is None` / `is not None` instead of `== None`.",
     "E712": "Use `is True` / `is False` instead of `== True`.",
-    "F401": "Remove unused import or add `# noqa: F401` if intentional.",
+    "F401": "Remove unused import or add `noqa: F401` if intentional.",
     "F811": "Remove duplicate definition.",
     "F841": "Remove unused local variable.",
     "W291": "Strip trailing whitespace.",
@@ -98,6 +99,7 @@ def _check_naming(source: str, file_path: str) -> List[Dict]:
     return violations
 
 
+@functools.lru_cache(maxsize=1)
 def _flake8_available() -> bool:
     """Return True if flake8 is importable."""
     try:
@@ -150,18 +152,43 @@ def _run_flake8(
         return None
 
 
+def _project_python_files(root: Path) -> List[Path]:
+    files: List[Path] = []
+    for candidate in sorted(root.rglob("*.py")):
+        if any(part in _SKIP_DIRS for part in candidate.parts):
+            continue
+        files.append(candidate)
+    return files
+
+
+def _empty_project_result(root: Path) -> Dict[str, Any]:
+    return {
+        "project_root": str(root),
+        "violations": [],
+        "violation_count": 0,
+        "error_count": 0,
+        "warning_count": 0,
+        "naming_violation_count": 0,
+        "critical_count": 0,
+        "top_offending_files": [],
+    }
+
+
 def _scan_project(
     root: Path,
     max_line_length: int,
     ignore_codes: Optional[List[str]],
+    python_files: Optional[List[Path]] = None,
 ) -> Dict[str, Any]:
     """Scan a single project root. Returns aggregated violation data."""
+    python_files = python_files if python_files is not None else _project_python_files(root)
+    if not python_files:
+        return _empty_project_result(root)
+
     flake8_violations = _run_flake8(".", root, max_line_length, ignore_codes) or []
     naming_violations: List[Dict] = []
 
-    for f in sorted(root.rglob("*.py")):
-        if any(part in _SKIP_DIRS for part in f.parts):
-            continue
+    for f in python_files:
         try:
             src = f.read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -215,19 +242,17 @@ class LinterEnforcerSkill(SkillBase):
         max_line_length: int = int(input_data.get("max_line_length", 120))
         ignore_codes: Optional[List[str]] = input_data.get("ignore_codes")
 
-        available = _flake8_available()
-
         # --- Inline code ---
         if code and file_path:
-            import tempfile
-            import os
+            import tempfile, os
             with tempfile.NamedTemporaryFile(
                 mode="w", suffix=".py", delete=False, encoding="utf-8"
             ) as tmp:
                 tmp.write(code)
                 tmp_path = tmp.name
             try:
-                flake8_v = _run_flake8(tmp_path, Path("."), max_line_length, ignore_codes) or []
+                flake8_raw = _run_flake8(tmp_path, Path("."), max_line_length, ignore_codes)
+                flake8_v = flake8_raw or []
                 # Remap temp file path back to file_path label
                 for v in flake8_v:
                     v["file"] = file_path
@@ -245,7 +270,7 @@ class LinterEnforcerSkill(SkillBase):
                 "error_count": errors,
                 "warning_count": warnings,
                 "naming_violation_count": len(naming_v),
-                "flake8_available": available,
+                "flake8_available": flake8_raw is not None,
             }
 
         # --- Multi-project scan ---
@@ -256,20 +281,40 @@ class LinterEnforcerSkill(SkillBase):
                 if not root.exists():
                     results.append({"project_root": p, "error": "Path not found"})
                     continue
-                results.append(_scan_project(root, max_line_length, ignore_codes))
+                python_files = _project_python_files(root)
+                project_result = _scan_project(
+                    root,
+                    max_line_length,
+                    ignore_codes,
+                    python_files=python_files,
+                )
+                project_result["flake8_available"] = (
+                    _flake8_available() if python_files else False
+                )
+                results.append(project_result)
             total = sum(r.get("violation_count", 0) for r in results if "error" not in r)
             log_json("INFO", "linter_enforcer_multi_complete", details={"projects": len(paths), "total_violations": total})
             return {
                 "projects_scanned": len(paths),
                 "total_violations": total,
-                "flake8_available": available,
+                "flake8_available": any(
+                    r.get("flake8_available", False)
+                    for r in results
+                    if "error" not in r
+                ),
                 "results": results,
             }
 
         # --- Single project root ---
         root = Path(project_root_str or ".")
-        result = _scan_project(root, max_line_length, ignore_codes)
-        result["flake8_available"] = available
+        python_files = _project_python_files(root)
+        result = _scan_project(
+            root,
+            max_line_length,
+            ignore_codes,
+            python_files=python_files,
+        )
+        result["flake8_available"] = _flake8_available() if python_files else False
         log_json("INFO", "linter_enforcer_complete", details={
             "root": str(root),
             "violations": result["violation_count"],

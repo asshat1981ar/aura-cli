@@ -1,4 +1,3 @@
-import json
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -6,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 import core.task_handler as task_handler
+from core.file_tools import MismatchOverwriteBlockedError
 
 
 class _FakeGoalQueue:
@@ -44,18 +44,20 @@ def test_queue_loop_policy_block_retries_once_with_grounding_hint_and_no_overwri
     queue = _FakeGoalQueue(["Integration policy-block retry"])
     archive = _FakeGoalArchive()
     loop = MagicMock()
-    loop.run.side_effect = [
-        json.dumps(
-            {
-                "IMPLEMENT": {
-                    "file_path": "core/existing.py",
-                    "old_code": "stale snippet",
-                    "new_code": "print('after')\n",
-                    "overwrite_file": True,
+    loop.run_loop.side_effect = [
+        {
+            "stop_reason": "MAX_CYCLES",
+            "history": [{
+                "phase_outputs": {
+                    "apply_result": {
+                        "failed": [{
+                            "error": "'stale_code' not found in 'core/existing.py' and mismatch overwrite fallback is disabled."
+                        }]
+                    }
                 }
-            }
-        ),
-        json.dumps({"FINAL_STATUS": "ok"}),
+            }]
+        },
+        {"FINAL_STATUS": "ok"},
     ]
     loop.current_score = 0.91
 
@@ -78,10 +80,10 @@ def test_queue_loop_policy_block_retries_once_with_grounding_hint_and_no_overwri
         )
 
     assert target.read_text(encoding="utf-8") == "print('before')\n"
-    assert loop.run.call_count == 2
+    assert loop.run_loop.call_count == 2
     assert archive.records == [("Integration policy-block retry", 0.91)]
 
-    second_goal = loop.run.call_args_list[1].args[0]
+    second_goal = loop.run_loop.call_args_list[1].args[0]
     assert "GROUNDING_HINT" in second_goal
     assert "overwrite_file" in second_goal
     assert "old_code to an empty string" in second_goal

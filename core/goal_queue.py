@@ -82,10 +82,20 @@ class GoalQueue:
         Persists the current state of the goal queue to the configured JSON file.
         Uses a compact encoding because this path is on the hot add/pop loop.
         """
-        self.queue_path.write_text(
-            json.dumps(list(self.queue), separators=(",", ":")),
-            encoding="utf-8",
-        )
+        import os
+        import tempfile
+        
+        # Write to a temporary file first
+        temp_fd, temp_path = tempfile.mkstemp(dir=self.queue_path.parent, text=True)
+        try:
+            with os.fdopen(temp_fd, 'w', encoding='utf-8') as f:
+                json.dump(list(self.queue), f, separators=(",", ":"))
+            # Atomic replace
+            os.replace(temp_path, self.queue_path)
+        except Exception:
+            os.close(temp_fd) # Close file descriptor before removing
+            os.remove(temp_path)
+            raise
 
     def _load_queue(self):
         """

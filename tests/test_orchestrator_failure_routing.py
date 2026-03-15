@@ -1,8 +1,9 @@
 """Tests for orchestrator failure routing and act-loop retry/replan/stash."""
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, patch, call
 
 from core.orchestrator import LoopOrchestrator
 from memory.store import MemoryStore
@@ -48,6 +49,14 @@ class TestRouteFailure(unittest.TestCase):
     def test_empty_verification_returns_act(self):
         result = self.orc._route_failure({})
         self.assertEqual(result, "act")
+
+    def test_explain_route_decision_reports_matching_signal(self):
+        reason = self.orc._explain_route_decision(
+            {"failures": ["detected architecture issue"]},
+            "plan",
+        )
+        self.assertIn("structural", reason)
+        self.assertIn("architecture", reason)
 
 
 # ── _restore_applied_changes ──────────────────────────────────────────────────
@@ -169,3 +178,34 @@ class TestActLoopRetryBackoff(unittest.TestCase):
                 plan_attempt=0, max_plan_retries=1, skill_context={},
             )
         self.assertTrue(replan)
+
+    def test_replan_records_failure_routing_trace(self):
+        orc = _make_orchestrator()
+        cfg = self._make_pipeline_cfg(max_attempts=2)
+        phase_outputs = {}
+
+        with patch("time.sleep"), \
+             patch("core.orchestrator.validate_phase_output", return_value=[]), \
+             patch.object(orc, "_run_phase") as mock_phase, \
+             patch.object(orc, "_run_sandbox_loop", return_value=({}, {}, 0)):
+            mock_phase.side_effect = [
+                {"changes": []},
+                {
+                    "status": "fail",
+                    "failures": ["design error"],
+                    "passed": [],
+                    "logs": "interface mismatch",
+                },
+            ]
+            _, replan, _ = orc._run_act_loop(
+                goal="test", plan={}, task_bundle={}, pipeline_cfg=cfg,
+                cycle_id="c1", phase_outputs=phase_outputs, dry_run=True,
+                plan_attempt=0, max_plan_retries=1, skill_context={},
+            )
+
+        self.assertTrue(replan)
+        self.assertEqual(phase_outputs["_failure_context"]["route"], "plan")
+        self.assertIn(
+            "design",
+            phase_outputs["_failure_context"]["routing_reason"],
+        )

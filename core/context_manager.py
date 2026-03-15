@@ -8,12 +8,13 @@ prioritised.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from core.config_manager import config
 from core.logging_utils import log_json
-from core.memory_types import RetrievalQuery, ContextBundle
+from core.memory_types import RetrievalQuery, ContextBundle, SearchHit
 
 class ContextManager:
     """
@@ -53,6 +54,13 @@ class ContextManager:
         if not text: return 0
         return max(1, len(text) // 4)
 
+    def compress_context(self, text: str, max_tokens: int) -> str:
+        """Truncates text to fit within max_tokens (rough estimate: 4 chars per token)."""
+        max_chars = max_tokens * 4
+        if len(text) <= max_chars:
+            return text
+        return text[:max_chars]
+
     def get_context_bundle(
         self,
         goal: str,
@@ -84,9 +92,24 @@ class ContextManager:
         snippet_tokens = 0
         for snip in snippets:
             cost = self._estimate_tokens(snip["content"])
-            if snippet_tokens + cost <= snippet_budget:
+            remaining = snippet_budget - snippet_tokens
+            if remaining <= 0:
+                break
+                
+            if cost <= remaining:
                 final_snippets.append(snip)
                 snippet_tokens += cost
+            else:
+                # Truncate to fit
+                truncated_content = self.compress_context(snip["content"], remaining)
+                # Only include if meaningful (e.g. > 10 tokens)
+                if self._estimate_tokens(truncated_content) > 10:
+                    snip["content"] = truncated_content
+                    snip["explanation"] += " (truncated)"
+                    final_snippets.append(snip)
+                    snippet_tokens += remaining
+                break # Budget full
+                
         used_tokens += snippet_tokens
         budget_report["snippets"] = snippet_tokens
 

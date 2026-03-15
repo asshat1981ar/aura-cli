@@ -2,7 +2,7 @@ import os
 import sys
 import json
 import io
-import copy
+import shlex
 import urllib.request
 import urllib.error
 from contextlib import redirect_stdout
@@ -15,23 +15,24 @@ try:
 except ImportError:
     readline = None
 
-from core.config_manager import ConfigManager, DEFAULT_CONFIG, config
+from core.config_manager import DEFAULT_CONFIG, config
 from core.goal_queue import GoalQueue
 from core.goal_archive import GoalArchive
 from memory.brain import Brain
 from core.model_adapter import ModelAdapter
+from core.beads_bridge import BeadsBridge
 from core.orchestrator import LoopOrchestrator
+from core.operator_runtime import build_beads_runtime_metadata, build_operator_runtime_snapshot
 from core.policy import Policy
 from memory.store import MemoryStore
+from memory.embedding_provider import get_default_provider
 from agents.registry import default_agents
 from core.git_tools import GitTools
 from core.logging_utils import log_json
 from agents.debugger import DebuggerAgent
 from agents.planner import PlannerAgent
 from agents.router import RouterAgent
-from agents.scaffolder import ScaffolderAgent
 from core.vector_store import VectorStore
-from core.beads_bridge import BeadsBridge
 from core.runtime_paths import resolve_project_path
 from core.runtime_auth import (
     resolve_config_api_key,
@@ -39,7 +40,8 @@ from core.runtime_auth import (
     runtime_provider_summary,
 )
 
-from core.task_handler import _check_project_writability, run_goals_loop
+from core.task_handler import run_goals_loop
+from core.path_resolver import check_project_writability
 from aura_cli.commands import _handle_add, _handle_run, _handle_status, _handle_exit, _handle_help, _handle_doctor, _handle_clear
 from aura_cli.cli_options import (
     CLIParseError,
@@ -50,6 +52,9 @@ from aura_cli.cli_options import (
     unknown_command_help_topic_payload,
 )
 from aura_cli.options import action_runtime_required
+
+_STATUS_JSON_COMPAT_UPDATED_AT = 1234567890.0
+_DEFAULT_GITTOOLS = GitTools
 
 
 def _mcp_headers():
@@ -81,38 +86,44 @@ def _mcp_request(method: str, path: str, data: dict | None = None):
         return 500, {"error": str(e)}
 
 
-def cmd_mcp_tools():
+def cmd_mcp_tools(parsed=None):
     """List MCP tools via HTTP client."""
     status, data = _mcp_request("GET", "/tools")
-    print(json.dumps({"status": status, "data": data}, indent=2))
+    _print_json_payload({"status": status, "data": data}, parsed=parsed, indent=2)
 
 
-def cmd_mcp_call(tool: str, args_json: str | None):
+def cmd_mcp_call(tool: str, args_json: str | None, parsed=None):
     """Call an MCP tool by name with JSON args."""
     try:
         args_obj = json.loads(args_json) if args_json else {}
     except json.JSONDecodeError as exc:
-        print(f"Invalid args JSON: {exc}")
+        log_json(
+            "ERROR",
+            "mcp_call_args_json_invalid",
+            details={"error": str(exc), "tool": tool, "args": args_json},
+        )
+        payload = cli_parse_error_payload(CLIParseError(f"Invalid args JSON: {exc}"))
+        _print_json_payload(payload, parsed=parsed, indent=2)
         return
     payload = {"tool_name": tool, "args": args_obj}
     status, data = _mcp_request("POST", "/call", payload)
-    print(json.dumps({"status": status, "data": data}, indent=2))
+    _print_json_payload({"status": status, "data": data}, parsed=parsed, indent=2)
 
 
-def cmd_diag():
+def cmd_diag(parsed=None):
     """Fetch MCP health/metrics/limits/log tail and linter capabilities."""
     health = _mcp_request("GET", "/health")
     metrics = _mcp_request("GET", "/metrics")
     limits = _mcp_request("POST", "/call", {"tool_name": "limits", "args": {}})
     lcap = _mcp_request("POST", "/call", {"tool_name": "linter_capabilities", "args": {}})
     tail = _mcp_request("POST", "/call", {"tool_name": "tail_logs", "args": {"lines": 50}})
-    print(json.dumps({
+    _print_json_payload({
         "health": {"status": health[0], "data": health[1]},
         "metrics": {"status": metrics[0], "data": metrics[1]},
         "limits": {"status": limits[0], "data": limits[1]},
         "linter_capabilities": {"status": lcap[0], "data": lcap[1]},
         "tail_logs": {"status": tail[0], "data": tail[1]},
-    }, indent=2))
+    }, parsed=parsed, indent=2)
 
 def cli_interaction_loop(args, runtime):
     def _get_runtime_part(key):
@@ -138,23 +149,23 @@ def cli_interaction_loop(args, runtime):
                     full_runtime = create_runtime(project_root, overrides={"runtime_mode": "full"})
                     runtime.update(full_runtime)
                 
-                orchestrator = runtime.get("orchestrator")
                 _handle_run(
                     args, 
                     runtime["goal_queue"], 
                     runtime["goal_archive"], 
-                    orchestrator, 
+                    runtime["orchestrator"], 
                     runtime["debugger"], 
                     runtime["planner"], 
                     project_root
                 )
             elif cmd_name == "status":
+                status_loop = runtime.get("orchestrator") or runtime.get("loop")
                 _handle_status(
                     runtime["goal_queue"], 
                     runtime["goal_archive"], 
-                    runtime.get("orchestrator"), 
-                    project_root=project_root, 
-                    memory_persistence_path=runtime.get("memory_persistence_path")
+                    status_loop,
+                    project_root=project_root,
+                    memory_persistence_path=runtime.get("memory_persistence_path"),
                 )
             elif cmd_name == "doctor":
                 _handle_doctor(project_root)
@@ -203,31 +214,8 @@ class _ConvergenceEscapeLoop:
             self._escape.check_and_escape(goal, entry)
 
 
-def _build_runtime_config(overrides: dict | None = None) -> dict:
-    """Build a runtime-local effective config without mutating global config state."""
-    base_config = ConfigManager(config_file=config.config_file).show_config()
-    merged = copy.deepcopy(base_config)
-    runtime_overrides = dict(overrides or {})
-
-    for nested_key in (
-        "beads",
-        "model_routing",
-        "semantic_memory",
-        "local_model_profiles",
-        "local_model_routing",
-    ):
-        nested_value = runtime_overrides.pop(nested_key, None)
-        if isinstance(nested_value, dict):
-            merged.setdefault(nested_key, {})
-            merged[nested_key].update(nested_value)
-
-    merged.update(runtime_overrides)
-    return merged
-
-
-def _resolve_runtime_paths(project_root: Path, runtime_config: dict | None = None) -> dict:
+def _resolve_runtime_paths(project_root: Path) -> dict:
     """Resolve all required storage paths against the project root."""
-    runtime_config = runtime_config or config.show_config()
     paths = {}
     for key in [
         "goal_queue_path", "goal_archive_path", "brain_db_path",
@@ -235,7 +223,7 @@ def _resolve_runtime_paths(project_root: Path, runtime_config: dict | None = Non
     ]:
         paths[key] = resolve_project_path(
             project_root,
-            runtime_config.get(key, DEFAULT_CONFIG[key]),
+            config.get(key, DEFAULT_CONFIG[key]),
             DEFAULT_CONFIG[key]
         )
     return paths
@@ -307,12 +295,6 @@ def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal
         _compaction = MemoryCompactionLoop(memory_store)
 
         orchestrator.attach_improvement_loops(_reflection, _health, _remediator, _skill_adapt, _conv_escape, _compaction)
-
-        # 1.1 Beads Sync Loop
-        if getattr(orchestrator, "beads_enabled", False) and "beads_skill" in orchestrator.skills:
-            from core.orchestrator import BeadsSyncLoop
-            _beads_sync = BeadsSyncLoop(orchestrator.skills["beads_skill"])
-            orchestrator.attach_improvement_loops(_beads_sync)
     except Exception as _exc:
         log_json("WARN", "improvement_loops_setup_failed", details={"error": str(_exc)})
 
@@ -322,41 +304,79 @@ def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal
         from core.adaptive_pipeline import AdaptivePipeline
         from core.propagation_engine import PropagationEngine
         from core.autonomous_discovery import AutonomousDiscovery
-        from core.evolution_loop import EvolutionLoop
-        from agents.mutator import MutatorAgent
 
         _context_graph = ContextGraph()
         _adaptive_pipeline = AdaptivePipeline(
             context_graph=_context_graph,
             skill_weight_adapter=_skill_adapt if "_skill_adapt" in locals() else None,
             memory_store=memory_store,
-            brain=brain,
         )
         _propagation = PropagationEngine(goal_queue, _context_graph, memory_store)
         _discovery = AutonomousDiscovery(goal_queue, memory_store, project_root=str(project_root))
-        
-        # Evolution Loop
-        from core.recursive_improvement import RecursiveImprovementService
-        _ri_service = RecursiveImprovementService()
-        # EvolutionLoop expects the raw agents, not the orchestrator's adapters
-        _coder_adapter = orchestrator.agents.get("act")
-        _critic_adapter = orchestrator.agents.get("critique")
-        _planner_adapter = orchestrator.agents.get("plan")
-        _coder = getattr(_coder_adapter, "agent", _coder_adapter)
-        _critic = getattr(_critic_adapter, "agent", _critic_adapter)
-        _planner = getattr(_planner_adapter, "agent", _planner_adapter)
-        _git = GitTools(repo_path=str(project_root))
-        _mutator = MutatorAgent(project_root)
-        _evo = EvolutionLoop(_planner, _coder, _critic, brain, getattr(brain, "vector_store", None), _git, _mutator, improvement_service=_ri_service)
 
         orchestrator.attach_caspa(
             adaptive_pipeline=_adaptive_pipeline,
             propagation_engine=_propagation,
             context_graph=_context_graph,
         )
-        orchestrator.attach_improvement_loops(_discovery, _evo)
+        orchestrator.attach_improvement_loops(_discovery)
     except Exception as _exc:
         log_json("WARN", "caspa_setup_failed", details={"error": str(_exc)})
+
+
+def _resolve_beads_runtime_metadata(orchestrator, *, runtime_mode: str | None = None) -> dict | None:
+    metadata = build_beads_runtime_metadata(orchestrator)
+    if metadata:
+        if runtime_mode and "runtime_mode" not in metadata:
+            metadata["runtime_mode"] = runtime_mode
+        return metadata
+
+    beads_cfg = config.get("beads", DEFAULT_CONFIG.get("beads", {})) or {}
+    if not isinstance(beads_cfg, dict) or not beads_cfg:
+        return None
+
+    return {
+        "enabled": bool(beads_cfg.get("enabled", False)),
+        "required": bool(beads_cfg.get("required", False)),
+        "scope": beads_cfg.get("scope", "goal_run"),
+        "runtime_mode": runtime_mode or "full",
+    }
+
+
+def _normalize_goal_status_json_payload(payload: dict, orchestrator) -> dict:
+    if payload.get("schema_version") == 1 and isinstance(payload.get("queue"), dict):
+        queue = payload.get("queue") or {}
+        payload.setdefault("queue_length", queue.get("pending_count", len(queue.get("pending") or [])))
+        payload.setdefault("completed_count", queue.get("completed_count", len(queue.get("completed") or [])))
+        payload.setdefault("completed", list(queue.get("completed") or []))
+        return payload
+
+    if "capabilities" in payload:
+        return payload
+
+    pending_goals = list(payload.get("queue") or [])
+    completed_goals = list(payload.get("completed") or [])
+    active_cycle = getattr(orchestrator, "active_cycle_summary", None)
+    if not isinstance(active_cycle, dict):
+        active_cycle = None
+    last_cycle = getattr(orchestrator, "last_cycle_summary", None)
+    if not isinstance(last_cycle, dict):
+        last_cycle = None
+    goal_queue = SimpleNamespace(queue=pending_goals)
+    goal_archive = SimpleNamespace(completed=completed_goals)
+    snapshot = build_operator_runtime_snapshot(
+        goal_queue,
+        goal_archive,
+        active_cycle=active_cycle,
+        last_cycle=last_cycle,
+        updated_at=_STATUS_JSON_COMPAT_UPDATED_AT,
+    )
+    if snapshot.get("beads_runtime") is None:
+        snapshot.pop("beads_runtime", None)
+    snapshot["queue_length"] = snapshot["queue"]["pending_count"]
+    snapshot["completed_count"] = snapshot["queue"]["completed_count"]
+    snapshot["completed"] = list(snapshot["queue"]["completed"])
+    return snapshot
 
 
 def create_runtime(project_root: Path, overrides: dict | None = None):
@@ -369,14 +389,16 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
 
     runtime_overrides = dict(overrides or {})
     runtime_mode = runtime_overrides.pop("runtime_mode", "full")
-    beads_cli_override = runtime_overrides.pop("beads_cli_override", None)
-    runtime_config = _build_runtime_config(runtime_overrides)
+    beads_cfg = config.get("beads", DEFAULT_CONFIG.get("beads", {})) or {}
 
-    paths = _resolve_runtime_paths(project_root, runtime_config=runtime_config)
+    for k, v in runtime_overrides.items():
+        config.set_runtime_override(k, v)
+
+    paths = _resolve_runtime_paths(project_root)
     goal_queue = GoalQueue(str(paths["goal_queue_path"]))
     goal_archive = GoalArchive(str(paths["goal_archive_path"]))
     
-    config_api_key = resolve_config_api_key(runtime_config.get("api_key", ""))
+    config_api_key = resolve_config_api_key(config.get("api_key", ""))
     provider_status = runtime_provider_status(config_api_key=config_api_key)
 
     if not provider_status["chat_ready"]:
@@ -384,11 +406,18 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         print("⚠️  AURA: No chat provider configured.", file=sys.stderr)
 
     if runtime_mode == "queue":
+        queue_runtime_orchestrator = SimpleNamespace(
+            active_cycle_summary=None,
+            last_cycle_summary=None,
+            beads_enabled=bool(beads_cfg.get("enabled", False)),
+            beads_required=bool(beads_cfg.get("required", False)),
+            beads_scope=beads_cfg.get("scope", "goal_run"),
+            runtime_mode=runtime_mode,
+        )
         return {
             "goal_queue": goal_queue,
             "goal_archive": goal_archive,
-            "orchestrator": SimpleNamespace(),
-            "beads_bridge": None,
+            "orchestrator": queue_runtime_orchestrator,
             "debugger": None,
             "planner": None,
             "loop": None,
@@ -402,14 +431,15 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
             "config_api_key": config_api_key,
             "provider_status": provider_status,
             "memory_persistence_path": paths["memory_persistence_path"],
-            "beads_cli_override": beads_cli_override,
+            "runtime_mode": runtime_mode,
         }
 
     brain_instance, _momento = _init_memory_and_brain(paths["brain_db_path"])
     model_adapter = ModelAdapter()
     model_adapter.enable_cache(brain_instance.db, ttl_seconds=3600, momento=_momento)
     
-    vector_store = VectorStore(model_adapter, brain_instance)
+    embedding_provider = get_default_provider(model_adapter)
+    vector_store = VectorStore(embedding_provider, brain_instance)
     brain_instance.set_vector_store(vector_store)
     
     router = RouterAgent(brain_instance, model_adapter)
@@ -435,36 +465,35 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     from memory.controller import memory_controller
     memory_controller.set_store(memory_store)
 
-    beads_config = runtime_config.get("beads", DEFAULT_CONFIG["beads"]) or {}
-    bridge_command = beads_config.get("bridge_command")
+    bridge_command = _normalize_beads_bridge_command(beads_cfg.get("bridge_command"))
     beads_bridge = BeadsBridge.from_defaults(
         project_root,
         command=bridge_command,
-        timeout_seconds=float(beads_config.get("timeout_seconds", 20)),
-        enabled=bool(beads_config.get("enabled", True)),
-        required=bool(beads_config.get("required", True)),
-        persist_artifacts=bool(beads_config.get("persist_artifacts", True)),
-        scope=str(beads_config.get("scope", "goal_run")),
+        timeout_seconds=float(beads_cfg.get("timeout_seconds", 20)),
+        enabled=bool(beads_cfg.get("enabled", False)),
+        required=bool(beads_cfg.get("required", False)),
+        persist_artifacts=bool(beads_cfg.get("persist_artifacts", True)),
+        scope=str(beads_cfg.get("scope", "goal_run")),
     )
 
     orchestrator = LoopOrchestrator(
         agents=default_agents(brain_instance, model_adapter, context_manager=context_manager),
         memory_store=memory_store,
-        policy=Policy.from_config(copy.deepcopy(runtime_config)),
+        policy=Policy.from_config(config.effective_config.copy()),
         project_root=project_root,
-        strict_schema=bool(runtime_config.get("strict_schema", False)),
+        strict_schema=config.get("strict_schema", False),
         debugger=debugger_instance,
         goal_queue=goal_queue,
-        goal_archive=goal_archive,
-        brain=brain_instance,
-        model=model_adapter,
-        runtime_mode=runtime_mode,
         beads_bridge=beads_bridge,
-        beads_enabled=bool(beads_config.get("enabled", True)),
-        beads_required=bool(beads_config.get("required", True)),
-        beads_scope=str(beads_config.get("scope", "goal_run")),
+        beads_enabled=bool(beads_cfg.get("enabled", False)),
+        beads_required=bool(beads_cfg.get("required", False)),
     )
-    orchestrator.beads_runtime_override = beads_cli_override
+    orchestrator.beads_scope = beads_cfg.get("scope", "goal_run")
+    orchestrator.runtime_mode = runtime_mode
+
+    # Inject runtime factory into EvolutionSkill to break circular dependency
+    if "evolution_skill" in orchestrator.skills:
+        orchestrator.skills["evolution_skill"].set_runtime_factory(create_runtime)
 
     _attach_advanced_loops(orchestrator, runtime_mode, brain_instance, memory_store, goal_queue, _momento, project_root)
 
@@ -472,9 +501,9 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         "goal_queue": goal_queue,
         "goal_archive": goal_archive,
         "orchestrator": orchestrator,
-        "beads_bridge": beads_bridge,
         "debugger": debugger_instance,
         "planner": planner_instance,
+        "loop": None,
         "git_tools": GitTools(repo_path=str(project_root)),
         "project_root": project_root,
         "model_adapter": model_adapter,
@@ -485,8 +514,19 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         "config_api_key": config_api_key,
         "provider_status": provider_status,
         "memory_persistence_path": paths["memory_persistence_path"],
-        "beads_cli_override": beads_cli_override,
+        "runtime_mode": runtime_mode,
     }
+
+
+def _normalize_beads_bridge_command(command_value):
+    if command_value is None:
+        return None
+    if isinstance(command_value, str):
+        stripped = command_value.strip()
+        return tuple(shlex.split(stripped)) if stripped else None
+    if isinstance(command_value, (list, tuple)) and all(isinstance(part, str) for part in command_value):
+        return tuple(command_value)
+    raise TypeError("beads.bridge_command must be null, a string, or a list of strings.")
 
 
 def _get_momento_store(root, momento):
@@ -514,6 +554,8 @@ class DispatchRule:
     handler: object
 
 
+
+
 def _resolve_dispatch_action(parsed) -> str:
     action = getattr(parsed, "action", None)
     if action:
@@ -533,33 +575,6 @@ def _prepare_runtime_context(ctx: DispatchContext) -> int | None:
         overrides["decompose"] = True
     if getattr(args, "model", None):
         overrides["model_name"] = args.model
-
-    beads_config = dict(config.get("beads", DEFAULT_CONFIG["beads"]) or {})
-    beads_override_requested = False
-    beads_cli_override: dict[str, object] | None = None
-    if getattr(args, "beads", False):
-        beads_config["enabled"] = True
-        beads_override_requested = True
-    if getattr(args, "no_beads", False):
-        beads_config["enabled"] = False
-        beads_override_requested = True
-    if getattr(args, "beads_required", False):
-        beads_config["enabled"] = True
-        beads_config["required"] = True
-        beads_override_requested = True
-    if getattr(args, "beads_optional", False):
-        beads_config["enabled"] = True
-        beads_config["required"] = False
-        beads_override_requested = True
-    if beads_override_requested:
-        overrides["beads"] = beads_config
-        beads_cli_override = {
-            "source": "cli",
-            "enabled": bool(beads_config.get("enabled", True)),
-            "required": bool(beads_config.get("required", True)),
-        }
-        overrides["beads_cli_override"] = beads_cli_override
-
     if _resolve_dispatch_action(ctx.parsed) in {"goal_status", "goal_add", "interactive"}:
         overrides["runtime_mode"] = "queue"
     elif _resolve_dispatch_action(ctx.parsed) == "goal_once" and getattr(args, "dry_run", False):
@@ -568,7 +583,7 @@ def _prepare_runtime_context(ctx: DispatchContext) -> int | None:
     ctx.runtime = ctx.runtime_factory(ctx.project_root, overrides=overrides or None)
     log_json("INFO", "aura_cli_online", details={"dry_run_mode": getattr(args, 'dry_run', False)})
 
-    if not _check_project_writability(ctx.project_root):
+    if not check_project_writability(ctx.project_root):
         log_json("CRITICAL", "aura_cli_startup_aborted_not_writable")
         return 1
     return None
@@ -591,8 +606,8 @@ def _handle_json_help_dispatch(_ctx: DispatchContext) -> int:
     return 0
 
 
-def _handle_doctor_dispatch(ctx: DispatchContext) -> int:
-    _handle_doctor(ctx.project_root)
+def _handle_doctor_dispatch(_ctx: DispatchContext) -> int:
+    _handle_doctor(_ctx.project_root)
     return 0
 
 
@@ -603,7 +618,7 @@ def _handle_bootstrap_dispatch(_ctx: DispatchContext) -> int:
 
 def _handle_show_config_dispatch(_ctx: DispatchContext) -> int:
     """Print the resolved effective configuration as JSON."""
-    print(json.dumps(config.show_config(), indent=2, default=str))
+    _print_json_payload(config.show_config(), parsed=_ctx.parsed, indent=2, default=str)
     return 0
 
 
@@ -632,6 +647,17 @@ def _print_json_payload(payload: dict, *, parsed=None, **json_kwargs) -> None:
 
 
 def _run_json_printing_callable_with_warnings(ctx: DispatchContext, func, *args, **kwargs) -> None:
+    # If the function accepts 'parsed' kwarg, pass it.
+    import inspect
+    try:
+        sig = inspect.signature(func)
+        if "parsed" in sig.parameters:
+            kwargs["parsed"] = ctx.parsed
+            func(*args, **kwargs)
+            return
+    except Exception:
+        pass
+
     warning_records = getattr(ctx.parsed, "warning_records", None) or []
     if not warning_records:
         func(*args, **kwargs)
@@ -645,12 +671,15 @@ def _run_json_printing_callable_with_warnings(ctx: DispatchContext, func, *args,
         return
 
     try:
-        payload = json.loads(raw)
+        data = json.loads(raw)
+        if isinstance(data, dict):
+            # This path is for functions that print JSON but don't use _print_json_payload
+            # We re-serialize with warnings attached
+            _print_json_payload(data, parsed=ctx.parsed, indent=2)
+        else:
+            print(raw, end="")
     except json.JSONDecodeError:
         print(raw, end="")
-        return
-
-    _print_json_payload(payload, parsed=ctx.parsed, indent=2)
 
 
 def _handle_mcp_tools_dispatch(ctx: DispatchContext) -> int:
@@ -693,8 +722,13 @@ def _handle_watch_dispatch(ctx: DispatchContext) -> int:
 
 def _handle_queue_list_dispatch(ctx: DispatchContext) -> int:
     goal_queue = ctx.runtime["goal_queue"]
+    
     if getattr(ctx.args, "json", False):
-        _print_json_payload({"queue": list(goal_queue.queue), "count": len(goal_queue.queue)}, parsed=ctx.parsed, indent=2)
+        _print_json_payload(
+            {"goals": goal_queue.queue, "count": len(goal_queue.queue)},
+            parsed=ctx.parsed,
+            indent=2
+        )
         return 0
 
     if not goal_queue.queue:
@@ -712,10 +746,7 @@ def _handle_queue_clear_dispatch(ctx: DispatchContext) -> int:
     count = len(goal_queue.queue)
     goal_queue.queue = []
     goal_queue._save()
-    if getattr(ctx.args, "json", False):
-        _print_json_payload({"cleared_count": count}, parsed=ctx.parsed, indent=2)
-    else:
-        print(f"Cleared {count} goals from the queue.")
+    print(f"Cleared {count} goals from the queue.")
     return 0
 
 
@@ -729,21 +760,6 @@ def _handle_memory_search_dispatch(ctx: DispatchContext) -> int:
     )
     hits = vector_store.search(query)
     
-    if getattr(ctx.args, "json", False):
-        payload = {
-            "query": ctx.args.query,
-            "hits": [
-                {
-                    "score": hit.score,
-                    "source_ref": hit.source_ref,
-                    "content_preview": hit.content[:200] + "..." if len(hit.content) > 200 else hit.content
-                }
-                for hit in hits
-            ]
-        }
-        _print_json_payload(payload, parsed=ctx.parsed, indent=2)
-        return 0
-
     if not hits:
         print(f"No results found for '{ctx.args.query}'")
         return 0
@@ -756,146 +772,133 @@ def _handle_memory_search_dispatch(ctx: DispatchContext) -> int:
     return 0
 
 
+def _handle_metrics_show_dispatch(ctx: DispatchContext) -> int:
+    def _normalize_cycle_metric(entry: dict) -> dict | None:
+        if not isinstance(entry, dict):
+            return None
+
+        summary = entry.get("cycle_summary")
+        if not isinstance(summary, dict):
+            summary = entry
+
+        cycle_id = summary.get("cycle_id") or entry.get("cycle_id")
+        goal = summary.get("goal") or entry.get("goal")
+        status = summary.get("outcome")
+        if not isinstance(status, str) or not status:
+            if "success" in summary:
+                status = "SUCCESS" if bool(summary.get("success")) else "FAILED"
+            else:
+                verification_status = entry.get("verification_status") or summary.get("verification_status")
+                status = str(verification_status or "UNKNOWN").upper()
+
+        duration = summary.get("duration_s")
+        if not isinstance(duration, (int, float)):
+            started_at = summary.get("started_at")
+            completed_at = summary.get("completed_at")
+            if isinstance(started_at, (int, float)) and isinstance(completed_at, (int, float)):
+                duration = completed_at - started_at
+            else:
+                duration = 0.0
+
+        metric = {
+            "cycle_id": cycle_id,
+            "status": status,
+            "duration": float(duration),
+            "goal": goal,
+        }
+        stop_reason = summary.get("stop_reason")
+        if isinstance(stop_reason, str) and stop_reason:
+            metric["stop_reason"] = stop_reason
+        return metric
+
+    metrics_data = []
+    memory_store = ctx.runtime.get("memory_store")
+    if memory_store is not None and hasattr(memory_store, "read_log"):
+        for entry in memory_store.read_log(limit=100):
+            metric = _normalize_cycle_metric(entry)
+            if metric is not None:
+                metrics_data.append(metric)
+    else:
+        brain = ctx.runtime.get("brain")
+        outcomes = []
+        if brain is not None and hasattr(brain, "recall_recent"):
+            outcomes = [e for e in brain.recall_recent(limit=100) if isinstance(e, str) and "outcome:" in e]
+        for raw in outcomes:
+            try:
+                parsed = json.loads(raw.split("->", 1)[1])
+            except (IndexError, json.JSONDecodeError, TypeError):
+                continue
+            metric = _normalize_cycle_metric(parsed)
+            if metric is not None:
+                metrics_data.append(metric)
+
+    recent_cycles = metrics_data[:10]
+    successes = sum(1 for item in metrics_data if item["status"] == "SUCCESS")
+    skipped = sum(1 for item in metrics_data if item["status"] == "SKIPPED")
+    fails = sum(1 for item in metrics_data if item["status"] == "FAILED")
+    total_time = sum(item["duration"] for item in metrics_data)
+    avg_time = total_time / len(metrics_data) if metrics_data else 0.0
+    win_rate = (successes / len(metrics_data) * 100) if metrics_data else 0.0
+
+    if getattr(ctx.args, "json", False):
+        _print_json_payload(
+            {
+                "recent_cycles": recent_cycles,
+                "metrics": recent_cycles,
+                "summary": {
+                    "successes": successes,
+                    "skipped": skipped,
+                    "fails": fails,
+                    "count": len(metrics_data),
+                    "win_rate": win_rate,
+                    "success_rate": win_rate,
+                    "avg_duration": avg_time,
+                    "total_cycles": len(metrics_data),
+                },
+            },
+            parsed=ctx.parsed,
+            indent=2
+        )
+        return 0
+
+    if not metrics_data:
+        print("No metrics recorded yet.")
+        return 0
+        
+    print("Recent Cycle Metrics (last 10 cycles):\n")
+    print(f"{'Cycle ID':<10} | {'Status':<8} | {'Duration':<8} | {'Goal'}")
+    print("-" * 60)
+    
+    for item in recent_cycles:
+        print(f"{item['cycle_id'][:8]:<10} | {item['status']:<8} | {item['duration']:>7.1f}s | {item['goal'][:30]}...")
+            
+    print("-" * 60)
+    print(f"Summary: {win_rate:.1f}% success rate | Avg duration: {avg_time:.1f}s")
+    return 0
+
+
 def _handle_memory_reindex_dispatch(ctx: DispatchContext) -> int:
     from core.project_syncer import ProjectKnowledgeSyncer
 
-    runtime = ctx.runtime
-    vector_store = runtime["vector_store"]
-    model_adapter = runtime["model_adapter"]
-
-    rebuild_stats = vector_store.rebuild({
-        "exclude_source_types": ["file"],
-        "drop_existing_embeddings": True,
-    })
-    syncer = ProjectKnowledgeSyncer(vector_store, None, project_root=str(ctx.project_root))
-    sync_stats = syncer.sync_all(force=True)
-
+    vector_store = ctx.runtime["vector_store"]
+    rebuild_stats = vector_store.rebuild({})
+    sync_report = ProjectKnowledgeSyncer(vector_store, None, project_root=str(ctx.project_root)).sync_all(force=True)
     payload = {
-        "status": "ok" if "error" not in rebuild_stats else "error",
-        "embedding_model": model_adapter.model_id(),
-        "embedding_dims": model_adapter.dimensions(),
+        "status": "ok",
         "rebuild": rebuild_stats,
-        "project_sync": sync_stats,
+        "sync": sync_report,
     }
 
     if getattr(ctx.args, "json", False):
         _print_json_payload(payload, parsed=ctx.parsed, indent=2)
-        return 0 if payload["status"] == "ok" else 1
+        return 0
 
     print("Semantic memory reindex complete.")
-    print(f"Embedding model: {payload['embedding_model']} ({payload['embedding_dims']} dims)")
-    print(
-        "Non-file records rebuilt: "
-        f"{rebuild_stats.get('embeddings_written', 0)}/{rebuild_stats.get('records_seen', 0)}"
-    )
-    print(
-        "Project sync: "
-        f"{sync_stats.get('files_processed', 0)} files processed, "
-        f"{sync_stats.get('chunks_created', 0)} chunks created, "
-        f"{sync_stats.get('files_skipped', 0)} skipped"
-    )
-    if payload["status"] != "ok":
-        print(f"Error: {rebuild_stats.get('error')}", file=sys.stderr)
-        return 1
-    return 0
-
-
-def _handle_metrics_show_dispatch(ctx: DispatchContext) -> int:
-    memory_store = ctx.runtime["memory_store"]
-    log_entries = memory_store.read_log(limit=100)
-
-    recent_data = []
-    successes = 0
-    skipped = 0
-    fails = 0
-    total_time = 0.0
-
-    # 1. Try structured summaries from decision log
-    summaries = [e["cycle_summary"] for e in log_entries if "cycle_summary" in e]
-    if summaries:
-        for s in summaries[-10:]:
-            outcome = s.get("outcome", "FAILED")
-            duration = s.get("duration_s", 0.0)
-
-            if outcome == "SUCCESS": successes += 1
-            elif outcome == "SKIPPED": skipped += 1
-            else: fails += 1
-
-            total_time += duration
-            recent_data.append({
-                "cycle_id": s.get("cycle_id"),
-                "status": outcome,
-                "duration": duration,
-                "goal": s.get("goal")
-            })
-
-    # 2. Fallback to legacy outcome strings in brain
-    if not recent_data:
-        brain = ctx.runtime["brain"]
-        outcomes = [e for e in brain.recall_recent(limit=100) if "outcome:" in e]
-        for raw in outcomes[:10]:
-            try:
-                # Format: outcome:id -> json
-                data = json.loads(raw.split("->", 1)[1])
-                status = "SUCCESS" if data.get("success") else "FAILED"
-                duration = data.get("completed_at", 0) - data.get("started_at", 0)
-
-                if data.get("success"): successes += 1
-                else: fails += 1
-
-                total_time += duration
-                recent_data.append({
-                    "cycle_id": data.get("cycle_id"),
-                    "status": status,
-                    "duration": duration,
-                    "goal": data.get("goal")
-                })
-            except Exception:
-                continue
-
-    count = len(recent_data)
-    avg_time = total_time / count if count else 0
-    win_rate = (successes / count * 100) if count else 0
-
-    if getattr(ctx.args, "json", False):
-        payload = {
-            "recent_cycles": recent_data,
-            "summary": {
-                "win_rate": win_rate,
-                "avg_duration": avg_time,
-                "count": count,
-                "successes": successes,
-                "skipped": skipped,
-                "fails": fails
-            }
-        }
-        for i, s in enumerate(summaries[-10:]):
-            recent_data[i]["stop_reason"] = s.get("stop_reason")
-        _print_json_payload(payload, parsed=ctx.parsed, indent=2)
-        return 0
-
-    if not recent_data:
-        print("No metrics recorded yet.")
-        return 0
-
-    print("Recent Cycle Metrics (last 10 cycles):\n")
-    print(f"{'Cycle ID':<10} | {'Status':<8} | {'Dur':<6} | {'Stop Reason':<15} | {'Goal'}")
-    print("-" * 85)
-
-    for i, item in enumerate(recent_data):
-        cid = (item['cycle_id'] or "unknown")[:8]
-        stop = (summaries[-len(recent_data):][i].get("stop_reason") or "N/A") if summaries else "N/A"
-        print(f"{cid:<10} | {item['status']:<8} | {item['duration']:>5.1f}s | {stop:<15} | {item['goal'][:30]}...")
-
-    print("-" * 85)
-    print(f"Summary: {win_rate:.1f}% success rate | {successes} pass, {skipped} skip, {fails} fail")
-    print(f"Avg duration: {avg_time:.1f}s")
+    print(json.dumps(payload, indent=2))
     return 0
 
 
 def _handle_workflow_run_dispatch(ctx: DispatchContext) -> int:
-    from core.operator_runtime import build_beads_runtime_metadata
-
     args = ctx.args
     orchestrator = ctx.runtime["orchestrator"]
     result = orchestrator.run_loop(
@@ -903,57 +906,61 @@ def _handle_workflow_run_dispatch(ctx: DispatchContext) -> int:
         max_cycles=args.workflow_max_cycles or args.max_cycles or config.get("policy_max_cycles", config.get("max_cycles", 5)),
         dry_run=args.dry_run,
     )
-    _print_json_payload(
-        {
-            "goal": args.workflow_goal,
-            "stop_reason": result.get("stop_reason"),
-            "cycles": len(result.get("history", [])),
-            "beads_runtime": build_beads_runtime_metadata(orchestrator),
-        },
-        parsed=ctx.parsed,
-        indent=2,
-    )
+    payload = {
+        "goal": args.workflow_goal,
+        "stop_reason": result.get("stop_reason"),
+        "cycles": len(result.get("history", [])),
+    }
+    if args.dry_run:
+        payload["beads_runtime"] = _resolve_beads_runtime_metadata(
+            orchestrator,
+            runtime_mode=ctx.runtime.get("runtime_mode", "full"),
+        )
+    _print_json_payload(payload, parsed=ctx.parsed, indent=2)
     return 0
 
 
 def _handle_scaffold_dispatch(ctx: DispatchContext) -> int:
     args = ctx.args
     runtime = ctx.runtime
+    from agents.scaffolder import ScaffolderAgent
 
-    scaffolder = ScaffolderAgent(runtime.get("brain", None) or Brain(), runtime["model_adapter"])
+    scaffolder = ScaffolderAgent(runtime.get("brain", None) or __import__("memory.brain", fromlist=["Brain"]).Brain(), runtime["model_adapter"])
     result = scaffolder.scaffold_project(args.scaffold, args.scaffold_desc)
     
-    if getattr(args, "json", False):
-        _print_json_payload({"result": result, "project_name": args.scaffold}, parsed=ctx.parsed, indent=2)
-    else:
-        print(result)
+    if getattr(ctx.args, "json", False):
+        _print_json_payload(
+            {"scaffold": args.scaffold, "result": result},
+            parsed=ctx.parsed,
+            indent=2
+        )
+        return 0
+
+    print(result)
     return 0
 
 
 def _handle_evolve_dispatch(ctx: DispatchContext) -> int:
-    from core.evolution_loop import EvolutionLoop
-    from agents.mutator import MutatorAgent
-
     args = ctx.args
     runtime = ctx.runtime
+    from core.git_tools import GitTools as runtime_git_tools
+    from core.rsi_integration_verification import (
+        DEFAULT_EVOLVE_GOAL,
+        build_evolution_loop,
+    )
 
-    _brain = runtime.get("brain") or Brain()
+    _brain = runtime.get("brain") or __import__("memory.brain", fromlist=["Brain"]).Brain()
     _model = runtime["model_adapter"]
-    _planner = runtime["planner"]
-    _agents = default_agents(_brain, _model)
-    _coder_adapter = _agents.get("act")
-    _critic_adapter = _agents.get("critique")
-    _planner_adapter = _agents.get("plan")
-    _coder = getattr(_coder_adapter, "agent", _coder_adapter)
-    _critic = getattr(_critic_adapter, "agent", _critic_adapter)
-    _planner = getattr(_planner_adapter, "agent", _planner_adapter)
-    _git = GitTools(repo_path=str(ctx.project_root))
-    _mutator = MutatorAgent(ctx.project_root)
-    _vec = VectorStore(_model, _brain)
-    from core.recursive_improvement import RecursiveImprovementService
-    _ri_service = RecursiveImprovementService()
-    evo = EvolutionLoop(_planner, _coder, _critic, _brain, _vec, _git, _mutator, improvement_service=_ri_service)
-    goal = args.goal or args.workflow_goal or "evolve and improve the AURA system"
+    git_tools_cls = GitTools
+    if GitTools is _DEFAULT_GITTOOLS and runtime_git_tools is not _DEFAULT_GITTOOLS:
+        git_tools_cls = runtime_git_tools
+    evo = build_evolution_loop(
+        runtime,
+        ctx.project_root,
+        default_agents_factory=default_agents,
+        git_tools_cls=git_tools_cls,
+    )
+    goal = args.goal or args.workflow_goal or DEFAULT_EVOLVE_GOAL
     result = evo.run(goal)
     _print_json_payload(result, parsed=ctx.parsed, indent=2, default=str)
     return 0
@@ -962,16 +969,24 @@ def _handle_evolve_dispatch(ctx: DispatchContext) -> int:
 def _handle_goal_status_dispatch(ctx: DispatchContext) -> int:
     runtime = ctx.runtime
     if ctx.args.json:
-        _run_json_printing_callable_with_warnings(
-            ctx,
-            _handle_status,
-            runtime["goal_queue"],
-            runtime["goal_archive"],
-            runtime["orchestrator"],
-            as_json=True,
-            project_root=ctx.project_root,
-            memory_persistence_path=runtime.get("memory_persistence_path"),
-        )
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            _handle_status(
+                runtime["goal_queue"],
+                runtime["goal_archive"],
+                runtime["orchestrator"],
+                as_json=True,
+                project_root=ctx.project_root,
+                memory_persistence_path=runtime.get("memory_persistence_path"),
+            )
+        raw = buf.getvalue()
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError:
+            print(raw, end="")
+            return 0
+        payload = _normalize_goal_status_json_payload(payload, runtime.get("orchestrator"))
+        _print_json_payload(payload, parsed=ctx.parsed, indent=2)
     else:
         _handle_status(
             runtime["goal_queue"],
@@ -990,14 +1005,20 @@ def _maybe_add_goal(ctx: DispatchContext) -> None:
     goal_queue = ctx.runtime["goal_queue"]
     goal_queue.add(ctx.args.add_goal)
     log_json("INFO", "goal_added_from_cli", goal=ctx.args.add_goal)
-    if not getattr(ctx.args, "json", False):
+    
+    if getattr(ctx.args, "json", False):
+        _print_json_payload(
+            {"status": "added", "goal": ctx.args.add_goal, "queue_length": len(goal_queue.queue)},
+            parsed=ctx.parsed,
+            indent=2
+        )
+    else:
         print(f"Added goal: {ctx.args.add_goal}")
         print(f"Queue length: {len(goal_queue.queue)}")
 
 
 def _handle_goal_once_dispatch(ctx: DispatchContext) -> int:
     from core.explain import format_decision_log
-    from core.operator_runtime import build_beads_runtime_metadata
 
     args = ctx.args
     orchestrator = ctx.runtime["orchestrator"]
@@ -1011,19 +1032,20 @@ def _handle_goal_once_dispatch(ctx: DispatchContext) -> int:
         print(format_decision_log(history))
     
     if getattr(args, "json", False):
-        _print_json_payload(
-            {
-                "goal": args.goal,
-                "stop_reason": result.get("stop_reason"),
-                "cycles": len(history),
-                "dry_run": args.dry_run,
-                "beads_runtime": build_beads_runtime_metadata(orchestrator),
-            },
-            parsed=ctx.parsed,
-            indent=2,
-        )
+        payload = {
+            "goal": args.goal,
+            "stop_reason": result.get("stop_reason"),
+            "cycles": len(history),
+            "dry_run": args.dry_run,
+        }
+        if args.dry_run:
+            payload["beads_runtime"] = _resolve_beads_runtime_metadata(
+                orchestrator,
+                runtime_mode=ctx.runtime.get("runtime_mode", "full"),
+            )
+        _print_json_payload(payload, parsed=ctx.parsed, indent=2)
     else:
-        print("\n--- Goal Result Summary ---")
+        print(f"\n--- Goal Result Summary ---")
         print(f"Goal: {args.goal}")
         print(f"Stop Reason: {result.get('stop_reason')}")
         print(f"Cycles Completed: {len(history)}")
@@ -1034,19 +1056,37 @@ def _handle_goal_once_dispatch(ctx: DispatchContext) -> int:
 
 
 def _handle_goal_run_dispatch(ctx: DispatchContext) -> int:
+    from aura_cli.commands import _handle_run
+
     args = ctx.args
     runtime = ctx.runtime
-    run_goals_loop(
+    
+    # Ensure full runtime is initialized if needed
+    if isinstance(runtime.get("orchestrator"), SimpleNamespace):
+        print("Initializing full AURA runtime for execution...")
+        full_runtime = create_runtime(ctx.project_root, overrides={"runtime_mode": "full"})
+        runtime.update(full_runtime)
+
+    loop = runtime["orchestrator"]
+    runtime["loop"] = loop
+
+    _handle_run(
         args,
         runtime["goal_queue"],
-        runtime["orchestrator"],
+        runtime["goal_archive"],
+        loop,
         runtime["debugger"],
         runtime["planner"],
-        runtime["goal_archive"],
         ctx.project_root,
-        decompose=args.decompose,
     )
     return 0
+
+
+def _handle_loop_dispatch(ctx: DispatchContext) -> int:
+    goal_text = getattr(ctx.args, "goal", None)
+    if goal_text:
+        ctx.runtime["goal_queue"].add(goal_text)
+    return _handle_goal_run_dispatch(ctx)
 
 
 def _handle_goal_add_dispatch(ctx: DispatchContext) -> int:
@@ -1090,6 +1130,7 @@ COMMAND_DISPATCH_REGISTRY = {
     "workflow_run": _dispatch_rule("workflow_run", _handle_workflow_run_dispatch),
     "scaffold": _dispatch_rule("scaffold", _handle_scaffold_dispatch),
     "evolve": _dispatch_rule("evolve", _handle_evolve_dispatch),
+    "loop": _dispatch_rule("loop", _handle_loop_dispatch),
     "goal_status": _dispatch_rule("goal_status", _handle_goal_status_dispatch),
     "goal_add": _dispatch_rule("goal_add", _handle_goal_add_dispatch),
     "goal_add_run": _dispatch_rule("goal_add_run", _handle_goal_add_run_dispatch),

@@ -4,6 +4,7 @@ from typing import Dict, List
 
 from agents.base import Agent
 from core.logging_utils import log_json
+from memory.controller import MemoryTier
 from core.context_manager import ContextManager
 
 

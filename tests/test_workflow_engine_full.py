@@ -12,13 +12,19 @@ from unittest.mock import MagicMock, patch
 
 from core.workflow_engine import (
     WorkflowEngine, 
+)
+from core.workflow_models import (
     WorkflowDefinition, 
     WorkflowStep, 
-    RetryPolicy,
+    RetryPolicy, 
     WorkflowExecution,
+    StepResult,
+    LoopCycle,
     AgenticLoop,
-    _wire_inputs,
-    _execute_step
+)
+from core.workflow_steps import (
+    wire_inputs,
+    execute_step
 )
 
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
@@ -73,7 +79,7 @@ def test_wire_inputs_basic():
     step_outputs = {"step1": {"output_key": "hello"}}
     initial = {"root": "/tmp"}
     
-    result = _wire_inputs(step, step_outputs, initial)
+    result = wire_inputs(step, step_outputs, initial)
     assert result["val"] == "hello"
     assert result["root"] == "/tmp"
 
@@ -81,7 +87,7 @@ def test_wire_inputs_wildcard():
     step = WorkflowStep(name="step2", inputs_from={"unused": "step1.*"})
     step_outputs = {"step1": {"a": 1, "b": 2}}
     
-    result = _wire_inputs(step, step_outputs, {})
+    result = wire_inputs(step, step_outputs, {})
     assert result["a"] == 1
     assert result["b"] == 2
 
@@ -94,7 +100,7 @@ def test_execute_step_fn():
         return {"result": inputs["x"] + 1}
     
     step = WorkflowStep(name="add", fn=mock_fn, static_inputs={"x": 10})
-    res = _execute_step(step, {}, {})
+    res = execute_step(step, {}, {})
     
     assert res.status == "ok"
     assert res.output["result"] == 11
@@ -104,14 +110,14 @@ def test_execute_step_skip():
     step = WorkflowStep(name="opt", fn=lambda x: {}, skip_if_false="check.run_me")
     step_outputs = {"check": {"run_me": False}}
     
-    res = _execute_step(step, step_outputs, {})
+    res = execute_step(step, step_outputs, {})
     assert res.status == "skipped"
 
 def test_execute_step_retry_failure():
     mock_fn = MagicMock(side_effect=Exception("kaboom"))
     step = WorkflowStep(name="fail", fn=mock_fn, retry=RetryPolicy(max_attempts=2, backoff_base=0.01))
     
-    res = _execute_step(step, {}, {})
+    res = execute_step(step, {}, {})
     assert res.status == "failed"
     assert res.attempts == 2
     assert "kaboom" in res.error

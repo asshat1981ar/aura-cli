@@ -12,6 +12,7 @@ Usage:
 import sys
 import os
 import time
+import numpy as np
 from pathlib import Path
 from rich.console import Console
 from rich.table import Table

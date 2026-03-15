@@ -4,18 +4,17 @@ from typing import Dict
 
 from agents.skills.base import SkillBase
 
+_SKILL_CLASS_CACHE: list[tuple[str, type[SkillBase]]] | None = None
+_DEFAULT_SKILLS_CACHE: Dict[str, SkillBase] | None = None
 
-def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
-    """
-    Return a dict mapping skill_name -> skill_instance for all 23 skills.
 
-    Args:
-        brain: Optional Brain instance (currently unused by skills; reserved for future use).
-        model: Optional ModelAdapter instance (currently unused; reserved for future use).
+def _skill_classes() -> list[tuple[str, type[SkillBase]]]:
+    global _SKILL_CLASS_CACHE
+    if _SKILL_CLASS_CACHE is not None:
+        return _SKILL_CLASS_CACHE
 
-    Returns:
-        Dict of {skill_name: skill_instance}
-    """
+    # Lazy imports keep startup fast while still allowing repeated registry
+    # lookups to reuse the already-imported class objects.
     from agents.skills.dependency_analyzer import DependencyAnalyzerSkill
     from agents.skills.architecture_validator import ArchitectureValidatorSkill
     from agents.skills.complexity_scorer import ComplexityScorerSkill
@@ -50,38 +49,67 @@ def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
     from agents.skills.evolution_skill import EvolutionSkill
     from agents.skills.skill_generator import SkillGeneratorSkill
 
+    _SKILL_CLASS_CACHE = [
+        ("beads_skill", BeadsSkill),
+        ("dependency_analyzer", DependencyAnalyzerSkill),
+        ("architecture_validator", ArchitectureValidatorSkill),
+        ("complexity_scorer", ComplexityScorerSkill),
+        ("test_coverage_analyzer", TestCoverageAnalyzerSkill),
+        ("doc_generator", DocGeneratorSkill),
+        ("performance_profiler", PerformanceProfilerSkill),
+        ("refactoring_advisor", RefactoringAdvisorSkill),
+        ("schema_validator", SchemaValidatorSkill),
+        ("security_scanner", SecurityScannerSkill),
+        ("type_checker", TypeCheckerSkill),
+        ("linter_enforcer", LinterEnforcerSkill),
+        ("incremental_differ", IncrementalDifferSkill),
+        ("tech_debt_quantifier", TechDebtQuantifierSkill),
+        ("api_contract_validator", APIContractValidatorSkill),
+        ("generation_quality_checker", GenerationQualityCheckerSkill),
+        ("git_history_analyzer", GitHistoryAnalyzerSkill),
+        ("skill_composer", SkillComposerSkill),
+        ("error_pattern_matcher", ErrorPatternMatcherSkill),
+        ("code_clone_detector", CodeCloneDetectorSkill),
+        ("adaptive_strategy_selector", AdaptiveStrategySelectorSkill),
+        ("web_fetcher", WebFetcherSkill),
+        ("symbol_indexer", SymbolIndexerSkill),
+        ("multi_file_editor", MultiFileEditorSkill),
+        ("dockerfile_analyzer", DockerfileAnalyzerSkill),
+        ("observability_checker", ObservabilityCheckerSkill),
+        ("changelog_generator", ChangelogGeneratorSkill),
+        ("database_query_analyzer", DatabaseQueryAnalyzerSkill),
+        ("skill_failure_analyzer", SkillFailureAnalyzerSkill),
+        ("security_hardener", SecurityHardenerSkill),
+        ("structural_analyzer", StructuralAnalyzerSkill),
+        ("evolution_skill", EvolutionSkill),
+        ("skill_generator", SkillGeneratorSkill),
+    ]
+    return _SKILL_CLASS_CACHE
+
+
+def _build_skill_registry(brain=None, model=None) -> Dict[str, SkillBase]:
     return {
-        "beads_skill": BeadsSkill(brain=brain, model=model),
-        "dependency_analyzer": DependencyAnalyzerSkill(brain=brain, model=model),
-        "architecture_validator": ArchitectureValidatorSkill(brain=brain, model=model),
-        "complexity_scorer": ComplexityScorerSkill(brain=brain, model=model),
-        "test_coverage_analyzer": TestCoverageAnalyzerSkill(brain=brain, model=model),
-        "doc_generator": DocGeneratorSkill(brain=brain, model=model),
-        "performance_profiler": PerformanceProfilerSkill(brain=brain, model=model),
-        "refactoring_advisor": RefactoringAdvisorSkill(brain=brain, model=model),
-        "schema_validator": SchemaValidatorSkill(brain=brain, model=model),
-        "security_scanner": SecurityScannerSkill(brain=brain, model=model),
-        "type_checker": TypeCheckerSkill(brain=brain, model=model),
-        "linter_enforcer": LinterEnforcerSkill(brain=brain, model=model),
-        "incremental_differ": IncrementalDifferSkill(brain=brain, model=model),
-        "tech_debt_quantifier": TechDebtQuantifierSkill(brain=brain, model=model),
-        "api_contract_validator": APIContractValidatorSkill(brain=brain, model=model),
-        "generation_quality_checker": GenerationQualityCheckerSkill(brain=brain, model=model),
-        "git_history_analyzer": GitHistoryAnalyzerSkill(brain=brain, model=model),
-        "skill_composer": SkillComposerSkill(brain=brain, model=model),
-        "error_pattern_matcher": ErrorPatternMatcherSkill(brain=brain, model=model),
-        "code_clone_detector": CodeCloneDetectorSkill(brain=brain, model=model),
-        "adaptive_strategy_selector": AdaptiveStrategySelectorSkill(brain=brain, model=model),
-        "web_fetcher": WebFetcherSkill(brain=brain, model=model),
-        "symbol_indexer": SymbolIndexerSkill(brain=brain, model=model),
-        "multi_file_editor": MultiFileEditorSkill(brain=brain, model=model),
-        "dockerfile_analyzer": DockerfileAnalyzerSkill(brain=brain, model=model),
-        "observability_checker": ObservabilityCheckerSkill(brain=brain, model=model),
-        "changelog_generator": ChangelogGeneratorSkill(brain=brain, model=model),
-        "database_query_analyzer": DatabaseQueryAnalyzerSkill(brain=brain, model=model),
-        "skill_failure_analyzer": SkillFailureAnalyzerSkill(brain=brain, model=model),
-        "security_hardener": SecurityHardenerSkill(brain=brain, model=model),
-        "structural_analyzer": StructuralAnalyzerSkill(brain=brain, model=model),
-        "evolution_skill": EvolutionSkill(brain=brain, model=model),
-        "skill_generator": SkillGeneratorSkill(brain=brain, model=model),
+        name: skill_cls(brain=brain, model=model)
+        for name, skill_cls in _skill_classes()
     }
+
+
+def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
+    """
+    Return a dict mapping skill_name -> skill_instance for all 23 skills.
+
+    Args:
+        brain: Optional Brain instance (currently unused by skills; reserved for future use).
+        model: Optional ModelAdapter instance (currently unused; reserved for future use).
+
+    Returns:
+        Dict of {skill_name: skill_instance}
+    """
+    global _DEFAULT_SKILLS_CACHE
+
+    if brain is None and model is None:
+        if _DEFAULT_SKILLS_CACHE is None:
+            _DEFAULT_SKILLS_CACHE = _build_skill_registry()
+        return dict(_DEFAULT_SKILLS_CACHE)
+
+    return _build_skill_registry(brain=brain, model=model)

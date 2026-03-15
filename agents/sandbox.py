@@ -26,6 +26,7 @@ import os
 import re
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -142,7 +143,7 @@ class SandboxAgent:
     # Public API
     # ------------------------------------------------------------------
 
-    def run_code(self, code: str, extra_files: Optional[dict] = None) -> SandboxResult:
+    def run_code(self, code: str, extra_files: Optional[dict] = None, corr_id: str = None) -> SandboxResult:
         """Execute a raw Python code string in a fresh temporary directory.
 
         Writes *code* to ``aura_exec.py`` in a new temp dir, optionally writes
@@ -159,6 +160,7 @@ class SandboxAgent:
             :attr:`SandboxResult.execution_path` points to ``aura_exec.py``
             inside the (now deleted) temp dir.
         """
+        t0 = time.monotonic()
         with tempfile.TemporaryDirectory(prefix="aura_sandbox_") as tmpdir:
             script = Path(tmpdir) / "aura_exec.py"
             script.write_text(code, encoding="utf-8")
@@ -168,10 +170,22 @@ class SandboxAgent:
                     (Path(tmpdir) / fname).write_text(content, encoding="utf-8")
 
             result = self._run(str(script), cwd=tmpdir)
+            latency_ms = (time.monotonic() - t0) * 1000
             self._record(result, label="run_code", code_snippet=code[:120])
+            log_json(
+                "INFO",
+                "sandbox_run_code",
+                corr_id=corr_id,
+                phase="sandbox",
+                component="sandbox",
+                latency_ms=latency_ms,
+                outcome="success" if result.passed else "fail",
+                failure_reason=None if result.passed else (result.stderr[:200] or "sandbox_fail"),
+                payload_bytes=len(code.encode("utf-8")),
+            )
             return result
 
-    def run_file(self, file_path: str) -> SandboxResult:
+    def run_file(self, file_path: str, corr_id: str = None) -> SandboxResult:
         """Execute an existing Python file on disk in an isolated subprocess.
 
         Unlike :meth:`run_code`, no temporary directory is created — the file
@@ -183,11 +197,23 @@ class SandboxAgent:
         Returns:
             :class:`SandboxResult` with execution outcome.
         """
+        t0 = time.monotonic()
         result = self._run(file_path, cwd=str(Path(file_path).parent))
+        latency_ms = (time.monotonic() - t0) * 1000
         self._record(result, label="run_file", code_snippet=file_path)
+        log_json(
+            "INFO",
+            "sandbox_run_file",
+            corr_id=corr_id,
+            phase="sandbox",
+            component="sandbox",
+            latency_ms=latency_ms,
+            outcome="success" if result.passed else "fail",
+            failure_reason=None if result.passed else (result.stderr[:200] or "sandbox_fail"),
+        )
         return result
 
-    def run_tests(self, code: str, tests: str) -> SandboxResult:
+    def run_tests(self, code: str, tests: str, corr_id: str = None) -> SandboxResult:
         """Write *code* and *tests* to a temp dir, then run pytest (or unittest).
 
         If the test file does not already import the source module, a
@@ -204,6 +230,7 @@ class SandboxAgent:
             :attr:`SandboxResult.metadata` is populated with parsed pytest
             counts: ``{"passed": int, "failed": int, "errors": int}``.
         """
+        t0 = time.monotonic()
         with tempfile.TemporaryDirectory(prefix="aura_test_") as tmpdir:
             src = Path(tmpdir) / "source.py"
             tst = Path(tmpdir) / "test_source.py"
@@ -218,6 +245,18 @@ class SandboxAgent:
             result = self._run_pytest(tmpdir)
             result.metadata.update(self._parse_pytest_summary(result.stdout + result.stderr))
             self._record(result, label="run_tests", code_snippet=code[:120])
+            latency_ms = (time.monotonic() - t0) * 1000
+            log_json(
+                "INFO",
+                "sandbox_run_tests",
+                corr_id=corr_id,
+                phase="sandbox",
+                component="sandbox",
+                latency_ms=latency_ms,
+                outcome="success" if result.passed else "fail",
+                failure_reason=None if result.passed else (result.stderr[:200] or "sandbox_fail"),
+                payload_bytes=len(code.encode("utf-8")) + len(tests.encode("utf-8")),
+            )
             return result
 
     # ------------------------------------------------------------------

@@ -54,7 +54,8 @@ def _profile_snippet(code: str, max_rows: int = 10) -> List[Dict]:
     pr = cProfile.Profile()
     try:
         pr.enable()
-        exec(compile(code, "<profiled>", "exec"), {})  # noqa: S102
+        # S102: Use of exec detected. This is intended for profiling dynamic code.
+        exec(compile(code, "<profiled>", "exec"), {})  # pylint: disable=exec-used
     except Exception:
         pass
     finally:

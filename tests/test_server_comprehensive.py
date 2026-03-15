@@ -1,7 +1,9 @@
 """Comprehensive tests for AURA Agent API (aura_cli/server.py)."""
+import os
+import json
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from aura_cli.server import app
 

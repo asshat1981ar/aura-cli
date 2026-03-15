@@ -1,6 +1,6 @@
 """Tests for DeepReflectionLoop, HealthMonitor, WeaknessRemediator."""
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, call, patch
 
 from core.reflection_loop import DeepReflectionLoop
 from core.health_monitor import HealthMonitor
@@ -189,8 +189,7 @@ class TestWeaknessRemediatorRun(unittest.TestCase):
         self.assertEqual(queue.add.call_count, 2)
 
     def test_skips_already_queued_weaknesses(self):
-        import json
-        import hashlib
+        import json, hashlib
         weakness = json.dumps({"type": "phase_failure", "phase": "act",
                                "failure_rate": 0.9, "severity": "HIGH"})
         w_hash = hashlib.sha256(weakness.encode()).hexdigest()[:16]

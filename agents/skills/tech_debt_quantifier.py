@@ -10,6 +10,16 @@ from core.logging_utils import log_json
 
 _DEBT_TAGS = re.compile(r"#\s*(TODO|FIXME|HACK|XXX|NOQA|TEMP|BUG)\b", re.IGNORECASE)
 _EFFORT = {"TODO": 0.5, "FIXME": 1.0, "HACK": 2.0, "XXX": 1.5, "BUG": 2.0, "NOQA": 0.25, "TEMP": 1.0}
+_SKIP_DIRS = {
+    ".git",
+    "node_modules",
+    "__pycache__",
+    "venv",
+    ".venv",
+    ".tox",
+    ".mypy_cache",
+    ".pytest_cache",
+}
 
 
 def _count_functions(source: str) -> int:
@@ -23,6 +33,9 @@ def _count_functions(source: str) -> int:
 class TechDebtQuantifierSkill(SkillBase):
     name = "tech_debt_quantifier"
 
+    def _should_skip(self, path: Path) -> bool:
+        return any(part in _SKIP_DIRS for part in path.parts)
+
     def _run(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         project_root = Path(input_data.get("project_root", "."))
         debt_items: List[Dict] = []
@@ -31,7 +44,7 @@ class TechDebtQuantifierSkill(SkillBase):
         total_funcs = 0
         total_todos = 0
 
-        py_files = [f for f in project_root.rglob("*.py") if ".git" not in f.parts and "node_modules" not in f.parts and "__pycache__" not in f.parts]
+        py_files = [f for f in project_root.rglob("*.py") if not self._should_skip(f)]
 
         for f in py_files:
             try:

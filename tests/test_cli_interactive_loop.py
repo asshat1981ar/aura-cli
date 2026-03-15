@@ -1,3 +1,5 @@
+import io
+import json
 import unittest
 from unittest.mock import patch, MagicMock
 from aura_cli.cli_main import cli_interaction_loop

@@ -16,8 +16,8 @@ def _complexity(node: ast.AST) -> int:
     for child in ast.walk(node):
         if isinstance(child, _COMPLEXITY_NODES):
             score += 1
-        elif isinstance(child, _BOOL_OP_NODES):
-            score += len(child.values) - 1  # type: ignore[attr-defined]
+        elif isinstance(child, ast.BoolOp):
+            score += len(child.values) - 1
     return score
 
 
@@ -40,7 +40,8 @@ def _analyze_source(source: str, file_path: str) -> List[Dict]:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             cc = _complexity(node)
             depth = _nesting_depth(node)
-            lines = (node.end_lineno or node.lineno) - node.lineno + 1  # type: ignore[attr-defined]
+            end_lineno = node.end_lineno if node.end_lineno is not None else node.lineno
+            lines = end_lineno - node.lineno + 1
             risk = "low"
             if cc > 15 or lines > 80 or depth > 4:
                 risk = "high"

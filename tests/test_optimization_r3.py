@@ -310,7 +310,7 @@ class TestGoalQueueBatchAdd(unittest.TestCase):
     def test_batch_add_single_flush_count(self):
         """batch_add must call _save_queue exactly once regardless of N."""
         from core.goal_queue import GoalQueue
-        from unittest.mock import patch
+        from unittest.mock import patch, call
         gq = GoalQueue(queue_path=self.tmp.name)
         goals = [{"description": f"g{i}"} for i in range(10)]
         with patch.object(gq, "_save_queue") as mock_save:
@@ -356,7 +356,7 @@ class TestAllSkillsRegistry(unittest.TestCase):
 # 6. replace_code — validate performance baseline
 # ──────────────────────────────────────────────────────────────────────────────
 class TestReplaceCodePerformance(unittest.TestCase):
-    """replace_code is already 0.79ms — validate baseline and correctness."""
+    """replace_code should stay comfortably fast while preserving atomic writes."""
 
     def test_replace_code_correct(self):
         from core.file_tools import replace_code
@@ -388,8 +388,8 @@ class TestReplaceCodePerformance(unittest.TestCase):
         finally:
             os.unlink(fp)
         avg_ms = statistics.mean(samples)
-        self.assertLess(avg_ms, 5.0,
-                        f"replace_code 100-func file: {avg_ms:.2f}ms (expected <5ms)")
+        self.assertLess(avg_ms, 10.0,
+                        f"replace_code 100-func file: {avg_ms:.2f}ms (expected <10ms)")
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ Tests for autonomous backfill goal generation in LoopOrchestrator.
 from __future__ import annotations
 
 import pytest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 from core.orchestrator import LoopOrchestrator
 

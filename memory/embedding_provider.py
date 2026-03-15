@@ -2,8 +2,9 @@
 from __future__ import annotations
 
 import math
+import os
 import random
-from typing import List, TYPE_CHECKING
+from typing import List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     pass
@@ -125,14 +126,9 @@ class OpenAIEmbeddingProvider(EmbeddingProvider):
             return []
         if self._api_available and self._adapter is not None:
             try:
-                results = []
-                for text in texts:
-                    emb = self._adapter.embed(text, model="text-embedding-3-small")
-                    if emb and isinstance(emb, list):
-                        results.append(emb)
-                    else:
-                        raise ValueError("empty embedding")
-                return results
+                # ModelAdapter handles batching and returns List[np.ndarray]
+                vectors = self._adapter.embed(texts)
+                return [v.tolist() for v in vectors]
             except Exception:
                 pass
         return self._fallback.embed(texts)

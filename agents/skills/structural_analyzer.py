@@ -3,7 +3,7 @@ Structural Analyzer Skill — Detects architectural debt and hotspots.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from pathlib import Path
 
 from agents.skills.base import SkillBase

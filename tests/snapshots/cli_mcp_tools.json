@@ -1,0 +1,11 @@
+{
+  "data": {
+    "tools": [
+      {
+        "description": "A test tool",
+        "name": "test_tool"
+      }
+    ]
+  },
+  "status": 200
+}

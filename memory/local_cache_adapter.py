@@ -1,263 +1,133 @@
-"""
-LocalCacheAdapter — zero-dependency, always-on drop-in for MomentoAdapter.
-
-Provides the exact same interface as :class:`memory.momento_adapter.MomentoAdapter`
-but runs entirely in-process:
-
-- **Key-value cache**: in-process ``dict`` with per-key TTL tracking.
-  Entries are lazily expired on ``cache_get`` — no background thread needed.
-- **List operations**: in-process ``dict`` of lists with configurable max-size
-  trimming (mirrors Momento's ``list_push_back`` + ``list_retain``).
-- **Pub/Sub topics**: SQLite ``topic_events`` table (append-only log).
-  ``publish()`` inserts a row; subscribers can poll or tail the table.
-
-``is_available()`` always returns ``True`` — no API key or external service
-required.  This makes it a perfect L1 cache for single-process AURA runs on
-devices without network access (e.g. Android/Termux).
-
-Usage::
-
-    from memory.local_cache_adapter import LocalCacheAdapter
-    adapter = LocalCacheAdapter()
-    adapter.cache_set("aura-working-memory", "skill_weights:all", data, ttl_seconds=3600)
-    value = adapter.cache_get("aura-working-memory", "skill_weights:all")
-    adapter.publish("aura.cycle_complete", json.dumps(event))
-
-Thread safety:
-    All in-process operations are protected by a single ``threading.RLock``.
-    SQLite writes use ``check_same_thread=False`` with a per-call connection.
-"""
 from __future__ import annotations
 
-import sqlite3
 import threading
 import time
-from pathlib import Path
-from typing import List, Optional
-
-from core.logging_utils import log_json
-
-# Default TTL for cache_set when caller passes 0 or omits ttl_seconds
-DEFAULT_TTL_SECONDS = 3600
-
-# Maximum list size when caller omits max_size
-LIST_MAX_SIZE = 200
-
-# SQLite file for topic event log (relative to project root)
-_DEFAULT_DB_PATH = "memory/local_cache.db"
+from typing import Any, Dict, List, Optional, Tuple
 
 
 class LocalCacheAdapter:
-    """In-process cache adapter with the same API as :class:`MomentoAdapter`.
-
-    Args:
-        db_path: Path to the SQLite file used for the topic event log.
-            Defaults to ``memory/local_cache.db``.
+    """
+    Lightweight in-memory cache used as the default fallback when no external
+    cache (e.g., Momento) is configured. Thread-safe and file-system agnostic.
     """
 
-    def __init__(self, db_path: str = _DEFAULT_DB_PATH):
-        self._lock = threading.RLock()
-        # {namespaced_key: (value: str, expire_at: float|None)}
-        self._kv: dict[str, tuple[str, Optional[float]]] = {}
-        # {namespaced_key: list[str]}
-        self._lists: dict[str, list[str]] = {}
+    def __init__(self, db_path: Optional[str] = None) -> None:
         self._db_path = db_path
-        self._init_db()
-        log_json("INFO", "local_cache_adapter_initialized",
-                 details={"db_path": db_path})
+        self._lock = threading.RLock()
+        self._kv: Dict[str, Dict[str, Tuple[Any, Optional[float]]]] = {}
+        self._lists: Dict[str, Dict[str, List[Any]]] = {}
+        self._events: List[Dict[str, Any]] = []
 
-    # ── Availability ─────────────────────────────────────────────────────────
-
+    # ------------------------------------------------------------------ #
+    # Key-value operations
+    # ------------------------------------------------------------------ #
     def is_available(self) -> bool:
-        """Always True — no external service required."""
         return True
 
-    # ── Cache operations ──────────────────────────────────────────────────────
+    def _now(self) -> float:
+        return time.time()
 
-    def cache_get(self, cache: str, key: str) -> Optional[str]:
-        """Return the cached value or ``None`` on miss / expired entry."""
-        k = _ns(cache, key)
+    def cache_set(self, cache: str, key: str, value: Any, ttl_seconds: float = 0) -> bool:
+        expiry = None if not ttl_seconds or ttl_seconds <= 0 else self._now() + ttl_seconds
         with self._lock:
-            entry = self._kv.get(k)
-            if entry is None:
+            self._kv.setdefault(cache, {})[key] = (value, expiry)
+        return True
+
+    def cache_get(self, cache: str, key: str) -> Any:
+        with self._lock:
+            entry = self._kv.get(cache, {}).get(key)
+            if not entry:
                 return None
-            value, exp = entry
-            if exp is not None and time.time() > exp:
-                del self._kv[k]
+            value, expiry = entry
+            if expiry and expiry <= self._now():
+                # Expired; remove lazily
+                self.cache_delete(cache, key)
                 return None
             return value
 
-    def cache_set(
-        self,
-        cache: str,
-        key: str,
-        value: str,
-        ttl_seconds: int = DEFAULT_TTL_SECONDS,
-    ) -> bool:
-        """Store *value* under *key* in *cache* with optional TTL."""
-        k = _ns(cache, key)
-        exp = time.time() + ttl_seconds if ttl_seconds > 0 else None
+    def cache_delete(self, cache: str, key: str) -> None:
         with self._lock:
-            self._kv[k] = (value, exp)
-        return True
+            cache_map = self._kv.get(cache)
+            if not cache_map:
+                return
+            cache_map.pop(key, None)
+            if not cache_map:
+                self._kv.pop(cache, None)
 
-    def cache_delete(self, cache: str, key: str) -> bool:
-        """Remove *key* from *cache*.  Returns ``True`` always."""
-        k = _ns(cache, key)
+    def evict_expired(self) -> int:
+        removed = 0
+        now = self._now()
         with self._lock:
-            self._kv.pop(k, None)
-        return True
+            for cache, items in list(self._kv.items()):
+                for key, (_, expiry) in list(items.items()):
+                    if expiry and expiry <= now:
+                        del items[key]
+                        removed += 1
+                if not items:
+                    self._kv.pop(cache, None)
+        return removed
 
-    # ── List operations ───────────────────────────────────────────────────────
-
-    def list_push(
-        self,
-        cache: str,
-        key: str,
-        value: str,
-        ttl_seconds: int = 0,
-        max_size: int = LIST_MAX_SIZE,
-    ) -> bool:
-        """Append *value* to the list at *key*, trimming to *max_size*."""
-        k = _ns(cache, key)
+    # ------------------------------------------------------------------ #
+    # List operations
+    # ------------------------------------------------------------------ #
+    def list_push(self, cache: str, key: str, value: Any, max_size: Optional[int] = None) -> bool:
         with self._lock:
-            lst = self._lists.setdefault(k, [])
+            lists = self._lists.setdefault(cache, {})
+            lst = lists.setdefault(key, [])
             lst.append(value)
-            if len(lst) > max_size:
-                # Keep the most recent max_size items (trim from front)
-                self._lists[k] = lst[-max_size:]
+            if max_size and max_size > 0 and len(lst) > max_size:
+                lst[:] = lst[-max_size:]
         return True
 
-    def list_range(
-        self,
-        cache: str,
-        key: str,
-        start: int = 0,
-        end: int = -1,
-    ) -> List[str]:
-        """Return a slice of the list at *key*.
-
-        *end* ``-1`` means "all remaining elements" (matches Redis/Momento
-        convention).  Returned list is a copy — safe to mutate.
-        """
-        k = _ns(cache, key)
+    def list_range(self, cache: str, key: str, start: int = 0, end: Optional[int] = None) -> List[Any]:
         with self._lock:
-            lst = self._lists.get(k, [])
-            if end == -1 or end is None:
-                return list(lst[start:])
-            return list(lst[start : end + 1])
+            lst = list(self._lists.get(cache, {}).get(key, []))
+        if end is None or end == -1:
+            return lst[start:]
+        return lst[start:end + 1]
 
-    # ── Pub/Sub topics ────────────────────────────────────────────────────────
-
+    # ------------------------------------------------------------------ #
+    # Pub/Sub
+    # ------------------------------------------------------------------ #
     def publish(self, topic: str, message: str) -> bool:
-        """Append *message* to the ``topic_events`` log in SQLite."""
-        try:
-            with sqlite3.connect(self._db_path, check_same_thread=False) as conn:
-                conn.execute(
-                    "INSERT INTO topic_events (topic, message, ts) VALUES (?, ?, ?)",
-                    (topic, message, time.time()),
-                )
-            return True
-        except Exception as exc:
-            log_json("WARN", "local_cache_publish_failed",
-                     details={"topic": topic, "error": str(exc)})
-            return False
-
-    def read_events(
-        self,
-        topic: str,
-        since_ts: float = 0.0,
-        limit: int = 100,
-    ) -> List[dict]:
-        """Poll *topic* events newer than *since_ts*.
-
-        Useful for improvement loops that want to react to cycle completions
-        without a blocking subscribe.  Returns a list of
-        ``{"id": int, "topic": str, "message": str, "ts": float}`` dicts.
-        """
-        try:
-            with sqlite3.connect(self._db_path, check_same_thread=False) as conn:
-                conn.row_factory = sqlite3.Row
-                rows = conn.execute(
-                    "SELECT id, topic, message, ts FROM topic_events "
-                    "WHERE topic = ? AND ts > ? ORDER BY ts ASC LIMIT ?",
-                    (topic, since_ts, limit),
-                ).fetchall()
-            return [dict(row) for row in rows]
-        except Exception as exc:
-            log_json("WARN", "local_cache_read_events_failed",
-                     details={"topic": topic, "error": str(exc)})
-            return []
-
-    # ── Compatibility stubs (match MomentoAdapter API exactly) ────────────────
-
-    def ensure_caches(self) -> None:
-        """No-op — local adapter has no named caches to create."""
-
-    # ── Introspection / housekeeping ──────────────────────────────────────────
-
-    def stats(self) -> dict:
-        """Return a snapshot of in-process cache statistics."""
         with self._lock:
-            now = time.time()
-            live = sum(
-                1 for (_, exp) in self._kv.values()
-                if exp is None or exp > now
-            )
-            expired = len(self._kv) - live
-            list_items = sum(len(v) for v in self._lists.values())
+            self._events.append({"topic": topic, "message": message, "timestamp": self._now()})
+        return True
+
+    def read_events(self, topic: str, since_ts: float = 0.0) -> List[Dict[str, Any]]:
+        with self._lock:
+            return [
+                dict(evt)
+                for evt in self._events
+                if evt["topic"] == topic and evt["timestamp"] > since_ts
+            ]
+
+    # ------------------------------------------------------------------ #
+    # Stats and maintenance
+    # ------------------------------------------------------------------ #
+    def stats(self) -> Dict[str, Any]:
+        now = self._now()
+        with self._lock:
+            kv_live = kv_expired = 0
+            for items in self._kv.values():
+                for _, expiry in items.values():
+                    if expiry and expiry <= now:
+                        kv_expired += 1
+                    else:
+                        kv_live += 1
+
+            list_keys = sum(len(cache_lists) for cache_lists in self._lists.values())
+            list_items = sum(len(lst) for cache_lists in self._lists.values() for lst in cache_lists.values())
+
         return {
-            "kv_live": live,
-            "kv_expired_pending_eviction": expired,
-            "list_keys": len(self._lists),
+            "kv_live": kv_live,
+            "kv_expired_pending_eviction": kv_expired,
+            "list_keys": list_keys,
             "list_items": list_items,
         }
 
-    def evict_expired(self) -> int:
-        """Eagerly remove expired KV entries.  Returns count removed."""
-        now = time.time()
-        removed = 0
-        with self._lock:
-            expired_keys = [
-                k for k, (_, exp) in self._kv.items()
-                if exp is not None and now > exp
-            ]
-            for k in expired_keys:
-                del self._kv[k]
-                removed += 1
-        return removed
-
     def flush(self) -> None:
-        """Clear all in-process state (KV + lists).  SQLite event log kept."""
         with self._lock:
             self._kv.clear()
             self._lists.clear()
-
-    # ── Internal helpers ──────────────────────────────────────────────────────
-
-    def _init_db(self) -> None:
-        """Create the SQLite event-log table if it doesn't exist."""
-        try:
-            Path(self._db_path).parent.mkdir(parents=True, exist_ok=True)
-            with sqlite3.connect(self._db_path, check_same_thread=False) as conn:
-                conn.execute("""
-                    CREATE TABLE IF NOT EXISTS topic_events (
-                        id      INTEGER PRIMARY KEY AUTOINCREMENT,
-                        topic   TEXT    NOT NULL,
-                        message TEXT    NOT NULL,
-                        ts      REAL    NOT NULL
-                    )
-                """)
-                conn.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_topic_ts "
-                    "ON topic_events (topic, ts)"
-                )
-        except Exception as exc:
-            log_json("WARN", "local_cache_db_init_failed", details={"error": str(exc)})
-
-
-# ── Module-level helper ───────────────────────────────────────────────────────
-
-def _ns(cache: str, key: str) -> str:
-    """Namespace a key as ``cache:key`` (matches Momento's logical separation)."""
-    return f"{cache}:{key}"
+            self._events.clear()

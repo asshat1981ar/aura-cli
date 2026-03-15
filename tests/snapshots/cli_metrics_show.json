@@ -1,0 +1,28 @@
+{
+  "metrics": [
+    {
+      "cycle_id": "12345678",
+      "duration": 5.0,
+      "goal": "Test Goal",
+      "status": "SUCCESS"
+    }
+  ],
+  "recent_cycles": [
+    {
+      "cycle_id": "12345678",
+      "duration": 5.0,
+      "goal": "Test Goal",
+      "status": "SUCCESS"
+    }
+  ],
+  "summary": {
+    "avg_duration": 5.0,
+    "count": 1,
+    "fails": 0,
+    "skipped": 0,
+    "success_rate": 100.0,
+    "successes": 1,
+    "total_cycles": 1,
+    "win_rate": 100.0
+  }
+}

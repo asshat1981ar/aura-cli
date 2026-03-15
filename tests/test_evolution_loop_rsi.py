@@ -3,9 +3,11 @@ import importlib
 import io
 import json
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from core.evolution_loop import EvolutionLoop
+from core.rsi_integration_verification import build_evolution_loop, run_rsi_verification
 
 
 class TestEvolutionLoopRSIContracts(unittest.TestCase):
@@ -83,9 +85,95 @@ class TestEvolutionLoopRSIContracts(unittest.TestCase):
         validation_payload = self.critic.validate_mutation.call_args.args[0]
         assert "\"mutations\"" in validation_payload
         self.mutator.apply_mutation.assert_called_once()
+        self.git_tools.commit_all.assert_called_once_with("AURA evolutionary update: improve aura")
         applied_payload = self.mutator.apply_mutation.call_args.args[0]
         assert applied_payload.startswith("ADD_FILE core/demo.py\n")
         assert result["mutation"]["mutations"][0]["file_path"] == "core/demo.py"
+        assert result["mutation_applied"] is True
+        assert result["validation"]["decision"] == "APPROVED"
+
+    def test_run_does_not_commit_or_apply_rejected_mutation(self):
+        self.planner.plan.side_effect = [
+            ["Inspect architecture"],
+            ["Implement changes"],
+        ]
+        self.planner._respond.return_value = json.dumps({
+            "mutations": [
+                {
+                    "type": "file_change",
+                    "file_path": "core/demo.py",
+                    "reason": "test",
+                    "new_content": "print('ok')\n",
+                }
+            ]
+        })
+        self.coder.implement.return_value = "print('done')"
+        self.critic.critique_code.return_value = "looks risky"
+        self.critic.validate_mutation.return_value = json.dumps({
+            "decision": "REJECTED",
+            "confidence_score": 0.2,
+            "impact_assessment": "bad",
+            "reasoning": "unsafe",
+        })
+
+        result = self.loop.run("improve aura")
+
+        self.mutator.apply_mutation.assert_not_called()
+        self.git_tools.commit_all.assert_not_called()
+        assert result["mutation_applied"] is False
+        assert result["validation"]["decision"] == "REJECTED"
+
+    def test_build_evolution_loop_reuses_runtime_components(self):
+        runtime = {
+            "planner": self.planner,
+            "model_adapter": MagicMock(),
+            "brain": self.brain,
+            "act": self.coder,
+            "critique": self.critic,
+            "git_tools": self.git_tools,
+            "mutator": self.mutator,
+            "vector_store": self.vector,
+        }
+
+        loop = build_evolution_loop(
+            runtime,
+            Path("."),
+            improvement_service=self.improvement_service,
+            default_agents_factory=MagicMock(),
+        )
+
+        self.assertIs(loop.planner, self.planner)
+        self.assertIs(loop.coder, self.coder)
+        self.assertIs(loop.critic, self.critic)
+        self.assertIs(loop.improvement_service, self.improvement_service)
+
+    def test_run_rsi_verification_builds_cycle_entries_for_improvement_service(self):
+        loop = MagicMock()
+        loop.run.side_effect = [
+            {
+                "tasks": ["task 1"],
+                "validation": {"decision": "APPROVED", "confidence_score": 0.9},
+                "mutation_applied": True,
+            },
+            {
+                "tasks": ["task 2"],
+                "validation": {"decision": "REJECTED", "confidence_score": 0.1},
+                "mutation_applied": False,
+            },
+        ]
+        loop.on_cycle_complete.side_effect = [
+            [{"proposal_id": "p1"}],
+            [],
+        ]
+
+        report = run_rsi_verification(loop, goal="improve aura", max_cycles=2)
+
+        assert report["proposal_count"] == 1
+        first_entry = loop.on_cycle_complete.call_args_list[0].args[0]
+        second_entry = loop.on_cycle_complete.call_args_list[1].args[0]
+        assert first_entry["phase_outputs"]["verification"]["status"] == "pass"
+        assert second_entry["phase_outputs"]["verification"]["status"] == "fail"
+        assert report["cycles"][0]["cycle_entry"]["goal"] == "improve aura"
 
     def test_rsi_integration_verification_has_no_import_side_effect(self):
         module_name = "core.rsi_integration_verification"

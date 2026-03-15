@@ -1,5 +1,7 @@
 """35+ tests for PRD-003: Autonomous Learning Loop."""
 from __future__ import annotations
+import json
+import time
 import warnings
 from pathlib import Path
 from unittest.mock import MagicMock, patch

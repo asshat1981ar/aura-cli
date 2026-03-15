@@ -7,6 +7,7 @@ import textwrap
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
+import pytest
 
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 

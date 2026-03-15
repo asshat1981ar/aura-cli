@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 """
-Final RSI Integration: Run AURA in a fully autonomous "evolve" mode for 50 cycles.
-Logs results to logs/rsi_evolution_50.log.
+Run the canonical RSI verification harness for 50 cycles.
 """
 from __future__ import annotations
 
-import os
-import time
 import sys
 from pathlib import Path
 
@@ -15,69 +12,53 @@ project_root = Path(__file__).resolve().parents[1]
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-from aura_cli.cli_main import create_runtime
-from core.logging_utils import log_json
-
-try:
-    from dotenv import load_dotenv
-except ImportError:
-    load_dotenv = None
+from aura_cli.cli_main import create_runtime, default_agents
+from core.recursive_improvement import RecursiveImprovementService
+from core.rsi_integration_verification import (
+    DEFAULT_RSI_VERIFICATION_GOAL,
+    build_evolution_loop,
+    ensure_rsi_environment,
+    load_optional_dotenv,
+    run_rsi_verification,
+)
 
 def main():
-    if load_dotenv:
-        load_dotenv()
-        
-    # Setup environment for tests if needed
-    if "AGENT_API_TOKEN" not in os.environ:
-        os.environ["AGENT_API_TOKEN"] = "rsi-dev-token"
-    if "AGENT_API_ENABLE_RUN" not in os.environ:
-        os.environ["AGENT_API_ENABLE_RUN"] = "1"
+    load_optional_dotenv()
+    ensure_rsi_environment()
 
-    project_root = Path(__file__).resolve().parents[1]
-    
-    # Initialize runtime
-    try:
-        runtime = create_runtime(project_root)
-        orchestrator = runtime["orchestrator"]
-        log_json("INFO", "rsi_evolution_script_initialized")
-    except Exception as e:
-        print(f"Failed to initialize AURA runtime: {e}")
-        return
+    runtime = create_runtime(project_root)
+    loop = build_evolution_loop(
+        runtime,
+        project_root,
+        improvement_service=RecursiveImprovementService(),
+        default_agents_factory=default_agents,
+    )
 
-    goal = "evolve and improve the AURA system via recursive self-improvement"
     max_total_cycles = 50
-    log_file = project_root / "logs" / "rsi_evolution_50.log"
-    
-    print(f"Starting RSI Evolution Loop: {max_total_cycles} cycles")
-    print(f"Logging to: {log_file}")
+    print(f"Starting RSI verification run: {max_total_cycles} cycles")
 
-    for i in range(1, max_total_cycles + 1):
-        start_time = time.time()
-        print(f"\n>>> Cycle {i}/{max_total_cycles} starting...")
-        
-        try:
-            # Run a single cycle
-            # orchestrator.run_cycle already calls evolution_loop.on_cycle_complete(entry)
-            # which might trigger the EvolutionLoop.run() if it hits N=20 or signal.
-            result = orchestrator.run_cycle(goal)
-            
-            elapsed = time.time() - start_time
-            status = result.get("phase_outputs", {}).get("verification", {}).get("status", "unknown")
-            summary = result.get("cycle_summary", {}).get("summary", "No summary")
-            
-            print(f"--- Cycle {i} complete in {elapsed:.2f}s | Status: {status}")
-            print(f"--- Summary: {summary}")
-            
-        except KeyboardInterrupt:
-            print("\nEvolution loop interrupted by user.")
-            break
-        except Exception as e:
-            log_json("ERROR", "rsi_evolution_cycle_failed", details={"cycle": i, "error": str(e)})
-            print(f"!!! Cycle {i} failed: {e}")
-            # Continue to next cycle unless it's a critical infrastructure failure
-            time.sleep(5)
+    report = run_rsi_verification(
+        loop,
+        goal=DEFAULT_RSI_VERIFICATION_GOAL,
+        max_cycles=max_total_cycles,
+        on_cycle_complete=_print_cycle_result,
+    )
 
-    print("\n>>> RSI Evolution run complete.")
+    print(
+        "\n>>> RSI verification complete. "
+        f"Cycles: {len(report['cycles'])} | Proposals: {report['proposal_count']}"
+    )
+
+
+def _print_cycle_result(cycle_number: int, result: dict, proposals: list[dict]) -> None:
+    validation = result.get("validation", {}) if isinstance(result, dict) else {}
+    decision = validation.get("decision", "UNKNOWN")
+    applied = bool(result.get("mutation_applied")) if isinstance(result, dict) else False
+    status = "applied" if applied else "rejected"
+    print(
+        f"Cycle {cycle_number}: {status} "
+        f"(decision={decision}, proposals={len(proposals)})"
+    )
 
 if __name__ == "__main__":
     main()

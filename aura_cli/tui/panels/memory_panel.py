@@ -27,10 +27,7 @@ def build_memory_panel(brain: Optional[Any] = None, limit: int = 5) -> "Panel":
         try:
             count = brain.count_memories()
         except Exception:
-            try:
-                count = len(brain.recall_all())
-            except Exception:
-                pass
+            count = 0
         try:
             recent = brain.recall_recent(limit=limit)
         except Exception:

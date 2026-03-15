@@ -1,3 +1,4 @@
+import asyncio
 import json
 from fastapi.testclient import TestClient
 from aura_cli import server
@@ -93,7 +94,7 @@ def test_run_sse_stream(monkeypatch):
     # disable auth and use a safe command
     monkeypatch.delenv("AGENT_API_TOKEN", raising=False)
     monkeypatch.setenv("AGENT_API_ENABLE_RUN", "1")
-    cmd = "python -m site --user-site"
+    cmd = "python -m site"
     with TestClient(server.app) as c:
         chunks = []
         with c.stream(

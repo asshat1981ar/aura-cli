@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional, Any
 from pathlib import Path
 from core.logging_utils import log_json
+from core.config_manager import config
 from memory.controller import memory_controller, MemoryTier
 
 @dataclass
@@ -61,9 +62,22 @@ class TaskManager:
     def save(self):
         data = [t.to_dict() for t in self.root_tasks]
         if self.persistence_path is not None:
+            import os
+            import tempfile
             try:
                 self.persistence_path.parent.mkdir(parents=True, exist_ok=True)
-                self.persistence_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+                
+                # Write to a temporary file first to ensure atomicity
+                temp_fd, temp_path = tempfile.mkstemp(dir=self.persistence_path.parent, text=True)
+                try:
+                    with os.fdopen(temp_fd, 'w', encoding='utf-8') as f:
+                        json.dump(data, f, indent=2)
+                    # Atomic replace
+                    os.replace(temp_path, self.persistence_path)
+                except Exception:
+                    os.close(temp_fd) # Close file descriptor before removing
+                    os.remove(temp_path)
+                    raise
             except Exception as e:
                 log_json("WARN", "task_hierarchy_file_save_failed", details={"error": str(e), "path": str(self.persistence_path)})
         memory_controller.store(MemoryTier.PROJECT, {"type": "task_hierarchy", "data": data}, metadata={"authority": "task_manager"})

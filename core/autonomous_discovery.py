@@ -8,7 +8,7 @@ cycles as an improvement loop.
 Discovery signals
 -----------------
 todo_fixme       Lines containing TODO / FIXME / HACK / XXX
-type_ignore      Lines with ``# type: ignore`` or ``# noqa``
+type_ignore      Lines with type-ignore or noqa comments
 missing_tests    Python modules in non-test dirs that lack a corresponding
                  test file in ``tests/``
 dead_imports     Import statements in __init__.py files that reference
@@ -38,13 +38,6 @@ from typing import Any, Dict, List, Tuple
 
 from core.logging_utils import log_json
 
-# Lines to scan for (pattern, goal_type, priority)
-_CODE_SIGNAL_PATTERNS: List[Tuple[str, str, str]] = [
-    (r"#\s*(TODO|FIXME|HACK|XXX)\s*:?\s*(.+)",  "todo_fixme",   "low"),
-    (r"#\s*type:\s*ignore",                       "type_ignore",  "medium"),
-    (r"#\s*noqa",                                  "noqa",         "low"),
-]
-
 # Directories that contain source (not tests, not vendor)
 _SOURCE_DIRS = ["agents", "core", "aura_cli", "memory", "tools"]
 _TEST_DIR = "tests"
@@ -52,6 +45,7 @@ _TEST_DIR = "tests"
 # Skip files matching these patterns
 _SKIP_PATTERNS = [
     "__pycache__", ".git", "node_modules", "*.pyc",
+    "venv/", ".venv/", ".tox/", ".mypy_cache/", ".pytest_cache/",
     "test_", "_test.py",
 ]
 
@@ -116,7 +110,7 @@ class AutonomousDiscovery:
                  details={"root": str(self.root)})
 
         findings: List[Dict] = []
-        findings += self._scan_code_signals()
+        findings += self._scan_tech_debt_skill()
         findings += self._scan_missing_tests()
         findings += self._scan_structural_debt()
 
@@ -150,48 +144,56 @@ class AutonomousDiscovery:
                  details={"new_goals": len(new_goals), "seen_total": len(self._seen)})
         return report
 
-    def _scan_code_signals(self) -> List[Dict]:
-        """Scan Python files for TODO, FIXME, type:ignore patterns."""
-        findings: List[Dict] = []
-        for src_dir in _SOURCE_DIRS:
-            dir_path = self.root / src_dir
-            if not dir_path.is_dir():
-                continue
-            for py_file in dir_path.rglob("*.py"):
-                if self._should_skip(py_file):
-                    continue
-                try:
-                    self._scan_file_signals(py_file, findings)
-                except Exception:
-                    continue
-        return findings
-
-    def _scan_file_signals(self, path: Path, findings: List[Dict]) -> None:
-        rel = str(path.relative_to(self.root))
+    def _scan_tech_debt_skill(self) -> List[Dict]:
+        """Scan using TechDebtQuantifierSkill (TODOs, long files, etc)."""
+        findings = []
         try:
-            content = path.read_text(encoding="utf-8", errors="replace")
-        except Exception:
-            return
-        for lineno, line in enumerate(content.splitlines(), 1):
-            for pattern, signal, priority in _CODE_SIGNAL_PATTERNS:
-                match = re.search(pattern, line, re.IGNORECASE)
-                if not match:
+            from agents.skills.tech_debt_quantifier import TechDebtQuantifierSkill
+            skill = TechDebtQuantifierSkill()
+            result = skill.run({"project_root": str(self.root)})
+            
+            for item in result.get("debt_items", []):
+                file_path = item.get("file", "")
+                
+                # Apply skip logic
+                if any(skip in file_path for skip in _SKIP_PATTERNS):
                     continue
-                if signal == "todo_fixme":
-                    description = match.group(2).strip()[:80] if match.lastindex >= 2 else line.strip()[:60]
-                    goal = f"Address {match.group(1).upper()} in {rel}:{lineno} — {description}"
-                    priority = "medium" if "fixme" in match.group(1).lower() else "low"
+                
+                itype = item.get("type")
+                line = item.get("line", 0)
+                snippet = item.get("snippet", "")
+                
+                signal = "tech_debt"
+                priority = "low"
+                goal = ""
+                
+                if itype in ("TODO", "FIXME", "HACK", "XXX", "BUG"):
+                    signal = "todo_fixme"
+                    priority = "medium" if itype in ("FIXME", "BUG") else "low"
+                    goal = f"Address {itype} in {file_path}:{line} — {snippet}"
+                elif itype == "LONG_FILE":
+                    goal = f"Refactor long file {file_path} ({snippet})"
+                elif itype == "LONG_FUNCTION":
+                    goal = f"Refactor long function {file_path}:{line} ({snippet})"
+                elif itype == "MISSING_INIT":
+                    goal = f"Add __init__.py to {file_path} ({snippet})"
                 else:
-                    goal = f"Fix {signal} annotation in {rel}:{lineno}"
-                item_hash = hashlib.sha256(f"{rel}:{lineno}:{signal}".encode()).hexdigest()[:16]
+                    goal = f"Fix {itype} in {file_path}:{line}"
+                
+                item_hash = hashlib.sha256(f"{file_path}:{line}:{itype}".encode()).hexdigest()[:16]
                 findings.append({
                     "signal": signal,
                     "priority": priority,
                     "goal": goal,
                     "hash": item_hash,
-                    "file": rel,
-                    "line": lineno,
+                    "file": file_path,
+                    "line": line,
                 })
+
+        except Exception as e:
+            log_json("WARN", "tech_debt_scan_failed", details={"error": str(e)})
+            
+        return findings
 
     def _scan_missing_tests(self) -> List[Dict]:
         """Find source modules without a corresponding test file."""
@@ -278,8 +280,13 @@ class AutonomousDiscovery:
             return False
 
     def _should_skip(self, path: Path) -> bool:
-        parts = str(path)
-        return any(skip in parts for skip in _SKIP_PATTERNS)
+        try:
+            # Check relative path to avoid matching unrelated parent directories (like pytest temp dirs)
+            rel = str(path.relative_to(self.root))
+        except ValueError:
+            rel = str(path)
+            
+        return any(skip in rel for skip in _SKIP_PATTERNS)
 
     def _load_seen(self) -> set:
         try:
@@ -299,3 +306,4 @@ class AutonomousDiscovery:
         except Exception as exc:
             log_json("WARN", "autonomous_discovery_save_failed",
                      details={"error": str(exc)})
+

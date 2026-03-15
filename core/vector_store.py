@@ -1,42 +1,39 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import sqlite3
 import time
 import uuid
-import hashlib
-import sqlite3
-from typing import List, Dict, Any, Union
+from typing import Any, Dict, List, Optional, Union
 
+try:
+    import numpy as np
+except ImportError:  # pragma: no cover - exercised in subprocess-based CLI contract tests
+    np = None
 from core.logging_utils import log_json
 from core.memory_types import MemoryRecord, RetrievalQuery, SearchHit
 
 
-class _MissingPackage:
-    """Placeholder for optional dependencies that are not installed."""
-
-    def __init__(self, name: str):
-        self._name = name
-
-    def __getattr__(self, attr):
-        raise ImportError(f"Optional dependency '{self._name}' is required for this operation.")
-
-    def __call__(self, *args, **kwargs):
-        raise ImportError(f"Optional dependency '{self._name}' is required for this operation.")
-
-
-try:
-    import numpy as np  # type: ignore
-except ImportError:  # pragma: no cover - exercised via optional-deps tests
-    np = _MissingPackage("numpy")  # type: ignore
+def _require_numpy():
+    if np is None:
+        raise ImportError(
+            "VectorStore requires the optional 'numpy' package for embedding storage and search. "
+            "Install it with `pip install numpy` or `pip install -r requirements.txt`."
+        )
+    return np
 
 class VectorStore:
     """
     Unified Control Plane: Centralized semantic memory store.
     Implements ASCM v2 VectorStoreV2 protocol with multi-model embedding support.
     """
-    def __init__(self, model_adapter, brain):
-        self.model_adapter = model_adapter
+    def __init__(self, embedding_provider, brain):
+        _require_numpy()
+        self.embedding_provider = embedding_provider
         self.brain = brain
+        adapter = getattr(embedding_provider, "model_adapter", None)
+        self.model_adapter = adapter or embedding_provider
         # ASCM v2: use Row factory for name-based access in search results
         self.brain.db.row_factory = sqlite3.Row
         self._init_db()
@@ -76,12 +73,41 @@ class VectorStore:
             """)
             self.brain.db.execute("CREATE INDEX IF NOT EXISTS idx_mr_content_hash ON memory_records(content_hash)")
             self.brain.db.execute("CREATE INDEX IF NOT EXISTS idx_mr_source_type ON memory_records(source_type)")
+            
+            # FTS5 Virtual Table for Keyword Search
+            self.brain.db.execute("""
+                CREATE VIRTUAL TABLE IF NOT EXISTS memory_records_fts USING fts5(
+                    id UNINDEXED,
+                    content,
+                    source_ref,
+                    tags
+                )
+            """)
+            
             self.brain.db.commit()
             
             # Migration check for legacy v1 table
             self._migrate_legacy_v1()
+            # Migration check for FTS5 population
+            self._migrate_fts()
         except sqlite3.Error as e:
             log_json("ERROR", "vector_store_init_failed", details={"error": str(e)})
+
+    def _migrate_fts(self):
+        """Populates the FTS5 table if it is empty but memory_records has data."""
+        try:
+            fts_count = self.brain.db.execute("SELECT COUNT(*) FROM memory_records_fts").fetchone()[0]
+            if fts_count == 0:
+                mr_count = self.brain.db.execute("SELECT COUNT(*) FROM memory_records").fetchone()[0]
+                if mr_count > 0:
+                    log_json("INFO", "vector_store_migrating_fts", details={"count": mr_count})
+                    self.brain.db.execute("""
+                        INSERT INTO memory_records_fts(id, content, source_ref, tags)
+                        SELECT id, content, source_ref, tags FROM memory_records
+                    """)
+                    self.brain.db.commit()
+        except Exception as e:
+            log_json("WARN", "vector_store_fts_migration_failed", details={"error": str(e)})
 
     def _migrate_legacy_v1(self):
         """Migrates data from legacy tables to the v2 schema."""
@@ -122,7 +148,7 @@ class VectorStore:
     def upsert(self, records: List[MemoryRecord]) -> Dict[str, int]:
         """Unified upsert: handles content and model-specific embeddings."""
         count = 0
-        current_model = self.model_adapter.model_id()
+        current_model = self.embedding_provider.model_id()
         
         # 1. Identify records needing embeddings for the current model
         to_embed = []
@@ -142,8 +168,10 @@ class VectorStore:
         # 2. Batch embed if needed
         if to_embed:
             try:
-                vectors = self.model_adapter.embed([r.content for r in to_embed])
+                vectors = self.embedding_provider.embed([r.content for r in to_embed])
                 for rec, vec in zip(to_embed, vectors):
+                    if isinstance(vec, list):
+                        vec = np.array(vec, dtype=np.float32)
                     rec.embedding = vec.tobytes()
                     rec.embedding_dims = len(vec)
                     rec.embedding_model = current_model
@@ -174,6 +202,13 @@ class VectorStore:
                             INSERT OR REPLACE INTO embeddings (record_id, model_id, dims, data)
                             VALUES (?, ?, ?, ?)
                         """, (rec.id, current_model, rec.embedding_dims, rec.embedding))
+                    
+                    # Sync to FTS5
+                    self.brain.db.execute("""
+                        INSERT OR REPLACE INTO memory_records_fts (id, content, source_ref, tags)
+                        VALUES (?, ?, ?, ?)
+                    """, (rec.id, rec.content, rec.source_ref, json.dumps(rec.tags)))
+                    
                     count += 1
                 except sqlite3.Error as e:
                     log_json("ERROR", "vector_store_record_upsert_failed", details={"id": rec.id, "error": str(e)})
@@ -195,13 +230,28 @@ class VectorStore:
         else:
             q_obj = query
 
-        current_model = self.model_adapter.model_id()
+        # Fallback Logic:
+        # 1. Try embedding provider
+        # 2. If provider fails or returns zero vectors (and hybrid/fallback is enabled), use FTS
+        
+        use_semantic = True
         try:
-            query_vec = self.model_adapter.get_embedding(q_obj.query_text)
+            embeddings = self.embedding_provider.embed([q_obj.query_text])
+            if not embeddings:
+                use_semantic = False
+            else:
+                query_vec = np.array(embeddings[0], dtype=np.float32)
+                if np.all(query_vec == 0):
+                    use_semantic = False
         except Exception as e:
-            log_json("WARN", "vector_store_search_embed_failed", details={"error": str(e)})
-            return []
+            log_json("WARN", "vector_store_embedding_failed_fallback_fts", details={"error": str(e)})
+            use_semantic = False
 
+        if not use_semantic:
+            return self._search_fts(query, q_obj)
+
+        current_model = self.embedding_provider.model_id()
+        
         # 1. Fetch candidates from DB (constrained by filters)
         # For efficiency, we only load vectors for the active model
         sql = """
@@ -218,12 +268,17 @@ class VectorStore:
                     sql += f" AND mr.{key} = ?"
                     params.append(val)
 
-        candidates = self.brain.db.execute(sql, params).fetchall()
+        try:
+            candidates = self.brain.db.execute(sql, params).fetchall()
+        except Exception as e:
+            # If embedding table query fails, fallback to FTS
+            return self._search_fts(query, q_obj)
+
         hits = []
         
         # 2. Rank candidates using cosine similarity in Python (sufficient for repo-scale)
         q_norm = np.linalg.norm(query_vec)
-        if q_norm == 0: return []
+        if q_norm == 0: return self._search_fts(query, q_obj)
 
         for row in candidates:
             vec = np.frombuffer(row["embedding_blob"], dtype=np.float32)
@@ -249,21 +304,64 @@ class VectorStore:
                 ))
 
         hits.sort(key=lambda h: h.score, reverse=True)
-        
+        return self._post_process_hits(hits, query, q_obj)
+
+    def _search_fts(self, original_query: Union[str, RetrievalQuery], q_obj: RetrievalQuery) -> Union[List[str], List[SearchHit]]:
+        """Fallback keyword search using FTS5."""
+        log_json("INFO", "vector_store_fallback_fts", details={"query": q_obj.query_text})
+        try:
+            # Simple sanitization for FTS5 syntax
+            # Match query against content, source_ref, tags
+            safe_query = q_obj.query_text.replace('"', '""')
+            
+            # FTS5 'rank' is a built-in function
+            sql = """
+                SELECT fts.rowid, fts.rank, mr.* 
+                FROM memory_records_fts fts
+                JOIN memory_records mr ON fts.id = mr.id
+                WHERE memory_records_fts MATCH ? 
+                ORDER BY rank
+                LIMIT ?
+            """
+            rows = self.brain.db.execute(sql, (safe_query, q_obj.k)).fetchall()
+            
+            hits = []
+            for row in rows:
+                rank = row["rank"]
+                # Rank is typically negative (more negative is better) or small positive depending on version
+                # Usually BM25 score. Let's just use absolute rank order as score proxy
+                score = 0.5  # Placeholder since we don't have true similarity
+                
+                hits.append(SearchHit(
+                    record_id=row["id"],
+                    content=row["content"],
+                    score=score,
+                    source_ref=row["source_ref"],
+                    metadata={"source_type": row["source_type"], "tags": json.loads(row["tags"])},
+                    explanation=f"FTS Rank: {rank}"
+                ))
+            
+            return self._post_process_hits(hits, original_query, q_obj)
+            
+        except Exception as e:
+            log_json("WARN", "vector_store_fts_failed", details={"error": str(e)})
+            return []
+
+    def _post_process_hits(self, hits, query_input, q_obj):
         # Deduplication by content_hash
         if q_obj.dedupe_key == "content_hash":
             unique = []
             seen = set()
             for h in hits:
-                # We need the hash from the candidate row
-                cand = next(c for c in candidates if c["id"] == h.record_id)
-                if cand["content_hash"] not in seen:
+                # Calculate hash from content since we don't have the original candidate object easily
+                content_hash = hashlib.sha256(h.content.encode()).hexdigest()
+                if content_hash not in seen:
                     unique.append(h)
-                    seen.add(cand["content_hash"])
+                    seen.add(content_hash)
             hits = unique
 
         results = hits[:q_obj.k]
-        if isinstance(query, str):
+        if isinstance(query_input, str):
             return [h.content for h in results]
         return results
 
@@ -284,7 +382,8 @@ class VectorStore:
           - batch_size: embedding batch size
         """
         opts = dict(options or {})
-        target_model = str(opts.get("model_id") or self.model_adapter.model_id())
+        adapter = opts.get("model_adapter") or self.model_adapter or self.embedding_provider
+        target_model = str(opts.get("model_id") or adapter.model_id())
         source_types = opts.get("source_types") or []
         exclude_source_types = opts.get("exclude_source_types") or []
         drop_existing_embeddings = bool(opts.get("drop_existing_embeddings", True))
@@ -337,7 +436,7 @@ class VectorStore:
             for start in range(0, len(rows), batch_size):
                 batch = rows[start:start + batch_size]
                 texts = [row["content"] if isinstance(row, sqlite3.Row) else row[1] for row in batch]
-                vectors = self.model_adapter.embed(texts)
+                vectors = adapter.embed(texts)
 
                 self.brain.db.execute("BEGIN TRANSACTION")
                 try:
@@ -384,6 +483,9 @@ class VectorStore:
 
     def delete(self, ids: List[str]) -> int:
         cur = self.brain.db.execute("DELETE FROM memory_records WHERE id IN ({})".format(
+            ",".join(["?"] * len(ids))
+        ), ids)
+        self.brain.db.execute("DELETE FROM memory_records_fts WHERE id IN ({})".format(
             ",".join(["?"] * len(ids))
         ), ids)
         self.brain.db.commit()

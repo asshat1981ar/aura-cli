@@ -61,6 +61,16 @@ def build_cycle_panel(
         table.add_section()
         table.add_row("Last Outcome", f"[bold {color}]{outcome}[/bold {color}]")
         table.add_row("Stop Reason", f"[dim]{stop}[/dim]")
+        if last_summary.get("failure_routing_decision"):
+            table.add_row(
+                "Routing",
+                f"[cyan]{last_summary['failure_routing_decision']}[/cyan]",
+            )
+        if last_summary.get("failure_routing_reason"):
+            table.add_row(
+                "Routing Why",
+                f"[dim]{last_summary['failure_routing_reason']}[/dim]",
+            )
         if last_summary.get("beads_status"):
             beads_detail = str(last_summary["beads_status"])
             if last_summary.get("beads_decision_id"):

@@ -117,6 +117,24 @@ def _infer_current_phase(phase_outputs: Dict[str, Any], state: str, current_phas
     return last_phase
 
 
+def _merge_queued_goals(*queue_payloads: Any) -> list[str]:
+    merged = []
+    for payload in queue_payloads:
+        if not isinstance(payload, dict):
+            continue
+        queued = payload.get("queued", [])
+        if not isinstance(queued, list):
+            continue
+        for item in queued:
+            if not isinstance(item, str):
+                continue
+            goal_text = item.strip()
+            if not goal_text or goal_text in merged:
+                continue
+            merged.append(goal_text)
+    return merged
+
+
 def _build_phase_status(
     phase_outputs: Dict[str, Any],
     *,
@@ -164,6 +182,10 @@ def build_cycle_summary(
     verification = phase_outputs.get("verification", {}) if isinstance(phase_outputs, dict) else {}
     apply_result = phase_outputs.get("apply_result", {}) if isinstance(phase_outputs, dict) else {}
     capability_goal_queue = phase_outputs.get("capability_goal_queue", {}) if isinstance(phase_outputs, dict) else {}
+    beads_goal_queue = phase_outputs.get("beads_goal_queue", {}) if isinstance(phase_outputs, dict) else {}
+    failure_context = phase_outputs.get("_failure_context", {}) if isinstance(phase_outputs, dict) else {}
+    if not isinstance(failure_context, dict):
+        failure_context = {}
 
     verification_status = _normalize_verification_status(verification)
     failures = list(verification.get("failures", [])) if isinstance(verification, dict) else []
@@ -172,7 +194,7 @@ def build_cycle_summary(
         item.get("file", str(item))
         for item in apply_result.get("failed", [])
     ] if isinstance(apply_result, dict) else []
-    queued_follow_up_goals = list(capability_goal_queue.get("queued", [])) if isinstance(capability_goal_queue, dict) else []
+    queued_follow_up_goals = _merge_queued_goals(capability_goal_queue, beads_goal_queue)
     retry_count = int(phase_outputs.get("retry_count", 0)) if isinstance(phase_outputs, dict) else 0
     beads = entry.get("beads") or phase_outputs.get("beads_gate", {}) if isinstance(phase_outputs, dict) else {}
     if not isinstance(beads, dict):
@@ -202,6 +224,8 @@ def build_cycle_summary(
         "verification_status": verification_status,
         "outcome": outcome,
         "stop_reason": stop_reason,
+        "failure_routing_decision": failure_context.get("route"),
+        "failure_routing_reason": failure_context.get("routing_reason"),
         "failures": failures,
         "retry_count": retry_count,
         "applied_files": applied_files,

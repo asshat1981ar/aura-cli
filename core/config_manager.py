@@ -1,7 +1,9 @@
 import os
 import json
+import shutil
+import time
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from core.logging_utils import log_json
 from core.exceptions import ConfigurationError
 
@@ -71,12 +73,16 @@ _KEY_VALIDATORS = {
     "mcp_server_url":   lambda k, v: _validate_string(k, v),
     "local_model_command": lambda k, v: _validate_string(k, v),
     "llm_timeout":      lambda k, v: _validate_positive_int(k, v),
+    "mcp_api_token":    lambda k, v: _validate_string(k, v),
+    "mcp_thinking_token": lambda k, v: _validate_string(k, v),
 }
 
 DEFAULT_CONFIG = {
     "model_name": "google/gemini-2.0-flash-exp:free",
     "api_key": None,
     "openai_api_key": None,
+    "mcp_api_token": None,
+    "mcp_thinking_token": None,
     "dry_run": False,
     "decompose": False,
     "max_iterations": 10,
@@ -135,6 +141,7 @@ DEFAULT_CONFIG = {
         "dev_tools": 8001,
         "skills": 8002,
         "control": 8003,
+        "thinking": 8004,
         "agentic_loop": 8006,
         "copilot": 8007,
     },
@@ -216,6 +223,8 @@ class ConfigManager:
             "MCP_SERVER_URL": "mcp_server_url",
             "AURA_LOCAL_MODEL_COMMAND": "local_model_command",
             "AURA_LLM_TIMEOUT": "llm_timeout",
+            "MCP_API_TOKEN": "mcp_api_token",
+            "MCP_THINKING_TOKEN": "mcp_thinking_token",
         }
         
         for env_key, config_key in env_mappings.items():
@@ -384,6 +393,7 @@ class ConfigManager:
 
     def persist_to_file(self, key: str, value: Any):
         """Sets a configuration value and persists it to the aura.config.json file."""
+        self._backup_config()
         self.file_config[key] = value
         try:
             with open(self.config_file, 'w') as f:
@@ -393,6 +403,52 @@ class ConfigManager:
         except Exception as e:
             log_json("ERROR", "config_save_failed", details={"error": str(e)})
             raise ConfigurationError(f"Failed to save config: {e}")
+
+    def _backup_config(self):
+        """Creates a timestamped backup of the current configuration."""
+        if not self.config_file.exists():
+            return
+            
+        self.backup_dir.mkdir(exist_ok=True)
+        timestamp = int(time.time())
+        backup_path = self.backup_dir / f"aura.config.{timestamp}.json"
+        try:
+            shutil.copy2(self.config_file, backup_path)
+            log_json("INFO", "config_backup_created", details={"path": str(backup_path)})
+        except Exception as e:
+            log_json("WARN", "config_backup_failed", details={"error": str(e)})
+
+    def rollback_config(self, steps: int = 1):
+        """Rolls back the configuration to a previous version."""
+        if not self.backup_dir.exists():
+             log_json("WARN", "config_rollback_no_backups")
+             return
+
+        backups = sorted(self.backup_dir.glob("aura.config.*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        if not backups:
+             log_json("WARN", "config_rollback_no_backups_found")
+             return
+
+        if steps > len(backups):
+             log_json("WARN", "config_rollback_steps_exceeded", details={"available": len(backups), "requested": steps})
+             return
+
+        target_backup = backups[steps - 1]
+        try:
+            shutil.copy2(target_backup, self.config_file)
+            log_json("INFO", "config_rollback_success", details={"restored_from": str(target_backup)})
+            self.refresh()
+        except Exception as e:
+            log_json("ERROR", "config_rollback_failed", details={"error": str(e)})
+            
+    def validate_command(self, command: str) -> bool:
+        """Validates if a command string is executable."""
+        if not command:
+            return False
+        # Basic check: split and check first token
+        cmd_name = command.split()[0]
+        return shutil.which(cmd_name) is not None
+
 
     def get_mcp_server_port(self, server_name: str) -> int:
         """R4: Return the configured port for a named MCP server.

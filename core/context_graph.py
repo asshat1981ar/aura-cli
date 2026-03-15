@@ -200,42 +200,147 @@ class ContextGraph:
 
     def find_circular_dependencies(self) -> List[List[str]]:
         """Identify cycles in the 'imports' and 'calls' graph."""
-        import networkx as nx
-        G = self.get_nx_graph(relations=["imports", "imports_from", "calls"])
-        cycles = list(nx.simple_cycles(G))
-        # Map IDs back to labels
-        labels = nx.get_node_attributes(G, 'label')
-        return [[labels.get(node, node) for node in cycle] for cycle in cycles]
+        try:
+            import networkx as nx
+            G = self.get_nx_graph(relations=["imports", "imports_from", "calls"])
+            cycles = list(nx.simple_cycles(G))
+            # Map IDs back to labels
+            labels = nx.get_node_attributes(G, 'label')
+            return [[labels.get(node, node) for node in cycle] for cycle in cycles]
+        except ImportError:
+            # Fallback implementation without networkx
+            log_json("INFO", "networkx_missing_fallback_cycle_detection")
+            return self._find_cycles_fallback(["imports", "imports_from", "calls"])
+
+    def _find_cycles_fallback(self, relations: List[str]) -> List[List[str]]:
+        """Simple DFS-based cycle detection for when networkx is unavailable."""
+        
+        # Query relations
+        with self._conn() as db:
+            if not relations:
+                edges_query = "SELECT src_id, dst_id FROM edges"
+                params = []
+            else:
+                placeholders = ",".join(["?"] * len(relations))
+                edges_query = f"SELECT src_id, dst_id FROM edges WHERE relation IN ({placeholders})"
+                params = relations
+            
+            rows = db.execute(edges_query, params).fetchall()
+            adj = {}
+            for row in rows:
+                src, dst = row["src_id"], row["dst_id"]
+                if src not in adj: adj[src] = []
+                adj[src].append(dst)
+                
+            # Get labels for reporting
+            nodes = db.execute("SELECT id, label FROM nodes").fetchall()
+            labels = {n["id"]: n["label"] for n in nodes}
+
+        # 3-color DFS to find cycles
+        # 0: white (unvisited), 1: gray (visiting), 2: black (visited)
+        color = {} 
+        cycles = []
+        
+        def dfs_visit(u, path):
+            color[u] = 1 # Gray
+            path.append(u)
+            
+            for v in adj.get(u, []):
+                v_color = color.get(v, 0)
+                if v_color == 1:
+                    # Found back edge -> cycle
+                    try:
+                        cycle_start_index = path.index(v)
+                        cycle_nodes = path[cycle_start_index:]
+                        # Map to labels
+                        cycle_labels = [labels.get(n, n) for n in cycle_nodes]
+                        cycles.append(cycle_labels)
+                    except ValueError:
+                        pass
+                elif v_color == 0:
+                    dfs_visit(v, path)
+            
+            path.pop()
+            color[u] = 2 # Black
+
+        all_nodes = list(adj.keys())
+        for node in all_nodes:
+            if color.get(node, 0) == 0:
+                dfs_visit(node, [])
+                
+        return cycles
 
     def find_bottleneck_files(self, limit: int = 5) -> List[Dict]:
         """Find files with high centrality (highly depended on)."""
-        import networkx as nx
-        G = self.get_nx_graph(relations=["imports", "imports_from", "calls"])
-        if not G.nodes:
-            return []
-        
         try:
-            # PageRank often requires scipy for performance
-            centrality = nx.pagerank(G, weight='weight')
-        except Exception:
-            # Fallback to degree centrality (no extra dependencies)
-            log_json("INFO", "pagerank_failed_fallback_to_degree")
-            centrality = nx.degree_centrality(G)
+            import networkx as nx
+            G = self.get_nx_graph(relations=["imports", "imports_from", "calls"])
+            if not G.nodes:
+                return []
             
-        sorted_nodes = sorted(centrality.items(), key=lambda x: x[1], reverse=True)
-        
-        labels = nx.get_node_attributes(G, 'label')
-        results = []
-        for nid, score in sorted_nodes:
-            if len(results) >= limit:
-                break
-            # Ensure node still exists and is a file
-            if nid in G.nodes and G.nodes[nid].get('type') == 'file':
+            try:
+                # PageRank often requires scipy for performance
+                centrality = nx.pagerank(G, weight='weight')
+            except Exception:
+                # Fallback to degree centrality (no extra dependencies)
+                log_json("INFO", "pagerank_failed_fallback_to_degree")
+                centrality = nx.degree_centrality(G)
+                
+            sorted_nodes = sorted(centrality.items(), key=lambda x: x[1], reverse=True)
+            
+            labels = nx.get_node_attributes(G, 'label')
+            results = []
+            for nid, score in sorted_nodes:
+                if len(results) >= limit:
+                    break
+                # Ensure node still exists and is a file
+                if nid in G.nodes and G.nodes[nid].get('type') == 'file':
+                    results.append({
+                        "file": labels.get(nid, nid),
+                        "centrality_score": round(score, 4)
+                    })
+            return results
+            
+        except ImportError:
+            log_json("INFO", "networkx_missing_fallback_bottleneck_analysis")
+            return self._find_bottleneck_fallback(limit)
+
+    def _find_bottleneck_fallback(self, limit: int = 5) -> List[Dict]:
+        """SQL-based fallback for centrality (in-degree)."""
+        with self._conn() as db:
+            # Count incoming edges for 'file' nodes
+            rows = db.execute("""
+            SELECT e.dst_id, COUNT(*) as degree
+            FROM edges e
+            JOIN nodes n ON e.dst_id = n.id
+            WHERE n.type = 'file'
+              AND e.relation IN ('imports', 'imports_from', 'calls')
+            GROUP BY e.dst_id
+            ORDER BY degree DESC
+            LIMIT ?
+            """, (limit,)).fetchall()
+            
+            total_row = db.execute("SELECT COUNT(*) FROM nodes WHERE type='file'").fetchone()
+            total_nodes = total_row[0] if total_row else 1
+            divisor = max(1, total_nodes - 1)
+            
+            results = []
+            for row in rows:
+                nid = row['dst_id']
+                degree = row['degree']
+                
+                # Fetch label
+                label_row = db.execute("SELECT label FROM nodes WHERE id = ?", (nid,)).fetchone()
+                label = label_row['label'] if label_row else nid
+                
+                # Calculate simple degree centrality
+                score = degree / divisor
+                
                 results.append({
-                    "file": labels.get(nid, nid),
+                    "file": label,
                     "centrality_score": round(score, 4)
                 })
-        return results
+            return results
 
     # ── Ingest logic ─────────────────────────────────────────────────────────
 

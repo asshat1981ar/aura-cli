@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
+
+import core.capability_manager as capability_manager
 
 from core.capability_manager import (
     analyze_capability_needs,
@@ -254,3 +259,85 @@ def test_provision_capability_actions_marks_dry_run_as_planned(tmp_path: Path):
     assert result["attempted"] is False
     assert result["results"][0]["status"] == "planned"
     assert result["results"][0]["skipped_reason"] == "dry_run"
+
+
+def test_goal_queue_items_logs_decode_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    queue_path = tmp_path / "memory" / "goal_queue.json"
+    queue_path.parent.mkdir(parents=True, exist_ok=True)
+    queue_path.write_text("{not-json", encoding="utf-8")
+
+    events = []
+
+    def _log(level, event, **kwargs):
+        events.append(event)
+
+    monkeypatch.setattr("core.capability_manager.log_json", _log)
+    items = capability_manager._goal_queue_items(project_root=tmp_path, goal_queue=None, config={"goal_queue_path": str(queue_path)})
+
+    assert items == []
+    assert "capability_goal_queue_load_failed" in events
+
+
+def test_record_capability_status_emits_telemetry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    queue = MagicMock()
+    queue.queue = ["Add AURA skill 'demo' so AURA can better handle goal: Demo"]
+    events = []
+
+    def _log(level, event, **kwargs):
+        events.append(event)
+
+    monkeypatch.setattr("core.capability_manager.log_json", _log)
+    record_capability_status(
+        project_root=tmp_path,
+        goal="Demo",
+        capability_plan={
+            "matched_capabilities": [{"capability_id": "github_mcp"}],
+            "recommended_skills": [],
+            "missing_skills": [],
+            "provisioning_actions": [],
+        },
+        capability_goal_queue={"queued": [], "skipped": [], "queue_strategy": "prepend"},
+        capability_provisioning={"results": []},
+        goal_queue=queue,
+    )
+
+    assert "capability_status_recorded" in events
+    assert (tmp_path / "memory" / "capability_status.json").exists()
+
+
+def test_capability_status_report_matches_snapshot(tmp_path: Path):
+    snapshot_path = Path(__file__).resolve().parent / "snapshots" / "capability_status_report.json"
+    queue = MagicMock()
+    queue.queue = ["Add AURA skill 'git_history_analyzer' so AURA can better handle goal: Test Goal"]
+
+    last_status = {
+        "updated_at": "2026-03-01T00:00:00Z",
+        "last_goal": "Test Goal",
+        "matched_capabilities": [{"capability_id": "github_mcp", "reason": "repo"}],
+        "recommended_skills": ["git_history_analyzer"],
+        "missing_skills": ["changelog_generator"],
+        "provisioning_actions": [{"action": "ensure_mcp_servers", "reason": "repo"}],
+        "queued_goals": ["Add AURA skill 'git_history_analyzer' so AURA can better handle goal: Test Goal"],
+        "skipped_goals": [],
+        "queue_strategy": "prepend",
+        "provisioning_results": [{"action": "ensure_mcp_servers", "status": "applied"}],
+    }
+
+    report = capability_manager.build_capability_status_report(
+        tmp_path,
+        goal_queue=queue,
+        last_status=last_status,
+        config={
+            "auto_add_capabilities": True,
+            "auto_queue_missing_capabilities": True,
+            "auto_provision_mcp": True,
+            "auto_start_mcp_servers": False,
+        },
+    )
+
+    normalized = json.dumps(report, sort_keys=True, indent=2) + "\n"
+    if not snapshot_path.exists():
+        snapshot_path.write_text(normalized, encoding="utf-8")
+        pytest.fail(f"Snapshot {snapshot_path.name} created; verify contents then rerun.")
+
+    assert normalized == snapshot_path.read_text(encoding="utf-8")

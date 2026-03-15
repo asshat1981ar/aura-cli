@@ -8,7 +8,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -369,6 +369,7 @@ class TestScaffolderAgent:
 class TestTesterAgent:
     def setup_method(self):
         from agents.tester import TesterAgent
+        from agents.sandbox import SandboxAgent
         self.brain = _make_brain()
         self.model = _make_model("def test_foo(): assert 1==1")
         self.sandbox = MagicMock()
@@ -429,6 +430,7 @@ class TestApplicatorAgent:
         assert a is not None
 
     def test_applicator_apply_no_code_block(self):
+        from agents.applicator import ApplyResult
         result = self.agent.apply("no code block here")
         assert result.success is False
         assert result.error is not None
@@ -493,6 +495,30 @@ class TestSynthesizerAgent:
         out = a.run(data)
         assert out["tasks"][0]["files"] == ["a.py"]
         assert out["tasks"][0]["tests"] == ["pytest a.py"]
+
+    def test_run_merges_beads_guidance_and_required_tests(self):
+        from agents.synthesizer import SynthesizerAgent
+        a = SynthesizerAgent()
+        out = a.run({
+            "goal": "g",
+            "tests": ["pytest a.py"],
+            "beads_context": {
+                "summary": "Proceed with compatibility guardrails.",
+                "required_constraints": ["Keep CLI JSON stable."],
+                "required_skills": ["status_formatter"],
+                "required_tests": ["pytest tests/test_commands_status.py -q"],
+                "follow_up_goals": ["Review telemetry after rollout"],
+            },
+        })
+        intent = out["tasks"][0]["intent"]
+        assert "BEADS Guidance" in intent
+        assert "Keep CLI JSON stable." in intent
+        assert "status_formatter" in intent
+        assert "Review telemetry after rollout" in intent
+        assert out["tasks"][0]["tests"] == [
+            "pytest a.py",
+            "pytest tests/test_commands_status.py -q",
+        ]
 
     def test_run_empty_input(self):
         from agents.synthesizer import SynthesizerAgent

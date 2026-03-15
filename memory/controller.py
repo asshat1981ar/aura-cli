@@ -42,7 +42,7 @@ class MemoryController:
         self.persistent_store = store
         log_json("INFO", "memory_controller_store_attached")
 
-    def store(self, tier: MemoryTier, content: Any, metadata: Optional[Dict[str, Any]] = None):
+    def store(self, tier: MemoryTier, content: Any, metadata: Optional[Dict[str, Any]] = None, corr_id: str = None):
         """Stores a piece of information in the specified tier."""
         entry = MemoryEntry(content=content, tier=tier, metadata=metadata or {})
         
@@ -57,7 +57,20 @@ class MemoryController:
                 record["metadata"] = metadata
             self.persistent_store.put("project_memory", record)
         
-        log_json("INFO", "memory_stored", details={"tier": tier.value, "content_snippet": str(content)[:50]})
+        payload_bytes = None
+        try:
+            payload_bytes = len(str(content).encode("utf-8"))
+        except Exception:
+            payload_bytes = None
+
+        log_json(
+            "INFO",
+            "memory_stored",
+            details={"tier": tier.value, "content_snippet": str(content)[:50]},
+            corr_id=corr_id,
+            component="memory",
+            payload_bytes=payload_bytes,
+        )
         
         # Immediate GC for volatile tiers
         if tier == MemoryTier.WORKING:
@@ -65,14 +78,23 @@ class MemoryController:
         elif tier == MemoryTier.SESSION:
             self._gc_tier(tier, self.max_session_size)
 
-    def retrieve(self, tier: MemoryTier, limit: int = 100) -> List[Any]:
+    def retrieve(self, tier: MemoryTier, limit: int = 100, corr_id: str = None) -> List[Any]:
         """Retrieves recent entries from a tier."""
         if tier == MemoryTier.PROJECT and self.persistent_store:
             # Query from disk for PROJECT tier
             records = self.persistent_store.query("project_memory", limit=limit)
             return [r.get("content", r) for r in records]
             
-        return [e.content for e in self.tiers[tier][-limit:]]
+        results = [e.content for e in self.tiers[tier][-limit:]]
+        log_json(
+            "INFO",
+            "memory_retrieved",
+            details={"tier": tier.value, "count": len(results), "limit": limit},
+            corr_id=corr_id,
+            component="memory",
+            outcome="success",
+        )
+        return results
 
     def _gc_tier(self, tier: MemoryTier, max_size: int):
         """Enforces size limits on a memory tier."""

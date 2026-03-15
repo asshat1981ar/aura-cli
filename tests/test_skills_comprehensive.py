@@ -365,22 +365,70 @@ class TestSkillFailureAnalyzer(_SkillTestMixin, unittest.TestCase):
 class TestEvolutionSkill(_SkillTestMixin, unittest.TestCase):
     from agents.skills.evolution_skill import EvolutionSkill
     skill_cls = EvolutionSkill
-    minimal_valid_input = {"project_root": _PROJECT_ROOT}
+    minimal_valid_input = {"goal": "improve system", "project_root": _PROJECT_ROOT}
+
+    def _mock_factory(self, project_root):
+        from unittest.mock import MagicMock
+        runtime = MagicMock()
+        
+        # Mock dictionary access: runtime["key"]
+        def get_item(key):
+            m = MagicMock()
+            # Make the mock return strings for methods often used in f-strings
+            m.plan.return_value = ["mock_task"]
+            m.implement.return_value = "print('mock code')"
+            m.critique_code.return_value = "Mock critique"
+            m.validate_mutation.return_value = '{"decision": "REJECTED"}'
+            m.recall_with_budget.return_value = ["memory1"]
+            m.search.return_value = ["search1"]
+            m.recall_weaknesses.return_value = ["weakness1"]
+            return m
+            
+        runtime.__getitem__.side_effect = get_item
+        runtime.get.side_effect = lambda k, d=None: get_item(k)
+        
+        # Ensure nested access works for runtime["orchestrator"].agents.get("act")
+        orch = MagicMock()
+        orch.agents = MagicMock()
+        orch.agents.get.side_effect = lambda k, d=None: get_item(k)
+        runtime.__getitem__.side_effect = lambda key: orch if key == "orchestrator" else get_item(key)
+
+        return runtime
+
+    def _make(self):
+        s = self.skill_cls()
+        # Mock the factory to avoid expensive real runtime creation
+        s.set_runtime_factory(self._mock_factory)
+        
+        # Also patch EvolutionLoop.run to avoid executing real logic
+        # Since EvolutionLoop is imported inside _run, we can't easily patch it directly
+        # But if we provide mocks for planner/coder, the loop might run fast enough?
+        # No, EvolutionLoop.run does a lot of orchestrating.
+        # Ideally we'd mock the EvolutionLoop class itself, but it's hard with local import.
+        # However, passing mocks to EvolutionLoop via our mock runtime is a good start.
+        return s
+
 
 
 # ===========================================================================
-# 30. SecurityHardener
+# 30. SecurityHardenerSkill
 # ===========================================================================
 
-class TestSecurityHardener(_SkillTestMixin, unittest.TestCase):
+class TestSecurityHardenerSkill(_SkillTestMixin, unittest.TestCase):
     from agents.skills.security_hardener import SecurityHardenerSkill
     skill_cls = SecurityHardenerSkill
-    minimal_valid_input = {"project_root": _PROJECT_ROOT}
+    minimal_valid_input = {"content": "API_KEY = '123'", "file_path": "secrets.py"}
 
-class TestStructuralAnalyzer(_SkillTestMixin, unittest.TestCase):
+
+# ===========================================================================
+# 31. StructuralAnalyzerSkill
+# ===========================================================================
+
+class TestStructuralAnalyzerSkill(_SkillTestMixin, unittest.TestCase):
     from agents.skills.structural_analyzer import StructuralAnalyzerSkill
     skill_cls = StructuralAnalyzerSkill
     minimal_valid_input = {"project_root": _PROJECT_ROOT}
+
 
 # ===========================================================================
 # Registry integration test

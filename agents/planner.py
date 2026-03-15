@@ -17,6 +17,7 @@ System State:
 - Known Weaknesses: {weakness}
 
 {backfill_instr}
+{beads_instr}
 
 You must:
 
@@ -58,8 +59,9 @@ class PlannerAgent:
         sim = input_data.get("similar_past_problems", "")
         weak = input_data.get("known_weaknesses", "")
         backfill_ctx = input_data.get("backfill_context", [])
+        beads_ctx = input_data.get("beads_context", {})
 
-        steps = self.plan(goal, mem, sim, weak, backfill_context=backfill_ctx)
+        steps = self.plan(goal, mem, sim, weak, backfill_context=backfill_ctx, beads_context=beads_ctx)
         return {"steps": steps}
 
     def _respond(self, prompt: str) -> str:
@@ -72,7 +74,15 @@ class PlannerAgent:
             return responder("planning", prompt)
         return self.model.respond(prompt)
 
-    def plan(self, goal: str, memory_snapshot: str, similar_past_problems: str, known_weaknesses: str, backfill_context: list = None) -> List[str]:
+    def plan(
+        self,
+        goal: str,
+        memory_snapshot: str,
+        similar_past_problems: str,
+        known_weaknesses: str,
+        backfill_context: list = None,
+        beads_context: dict | None = None,
+    ) -> List[str]:
         """
         Generates a detailed plan based on the current goal, system memory,
         similar past problems, and known system weaknesses.
@@ -85,12 +95,48 @@ class PlannerAgent:
                 backfill_instr += f"- {item['file']} ({pct}% coverage)\n"
             backfill_instr += "\nPRIORITIZE these modules by adding 'Test Backfill' steps at the BEGINNING of your plan."
 
+        beads_instr = ""
+        if isinstance(beads_context, dict) and beads_context:
+            sections = []
+            status = beads_context.get("status")
+            summary = beads_context.get("summary")
+            if isinstance(summary, str) and summary.strip():
+                if isinstance(status, str) and status.strip():
+                    sections.append(f"- Decision: {status.strip()} - {summary.strip()}")
+                else:
+                    sections.append(f"- Decision: {summary.strip()}")
+
+            for label, key, lead in (
+                ("Required Constraints", "required_constraints", "Treat these as mandatory constraints:"),
+                ("Required Tests", "required_tests", "Make sure the plan explicitly covers these tests:"),
+                ("Required Skills", "required_skills", "Use or acquire these capabilities if the task needs them:"),
+                ("Follow-up Goals", "follow_up_goals", "Account for these follow-up goals if dependent work is needed:"),
+            ):
+                values = beads_context.get(key, [])
+                if not isinstance(values, list):
+                    continue
+                normalized = []
+                for item in values:
+                    if not isinstance(item, str):
+                        continue
+                    text = item.strip()
+                    if not text or text in normalized:
+                        continue
+                    normalized.append(text)
+                if not normalized:
+                    continue
+                sections.append(f"{label}:\n{lead}\n" + "\n".join(f"- {item}" for item in normalized))
+
+            if sections:
+                beads_instr = "BEADS decision context:\n" + "\n".join(sections) + "\n"
+
         prompt = EVOLUTION_PROMPT.format(
             goal=goal,
             memory=memory_snapshot,
             similar=similar_past_problems,
             weakness=known_weaknesses,
-            backfill_instr=backfill_instr
+            backfill_instr=backfill_instr,
+            beads_instr=beads_instr,
         )
         response = self._respond(prompt)
         self.brain.remember(f"Planned for goal: {goal} with raw response: {response[:100]}...")

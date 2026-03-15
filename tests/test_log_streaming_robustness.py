@@ -3,7 +3,8 @@ import unittest
 import os
 import io
 import sys
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from tests.cli_entrypoint_test_utils import run_main_subprocess
 from core.logging_utils import log_json

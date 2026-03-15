@@ -4,6 +4,8 @@ Verifies AuraStudio callbacks and panel builders without live display.
 """
 from __future__ import annotations
 
+import os
+import pytest
 from unittest.mock import MagicMock
 from aura_cli.tui.app import AuraStudio
 
@@ -90,3 +92,32 @@ def test_cycle_panel_renders_beads_context():
     assert "BEADS" in rendered
     assert "beads-42" in rendered
     assert "goal_run" in rendered
+
+
+def test_cycle_panel_renders_failure_routing_context():
+    from aura_cli.tui.panels.cycle_panel import build_cycle_panel
+    from rich.console import Console
+
+    panel = build_cycle_panel(
+        "",
+        {},
+        "",
+        None,
+        last_summary={
+            "outcome": "FAILED",
+            "stop_reason": "MAX_CYCLES",
+            "queued_follow_up_goals": [],
+            "failure_routing_decision": "plan",
+            "failure_routing_reason": (
+                "structural: detected 'design' in failures/logs"
+            ),
+        },
+    )
+
+    console = Console(record=True, width=120)
+    console.print(panel)
+    rendered = console.export_text()
+
+    assert "Routing" in rendered
+    assert "plan" in rendered
+    assert "design" in rendered

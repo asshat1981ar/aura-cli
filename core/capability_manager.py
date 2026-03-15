@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Iterable
 
 from core.config_manager import ConfigManager, DEFAULT_CONFIG
+from core.logging_utils import log_json
 from core.runtime_paths import resolve_project_path
 
 
@@ -184,7 +185,13 @@ def _capability_status_path(project_root: Path) -> Path:
 
 def _goal_queue_items(*, project_root: Path, goal_queue=None, config=None) -> list[str]:
     if goal_queue is not None and getattr(goal_queue, "queue", None) is not None:
-        return list(goal_queue.queue)
+        items = list(goal_queue.queue)
+        log_json(
+            "INFO",
+            "capability_goal_queue_loaded",
+            details={"source": "runtime", "count": len(items)},
+        )
+        return items
 
     resolved_config = config or _project_config(project_root)
     queue_path = resolve_project_path(
@@ -193,14 +200,30 @@ def _goal_queue_items(*, project_root: Path, goal_queue=None, config=None) -> li
         DEFAULT_CONFIG["goal_queue_path"],
     )
     if not queue_path.exists():
+        log_json(
+            "INFO",
+            "capability_goal_queue_missing",
+            details={"path": str(queue_path)},
+        )
         return []
 
     try:
         payload = json.loads(queue_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, json.JSONDecodeError) as exc:
+        log_json(
+            "WARN",
+            "capability_goal_queue_load_failed",
+            details={"path": str(queue_path), "error": str(exc)},
+        )
         return []
 
-    return payload if isinstance(payload, list) else []
+    items = payload if isinstance(payload, list) else []
+    log_json(
+        "INFO",
+        "capability_goal_queue_loaded",
+        details={"source": "file", "path": str(queue_path), "count": len(items)},
+    )
+    return items
 
 
 def is_capability_goal(goal: str) -> bool:
@@ -340,38 +363,45 @@ def build_missing_skill_goals(missing_skills: Iterable[str], goal: str) -> list[
     ]
 
 
-def queue_missing_capability_goals(
+def queue_follow_up_goals(
     *,
     goal_queue,
-    missing_skills: Iterable[str],
-    goal: str,
+    goals: Iterable[str],
     enabled: bool,
     dry_run: bool,
+    disabled_reason: str = "auto_queue_disabled",
 ) -> dict:
-    missing = list(dict.fromkeys(missing_skills))
-    if not missing:
+    candidate_goals = []
+    for item in goals:
+        if not isinstance(item, str):
+            continue
+        goal_text = item.strip()
+        if not goal_text or goal_text in candidate_goals:
+            continue
+        candidate_goals.append(goal_text)
+
+    if not candidate_goals:
         return {"attempted": False, "queued": [], "skipped": []}
     if dry_run:
         return {
             "attempted": False,
             "queued": [],
-            "skipped": [{"goal": item, "reason": "dry_run"} for item in build_missing_skill_goals(missing, goal)],
+            "skipped": [{"goal": item, "reason": "dry_run"} for item in candidate_goals],
         }
     if not enabled:
         return {
             "attempted": False,
             "queued": [],
-            "skipped": [{"goal": item, "reason": "auto_queue_disabled"} for item in build_missing_skill_goals(missing, goal)],
+            "skipped": [{"goal": item, "reason": disabled_reason} for item in candidate_goals],
         }
     if goal_queue is None:
         return {
             "attempted": False,
             "queued": [],
-            "skipped": [{"goal": item, "reason": "goal_queue_unavailable"} for item in build_missing_skill_goals(missing, goal)],
+            "skipped": [{"goal": item, "reason": "goal_queue_unavailable"} for item in candidate_goals],
         }
 
     existing = set(getattr(goal_queue, "queue", []) or [])
-    candidate_goals = build_missing_skill_goals(missing, goal)
     new_goals = [item for item in candidate_goals if item not in existing]
     skipped = [
         {"goal": item, "reason": "already_queued"}
@@ -400,6 +430,24 @@ def queue_missing_capability_goals(
     }
 
 
+def queue_missing_capability_goals(
+    *,
+    goal_queue,
+    missing_skills: Iterable[str],
+    goal: str,
+    enabled: bool,
+    dry_run: bool,
+) -> dict:
+    missing = list(dict.fromkeys(missing_skills))
+    return queue_follow_up_goals(
+        goal_queue=goal_queue,
+        goals=build_missing_skill_goals(missing, goal),
+        enabled=enabled,
+        dry_run=dry_run,
+        disabled_reason="auto_queue_disabled",
+    )
+
+
 def record_capability_status(
     *,
     project_root: Path,
@@ -426,6 +474,18 @@ def record_capability_status(
             if is_capability_goal(item)
         ],
     }
+    log_json(
+        "INFO",
+        "capability_status_recorded",
+        goal=goal,
+        details={
+            "matched_capabilities": len(report["matched_capabilities"]),
+            "queued_goals": len(report["queued_goals"]),
+            "pending_self_development_goals": len(report["pending_self_development_goals"]),
+            "provisioning_results": len(report["provisioning_results"]),
+            "queue_strategy": report["queue_strategy"],
+        },
+    )
     return save_capability_status(project_root, report)
 
 
@@ -472,7 +532,7 @@ def build_capability_status_report(
 
     dedupe = lambda values: list(dict.fromkeys(item for item in values if item))
 
-    return {
+    report = {
         "configured": {
             "auto_add_capabilities": bool(_config_value(resolved_config, "auto_add_capabilities", True)),
             "auto_queue_missing_capabilities": bool(
@@ -500,6 +560,19 @@ def build_capability_status_report(
         "applied_bootstrap_actions": dedupe(applied_bootstrap_actions),
         "failed_bootstrap_actions": dedupe(failed_bootstrap_actions),
     }
+    log_json(
+        "INFO",
+        "capability_status_built",
+        details={
+            "matched_capabilities": len(report["matched_capabilities"]),
+            "pending_self_development_goals": len(report["pending_self_development_goals"]),
+            "pending_bootstrap_actions": len(report["pending_bootstrap_actions"]),
+            "running_bootstrap_actions": len(report["running_bootstrap_actions"]),
+            "applied_bootstrap_actions": len(report["applied_bootstrap_actions"]),
+            "failed_bootstrap_actions": len(report["failed_bootstrap_actions"]),
+        },
+    )
+    return report
 
 
 def capability_doctor_check(
@@ -549,30 +622,36 @@ def provision_capability_actions(
         return {"attempted": False, "results": []}
 
     if dry_run:
-        return {
-            "attempted": False,
-            "results": [
-                {
-                    **action,
-                    "status": "planned",
-                    "skipped_reason": "dry_run",
-                }
-                for action in actions
-            ],
-        }
+        results = [
+            {
+                **action,
+                "status": "planned",
+                "skipped_reason": "dry_run",
+            }
+            for action in actions
+        ]
+        log_json(
+            "INFO",
+            "capability_provision_evaluated",
+            details={"attempted": False, "results": results, "reason": "dry_run"},
+        )
+        return {"attempted": False, "results": results}
 
     if not auto_provision:
-        return {
-            "attempted": False,
-            "results": [
-                {
-                    **action,
-                    "status": "planned",
-                    "skipped_reason": "auto_provision_disabled",
-                }
-                for action in actions
-            ],
-        }
+        results = [
+            {
+                **action,
+                "status": "planned",
+                "skipped_reason": "auto_provision_disabled",
+            }
+            for action in actions
+        ]
+        log_json(
+            "INFO",
+            "capability_provision_evaluated",
+            details={"attempted": False, "results": results, "reason": "auto_provision_disabled"},
+        )
+        return {"attempted": False, "results": results}
 
     results: list[dict] = []
     for action in actions:
@@ -592,4 +671,14 @@ def provision_capability_actions(
             continue
         results.append({**action, "status": "failed", "error": f"unknown action: {action_name}"})
 
+    log_json(
+        "INFO",
+        "capability_provision_evaluated",
+        details={
+            "attempted": True,
+            "results": results,
+            "start_servers": start_servers,
+            "auto_provision": auto_provision,
+        },
+    )
     return {"attempted": True, "results": results}

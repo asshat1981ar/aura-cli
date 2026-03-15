@@ -4,7 +4,8 @@ Tests for PlannerAgent backfill prioritization.
 from __future__ import annotations
 
 import pytest
-from unittest.mock import MagicMock
+import json
+from unittest.mock import MagicMock, patch
 from agents.planner import PlannerAgent
 
 @pytest.fixture
@@ -57,3 +58,28 @@ def test_planner_prefers_backfill_steps_first(mock_brain, mock_model):
     })
     
     assert "Backfill" in res["steps"][0]
+
+
+def test_planner_includes_beads_constraints_in_prompt(mock_brain, mock_model):
+    planner = PlannerAgent(mock_brain, mock_model)
+    mock_model.respond.return_value = '["Step 1: Respect BEADS constraints"]'
+
+    planner.run({
+        "goal": "Harden goal status output",
+        "beads_context": {
+            "status": "allow",
+            "summary": "Proceed with compatibility guardrails.",
+            "required_constraints": ["Keep CLI JSON stable."],
+            "required_tests": ["pytest tests/test_commands_status.py -q"],
+            "required_skills": ["status_formatter"],
+            "follow_up_goals": ["Review telemetry after rollout"],
+        },
+    })
+
+    args, _ = mock_model.respond.call_args
+    prompt = args[0]
+    assert "BEADS decision context" in prompt
+    assert "Keep CLI JSON stable." in prompt
+    assert "pytest tests/test_commands_status.py -q" in prompt
+    assert "status_formatter" in prompt
+    assert "Review telemetry after rollout" in prompt

@@ -22,8 +22,8 @@ def test_apply_change_set_logs_policy_block_for_mismatch_overwrite(tmp_path: Pat
         "overwrite_file": True,
     }
 
-    with patch("core.orchestrator.apply_change_with_explicit_overwrite_policy", side_effect=MismatchOverwriteBlockedError("blocked")), \
-         patch("core.orchestrator.log_json") as mock_log:
+    with patch("core.file_tools.apply_change_with_explicit_overwrite_policy", side_effect=MismatchOverwriteBlockedError("blocked")), \
+         patch("core.file_tools.log_json") as mock_log:
         result = orchestrator._apply_change_set(change_set, dry_run=False)
 
     assert result["applied"] == []
@@ -60,7 +60,7 @@ def test_apply_change_set_real_policy_blocks_stale_overwrite_and_preserves_file(
     }
 
     with patch("core.file_tools.recover_old_code_from_git", return_value=None), \
-         patch("core.orchestrator.log_json") as mock_log:
+         patch("core.file_tools.log_json") as mock_log:
         result = orchestrator._apply_change_set(change_set, dry_run=False)
 
     assert target.read_text(encoding="utf-8") == "print('before')\n"
@@ -94,7 +94,7 @@ def test_apply_change_set_real_policy_allows_explicit_full_file_overwrite(tmp_pa
     }
 
     with patch("core.file_tools.recover_old_code_from_git", return_value=None), \
-         patch("core.orchestrator.log_json") as mock_log:
+         patch("core.file_tools.log_json") as mock_log:
         result = orchestrator._apply_change_set(change_set, dry_run=False)
 
     assert target.read_text(encoding="utf-8") == "print('after')\n"

@@ -42,6 +42,10 @@ _COMMON_FLAG_MAX_CYCLES_EXCLUDED_PATHS: set[tuple[str, ...]] = {
     ("workflow", "run"),
 }
 
+_HELP_RENDER_EXCLUDED_PATHS: set[tuple[str, ...]] = {
+    ("loop",),
+}
+
 _TOP_LEVEL_COMMANDS: tuple[str, ...] = tuple(dict.fromkeys(spec.path[0] for spec in COMMAND_SPECS if spec.path))
 
 
@@ -271,6 +275,10 @@ def _customize_goal_once(parser: argparse.ArgumentParser) -> None:
 
 
 
+def _customize_loop(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("goal", nargs="?", help="Optional goal text to run in the loop.")
+
+
 def _customize_workflow_run(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("workflow_goal", help="Workflow goal text.")
     parser.add_argument("--max-cycles", dest="workflow_max_cycles", type=int, help="Workflow-specific max cycles.")
@@ -374,6 +382,7 @@ _PARSER_CUSTOMIZERS.update(
         ("goal", "run"): _customize_goal_run,
         ("goal", "status"): _customize_goal_status,
         ("goal", "once"): _customize_goal_once,
+        ("loop",): _customize_loop,
         ("workflow", "run"): _customize_workflow_run,
         ("mcp", "tools"): _customize_mcp_tools,
         ("mcp", "call"): _customize_mcp_call,
@@ -590,11 +599,7 @@ def _format_command_path(path: Sequence[str]) -> str:
 def _render_text_help_for_path(path: tuple[str, ...]) -> str:
     spec = COMMAND_SPECS_BY_PATH.get(path)
     if spec is None:
-        labels = [_format_command_path(spec.path) for spec in COMMAND_SPECS]
         target = _format_command_path(path)
-        suggestion = difflib.get_close_matches(target, labels, n=1, cutoff=0.5)
-        if suggestion:
-            raise ValueError(f"Unknown command help topic '{target}'. Did you mean '{suggestion[0]}'?")
         raise ValueError(f"Unknown command help topic '{target}'.")
 
     lines = [f"aura {_format_command_path(spec.path)}", "", spec.description or spec.summary]
@@ -615,7 +620,11 @@ def _render_text_help_for_path(path: tuple[str, ...]) -> str:
 
 
 def _render_top_level_help() -> str:
-    top_level = [spec for spec in COMMAND_SPECS if len(spec.path) == 1]
+    top_level = [
+        spec
+        for spec in COMMAND_SPECS
+        if len(spec.path) == 1 and spec.path not in _HELP_RENDER_EXCLUDED_PATHS
+    ]
     lines = ["AURA CLI", "", "Commands:"]
     for spec in top_level:
         lines.append(f"  {spec.path[0]:<12} {spec.summary}")
@@ -636,7 +645,13 @@ def _render_top_level_help() -> str:
 
 def render_help(topics: Sequence[str] | None = None, *, format: str = "text") -> str:
     if format == "json":
-        return json.dumps(help_schema(), indent=2)
+        payload = help_schema()
+        payload["commands"] = [
+            item
+            for item in payload.get("commands", [])
+            if tuple(item.get("path", ())) not in _HELP_RENDER_EXCLUDED_PATHS
+        ]
+        return json.dumps(payload, indent=2)
     if format != "text":
         raise ValueError(f"Unsupported help format: {format}")
     if topics:

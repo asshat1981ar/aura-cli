@@ -242,7 +242,7 @@ class ActAdapter:
                 for path in entry_path.rglob("*.py"):
                     if ".git" in path.parts or "__pycache__" in path.parts:
                         continue
-                    candidates.append(str(path.relative_to(project_root)))
+                    candidates.append(str(path.relative_to(project_root.resolve())))
             else:
                 candidates.append(entry)
 
@@ -387,10 +387,11 @@ class SandboxAdapter:
                     "summary": "no_code_to_sandbox", "details": {}}
 
         results = []
+        corr_id = input_data.get("corr_id")
         for snippet in snippets:
             if not snippet.strip():
                 continue
-            res = self.agent.run_code(snippet)
+            res = self.agent.run_code(snippet, corr_id=corr_id)
             results.append(res)
 
         if not results:

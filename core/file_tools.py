@@ -27,6 +27,7 @@ from typing import Optional
 import re # Added for _aura_clean_json
 import json # Added for _aura_safe_loads
 from core.logging_utils import log_json
+from core.sanitizer import sanitize_path
 
 # Custom Exception for FileTools
 class FileToolsError(Exception):
@@ -142,11 +143,18 @@ def recover_old_code_from_git(old_code: str, file_path: str, project_root: Path)
     return find_historical_match(old_code, file_path, project_root)
 
 
-def replace_code(file_path: str, old_code: str, new_code: str, dry_run: bool = False, overwrite_file: bool = False, project_root: Optional[Path] = None):
+def replace_code(
+    file_path: str,
+    old_code: str,
+    new_code: str,
+    dry_run: bool = False,
+    overwrite_file: bool = False,
+    project_root: Optional[Path] = None,
+    current_content: Optional[str] = None,
+):
     """Replace a block of code inside a file, or overwrite the entire file.
     Enforces path jailing if project_root is provided.
     """
-    from core.sanitizer import sanitize_path
     path = Path(file_path)
     if project_root:
         path = sanitize_path(file_path, project_root)
@@ -155,7 +163,8 @@ def replace_code(file_path: str, old_code: str, new_code: str, dry_run: bool = F
         raise FileNotFoundError(f"File not found at '{path}'")
 
     try:
-        current_content = path.read_text()
+        if current_content is None:
+            current_content = path.read_text()
         new_content = ""
 
         if overwrite_file:
@@ -185,37 +194,36 @@ def replace_code(file_path: str, old_code: str, new_code: str, dry_run: bool = F
             print(new_code)
             print("--------------------------------------")
         else:
-            # Atomic write: write to temp file, then rename/replace
-            # Using tempfile.NamedTemporaryFile for safety and automatic cleanup (on close/delete)
-            # Use os.replace for atomic replacement on POSIX systems.
-            with tempfile.NamedTemporaryFile(mode='w', delete=False, dir=path.parent, encoding='utf-8') as tmp_file:
-                tmp_file.write(new_content)
-            
+            temp_fd, temp_path = tempfile.mkstemp(dir=path.parent)
             try:
-                # Atomically replace the original file
-                os.replace(tmp_file.name, path)
-            except OSError as e:
-                # If os.replace fails with "File exists" (Errno 17), try explicit removal then rename.
-                if e.errno == 17: # errno 17 is EEXIST (File exists)
-                    log_json("WARN", "replace_code_initial_replace_failed_errno_17", details={"file": str(path), "error": str(e)})
-                    try:
-                        log_json("INFO", "replace_code_attempting_remove", details={"file": str(path)})
-                        os.remove(path) # Remove the old file
-                        log_json("INFO", "replace_code_old_file_removed", details={"file": str(path)})
-                        log_json("INFO", "replace_code_attempting_rename", details={"temp_file": tmp_file.name, "target_file": str(path)})
-                        os.rename(tmp_file.name, path) # Then rename the new file
-                        log_json("INFO", "replace_code_new_file_renamed", details={"file": str(path)})
-                    except OSError as remove_rename_e: # Catch OSError specifically here for more details
-                        log_json("ERROR", "replace_code_remove_rename_os_error", details={"file": str(path), "error": str(remove_rename_e), "errno": remove_rename_e.errno})
-                        raise FileToolsError(f"Failed to replace file '{file_path}' during remove/rename fallback: {remove_rename_e}")
-                    except Exception as remove_rename_e:
-                        log_json("ERROR", "replace_code_remove_rename_unexpected_error", details={"file": str(path), "error": str(remove_rename_e)})
-                        raise FileToolsError(f"Unexpected error during remove/rename fallback for '{file_path}': {remove_rename_e}")
-                else:
-                    log_json("ERROR", "replace_code_os_error", details={"file": str(path), "error": str(e), "errno": e.errno})
-                    raise # Re-raise other OSErrors
+                with os.fdopen(temp_fd, "wb") as tmp_file:
+                    tmp_file.write(new_content.encode("utf-8"))
 
-            print(f"Successfully replaced code in '{file_path}'")
+                try:
+                    os.replace(temp_path, path)
+                except OSError as e:
+                    if e.errno == 17: # errno 17 is EEXIST (File exists)
+                        log_json("WARN", "replace_code_initial_replace_failed_errno_17", details={"file": str(path), "error": str(e)})
+                        try:
+                            log_json("INFO", "replace_code_attempting_remove", details={"file": str(path)})
+                            os.remove(path)
+                            log_json("INFO", "replace_code_old_file_removed", details={"file": str(path)})
+                            log_json("INFO", "replace_code_attempting_rename", details={"temp_file": temp_path, "target_file": str(path)})
+                            os.rename(temp_path, path)
+                            log_json("INFO", "replace_code_new_file_renamed", details={"file": str(path)})
+                        except OSError as remove_rename_e:
+                            log_json("ERROR", "replace_code_remove_rename_os_error", details={"file": str(path), "error": str(remove_rename_e), "errno": remove_rename_e.errno})
+                            raise FileToolsError(f"Failed to replace file '{file_path}' during remove/rename fallback: {remove_rename_e}")
+                        except Exception as remove_rename_e:
+                            log_json("ERROR", "replace_code_remove_rename_unexpected_error", details={"file": str(path), "error": str(remove_rename_e)})
+                            raise FileToolsError(f"Unexpected error during remove/rename fallback for '{file_path}': {remove_rename_e}")
+                    else:
+                        log_json("ERROR", "replace_code_os_error", details={"file": str(path), "error": str(e), "errno": e.errno})
+                        raise
+            except Exception:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                raise
 
     except FileToolsError as e:
         print(f"Error in FileTools: {e}")
@@ -325,7 +333,6 @@ def _safe_apply_change(
             the existing file, *and* *new_code* is also empty (no safe
             fallback exists).
     """
-    from core.sanitizer import sanitize_path
     path_obj = sanitize_path(file_path, project_root)
     path_obj.parent.mkdir(parents=True, exist_ok=True)
 
@@ -376,7 +383,13 @@ def _safe_apply_change(
             # No new_code and no match → truly invalid
             raise OldCodeNotFoundError(f"'{old_code}' not found in '{path_obj}' and no new_code for overwrite.")
 
-    replace_code(str(path_obj), old_code, new_code, overwrite_file=overwrite_file, project_root=project_root)
+    replace_code(
+        str(path_obj),
+        old_code,
+        new_code,
+        overwrite_file=overwrite_file,
+        current_content=current,
+    )
 
 
 class AtomicChangeSet:
@@ -408,15 +421,15 @@ class AtomicChangeSet:
         """
         backups: dict = {}  # file_path_str -> original content (or None if new)
         applied: list = []
+        sanitize = sanitize_path
 
         for change in self.changes:
-            from core.sanitizer import sanitize_path
             file_path = change["file_path"]
             old_code = change.get("old_code", "")
             new_code = change.get("new_code", "")
             overwrite_file = change.get("overwrite_file", False)
 
-            path_obj = sanitize_path(file_path, self.project_root)
+            path_obj = sanitize(file_path, self.project_root)
             key = str(path_obj)
 
             # Capture backup before first touch
@@ -467,3 +480,128 @@ def apply_atomic(changes: list, project_root: Path) -> list:
         List of file paths successfully applied.
     """
     return AtomicChangeSet(changes, project_root).apply()
+
+
+def snapshot_file_state(project_root: Path, file_path: str) -> dict:
+    """Capture a restorable snapshot of a target file before mutation.
+    
+    Args:
+        project_root: The root directory of the project.
+        file_path: The relative path to the file to snapshot.
+        
+    Returns:
+        A dictionary containing the file's path, existence status, content, and mode.
+    """
+    target = (project_root / file_path).resolve()
+    snapshot = {
+        "file": file_path,
+        "target": str(target),
+        "existed": target.exists(),
+        "content": None,
+        "mode": None,
+    }
+    if target.exists():
+        try:
+            snapshot["content"] = target.read_text(encoding="utf-8", errors="ignore")
+            snapshot["mode"] = target.stat().st_mode & 0o777
+        except Exception:
+            pass # Keep content as None if unreadable
+    return snapshot
+
+
+def restore_file_state(snapshots: list[dict]) -> list[dict]:
+    """Restore files from snapshots.
+    
+    Args:
+        snapshots: A list of snapshot dictionaries created by snapshot_file_state.
+        
+    Returns:
+        A list of failure dictionaries containing "file" and "error" keys.
+    """
+    failed: list[dict] = []
+
+    for snapshot in reversed(snapshots):
+        target = Path(snapshot["target"])
+        try:
+            if snapshot.get("existed"):
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(snapshot.get("content") or "", encoding="utf-8")
+                if snapshot.get("mode") is not None:
+                    os.chmod(target, int(snapshot["mode"]))
+            else:
+                if target.exists():
+                    target.unlink()
+        except Exception as exc:
+            failed.append({"file": snapshot["file"], "error": str(exc)})
+    return failed
+
+
+def apply_change_set(
+    project_root: Path,
+    change_set: dict,
+    dry_run: bool,
+    *,
+    apply_change_fn=None,
+) -> dict:
+    """Apply each change in *change_set* independently.
+    
+    Args:
+        project_root: The root directory of the project.
+        change_set: A dictionary representing the changes to apply.
+        dry_run: If True, changes are not actually written to disk.
+        
+    Returns:
+        A dictionary with "applied" (list of paths), "failed" (list of errors), 
+        and "snapshots" (list of pre-change states).
+    """
+    if apply_change_fn is None:
+        apply_change_fn = apply_change_with_explicit_overwrite_policy
+
+    changes: list[dict] = []
+    if isinstance(change_set, dict):
+        if all(k in change_set for k in ["file_path", "old_code", "new_code"]):
+            changes.append(change_set)
+        elif "changes" in change_set and isinstance(change_set["changes"], list):
+            changes.extend(change_set["changes"])
+
+    applied: list[str] = []
+    failed: list[dict] = []
+    snapshots: list[dict] = []
+    snapshotted_files: set[str] = set()
+
+    for change in changes:
+        file_path = change.get("file_path")
+        old_code = change.get("old_code")
+        new_code = change.get("new_code")
+        overwrite_file = change.get("overwrite_file", False)
+
+        if not file_path:
+            log_json("WARN", "apply_change_skipped_missing_path", details={"change": change})
+            continue
+
+        if dry_run:
+            log_json("INFO", "replace_code_skipped", details={"reason": "dry_run", "file": file_path})
+            applied.append(file_path)
+            continue
+
+        try:
+            if file_path not in snapshotted_files:
+                snapshots.append(snapshot_file_state(project_root, file_path))
+                snapshotted_files.add(file_path)
+            
+            apply_change_fn(
+                project_root, file_path, old_code, new_code,
+                overwrite_file=overwrite_file,
+            )
+            applied.append(file_path)
+        except MismatchOverwriteBlockedError as exc:
+            log_json("ERROR", MISMATCH_OVERWRITE_BLOCK_EVENT, details=mismatch_overwrite_block_log_details(exc, file_path))
+            failed.append({"file": file_path, "error": str(exc)})
+        except OldCodeNotFoundError as exc:
+            log_json("ERROR", "old_code_not_found", details={"error": str(exc), "file": file_path})
+            failed.append({"file": file_path, "error": str(exc)})
+        except Exception as exc:
+            log_json("ERROR", "apply_change_failed", details={"error": str(exc), "file": file_path})
+            failed.append({"file": file_path, "error": str(exc)})
+
+    return {"applied": applied, "failed": failed, "snapshots": snapshots}

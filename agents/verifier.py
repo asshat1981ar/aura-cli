@@ -2,6 +2,7 @@ import os
 import re
 import shlex
 import subprocess
+import time
 from pathlib import Path
 from typing import Dict
 
@@ -123,6 +124,8 @@ class VerifierAgent(Agent):
         if input_data.get("dry_run"):
             return {"status": "skip", "failures": [], "logs": "dry_run"}
 
+        corr_id = input_data.get("corr_id")
+        t0 = time.monotonic()
         project_root = Path(input_data.get("project_root", "."))
         cmd = ["python3", "-m", "pytest", "-q"]
         tests = input_data.get("tests")
@@ -151,6 +154,18 @@ class VerifierAgent(Agent):
                 env=env,
             )
         except subprocess.TimeoutExpired:
+            latency_ms = (time.monotonic() - t0) * 1000
+            log_json(
+                "WARN",
+                "verify_timeout",
+                corr_id=corr_id,
+                phase="verify",
+                component="verifier",
+                latency_ms=latency_ms,
+                outcome="timeout",
+                failure_reason="pytest_timeout",
+                details={"cmd": cmd},
+            )
             return {
                 "status": "fail",
                 "failures": ["pytest_timeout"],
@@ -160,4 +175,16 @@ class VerifierAgent(Agent):
         status = "pass" if proc.returncode == 0 else "fail"
         failures = [] if proc.returncode == 0 else ["pytest_failed"]
         logs = (proc.stdout or "") + (proc.stderr or "")
+        latency_ms = (time.monotonic() - t0) * 1000
+        log_json(
+            "INFO" if status == "pass" else "WARN",
+            "verify_complete",
+            corr_id=corr_id,
+            phase="verify",
+            component="verifier",
+            latency_ms=latency_ms,
+            outcome=status,
+            failure_reason=None if status == "pass" else "pytest_failed",
+            details={"cmd": cmd, "returncode": proc.returncode},
+        )
         return {"status": status, "failures": failures, "logs": logs.strip()}

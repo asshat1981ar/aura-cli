@@ -1,46 +1,146 @@
-def verify_rsi_integration():
-    # Step 1: Conduct a thorough audit of the existing RSI components in the AURA architecture
-    audit_scope = 'Review RSI modules, analyze dependency management, and optimize performance metrics.'
-    print('Conducting audit with scope:', audit_scope)
-    # Step 2: Analyze user feedback for missing capabilities
-    user_feedback = gather_user_feedback()
-    print('User feedback analyzed:', user_feedback)
-    # Step 3: Propose upgrades based on findings
-    upgrades = propose_upgrades(user_feedback)
-    print('Proposed upgrades:', upgrades)
-    # Step 4: Develop execution plan
-    execution_plan = create_execution_plan(upgrades)
-    print('Execution plan created:', execution_plan)
-    # Step 5: Create risk assessments
-    risk_assessment = create_risk_assessment(upgrades)
-    print('Risk assessment created:', risk_assessment)
-    # Step 6: Design improvements for modularity and scalability
-    design_improvements = design_architectural_improvements()
-    print('Architectural improvements designed:', design_improvements)
-    # Step 7: Establish continuous monitoring mechanisms
-    monitoring_kpis = establish_monitoring_mechanisms()
-    print('Continuous monitoring KPIs established:', monitoring_kpis)
-    # Step 8: Integrate feedback loop into the process
-    feedback_loop = integrate_feedback_loop()
-    print('Feedback loop integrated:', feedback_loop)
-    # Step 9: Document upgrades and learnings
-    documentation = document_upgrades_and_learnings()
-    print('Documentation completed:', documentation)
-    # Step 10: Conduct thorough testing of upgraded components
-    testing_results = conduct_testing()
-    print('Testing completed with results:', testing_results)
+"""Shared RSI runtime helpers for CLI and verification scripts."""
 
-# Mock functions for demonstration
+from __future__ import annotations
 
-def gather_user_feedback(): return 'User feedback compiled.'
-def propose_upgrades(feedback): return 'Upgrades proposed based on feedback.'
-def create_execution_plan(upgrades): return 'Step-by-step execution plan created.'
-def create_risk_assessment(upgrades): return 'Risks identified.'
-def design_architectural_improvements(): return 'Improvements designed.'
-def establish_monitoring_mechanisms(): return 'KPIs established.'
-def integrate_feedback_loop(): return 'Feedback loop in place.'
-def document_upgrades_and_learnings(): return 'Documentation stored.'
-def conduct_testing(): return 'All tests passed.'
+import os
+from pathlib import Path
+from typing import Any, Callable
 
-if __name__ == "__main__":
-    verify_rsi_integration()
+
+DEFAULT_EVOLVE_GOAL = "evolve and improve the AURA system"
+DEFAULT_RSI_VERIFICATION_GOAL = (
+    "evolve and improve the AURA system via recursive self-improvement"
+)
+
+
+def load_optional_dotenv() -> None:
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        return
+    load_dotenv()
+
+
+def ensure_rsi_environment(env: dict[str, str] | None = None) -> dict[str, str]:
+    target = os.environ if env is None else env
+    target.setdefault("AGENT_API_TOKEN", "rsi-dev-token")
+    target.setdefault("AGENT_API_ENABLE_RUN", "1")
+    return target
+
+
+def build_evolution_loop(
+    runtime: dict[str, Any],
+    project_root: Path,
+    *,
+    improvement_service: Any = None,
+    default_agents_factory: Callable[[Any, Any], dict[str, Any]] | None = None,
+    git_tools_cls: Any = None,
+):
+    from agents.mutator import MutatorAgent
+    from core.evolution_loop import EvolutionLoop
+    from core.git_tools import GitTools
+    from core.vector_store import VectorStore
+    from memory.brain import Brain
+
+    brain = runtime.get("brain") or Brain()
+    model = runtime.get("model_adapter")
+    planner = runtime.get("planner") or runtime.get("plan")
+    coder = runtime.get("act") or runtime.get("coder")
+    critic = runtime.get("critique") or runtime.get("critic")
+
+    if planner is None or coder is None or critic is None:
+        if default_agents_factory is None:
+            from aura_cli.cli_main import default_agents as default_agents_factory
+        agents = default_agents_factory(brain, model)
+        planner = planner or agents.get("plan")
+        coder = coder or agents.get("act")
+        critic = critic or agents.get("critique")
+
+    if planner is None or coder is None or critic is None:
+        raise ValueError("RSI requires planner, coder, and critic agents.")
+    if model is None:
+        raise ValueError("RSI requires a model adapter in runtime['model_adapter'].")
+
+    if git_tools_cls is None:
+        git_tools_cls = GitTools
+
+    git_tools = runtime.get("git_tools") or git_tools_cls(repo_path=str(project_root))
+    mutator = runtime.get("mutator") or MutatorAgent(project_root)
+    vector_store = runtime.get("vector_store") or VectorStore(model, brain)
+    improvement_service = improvement_service or runtime.get("recursive_improvement_service")
+
+    return EvolutionLoop(
+        planner,
+        coder,
+        critic,
+        brain,
+        vector_store,
+        git_tools,
+        mutator,
+        improvement_service=improvement_service,
+    )
+
+
+def build_rsi_cycle_entry(goal: str, cycle_number: int, result: dict[str, Any]) -> dict[str, Any]:
+    validation = result.get("validation", {}) if isinstance(result, dict) else {}
+    if not isinstance(validation, dict):
+        validation = {}
+    mutation_applied = bool(result.get("mutation_applied")) if isinstance(result, dict) else False
+    verification_status = "pass" if mutation_applied else "fail"
+
+    return {
+        "cycle_id": f"rsi_cycle_{cycle_number}",
+        "goal": goal,
+        "verification_status": verification_status,
+        "phase_outputs": {
+            "verification": {
+                "status": verification_status,
+                "decision": validation.get("decision"),
+                "confidence_score": validation.get("confidence_score"),
+            },
+            "retry_count": 0,
+            "rsi": {
+                "validation": validation,
+                "mutation_applied": mutation_applied,
+                "tasks": result.get("tasks", []) if isinstance(result, dict) else [],
+                "hypothesis": result.get("hypothesis") if isinstance(result, dict) else None,
+            },
+        },
+    }
+
+
+def run_rsi_verification(
+    loop,
+    *,
+    goal: str = DEFAULT_RSI_VERIFICATION_GOAL,
+    max_cycles: int = 1,
+    on_cycle_complete: Callable[[int, dict[str, Any], list[dict[str, Any]]], None] | None = None,
+) -> dict[str, Any]:
+    if max_cycles < 1:
+        raise ValueError("RSI verification requires at least one cycle.")
+
+    cycles = []
+    proposal_count = 0
+
+    for cycle_number in range(1, max_cycles + 1):
+        result = loop.run(goal)
+        cycle_entry = build_rsi_cycle_entry(goal, cycle_number, result)
+        proposals = list(loop.on_cycle_complete(cycle_entry) or [])
+        proposal_count += len(proposals)
+        if on_cycle_complete is not None:
+            on_cycle_complete(cycle_number, result, proposals)
+        cycles.append(
+            {
+                "cycle_number": cycle_number,
+                "cycle_entry": cycle_entry,
+                "result": result,
+                "proposals": proposals,
+            }
+        )
+
+    return {
+        "goal": goal,
+        "max_cycles": max_cycles,
+        "proposal_count": proposal_count,
+        "cycles": cycles,
+    }

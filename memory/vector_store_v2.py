@@ -5,10 +5,11 @@ supports the ASCM v2 protocol.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Union
 from pathlib import Path
 
 from core.vector_store import VectorStore as CoreVectorStore
+from core.memory_types import MemoryRecord, RetrievalQuery, SearchHit
 
 class VectorStoreV2(CoreVectorStore):
     """

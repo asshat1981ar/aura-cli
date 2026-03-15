@@ -1,0 +1,39 @@
+{
+  "applied_bootstrap_actions": [
+    "ensure_mcp_servers"
+  ],
+  "configured": {
+    "auto_add_capabilities": true,
+    "auto_provision_mcp": true,
+    "auto_queue_missing_capabilities": true,
+    "auto_start_mcp_servers": false
+  },
+  "failed_bootstrap_actions": [],
+  "last_goal": "Test Goal",
+  "last_updated": "2026-03-01T00:00:00Z",
+  "matched_capabilities": [
+    {
+      "capability_id": "github_mcp",
+      "reason": "repo"
+    }
+  ],
+  "matched_capability_ids": [
+    "github_mcp"
+  ],
+  "missing_skills": [
+    "changelog_generator"
+  ],
+  "pending_bootstrap_actions": [],
+  "pending_self_development_goals": [
+    "Add AURA skill 'git_history_analyzer' so AURA can better handle goal: Test Goal"
+  ],
+  "queue_strategy": "prepend",
+  "queued_goals": [
+    "Add AURA skill 'git_history_analyzer' so AURA can better handle goal: Test Goal"
+  ],
+  "recommended_skills": [
+    "git_history_analyzer"
+  ],
+  "running_bootstrap_actions": [],
+  "skipped_goals": []
+}

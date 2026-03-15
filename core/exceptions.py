@@ -34,6 +34,43 @@ class GitStashPopError(GitToolsError):
     """Exception raised for errors during Git stash pop operations."""
     pass
 
+# Typed execution/validation hierarchy
+class ValidationError(AuraError):
+    """Raised when input validation fails."""
+    pass
+
+class PhaseValidationError(ValidationError):
+    """Raised when a pipeline phase emits invalid or missing fields."""
+    def __init__(self, phase: str, message: str):
+        super().__init__(f"{phase}: {message}")
+        self.phase = phase
+
+class PhaseExecutionError(AuraError):
+    """Raised when a pipeline phase fails unexpectedly."""
+    def __init__(self, phase: str, message: str):
+        super().__init__(f"{phase}: {message}")
+        self.phase = phase
+
+class SkillExecutionError(PhaseExecutionError):
+    """Raised when a skill fails during dispatch."""
+    pass
+
+class SandboxExecutionError(PhaseExecutionError):
+    """Raised when sandbox execution fails."""
+    pass
+
+class VerificationError(PhaseExecutionError):
+    """Raised when verification fails unexpectedly."""
+    pass
+
+class PaginationError(AuraError):
+    """Raised when pagination/filtering parameters are invalid."""
+    pass
+
+class PreflightError(ValidationError):
+    """Raised when known-bad requests are short-circuited."""
+    pass
+
 class GoalQueueError(AuraError):
     """Raised when an error occurs in Goal Queue operations."""
     pass

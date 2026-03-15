@@ -1,4 +1,7 @@
-from core.logging_utils import log_json
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 def monitor_performance(performance_metrics):
@@ -7,4 +10,4 @@ def monitor_performance(performance_metrics):
     # Example tracking logic
     for metric in performance_metrics:
         # Process and log metrics
-        log_json("INFO", "performance_metric", None, details={"metric": metric})
+        logger.info(f"Performance Metric: {metric}")

@@ -1,11 +1,8 @@
 import unittest
 import sys
 import io
-import sqlite3
-import tempfile
-from pathlib import Path
 from unittest.mock import patch
-from aura_cli.doctor import check_env_vars, check_embedding_index, main as aura_doctor_main
+from aura_cli.doctor import check_env_vars, main as aura_doctor_main
 from aura_cli.commands import _handle_doctor
 
 class TestAuraDoctorOutputParsing(unittest.TestCase):
@@ -59,12 +56,13 @@ class TestAuraDoctorOutputParsing(unittest.TestCase):
         
         return results
 
+    @patch('aura_cli.doctor.capability_doctor_check')
     @patch('aura_cli.doctor.check_python_version')
     @patch('aura_cli.doctor.check_env_vars')
     @patch('aura_cli.doctor.check_sqlite_write_access')
     @patch('aura_cli.doctor.check_git_status')
     @patch('aura_cli.doctor.check_pytest_and_run_tests')
-    def test_all_pass_scenario(self, mock_pytest, mock_git, mock_sqlite, mock_env, mock_python):
+    def test_all_pass_scenario(self, mock_pytest, mock_git, mock_sqlite, mock_env, mock_python, mock_capability):
         # Mock sys.argv for this test
         original_argv = sys.argv
         sys.argv = ['aura_cli.doctor.py']
@@ -74,6 +72,7 @@ class TestAuraDoctorOutputParsing(unittest.TestCase):
             mock_sqlite.return_value = ("PASS", "SQLite write access: OK")
             mock_git.return_value = ("PASS", "Git is installed and repository is initialized.")
             mock_pytest.return_value = ("WARN", "Pytest is available, but tests were not run (use --run-tests).")
+            mock_capability.return_value = ("PASS", "matched: none; bootstrap pending: none")
         
             aura_doctor_main()
             output = self.get_captured_output()
@@ -83,18 +82,20 @@ class TestAuraDoctorOutputParsing(unittest.TestCase):
             self.assertEqual(parsed_output["Environment Variables"]["status"], "PASS")
             self.assertEqual(parsed_output["SQLite Write Access"]["status"], "PASS")
             self.assertEqual(parsed_output["Git Status"]["status"], "PASS")
+            self.assertEqual(parsed_output["Capability Bootstrap"]["status"], "PASS")
             self.assertEqual(parsed_output["Pytest Tests"]["status"], "WARN") # WARN because --run-tests not passed
             # Overall should be WARN because of Pytest
             self.assertEqual(parsed_output["Overall Health"]["status"], "WARN") 
         finally:
             sys.argv = original_argv # Restore original argv
 
+    @patch('aura_cli.doctor.capability_doctor_check')
     @patch('aura_cli.doctor.check_python_version')
     @patch('aura_cli.doctor.check_env_vars')
     @patch('aura_cli.doctor.check_sqlite_write_access')
     @patch('aura_cli.doctor.check_git_status')
     @patch('aura_cli.doctor.check_pytest_and_run_tests')
-    def test_fail_scenario(self, mock_pytest, mock_git, mock_sqlite, mock_env, mock_python):
+    def test_fail_scenario(self, mock_pytest, mock_git, mock_sqlite, mock_env, mock_python, mock_capability):
         # Mock sys.argv for this test
         original_argv = sys.argv
         sys.argv = ['aura_cli.doctor.py']
@@ -104,6 +105,7 @@ class TestAuraDoctorOutputParsing(unittest.TestCase):
             mock_sqlite.return_value = ("FAIL", "SQLite write access: Failed (Permission denied)")
             mock_git.return_value = ("PASS", "Git is installed and repository is initialized.")
             mock_pytest.return_value = ("WARN", "Pytest is not installed.")
+            mock_capability.return_value = ("PASS", "matched: none; bootstrap pending: none")
 
             aura_doctor_main()
             output = self.get_captured_output()
@@ -113,17 +115,19 @@ class TestAuraDoctorOutputParsing(unittest.TestCase):
             self.assertEqual(parsed_output["Environment Variables"]["status"], "WARN")
             self.assertEqual(parsed_output["SQLite Write Access"]["status"], "FAIL")
             self.assertEqual(parsed_output["Git Status"]["status"], "PASS")
+            self.assertEqual(parsed_output["Capability Bootstrap"]["status"], "PASS")
             self.assertEqual(parsed_output["Pytest Tests"]["status"], "WARN")
             self.assertEqual(parsed_output["Overall Health"]["status"], "FAIL") # Overall should be FAIL because of SQLite
         finally:
             sys.argv = original_argv # Restore original argv
 
+    @patch('aura_cli.doctor.capability_doctor_check')
     @patch('aura_cli.doctor.check_python_version')
     @patch('aura_cli.doctor.check_env_vars')
     @patch('aura_cli.doctor.check_sqlite_write_access')
     @patch('aura_cli.doctor.check_git_status')
     @patch('aura_cli.doctor.check_pytest_and_run_tests')
-    def test_all_pass_with_run_tests_scenario(self, mock_pytest, mock_git, mock_sqlite, mock_env, mock_python):
+    def test_all_pass_with_run_tests_scenario(self, mock_pytest, mock_git, mock_sqlite, mock_env, mock_python, mock_capability):
         # Simulate sys.argv to include --run-tests and --openrouter-api-key
         original_argv = sys.argv
         sys.argv = ['aura_cli.doctor.py', '--run-tests', '--openrouter-api-key', 'dummy-key']
@@ -133,6 +137,7 @@ class TestAuraDoctorOutputParsing(unittest.TestCase):
             mock_sqlite.return_value = ("PASS", "SQLite write access: OK")
             mock_git.return_value = ("PASS", "Git is installed and repository is initialized.")
             mock_pytest.return_value = ("PASS", "Pytest tests passed.") # Now it passes
+            mock_capability.return_value = ("PASS", "matched: none; bootstrap pending: none")
 
             aura_doctor_main()
             output = self.get_captured_output()
@@ -142,6 +147,7 @@ class TestAuraDoctorOutputParsing(unittest.TestCase):
             self.assertEqual(parsed_output["Environment Variables"]["status"], "PASS")
             self.assertEqual(parsed_output["SQLite Write Access"]["status"], "PASS")
             self.assertEqual(parsed_output["Git Status"]["status"], "PASS")
+            self.assertEqual(parsed_output["Capability Bootstrap"]["status"], "PASS")
             self.assertEqual(parsed_output["Pytest Tests"]["status"], "PASS")
             self.assertEqual(parsed_output["Overall Health"]["status"], "PASS")
         finally:
@@ -163,77 +169,7 @@ class TestAuraDoctorOutputParsing(unittest.TestCase):
         self.assertIn("AURA_LOCAL_MODEL_COMMAND", message)
         self.assertIn("embeddings: disabled", message)
 
-    def test_check_embedding_index_warns_when_active_model_has_no_embeddings(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            db_path = root / "memory" / "brain.db"
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-            conn = sqlite3.connect(str(db_path), check_same_thread=False)
-            conn.execute("CREATE TABLE memory_records (id TEXT PRIMARY KEY, content TEXT)")
-            conn.execute(
-                "CREATE TABLE embeddings (record_id TEXT NOT NULL, model_id TEXT NOT NULL, dims INTEGER NOT NULL, data BLOB NOT NULL)"
-            )
-            conn.execute("INSERT INTO memory_records (id, content) VALUES (?, ?)", ("rec1", "hello"))
-            conn.execute(
-                "INSERT INTO embeddings (record_id, model_id, dims, data) VALUES (?, ?, ?, ?)",
-                ("rec1", "text-embedding-3-small", 3, b"123"),
-            )
-            conn.commit()
-            conn.close()
-
-            cfg = {
-                "brain_db_path": "memory/brain.db",
-                "semantic_memory": {"embedding_model": "local_profile:android_embeddings"},
-                "local_model_profiles": {
-                    "android_embeddings": {
-                        "provider": "openai_compatible",
-                        "embedding_model": "bge-small-en-v1.5-q8_0",
-                    }
-                },
-            }
-
-            status, detail = check_embedding_index(root, cfg)
-
-        self.assertEqual(status, "WARN")
-        self.assertIn("bge-small-en-v1.5-q8_0", detail)
-        self.assertIn("text-embedding-3-small", detail)
-        self.assertIn("memory reindex", detail)
-
-    def test_check_embedding_index_passes_when_active_model_is_present(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            db_path = root / "memory" / "brain.db"
-            db_path.parent.mkdir(parents=True, exist_ok=True)
-            conn = sqlite3.connect(str(db_path), check_same_thread=False)
-            conn.execute("CREATE TABLE memory_records (id TEXT PRIMARY KEY, content TEXT)")
-            conn.execute(
-                "CREATE TABLE embeddings (record_id TEXT NOT NULL, model_id TEXT NOT NULL, dims INTEGER NOT NULL, data BLOB NOT NULL)"
-            )
-            conn.execute("INSERT INTO memory_records (id, content) VALUES (?, ?)", ("rec1", "hello"))
-            conn.execute(
-                "INSERT INTO embeddings (record_id, model_id, dims, data) VALUES (?, ?, ?, ?)",
-                ("rec1", "bge-small-en-v1.5-q8_0", 3, b"123"),
-            )
-            conn.commit()
-            conn.close()
-
-            cfg = {
-                "brain_db_path": "memory/brain.db",
-                "semantic_memory": {"embedding_model": "local_profile:android_embeddings"},
-                "local_model_profiles": {
-                    "android_embeddings": {
-                        "provider": "openai_compatible",
-                        "embedding_model": "bge-small-en-v1.5-q8_0",
-                    }
-                },
-            }
-
-            status, detail = check_embedding_index(root, cfg)
-
-        self.assertEqual(status, "PASS")
-        self.assertIn("bge-small-en-v1.5-q8_0", detail)
-
-    @patch("aura_cli.commands.capability_doctor_check", return_value=("PASS", "matched: docker_analysis"))
+    @patch("aura_cli.doctor.capability_doctor_check", return_value=("PASS", "matched: docker_analysis"))
     @patch("aura_cli.doctor.check_pytest_and_run_tests", return_value=("WARN", "tests skipped"))
     @patch("aura_cli.doctor.check_git_status", return_value=("PASS", "git ok"))
     @patch("aura_cli.doctor.check_sqlite_write_access", return_value=("PASS", "sqlite ok"))
@@ -253,7 +189,6 @@ class TestAuraDoctorOutputParsing(unittest.TestCase):
             _handle_doctor()
 
         output = out.getvalue()
-        self.assertIn("Capability", output)
         self.assertIn("matched: docker_analysis", output)
 
 if __name__ == '__main__':

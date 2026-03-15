@@ -1,13 +1,15 @@
 import time
-import dataclasses
+import json
 from dataclasses import dataclass, asdict
-from typing import Optional, Callable, Dict, List
-from core.logging_utils import log_json
+from typing import Optional, Callable
+from core.logging_utils import log_json # Import log_json
 
 
-# --------------------------------------------------------------------------- 
+
+
+# ---------------------------------------------------------------------------
 # Data structures
-# --------------------------------------------------------------------------- 
+# ---------------------------------------------------------------------------
 
 @dataclass
 class ModelStats:
@@ -20,13 +22,8 @@ class ModelStats:
     cooldown_until: float = 0.0       # Unix timestamp
 
     EMA_ALPHA: float = 0.2            # Weight of latest observation in EMA
-    COOLDOWN_SECONDS: float = 10.0    # Backoff window after consecutive failures
-    FAILURE_THRESHOLD: int = 10
-    
-    # New thresholds for automatic benching
-    MIN_EMA_SCORE: float = 0.3        # Below this, model is benched for LONG_COOLDOWN
-    MAX_LATENCY_SECONDS: float = 90.0 # Above this, model is benched for LONG_COOLDOWN
-    LONG_COOLDOWN_SECONDS: float = 600.0 # 10 minutes
+    COOLDOWN_SECONDS: float = 120.0   # Backoff window after 3 consecutive failures
+    FAILURE_THRESHOLD: int = 3
 
     @property
     def is_cooled_down(self) -> bool:
@@ -35,7 +32,7 @@ class ModelStats:
     @property
     def avg_latency(self) -> float:
         total = self.success_count + self.failure_count
-        return self.total_latency / total if total > 0 else 0.0
+        return self.total_latency / total if total > 0 else 999.0
 
     def record(self, success: bool, latency: float):
         observation = 1.0 if success else 0.0
@@ -49,19 +46,7 @@ class ModelStats:
             self.failure_count += 1
             self.consecutive_failures += 1
             if self.consecutive_failures >= self.FAILURE_THRESHOLD:
-                cooldown = 1.0 if self.name == "openai" else self.COOLDOWN_SECONDS
-                self.cooldown_until = time.time() + cooldown
-                log_json("WARN", "router_model_consecutive_failure_cooldown", details={"model": self.name, "cooldown": cooldown})
-
-        # Automatic benching based on EMA score or latency
-        if self.ema_score < self.MIN_EMA_SCORE:
-            self.cooldown_until = max(self.cooldown_until, time.time() + self.LONG_COOLDOWN_SECONDS)
-            log_json("WARN", "router_model_low_score_cooldown", details={"model": self.name, "score": f"{self.ema_score:.2f}", "cooldown": self.LONG_COOLDOWN_SECONDS})
-            
-        if self.avg_latency > self.MAX_LATENCY_SECONDS and (self.success_count + self.failure_count) >= 5:
-            self.cooldown_until = max(self.cooldown_until, time.time() + self.LONG_COOLDOWN_SECONDS)
-            log_json("WARN", "router_model_high_latency_cooldown", details={"model": self.name, "avg_latency": f"{self.avg_latency:.2f}", "cooldown": self.LONG_COOLDOWN_SECONDS})
-
+                self.cooldown_until = time.time() + self.COOLDOWN_SECONDS
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -70,8 +55,7 @@ class ModelStats:
     def from_dict(cls, d: dict) -> "ModelStats":
         obj = cls(name=d["name"])
         for k, v in d.items():
-            if hasattr(obj, k):
-                setattr(obj, k, v)
+            setattr(obj, k, v)
         return obj
 
     def __str__(self):
@@ -83,9 +67,9 @@ class ModelStats:
         )
 
 
-# --------------------------------------------------------------------------- 
+# ---------------------------------------------------------------------------
 # Router
-# --------------------------------------------------------------------------- 
+# ---------------------------------------------------------------------------
 
 class RouterAgent:
     """
@@ -107,28 +91,26 @@ class RouterAgent:
         "gemini":     "call_gemini",
         "openrouter": "call_openrouter",
         "local":      "call_local",
-        "codex":      "call_codex",
-        "copilot":    "call_copilot",
     }
 
     # Short prompts stay local/fast; long prompts need more capable models
     SHORT_PROMPT_THRESHOLD = 500    # characters
     LONG_PROMPT_THRESHOLD  = 3000
 
-    def __init__(self, brain, model_adapter, enabled_models: Optional[List[str]] = None):
+    def __init__(self, brain, model_adapter, enabled_models: Optional[list] = None):
         self.brain = brain
         self.adapter = model_adapter
-        self.enabled = enabled_models or ["openai", "gemini", "openrouter", "codex", "copilot"]
+        self.enabled = enabled_models or ["openai", "gemini", "openrouter"]
 
         # Load persisted stats from brain or initialise fresh
-        self.stats: Dict[str, ModelStats] = {}
+        self.stats: dict[str, ModelStats] = {}
         self._load_stats()
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
-    def route(self, prompt: str) -> str:
+    def route(self, prompt: str, corr_id: str = None) -> str:
         """
         Route prompt to the best available model.
         Tries ranked candidates in order until one succeeds.
@@ -148,7 +130,17 @@ class RouterAgent:
                 response = caller(prompt)
                 latency = time.time() - start
                 self.stats[model_name].record(success=True, latency=latency)
-                self._save_stats()
+                self._persist_stats()
+                log_json(
+                    "INFO",
+                    "router_route_success",
+                    corr_id=corr_id,
+                    phase="route",
+                    component="router",
+                    details={"model": model_name, "latency_ms": latency * 1000},
+                    latency_ms=latency * 1000,
+                    outcome="success",
+                )
                 self.brain.remember(
                     f"RouterAgent: routed to {model_name} | "
                     f"lat={latency:.2f}s | ema={self.stats[model_name].ema_score:.3f}"
@@ -158,8 +150,19 @@ class RouterAgent:
             except Exception as exc:
                 latency = time.time() - start
                 self.stats[model_name].record(success=False, latency=latency)
-                self._save_stats()
+                self._persist_stats()
                 last_error = exc
+                log_json(
+                    "WARN",
+                    "router_route_failure",
+                    corr_id=corr_id,
+                    phase="route",
+                    component="router",
+                    details={"model": model_name, "latency_ms": latency * 1000, "error": str(exc)},
+                    latency_ms=latency * 1000,
+                    outcome="fail",
+                    failure_reason=str(exc),
+                )
                 self.brain.remember(
                     f"RouterAgent: {model_name} FAILED ({exc}) | "
                     f"ema={self.stats[model_name].ema_score:.3f}"
@@ -190,7 +193,7 @@ class RouterAgent:
     # Ranking logic
     # ------------------------------------------------------------------
 
-    def _rank_candidates(self, prompt: str) -> List[str]:
+    def _rank_candidates(self, prompt: str) -> list:
         """
         Return an ordered list of model names to try, best-first.
 
@@ -226,28 +229,27 @@ class RouterAgent:
     # Persistence
     # ------------------------------------------------------------------
 
+    def _persist_stats(self):
+        payload = {name: stat.to_dict() for name, stat in self.stats.items()}
+        self.brain.set("__router_stats__", payload)
+
     def _load_stats(self):
         # Initialise all enabled models with defaults first
         for name in self.enabled:
             self.stats[name] = ModelStats(name=name)
 
-        # Try to restore from brain KV store — avoids full scan
+        payload = self.brain.get("__router_stats__")
         try:
-            payload = self.brain.get("__router_stats__")
-            if payload and isinstance(payload, dict):
+            if isinstance(payload, str):
+                payload = json.loads(payload)
+            if isinstance(payload, dict):
                 for name, d in payload.items():
                     if name in self.enabled:
                         self.stats[name] = ModelStats.from_dict(d)
+        except (json.JSONDecodeError, KeyError) as e:
+            log_json("ERROR", "router_load_stats_failed", details={"error": str(e), "message": "Could not load model stats from brain memory."})
         except Exception as e:
             log_json("ERROR", "router_load_stats_unexpected_error", details={"error": str(e)})
-
-    def _save_stats(self):
-        """Persist current model stats to the brain KV store."""
-        try:
-            payload = {name: dataclasses.asdict(s) for name, s in self.stats.items()}
-            self.brain.set("__router_stats__", payload)
-        except Exception as e:
-            log_json("ERROR", "router_save_stats_failed", details={"error": str(e)})
 
     def _get_caller(self, model_name: str) -> Optional[Callable]:
         method_name = self.MODEL_REGISTRY.get(model_name)

@@ -1,0 +1,28 @@
+{
+  "capabilities": {
+    "applied_bootstrap_actions": [],
+    "configured": {
+      "auto_add_capabilities": true,
+      "auto_provision_mcp": false,
+      "auto_queue_missing_capabilities": true,
+      "auto_start_mcp_servers": false
+    },
+    "failed_bootstrap_actions": [],
+    "last_goal": null,
+    "last_updated": null,
+    "matched_capabilities": [],
+    "matched_capability_ids": [],
+    "missing_skills": [],
+    "pending_bootstrap_actions": [],
+    "pending_self_development_goals": [],
+    "queue_strategy": null,
+    "queued_goals": [],
+    "recommended_skills": [],
+    "running_bootstrap_actions": [],
+    "skipped_goals": []
+  },
+  "completed": [],
+  "completed_count": 0,
+  "queue": [],
+  "queue_length": 0
+}

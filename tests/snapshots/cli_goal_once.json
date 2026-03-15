@@ -1,0 +1,6 @@
+{
+  "cycles": 1,
+  "dry_run": false,
+  "goal": "Test Goal",
+  "stop_reason": "completed"
+}

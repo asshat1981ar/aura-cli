@@ -7,6 +7,7 @@ import numpy as np
 import sqlite3
 import time
 import sys
+import os
 from pathlib import Path
 
 # Add project root to sys.path
@@ -44,6 +45,7 @@ class EvalAdapter:
             else: results.append(np.zeros(4, dtype=np.float32))
         return results
     def get_embedding(self, text): return self.embed([text])[0]
+    def available(self): return True
 
 def run_eval():
     print("ASCM Retrieval Quality Evaluation")

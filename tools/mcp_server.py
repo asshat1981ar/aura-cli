@@ -189,7 +189,7 @@ TOOLS_MANIFEST: List[Dict[str, str]] = [
     {"name": "linter_capabilities", "description": "List available linter binaries"},
     {"name": "refactor_plan", "description": "Analyse a Python file and produce a refactor plan"},
     {"name": "lint_files", "description": "Lint specific files with ruff"},
-    {"name": "lint_all", "description": "Lint entire project with ruff"},
+    {"name": "lint_all", "description": "Lint entire project with ruff (advisory, exit-zero)"},
     {"name": "debug_trace", "description": "Run a Python module for debug tracing"},
 ]
 
@@ -414,7 +414,7 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
         if not ENABLE_WRITE:
             raise HTTPException(status_code=403, detail="Write disabled")
         try:
-            import yaml  # type: ignore
+            import yaml  # type: ignore[import-not-found]
         except ImportError:
             raise HTTPException(status_code=500, detail="PyYAML not installed")
         path_str = args.get("path", "")
@@ -629,7 +629,7 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
     # lint_all
     # ------------------------------------------------------------------ #
     if name == "lint_all":
-        result = _run_cmd(["ruff", "check", str(PROJECT_ROOT)])
+        result = _run_cmd(["ruff", "check", "--exit-zero", str(PROJECT_ROOT)])
         return {"data": result}
 
     # ------------------------------------------------------------------ #

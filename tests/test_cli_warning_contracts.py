@@ -1,3 +1,4 @@
+import json
 import unittest
 
 import aura_cli.options as cli_options_meta

@@ -1,3 +1,5 @@
+import concurrent.futures
+import json
 from unittest.mock import MagicMock, patch
 
 import requests
@@ -18,6 +20,7 @@ def test_model_adapter_normalizes_openai_embedding_model_from_config():
 
 
 def test_embed_disables_remote_provider_after_failure(monkeypatch):
+    import requests
     from unittest.mock import MagicMock
     monkeypatch.setenv("OPENAI_API_KEY", "openai-key")
     
@@ -28,6 +31,11 @@ def test_embed_disables_remote_provider_after_failure(monkeypatch):
     def mock_get(key, default=None):
         if key == "semantic_memory":
             return {"embedding_model": "text-embedding-3-small"}
+        if key == "openai_api_key":
+            return "openai-key"
+        # Fallback to defaults or simulated values for other keys
+        if key == "model_name":
+            return "test-model"
         return default
 
     with patch("core.model_adapter.log_json"), \
@@ -106,3 +114,106 @@ def test_model_adapter_uses_builtin_local_embeddings():
     assert adapter.dimensions() == 50
     assert len(vectors) == 2
     assert vectors[0].shape == (50,)
+
+
+class FakeFuture:
+    def __init__(self, result=None, error: Exception | None = None):
+        self._result = result
+        self._error = error
+        self.cancel_called = False
+
+    def result(self, timeout=None):
+        if self._error is not None:
+            raise self._error
+        return self._result
+
+    def cancel(self):
+        self.cancel_called = True
+        return True
+
+
+class FakeExecutor:
+    def __init__(self, futures):
+        self._futures = list(futures)
+        self.submit_calls = []
+        self.shutdown_calls = []
+
+    def submit(self, fn, *args):
+        self.submit_calls.append((fn, args))
+        return self._futures.pop(0)
+
+    def shutdown(self, wait=True, cancel_futures=False):
+        self.shutdown_calls.append((wait, cancel_futures))
+
+
+def test_respond_reuses_one_timeout_executor_across_fallbacks():
+    adapter = ModelAdapter()
+    timeout_future = FakeFuture(error=concurrent.futures.TimeoutError())
+    success_future = FakeFuture(result="ok")
+    executor = FakeExecutor([timeout_future, success_future])
+
+    with patch.object(adapter, "_new_timeout_executor", return_value=executor) as mock_new, \
+         patch.object(adapter, "_save_to_cache"):
+        response = adapter.respond("prompt")
+
+    assert response == "ok"
+    assert mock_new.call_count == 1
+    assert [call[0].__name__ for call in executor.submit_calls] == [
+        "call_openai",
+        "call_openrouter",
+    ]
+    assert timeout_future.cancel_called is True
+    assert executor.shutdown_calls == [(False, True)]
+
+
+def test_call_with_timeout_closes_owned_executor_without_waiting():
+    adapter = ModelAdapter()
+    future = FakeFuture(result="ok")
+    executor = FakeExecutor([future])
+
+    with patch.object(adapter, "_new_timeout_executor", return_value=executor):
+        response = adapter._call_with_timeout(lambda: "ignored")
+
+    assert response == "ok"
+    assert executor.shutdown_calls == [(False, True)]
+
+
+def test_execute_tool_routes_bound_tool_to_named_mcp_server():
+    adapter = ModelAdapter()
+    adapter._mcp_tool_bindings = {"get_repo": {"server": "copilot"}}
+    response = MagicMock()
+    response.json.return_value = {"result": {"ok": True}}
+    requests_mod = MagicMock()
+    requests_mod.post.return_value = response
+    requests_mod.exceptions.RequestException = requests.exceptions.RequestException
+
+    with patch("core.model_adapter._require_requests", return_value=requests_mod), \
+         patch("core.model_adapter.config.get_mcp_server_port", return_value=8007), \
+         patch("core.model_adapter.log_json"):
+        payload = json.loads(
+            adapter._execute_tool("get_repo", {"owner": "octo", "repo": "aura"})
+        )
+
+    requests_mod.post.assert_called_once_with(
+        "http://localhost:8007/call",
+        json={
+            "tool_name": "get_repo",
+            "args": {"owner": "octo", "repo": "aura"},
+        },
+        timeout=60,
+    )
+    assert payload["result"]["ok"] is True
+
+
+def test_execute_tool_returns_binding_error_for_unknown_server():
+    adapter = ModelAdapter()
+    adapter._mcp_tool_bindings = {"get_repo": {"server": "missing"}}
+
+    with patch(
+        "core.model_adapter.config.get_mcp_server_port",
+        side_effect=ValueError("Unknown MCP server name 'missing'"),
+    ):
+        result = adapter._execute_tool("get_repo", {"owner": "octo"})
+
+    assert "binding error" in result
+    assert "missing" in result

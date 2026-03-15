@@ -110,6 +110,8 @@ def test_build_cycle_summary_derives_operator_fields():
     assert summary["current_phase"] == "reflect"
     assert summary["verification_status"] == "fail"
     assert summary["stop_reason"] == "MAX_CYCLES"
+    assert summary["failure_routing_decision"] is None
+    assert summary["failure_routing_reason"] is None
     assert summary["failures"] == ["assertion error"]
     assert summary["retry_count"] == 2
     assert summary["applied_files"] == ["tests/test_example.py"]
@@ -126,6 +128,56 @@ def test_build_cycle_summary_derives_operator_fields():
     assert summary["phase_status"]["reflect"] == "pass"
 
 
+def test_build_cycle_summary_surfaces_failure_routing_trace():
+    entry = {
+        "cycle_id": "cycle_trace",
+        "goal": "Fix architecture drift",
+        "goal_type": "bug_fix",
+        "started_at": 10.0,
+        "completed_at": 11.0,
+        "phase_outputs": {
+            "verification": {
+                "status": "fail",
+                "failures": ["detected architecture issue"],
+                "logs": "refactor required",
+            },
+            "_failure_context": {
+                "route": "plan",
+                "routing_reason": "structural: detected 'architecture' in failures/logs",
+            },
+        },
+    }
+
+    summary = build_cycle_summary(entry)
+
+    assert summary["failure_routing_decision"] == "plan"
+    assert (
+        summary["failure_routing_reason"]
+        == "structural: detected 'architecture' in failures/logs"
+    )
+    assert summary["verification_status"] == "fail"
+
+
+def test_build_cycle_summary_merges_capability_and_beads_follow_up_queues():
+    summary = build_cycle_summary(
+        cycle_id="cycle_follow_ups",
+        goal="Stabilize status output",
+        goal_type="bug_fix",
+        phase_outputs={
+            "capability_goal_queue": {"queued": ["Review telemetry"]},
+            "beads_goal_queue": {"queued": ["Add regression coverage", "Review telemetry"]},
+        },
+        state="complete",
+        started_at=10.0,
+        completed_at=12.0,
+    )
+
+    assert summary["queued_follow_up_goals"] == [
+        "Review telemetry",
+        "Add regression coverage",
+    ]
+
+
 def test_build_operator_runtime_snapshot_composes_queue_and_cycle_summaries():
     goal_queue = SimpleNamespace(queue=["Fix failing tests"])
     goal_archive = SimpleNamespace(completed=[("Done goal", 9.0)])
@@ -138,6 +190,8 @@ def test_build_operator_runtime_snapshot_composes_queue_and_cycle_summaries():
         "phase_status": {},
         "verification_status": None,
         "stop_reason": None,
+        "failure_routing_decision": None,
+        "failure_routing_reason": None,
         "failures": [],
         "retry_count": 0,
         "applied_files": [],

@@ -6,9 +6,11 @@ from __future__ import annotations
 
 import json
 import subprocess
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from agents.skills.base import SkillBase
+from core.beads_cli import resolve_beads_cli, uses_repo_local_beads_cli
 from core.logging_utils import log_json
 
 
@@ -27,6 +29,10 @@ class BeadsSkill(SkillBase):
 
     name = "beads_skill"
 
+    def __init__(self, brain=None, model=None, project_root: Path | str | None = None):
+        super().__init__(brain=brain, model=model)
+        self.project_root = Path(project_root) if project_root is not None else None
+
     def _normalize_payload(self, cmd: str, payload: Any) -> Dict[str, Any]:
         """Wrap BEADS CLI JSON into the dict-only skill contract."""
         if isinstance(payload, dict):
@@ -36,6 +42,12 @@ class BeadsSkill(SkillBase):
             return {key: payload}
         return {"value": payload}
 
+    def _resolve_project_root(self, input_data: Dict[str, Any]) -> Path | None:
+        root = input_data.get("project_root")
+        if root is not None and str(root).strip():
+            return Path(root)
+        return self.project_root
+
     def _run(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         cmd: Optional[str] = input_data.get("cmd")
         bead_id: Optional[str] = input_data.get("id")
@@ -44,8 +56,12 @@ class BeadsSkill(SkillBase):
         if not cmd:
             return {"error": "Provide 'cmd' (ready, show, update, close, prime, sync)"}
 
-        # Base command
-        full_cmd = ["bd", "--json", cmd]
+        project_root = self._resolve_project_root(input_data)
+        beads_cli = resolve_beads_cli(project_root)
+        full_cmd = [beads_cli]
+        if uses_repo_local_beads_cli(beads_cli, project_root):
+            full_cmd.append("--no-daemon")
+        full_cmd.extend(["--json", cmd])
         
         # Add ID if applicable
         if bead_id:
@@ -60,6 +76,7 @@ class BeadsSkill(SkillBase):
                 full_cmd,
                 capture_output=True,
                 text=True,
+                cwd=project_root,
                 timeout=30,
                 check=False
             )

@@ -1,6 +1,7 @@
 """Tests for _CircuitBreaker in memory/momento_adapter.py."""
 import time
 import unittest
+from unittest.mock import patch
 
 from memory.momento_adapter import _CircuitBreaker
 

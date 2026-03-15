@@ -11,10 +11,12 @@ so the adapter is always in fallback/no-op mode.  This verifies:
   - SkillWeightAdapter works with momento=None
   - ModelAdapter.enable_cache works with momento=None
 """
+import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 
 class TestMomentoAdapterFallback(unittest.TestCase):

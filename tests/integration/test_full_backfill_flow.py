@@ -4,6 +4,7 @@ Integration test for the full autonomous backfill flow.
 from __future__ import annotations
 
 import pytest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 from core.orchestrator import LoopOrchestrator
 from agents.planner import PlannerAgent

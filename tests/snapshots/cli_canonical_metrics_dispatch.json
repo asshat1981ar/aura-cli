@@ -1,8 +1,16 @@
 {
+  "metrics": [
+    {
+      "cycle_id": "cycle123",
+      "duration": 50.0,
+      "goal": "Test goal",
+      "status": "SUCCESS"
+    }
+  ],
   "recent_cycles": [
     {
       "cycle_id": "cycle123",
-      "duration": 50,
+      "duration": 50.0,
       "goal": "Test goal",
       "status": "SUCCESS"
     }
@@ -12,7 +20,9 @@
     "count": 1,
     "fails": 0,
     "skipped": 0,
+    "success_rate": 100.0,
     "successes": 1,
+    "total_cycles": 1,
     "win_rate": 100.0
   }
 }

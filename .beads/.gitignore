@@ -8,7 +8,6 @@ bd.sock.startlock
 sync-state.json
 last-touched
 .jsonl.lock
-.beads/
 
 # Local version tracking (prevents upgrade notification spam after git ops)
 .local_version

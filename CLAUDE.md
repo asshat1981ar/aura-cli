@@ -332,7 +332,7 @@ Memory files (`*.db`, `*.json`, `.aura_history`) are git-ignored.
 ## Security & Secrets
 
 - `aura.config.json` contains an API key placeholder — **never commit real keys**
-- `.gitignore` excludes `.env`, `memory/*.db`, `memory/*.json`, `.aura_history`, `secrets/`
+- `.gitignore` excludes `.env`, `memory/*.db`, selected `memory/*.json` runtime artifacts, `.aura_history`, `secrets/`
 - Logging automatically masks secrets via `core/logging_utils.py`
 - Runtime auth managed by `core/runtime_auth.py`
 - Use environment variables for all API keys

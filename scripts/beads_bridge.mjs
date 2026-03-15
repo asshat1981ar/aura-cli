@@ -62,27 +62,12 @@ function isCliUnavailable(problem) {
 function runBdJson(args, timeoutMs = 1500) {
   const command = resolveBdCommand();
   const commandArgs = isLocalBdCommand(command) ? ["--no-daemon", ...args] : Array.from(args);
-  let proc = spawnSync(command, commandArgs, {
+  const proc = spawnSync(command, commandArgs, {
     encoding: "utf8",
     cwd: process.cwd(),
     env: process.env,
     timeout: timeoutMs,
   });
-  const fallbackCommand = localBdCommand();
-  if (
-    proc.error instanceof Error &&
-    proc.error.code === "ENOENT" &&
-    command === "bd" &&
-    fs.existsSync(fallbackCommand)
-  ) {
-    const fallbackArgs = ["--no-daemon", ...args];
-    proc = spawnSync(fallbackCommand, fallbackArgs, {
-      encoding: "utf8",
-      cwd: process.cwd(),
-      env: process.env,
-      timeout: timeoutMs,
-    });
-  }
   const stdout = typeof proc.stdout === "string" ? proc.stdout.trim() : "";
   const stderr = typeof proc.stderr === "string" ? proc.stderr.trim() : "";
   const error = proc.error instanceof Error ? proc.error.message : null;

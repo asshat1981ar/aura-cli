@@ -1,22 +1,22 @@
-# Use a lightweight Python image as the base
-FROM python:3.12-slim-buster
+FROM python:3.12-slim-bookworm
 
-# Set the working directory in the container
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
 WORKDIR /app
 
-# Copy the requirements file and install dependencies
-COPY ./tools/requirements.txt /app/tools/requirements.txt
-RUN pip install --no-cache-dir -r /app/tools/requirements.txt
+COPY tools/requirements.txt /tmp/tools-requirements.txt
 
-# Copy the rest of the application code
-COPY . /app
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir -r /tmp/tools-requirements.txt \
+    && groupadd --system aura \
+    && useradd --system --gid aura --create-home --home-dir /home/aura aura
 
-# Expose the port that Uvicorn will listen on
+COPY --chown=aura:aura . /app
+
+USER aura
+
 EXPOSE 8000
 
-# Set the GITHUB_PAT environment variable securely (e.g., via Kubernetes Secret or Docker secret)
-# For local testing, you can pass it via -e GITHUB_PAT=YOUR_PAT during docker run
-
-# Command to run the Uvicorn server
-# Make sure to run the mcp_server.py from the tools directory
-CMD ["uvicorn", "tools.mcp_server:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "tools.mcp_server:app", "--host", "0.0.0.0", "--port", "8000"]

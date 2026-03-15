@@ -1,0 +1,62 @@
+# VCS and local editor state
+.git
+.github
+.idea
+.vscode
+.devcontainer
+.DS_Store
+*.swp
+*.swo
+
+# Secrets and local environment
+.env
+secrets/
+*.key
+*.pat
+
+# Python caches and test artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+dist/
+build/
+.eggs/
+*.egg-info/
+
+# Node and local package installs
+node_modules/
+package-lock.json
+
+# Local runtime and scratch state
+.beads
+.ralph-state
+.rsi_pid
+logs/
+tmp*/
+tmp2*
+tmp_tail.log
+tmp_out/
+loop-output.txt
+reflect-out.txt
+pytest-out.txt
+lint-errors.txt
+test-results.txt
+pylint-out.txt
+skills-out.txt
+changed.txt
+
+# Repository runtime persistence
+memory/.aura_history
+memory/*.bak
+memory/*.json
+memory/*.db
+memory/*.db-shm
+memory/*.db-wal
+memory/store/
+
+# Detached/legacy artifacts
+copilot-cli
+archive/

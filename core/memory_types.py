@@ -5,7 +5,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Protocol
-import numpy as np
+
+try:
+    import numpy as np
+except ImportError:
+    class _MissingPackage:  # type: ignore[no-redef]
+        def __getattr__(self, name: str):
+            raise ImportError("numpy is required for embedding operations. Install it with: pip install numpy")
+    np = _MissingPackage()  # type: ignore[assignment]
 
 @dataclass
 class MemoryRecord:

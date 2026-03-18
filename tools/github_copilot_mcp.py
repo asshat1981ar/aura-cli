@@ -6,6 +6,7 @@ GitHub Copilot Workspace-style intelligence as MCP-compatible HTTP tools.
 
 Tools:
   issue_analyze     — fetch issue → AI root-cause analysis + implementation steps
+  agent_dispatch_plan — fetch issue → deterministic provider/profile dispatch recommendation
   pr_review         — fetch PR diff → AI code review with severity-tagged findings
   pr_describe       — fetch PR diff → auto-generate title + description
   code_explain      — explain any code snippet in plain English
@@ -125,6 +126,18 @@ _TOOL_SCHEMAS: Dict[str, Dict] = {
         "input": {
             "repo": {"type": "string", "description": "Repository in owner/repo format", "required": True},
             "issue_number": {"type": "integer", "description": "Issue number", "required": True},
+        },
+    },
+    "agent_dispatch_plan": {
+        "description": (
+            "Fetch a GitHub issue and produce a deterministic coding-agent dispatch plan, "
+            "including provider, role profile, branch naming, and merge-safety constraints."
+        ),
+        "input": {
+            "repo": {"type": "string", "description": "Repository in owner/repo format", "required": True},
+            "issue_number": {"type": "integer", "description": "Issue number", "required": True},
+            "preferred_provider": {"type": "string", "description": "Optional provider override hint"},
+            "requested_profile": {"type": "string", "description": "Optional profile override hint"},
         },
     },
     "pr_review": {
@@ -271,6 +284,38 @@ def _tool_issue_analyze(args: Dict) -> Dict:
         "title": title,
         "labels": labels,
         "analysis": analysis,
+    }
+
+
+def _tool_agent_dispatch_plan(args: Dict) -> Dict:
+    from core.github_automation import AgentDispatchPlanner, IssueContext
+
+    repo = args["repo"]
+    issue_number = int(args["issue_number"])
+    preferred_provider = args.get("preferred_provider")
+    requested_profile = args.get("requested_profile")
+    gh = _get_github()
+
+    issue = gh.get_issue_details(repo, issue_number)
+    labels = [label["name"] for label in issue.get("labels", [])]
+    context = IssueContext(
+        number=issue_number,
+        title=issue.get("title", ""),
+        body=issue.get("body", "") or "",
+        labels=labels,
+        author=(issue.get("user") or {}).get("login", ""),
+        is_pull_request=False,
+    )
+    dispatch = AgentDispatchPlanner(project_root=_ROOT).dispatch(
+        context,
+        preferred_provider=preferred_provider,
+        requested_profile=requested_profile,
+    )
+    return {
+        "repo": repo,
+        "issue_number": issue_number,
+        "dispatch": dispatch.to_dict(),
+        "comment_markdown": dispatch.render_markdown(),
     }
 
 
@@ -709,6 +754,7 @@ def _tool_find_related_code(args: Dict) -> Dict:
 
 _HANDLERS = {
     "issue_analyze": _tool_issue_analyze,
+    "agent_dispatch_plan": _tool_agent_dispatch_plan,
     "pr_review": _tool_pr_review,
     "pr_describe": _tool_pr_describe,
     "code_explain": _tool_code_explain,

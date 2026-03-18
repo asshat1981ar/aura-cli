@@ -31,6 +31,28 @@ When changing CLI commands, help text, parsing, or JSON output contracts:
 
 CI enforces the generated CLI docs and snapshot contracts via `.github/workflows/ci.yml`.
 
+## GitHub Automation
+
+This repo now has a governed GitHub automation baseline:
+
+- `.github/CODEOWNERS` defines review ownership for sensitive paths.
+- `.github/ISSUE_TEMPLATE/` contains structured forms for bugs, features, and agent tasks.
+- `.github/pull_request_template.md` standardizes risk, testing, and agent-disclosure notes.
+- `.github/workflows/pr-review-orchestrator.yml` posts one synthesized PR review summary instead of multiple public bot comments.
+- `.github/workflows/merge-readiness.yml` is the final merge gate that evaluates approvals, required checks, CODEOWNERS state, and the synthesized review verdict before applying `merge-ready`.
+- `.github/workflows/issue-intake.yml` converts new issues into structured planning artifacts.
+- `.github/workflows/issue-comment-commands.yml` handles `/plan`, `/queue aura`, and `/review <provider>` comment commands.
+- `.github/workflows/agent-task-dispatch.yml` produces provider/profile dispatch plans for coding-agent work.
+- `.github/workflows/nightly-repo-health.yml` publishes a nightly repo-health issue with stale PRs, flaky workflows, recurring failures, and hotspot summaries.
+
+`ci.yml` also runs on `merge_group`, which is required before enabling GitHub merge queue on `main`.
+
+Legacy provider-specific PR review workflows remain available behind `AURA_LEGACY_PROVIDER_REVIEWS=1` until the unified orchestrator is fully adopted.
+The older issue queue workflow remains available behind `AURA_LEGACY_ISSUE_QUEUE=1` for controlled migration.
+Coding-agent dispatch is branch-only by policy, and the GitHub MCP bridge now reports that branch policy in `/health` and `/metrics`.
+Protected-path PRs can now receive an `escalate` verdict from the review orchestrator without failing that check outright; merge readiness becomes the authoritative gate that waits for human approval instead.
+The scheduled AURA loop is now asynchronous maintenance only: if it generates code changes, it opens a branch and PR instead of pushing to `main`.
+
 ## Autonomous Apply Safety
 
 Autonomous code-apply paths (queue loop, orchestrator, hybrid loop, mutator, and atomic apply) enforce an explicit overwrite safety policy for stale-snippet mismatches.

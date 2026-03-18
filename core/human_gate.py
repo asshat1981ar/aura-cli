@@ -17,11 +17,25 @@ from typing import Tuple
 from core.logging_utils import log_json
 
 
+def _normalize_path(path: str) -> str:
+    if path.startswith("./"):
+        return path[2:]
+    return path
+
+
 class HumanGate:
     """Gate that pauses autonomous operation when risk is too high."""
 
     # Minimum drop in coverage (percentage points) that triggers a block.
     COVERAGE_DROP_THRESHOLD: float = 5.0
+    PROTECTED_PATH_PREFIXES: tuple[str, ...] = (".github/", "tools/", "core/", "aura_cli/")
+    PROTECTED_PATHS: tuple[str, ...] = (
+        "requirements.txt",
+        "pyproject.toml",
+        "package.json",
+        "package-lock.json",
+        "poetry.lock",
+    )
 
     def __init__(self, coverage_baseline: float | None = None):
         """Initialise the gate.
@@ -77,6 +91,29 @@ class HumanGate:
                     return True, reason
 
         return False, ""
+
+    def should_block_paths(self, changed_files: list[str]) -> Tuple[bool, str]:
+        """Decide whether path-sensitive changes require a human reviewer."""
+        risky = [
+            path
+            for path in changed_files
+            if self.is_protected_path(path)
+        ]
+        if not risky:
+            return False, ""
+
+        sample = ", ".join(risky[:3])
+        reason = f"protected path changes require a human review ({sample})"
+        log_json("WARN", "human_gate_blocked", details={"reason": reason})
+        return True, reason
+
+    @classmethod
+    def is_protected_path(cls, path: str) -> bool:
+        """Return True when *path* is a high-sensitivity area."""
+        normalized = _normalize_path(path)
+        if normalized in cls.PROTECTED_PATHS:
+            return True
+        return any(normalized.startswith(prefix) for prefix in cls.PROTECTED_PATH_PREFIXES)
 
     def request_approval(self, reason: str, change_summary: dict) -> bool:
         """Ask the operator whether to proceed with a risky change.

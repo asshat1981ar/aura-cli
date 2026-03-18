@@ -1,0 +1,51 @@
+name: Agent task
+description: Create a structured task for Copilot, Codex, Claude, Gemini, or AURA.
+title: "[agent-task] "
+labels:
+  - agent-task
+body:
+  - type: input
+    id: goal
+    attributes:
+      label: Goal
+      description: Clear task statement for the agent.
+      placeholder: Add merge_group support to the CI workflow.
+    validations:
+      required: true
+  - type: dropdown
+    id: preferred_provider
+    attributes:
+      label: Preferred provider
+      options:
+        - aura
+        - copilot
+        - codex
+        - claude
+        - gemini
+        - no preference
+    validations:
+      required: true
+  - type: textarea
+    id: affected_paths
+    attributes:
+      label: Likely files or directories
+      description: Mention likely code areas if known.
+      placeholder: |
+        .github/workflows/ci.yml
+        core/human_gate.py
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Note any non-obvious rules, deadlines, or safety limits.
+      placeholder: Do not change runtime memory files. Keep legacy workflows behind a flag.
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Risk level
+      options:
+        - low
+        - medium
+        - high
+    validations:
+      required: true

@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   copilot-code-review:
+    if: vars.AURA_LEGACY_PROVIDER_REVIEWS == '1'
     name: Copilot Code Review
     runs-on: ubuntu-latest
     steps:

@@ -812,6 +812,14 @@ class WorkflowEngine:
                 WorkflowStep("git_history",  skill_name="git_history_analyzer"),
             ],
         ))
+        self.define(WorkflowDefinition(
+            name="issue_intake_planning",
+            description="Deterministic GitHub issue triage and implementation planning.",
+            steps=[
+                WorkflowStep("triage_issue", fn=self._triage_issue_step),
+                WorkflowStep("plan_issue", fn=self._plan_issue_step, inputs_from={"triage_fields": "triage_issue.*"}),
+            ],
+        ))
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -820,6 +828,48 @@ class WorkflowEngine:
     def _get_execution(self, exec_id: str) -> Optional[WorkflowExecution]:
         with self._global_lock:
             return self._executions.get(exec_id)
+
+    def _triage_issue_step(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        from core.github_automation.issue_triage import IssueContext, triage_issue
+
+        context = IssueContext(
+            number=inputs.get("issue_number"),
+            title=str(inputs.get("issue_title", "")),
+            body=str(inputs.get("issue_body", "")),
+            labels=list(inputs.get("issue_labels", []) or []),
+            author=str(inputs.get("issue_author", "")),
+            is_pull_request=bool(inputs.get("issue_is_pull_request", False)),
+        )
+        return triage_issue(context).to_dict()
+
+    def _plan_issue_step(self, inputs: Dict[str, Any]) -> Dict[str, Any]:
+        from core.github_automation.issue_planner import IssuePlanner
+        from core.github_automation.issue_triage import IssueContext, IssueTriageResult
+
+        context = IssueContext(
+            number=inputs.get("issue_number"),
+            title=str(inputs.get("issue_title", "")),
+            body=str(inputs.get("issue_body", "")),
+            labels=list(inputs.get("issue_labels", []) or []),
+            author=str(inputs.get("issue_author", "")),
+            is_pull_request=bool(inputs.get("issue_is_pull_request", False)),
+        )
+        triage = IssueTriageResult(
+            issue_type=str(inputs.get("issue_type", "general")),
+            risk_level=str(inputs.get("risk_level", "medium")),
+            preferred_provider=str(inputs.get("preferred_provider", "no preference")),
+            automation_lane=str(inputs.get("automation_lane", "issue intake")),
+            summary=str(inputs.get("summary", context.title)),
+            problem_statement=str(inputs.get("problem_statement", context.body)),
+            labels_to_apply=list(inputs.get("labels_to_apply", []) or []),
+            queue_candidate=bool(inputs.get("queue_candidate", False)),
+            queue_goal=str(inputs.get("queue_goal", context.title)),
+            sections=dict(inputs.get("sections", {}) or {}),
+        )
+        plan = IssuePlanner(project_root=Path(__file__).resolve().parent.parent).plan(context, triage)
+        payload = plan.to_dict()
+        payload["comment_markdown"] = plan.render_markdown()
+        return payload
 
     def _get_loop(self, loop_id: str) -> Optional[AgenticLoop]:
         with self._global_lock:

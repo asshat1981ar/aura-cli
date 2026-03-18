@@ -1,0 +1,57 @@
+name: Bug report
+description: Report a defect, regression, or broken workflow.
+title: "[bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please include enough detail for a maintainer or agent to reproduce the problem safely.
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: One-sentence description of the bug.
+      placeholder: The CLI exits before processing queued goals.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: Exact steps to reproduce the problem.
+      placeholder: |
+        1. Run `python3 main.py --run-goals`
+        2. Add a queued goal
+        3. Observe the error
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected result
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual result
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs or screenshots
+      description: Paste relevant logs, stack traces, or screenshots.
+      render: shell
+  - type: dropdown
+    id: risk
+    attributes:
+      label: Severity
+      options:
+        - low
+        - medium
+        - high
+    validations:
+      required: true

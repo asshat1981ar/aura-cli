@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: AURA docs
+    url: https://github.com/asshat1981ar/aura-cli
+    about: Check the repository docs and plans before opening an issue.

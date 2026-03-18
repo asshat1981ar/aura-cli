@@ -1,0 +1,42 @@
+- name: agent-task
+  color: "1f6feb"
+  description: Structured work item intended for an agent workflow.
+- name: agent-review
+  color: "0969da"
+  description: Pull request has been processed by the AURA review orchestrator.
+- name: needs-human-review
+  color: "d1242f"
+  description: Automation detected a change that requires a human reviewer.
+- name: merge-ready
+  color: "2da44e"
+  description: PR is eligible for auto-merge after required approvals and checks.
+- name: blocked
+  color: "b60205"
+  description: Work is blocked by policy, CI, or missing information.
+- name: repo-health
+  color: "7057ff"
+  description: Nightly repo-health reporting and follow-up issues.
+- name: aura-loop-error
+  color: "d73a4a"
+  description: Errors detected during the scheduled AURA autonomous loop.
+- name: risk:low
+  color: "2da44e"
+  description: Low-risk change.
+- name: risk:medium
+  color: "fbca04"
+  description: Medium-risk change.
+- name: risk:high
+  color: "d93f0b"
+  description: High-risk or sensitive change.
+- name: provider:copilot
+  color: "5319e7"
+  description: Copilot was selected or involved for this workflow.
+- name: provider:codex
+  color: "0e8a16"
+  description: Codex was selected or involved for this workflow.
+- name: provider:claude
+  color: "c5def5"
+  description: Claude was selected or involved for this workflow.
+- name: provider:gemini
+  color: "bfdadc"
+  description: Gemini was selected or involved for this workflow.

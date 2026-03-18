@@ -1,0 +1,244 @@
+name: Merge Readiness
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled, review_requested, review_request_removed]
+  pull_request_review:
+    types: [submitted, dismissed]
+  workflow_run:
+    workflows: ["CI", "PR Review Orchestrator"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to evaluate
+        required: true
+        type: number
+
+permissions:
+  checks: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  evaluate:
+    name: evaluate
+    if: vars.AURA_GITHUB_AUTOMATION_ENABLED != '0'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Resolve pull request metadata
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const core = require("@actions/core");
+            const fs = require("fs");
+            const { owner, repo } = context.repo;
+
+            let pullNumber = null;
+            if (context.eventName === "workflow_dispatch") {
+              pullNumber = Number(context.payload.inputs?.pr_number || 0);
+            } else if (context.payload.pull_request) {
+              pullNumber = context.payload.pull_request.number;
+            } else if (context.payload.workflow_run?.pull_requests?.length) {
+              pullNumber = context.payload.workflow_run.pull_requests[0].number;
+            }
+
+            if (!pullNumber) {
+              core.setOutput("skip", "true");
+              core.notice("No pull request is associated with this event; merge readiness skipped.");
+              return;
+            }
+
+            const pr = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: pullNumber,
+            });
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner,
+              repo,
+              pull_number: pullNumber,
+              per_page: 100,
+            });
+
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner,
+              repo,
+              pull_number: pullNumber,
+              per_page: 100,
+            });
+
+            const latestByUser = new Map();
+            for (const review of reviews) {
+              const login = review.user?.login;
+              if (!login) {
+                continue;
+              }
+              latestByUser.set(login, review.state);
+            }
+
+            let approvals = 0;
+            let changesRequested = 0;
+            for (const state of latestByUser.values()) {
+              if (state === "APPROVED") {
+                approvals += 1;
+              } else if (state === "CHANGES_REQUESTED") {
+                changesRequested += 1;
+              }
+            }
+
+            const checkRuns = await github.paginate(github.rest.checks.listForRef, {
+              owner,
+              repo,
+              ref: pr.data.head.sha,
+              per_page: 100,
+            });
+
+            const payload = {
+              pull_request: {
+                number: pr.data.number,
+                title: pr.data.title || "",
+                base_ref: pr.data.base?.ref || "main",
+                head_ref: pr.data.head?.ref || "",
+                draft: Boolean(pr.data.draft),
+                labels: (pr.data.labels || []).map((label) => label.name).filter(Boolean),
+                changed_files: files.map((file) => file.filename),
+              },
+              reviews: {
+                approvals,
+                changes_requested: changesRequested,
+                review_decision: changesRequested > 0 ? "CHANGES_REQUESTED" : (approvals > 0 ? "APPROVED" : "REVIEW_REQUIRED"),
+                requested_reviewers: (pr.data.requested_reviewers || []).map((reviewer) => reviewer.login).filter(Boolean),
+                requested_teams: (pr.data.requested_teams || []).map((team) => team.slug).filter(Boolean),
+              },
+              checks: checkRuns.map((check) => ({
+                name: check.name,
+                status: check.status,
+                conclusion: check.conclusion,
+                required: true,
+              })),
+            };
+
+            fs.writeFileSync("merge-readiness-input.json", JSON.stringify(payload, null, 2));
+            core.setOutput("skip", "false");
+            core.setOutput("pr_number", String(pullNumber));
+
+      - name: Build synthesized PR review snapshot
+        if: steps.pr.outputs.skip != 'true'
+        env:
+          PR_CONTEXT_INPUT_PATH: merge-readiness-input.json
+        run: python scripts/run_pr_review_orchestrator.py
+
+      - name: Evaluate merge readiness
+        if: steps.pr.outputs.skip != 'true'
+        id: readiness
+        env:
+          MERGE_READINESS_INPUT_PATH: merge-readiness-input.json
+          PR_REVIEW_SUMMARY_PATH: pr-review-summary.json
+        run: python scripts/run_merge_readiness.py
+
+      - name: Upsert merge readiness comment
+        if: steps.pr.outputs.skip != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const marker = "<!-- aura-merge-readiness -->";
+            const body = fs.readFileSync("merge-readiness-comment.md", "utf8");
+            const { owner, repo } = context.repo;
+            const issue_number = Number("${{ steps.pr.outputs.pr_number }}");
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+            const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
+
+      - name: Sync merge readiness labels
+        if: steps.pr.outputs.skip != 'true'
+        uses: actions/github-script@v7
+        env:
+          LABELS_TO_ADD: ${{ steps.readiness.outputs.labels_to_add }}
+          LABELS_TO_REMOVE: ${{ steps.readiness.outputs.labels_to_remove }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue_number = Number("${{ steps.pr.outputs.pr_number }}");
+            const labelsToAdd = (process.env.LABELS_TO_ADD || "").split(",").map((value) => value.trim()).filter(Boolean);
+            const labelsToRemove = (process.env.LABELS_TO_REMOVE || "").split(",").map((value) => value.trim()).filter(Boolean);
+
+            for (const label of labelsToRemove) {
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number, name: label });
+              } catch (error) {
+                if (error.status !== 404) {
+                  throw error;
+                }
+              }
+            }
+
+            if (labelsToAdd.length > 0) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number,
+                labels: labelsToAdd,
+              });
+            }
+
+      - name: Add step summary
+        if: steps.pr.outputs.skip != 'true'
+        run: cat merge-readiness-comment.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload merge readiness artifacts
+        if: steps.pr.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: merge-readiness-${{ github.run_number }}
+          path: |
+            merge-readiness-input.json
+            pr-review-summary.json
+            pr-review-comment.md
+            merge-readiness-summary.json
+            merge-readiness-comment.md
+          retention-days: 7
+
+      - name: Enforce merge readiness
+        if: steps.pr.outputs.skip != 'true' && steps.readiness.outputs.ready_for_merge != 'true'
+        run: |
+          echo "Merge readiness status: ${{ steps.readiness.outputs.status }}"
+          exit 1

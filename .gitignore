@@ -30,13 +30,21 @@ build/
 .eggs/
 
 # ── Database / runtime state (auto-generated) ─────────────────────────────
+memory/.aura_history
 memory/brain.db
 memory/brain_v2.db
+memory/capability_status.json
+memory/discovery_seen.json
+memory/goal_archive.json
+memory/goal_archive_v2.json
+memory/goal_queue.json
+memory/*.bak
 memory/local_cache.db
 memory/context_graph.db
 memory/thinking_sessions.db
 memory/goal_queue_v2.json
-memory/goal_archive_v2.json
+memory/project_sync_hashes.json
+memory/skill_weights.json
 memory/task_hierarchy_v2.json
 memory/strategy_stats.json
 memory/store/
@@ -57,6 +65,22 @@ test-results.txt
 pylint-out.txt
 skills-out.txt
 changed.txt
+pr-review-summary.json
+pr-review-comment.md
+issue-plan-summary.json
+issue-plan-comment.md
+issue-command-summary.json
+issue-command-comment.md
+agent-dispatch-summary.json
+agent-dispatch-comment.md
+patch-metadata.json
+merge-readiness-summary.json
+merge-readiness-comment.md
+merge-readiness-input.json
+repo-health-input.json
+repo-health-summary.json
+repo-health-comment.md
+repo-health-followups.json
 
 # ── Gemini CLI ────────────────────────────────────────────────────────────
 .gemini/
@@ -70,3 +94,5 @@ changed.txt
 
 # Dolt database files (added by bd init)
 .dolt/
+
+gha-creds-*.json

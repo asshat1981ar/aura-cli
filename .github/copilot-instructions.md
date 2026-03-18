@@ -2,6 +2,25 @@
 
 AURA is an autonomous AI development loop. Goals enter a queue and are processed through a fixed multi-agent pipeline each cycle. This file is the single source of truth for GitHub Copilot in this codebase.
 
+## Repository Rules
+
+- Do not commit runtime memory files such as `memory/brain.db`, `memory/goal_queue.json`, `memory/goal_archive.json`, `memory/capability_status.json`, `memory/project_sync_hashes.json`, or `memory/skill_weights.json`.
+- Preserve the CLI contract. If a CLI command, help text, or error text changes, regenerate docs and rerun the snapshot suites.
+- Always run `python scripts/generate_cli_reference.py` after CLI changes.
+- Always run `pytest tests/test_cli_help_snapshots.py` and `pytest tests/test_cli_error_snapshots.py` after CLI output changes.
+
+## GitHub Automation Policy
+
+- Do not self-merge or set a PR to `merge-ready`.
+- Use normalized severity buckets for review output: `critical`, `high`, `medium`, `low`, `info`.
+- Changes under `.github/`, dependency manifests, `core/`, `tools/`, or bridge/auth code require human review.
+- Prefer updating the single AURA orchestrator review comment instead of posting duplicate provider-specific summaries.
+- When issue forms or PR templates are present, preserve their structure and fields.
+- Slash commands handled by automation are `/plan`, `/queue aura`, and `/review <provider>`.
+- Coding-agent dispatch is branch-only. Never plan a direct write to `main`.
+- Role-specific agent profiles live under `.github/agents/` and should be preferred over the general workflow profile when applicable.
+- Nightly or scheduled automation may propose changes, but it must do so through a branch and pull request rather than a direct push.
+
 ## Commands
 
 ```bash

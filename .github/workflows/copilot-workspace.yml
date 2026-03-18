@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     if: |
       github.event_name == 'workflow_dispatch' ||
-      contains(github.event.issue.labels.*.name, 'aura-goal')
+      (vars.AURA_LEGACY_ISSUE_QUEUE == '1' && contains(github.event.issue.labels.*.name, 'aura-goal'))
     steps:
       - uses: actions/checkout@v4
 

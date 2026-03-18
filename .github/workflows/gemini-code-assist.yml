@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   gemini-review:
+    if: vars.AURA_LEGACY_PROVIDER_REVIEWS == '1'
     name: Gemini Code Review
     runs-on: ubuntu-latest
     steps:

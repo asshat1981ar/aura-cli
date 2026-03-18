@@ -62,6 +62,22 @@ class GitHubTools:
         payload = {"title": title, "body": body}
         return self._make_request("POST", url, json_data=payload)
 
+    def create_issue_comment(self, repo_full_name: str, issue_number: int, body: str) -> Dict[str, Any]:
+        """
+        Create a top-level issue comment.
+        """
+        url = f"{self.BASE_URL}/repos/{repo_full_name}/issues/{issue_number}/comments"
+        payload = {"body": body}
+        return self._make_request("POST", url, json_data=payload)
+
+    def add_issue_labels(self, repo_full_name: str, issue_number: int, labels: list[str]) -> Dict[str, Any]:
+        """
+        Add labels to an issue or pull request.
+        """
+        url = f"{self.BASE_URL}/repos/{repo_full_name}/issues/{issue_number}/labels"
+        payload = {"labels": labels}
+        return self._make_request("POST", url, json_data=payload)
+
     def get_issue_details(self, repo_full_name: str, issue_number: int) -> Dict[str, Any]:
         """
         Get details of a specific issue in a GitHub repository.

@@ -87,7 +87,7 @@ class TestHealth:
         assert resp.status_code == 200
         data = resp.json()
         assert "status" in data
-        assert data["tool_count"] == 10
+        assert data["tool_count"] == 11
         assert data["server"] == "github_copilot_mcp"
 
 
@@ -96,12 +96,12 @@ class TestHealth:
 # ---------------------------------------------------------------------------
 
 class TestToolList:
-    def test_lists_all_10_tools(self, client):
+    def test_lists_all_tools(self, client):
         resp = client.get("/tools")
         assert resp.status_code == 200
         names = {t["name"] for t in resp.json()}
         assert names == {
-            "issue_analyze", "pr_review", "pr_describe", "code_explain",
+            "issue_analyze", "agent_dispatch_plan", "pr_review", "pr_describe", "code_explain",
             "code_fix", "test_generate", "commit_message", "repo_health",
             "issue_to_plan", "find_related_code",
         }
@@ -142,6 +142,19 @@ class TestIssueAnalyze:
         assert resp.status_code == 200
         data = resp.json()
         assert data["error"] is not None
+
+
+class TestAgentDispatchPlan:
+    def test_returns_dispatch_plan(self, client):
+        resp = client.post("/call", json={
+            "tool_name": "agent_dispatch_plan",
+            "args": {"repo": "owner/repo", "issue_number": 42},
+        })
+        assert resp.status_code == 200
+        result = resp.json()["result"]
+        assert "dispatch" in result
+        assert result["dispatch"]["direct_main_allowed"] is False
+        assert result["dispatch"]["requires_pr"] is True
 
 
 class TestPRReview:

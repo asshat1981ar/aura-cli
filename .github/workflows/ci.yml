@@ -1,63 +1,75 @@
-name: Python CI
+name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+  merge_group:
 
 jobs:
-  build:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check .
+      - run: ruff format --check .
+
+  test:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [ "3.10", "3.11" ]
-
+        python-version: ["3.10", "3.12"]
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        # Check if requirements.txt exists and install it
-        if [ -f requirements.txt ]; then
-          pip install -r requirements.txt
-        fi
-        pip install pytest
-    - name: Test with pytest
-      run: |
-        pytest -q --maxfail=1
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Unit tests
+        run: python -m pytest tests/ -x -q --timeout=30 -k "not integration"
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: mypy core/ aura_cli/ --ignore-missing-imports
 
   cli_docs_and_help_contracts:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.11"
-    - name: Install minimal test dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pytest
-    - name: Verify CLI docs are up to date
-      run: |
-        python scripts/generate_cli_reference.py --check
-    - name: Verify CLI docs generator tests
-      run: |
-        pytest -q tests/test_cli_docs_generator.py
-    - name: Verify CLI parser/dispatch contracts
-      run: |
-        pytest -q tests/test_cli_contract.py tests/test_cli_options.py
-    - name: Verify CLI dispatch runtime contract subset
-      run: |
-        pytest -q tests/test_cli_main_dispatch.py -k "runtime_initialization_follows_action_contract_for_all_actions or dispatch_config_does_not_create_runtime or watch_and_studio_commands_have_runtime_and_ui_parity or watch_and_studio_autonomous_flag_is_forwarded_to_ui_run"
-    - name: Verify CLI help/error snapshots
-      run: |
-        pytest -q tests/test_cli_help_snapshots.py tests/test_cli_error_snapshots.py
-    - name: Verify CLI dispatch JSON snapshots
-      run: |
-        pytest -q tests/test_cli_main_dispatch.py -k snapshot
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+      - name: Verify CLI docs are up to date
+        run: python scripts/generate_cli_reference.py --check
+      - name: Verify CLI docs generator tests
+        run: pytest -q tests/test_cli_docs_generator.py
+      - name: Verify CLI parser/dispatch contracts
+        run: pytest -q tests/test_cli_contract.py tests/test_cli_options.py
+      - name: Verify CLI dispatch runtime contract subset
+        run: |
+          pytest -q tests/test_cli_main_dispatch.py -k "runtime_initialization_follows_action_contract_for_all_actions or dispatch_config_does_not_create_runtime or watch_and_studio_commands_have_runtime_and_ui_parity or watch_and_studio_autonomous_flag_is_forwarded_to_ui_run"
+      - name: Verify CLI help/error snapshots
+        run: pytest -q tests/test_cli_help_snapshots.py tests/test_cli_error_snapshots.py
+      - name: Verify CLI dispatch JSON snapshots
+        run: pytest -q tests/test_cli_main_dispatch.py -k snapshot

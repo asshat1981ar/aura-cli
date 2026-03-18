@@ -27,6 +27,7 @@ from typing import Any
 
 PORT = int(os.getenv("MCP_SERVER_PORT", "8001"))
 GITHUB_TOKEN = os.getenv("GITHUB_PERSONAL_ACCESS_TOKEN", "")
+AURA_MCP_BLOCK_MAIN_WRITES = os.getenv("AURA_MCP_BLOCK_MAIN_WRITES", "1") != "0"
 
 logging.basicConfig(level=logging.INFO, format="[mcp-bridge] %(levelname)s %(message)s")
 log = logging.getLogger("mcp_bridge")
@@ -169,12 +170,19 @@ class BridgeHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/health":
-            self._send_json(200, {"status": "ok", "mcp_alive": _mcp.alive()})
+            self._send_json(200, {
+                "status": "ok",
+                "mcp_alive": _mcp.alive(),
+                "policy": {"branch_only": True, "direct_main_writes_blocked": AURA_MCP_BLOCK_MAIN_WRITES},
+            })
         elif self.path == "/tools":
             tools = _mcp.list_tools()
             self._send_json(200, {"tools": tools})
         elif self.path == "/metrics":
-            self._send_json(200, {"uptime": "ok"})
+            self._send_json(200, {
+                "uptime": "ok",
+                "policy": {"branch_only": True, "direct_main_writes_blocked": AURA_MCP_BLOCK_MAIN_WRITES},
+            })
         else:
             self._send_json(404, {"error": "not found"})
 
@@ -186,10 +194,27 @@ class BridgeHandler(BaseHTTPRequestHandler):
             if not tool_name:
                 self._send_json(400, {"error": "tool_name required"})
                 return
+            if _blocks_main_write(tool_name, args):
+                self._send_json(403, {"error": "direct writes to main are blocked by bridge policy"})
+                return
             result = _mcp.call_tool(tool_name, args)
             self._send_json(200, result)
         else:
             self._send_json(404, {"error": "not found"})
+
+
+def _blocks_main_write(tool_name: str, args: dict) -> bool:
+    """Best-effort guard against write-style MCP operations targeting main."""
+    if not AURA_MCP_BLOCK_MAIN_WRITES:
+        return False
+    lowered = tool_name.lower()
+    write_like = any(token in lowered for token in ("create", "update", "push", "merge", "delete", "write"))
+    target_refs = {
+        str(args.get("branch", "")),
+        str(args.get("base", "")),
+        str(args.get("ref", "")),
+    }
+    return write_like and "main" in target_refs
 
 
 def main():

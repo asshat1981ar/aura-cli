@@ -1,0 +1,136 @@
+name: Agent Task Dispatch
+
+on:
+  issues:
+    types: [opened, labeled, reopened, edited]
+  workflow_dispatch:
+    inputs:
+      issue_title:
+        description: "Issue title or task summary"
+        required: true
+        type: string
+      issue_body:
+        description: "Issue body"
+        required: false
+        type: string
+      issue_labels:
+        description: "Comma-separated labels"
+        required: false
+        type: string
+      requested_provider:
+        description: "Preferred provider"
+        required: false
+        type: choice
+        options: ["", "aura", "copilot", "codex", "claude", "gemini"]
+      requested_profile:
+        description: "Preferred profile"
+        required: false
+        type: choice
+        options: ["", "issue-planner", "pr-reviewer", "bugfix", "agentic-workflows-dev"]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  dispatch:
+    name: dispatch
+    if: |
+      vars.AURA_GITHUB_AUTOMATION_ENABLED != '0' &&
+      (github.event_name == 'workflow_dispatch' || contains(github.event.issue.labels.*.name, 'agent-task'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Build dispatch plan
+        id: dispatch
+        env:
+          ISSUE_TITLE: ${{ github.event.inputs.issue_title || '' }}
+          ISSUE_BODY: ${{ github.event.inputs.issue_body || '' }}
+          ISSUE_LABELS: ${{ github.event.inputs.issue_labels || '' }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || '' }}
+          ISSUE_AUTHOR: ${{ github.event.issue.user.login || '' }}
+          REQUESTED_PROVIDER: ${{ github.event.inputs.requested_provider || '' }}
+          REQUESTED_PROFILE: ${{ github.event.inputs.requested_profile || '' }}
+          BASE_BRANCH: main
+        run: python scripts/run_agent_task_dispatch.py
+
+      - name: Upsert dispatch comment
+        if: github.event_name == 'issues'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+            const marker = "<!-- aura-agent-dispatch -->";
+            const body = fs.readFileSync("agent-dispatch-comment.md", "utf8");
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner,
+              repo,
+              issue_number,
+              per_page: 100,
+            });
+            const existing = comments.find((comment) => comment.body && comment.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner,
+                repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number,
+                body,
+              });
+            }
+
+      - name: Add dispatch labels
+        if: github.event_name == 'issues'
+        uses: actions/github-script@v7
+        env:
+          AGENT_DISPATCH_LABELS_JSON: ${{ steps.dispatch.outputs.labels_json }}
+        with:
+          script: |
+            const labels = process.env.AGENT_DISPATCH_LABELS_JSON ? JSON.parse(process.env.AGENT_DISPATCH_LABELS_JSON) : [];
+            if (!labels.length) {
+              return;
+            }
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              labels,
+            });
+
+      - name: Optionally queue AURA dispatch goal
+        if: github.event_name == 'issues' && vars.AURA_AUTO_QUEUE_ISSUES == '1' && steps.dispatch.outputs.provider == 'aura'
+        env:
+          AURA_SKIP_CHDIR: "1"
+          AURA_DRY_RUN: ${{ vars.AURA_ISSUE_QUEUE_DRY_RUN || '1' }}
+        run: |
+          python3 main.py --add-goal "${{ steps.dispatch.outputs.queue_goal }}"
+
+      - name: Upload dispatch artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-dispatch-${{ github.run_number }}
+          path: |
+            agent-dispatch-summary.json
+            agent-dispatch-comment.md
+            patch-metadata.json
+          retention-days: 7

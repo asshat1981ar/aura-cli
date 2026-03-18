@@ -1,0 +1,8 @@
+# Default owner for all changes in this repository.
+* @asshat1981ar
+
+# Higher-sensitivity areas that should always request review from the repo owner.
+.github/ @asshat1981ar
+core/ @asshat1981ar
+aura_cli/ @asshat1981ar
+tools/ @asshat1981ar

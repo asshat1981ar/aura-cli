@@ -1,0 +1,51 @@
+name: Feature request
+description: Propose a new capability or automation flow.
+title: "[feature] "
+labels:
+  - enhancement
+body:
+  - type: input
+    id: summary
+    attributes:
+      label: Summary
+      description: Short description of the requested feature.
+      placeholder: Add a merge-readiness gate for risky pull requests.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem statement
+      description: What problem are we trying to solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the desired behavior or workflow.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Bullet out the expected outcomes.
+      placeholder: |
+        - PRs touching workflows require human review
+        - Merge queue stays green
+    validations:
+      required: true
+  - type: dropdown
+    id: automation_lane
+    attributes:
+      label: Best-fit automation lane
+      options:
+        - issue intake
+        - code review
+        - coding agent
+        - merge governance
+        - nightly maintenance
+        - unsure
+    validations:
+      required: true

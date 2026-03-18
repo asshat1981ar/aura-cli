@@ -98,6 +98,7 @@ class TestWorkflowDefinitions:
         assert "security_audit" in defs
         assert "code_quality" in defs
         assert "release_prep" in defs
+        assert "issue_intake_planning" in defs
 
     def test_redefine_overwrites(self, fresh_engine):
         fresh_engine.define(WorkflowDefinition("wf", [WorkflowStep("a", fn=_ok_step)]))
@@ -180,6 +181,21 @@ class TestWorkflowExecution:
         exec_id = fresh_engine.run_workflow("wf", {})
         with pytest.raises(KeyError):
             fresh_engine.get_step_output(exec_id, "nonexistent_step")
+
+    def test_issue_intake_planning_workflow_returns_triage_and_plan(self, fresh_engine):
+        exec_id = fresh_engine.run_workflow(
+            "issue_intake_planning",
+            {
+                "issue_title": "[feature] Add slash command routing",
+                "issue_body": "### Problem statement\nRoute /plan comments through a local handler.",
+                "issue_labels": ["enhancement"],
+            },
+        )
+        triage = fresh_engine.get_step_output(exec_id, "triage_issue")
+        plan = fresh_engine.get_step_output(exec_id, "plan_issue")
+        assert triage["issue_type"] == "feature"
+        assert plan["recommended_provider"] in {"aura", "codex", "copilot"}
+        assert "comment_markdown" in plan
 
 
 # ===========================================================================

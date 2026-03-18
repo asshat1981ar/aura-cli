@@ -89,6 +89,7 @@ from aura_cli.dispatch.config import (
     handle_show_config as _handle_show_config_dispatch,
     handle_contract_report as _handle_contract_report_dispatch,
 )
+from aura_cli.dispatch.chat import interactive_chat
 
 
 def cli_interaction_loop(args, runtime):
@@ -96,10 +97,13 @@ def cli_interaction_loop(args, runtime):
         return runtime.get(key)
 
     project_root = runtime["project_root"]
+    chat_history = []
 
+    print("Type 'help' for commands, or just chat with AURA in natural language.")
+    
     while True:
         try:
-            command_line = input("\nCommand (add/run/exit/status/help) > ").strip()
+            command_line = input("\nAURA > ").strip()
             command_parts = command_line.split(maxsplit=1)
             if not command_parts:
                 continue
@@ -143,7 +147,26 @@ def cli_interaction_loop(args, runtime):
                 _handle_exit()
                 break
             else:
-                log_json("WARN", "invalid_cli_command", details={"command": cmd_name})
+                action = interactive_chat(runtime, command_line, chat_history)
+                if action == "run_goals":
+                    # Re-inject the "run" command logic
+                    orchestrator = runtime.get("orchestrator")
+                    if isinstance(orchestrator, SimpleNamespace):
+                        print("Initializing full AURA runtime for execution...")
+                        full_runtime = create_runtime(project_root, overrides={"runtime_mode": "full"})
+                        runtime.update(full_runtime)
+                    
+                    orchestrator = runtime.get("orchestrator")
+                    _handle_run(
+                        args, 
+                        runtime["goal_queue"], 
+                        runtime["goal_archive"], 
+                        orchestrator, 
+                        runtime["debugger"], 
+                        runtime["planner"], 
+                        project_root
+                    )
+
         except EOFError:
             log_json("INFO", "aura_cli_eof_received", details={"message": "End of input received, exiting."})
             break

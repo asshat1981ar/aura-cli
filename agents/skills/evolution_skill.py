@@ -28,27 +28,44 @@ class EvolutionSkill(SkillBase):
             project_root (str): Root path for mutation and git commits.
         """
         goal = inputs.get("goal", "evolve and improve the AURA system")
-        project_root = Path(inputs.get("project_root", "."))
+        project_root_str = inputs.get("project_root", ".")
+        project_root = Path(project_root_str)
         
         log_json("INFO", "evolution_skill_start", details={"goal": goal})
         
+        if not self.brain or not self.model:
+            return {"status": "error", "error": "EvolutionSkill requires both brain and model instances."}
+
         try:
             # Lazy import to avoid circular dependencies
             from core.evolution_loop import EvolutionLoop
-            from core.orchestrator import LoopOrchestrator
-            from aura_cli.cli_main import create_runtime
+            from agents.planner import PlannerAgent
+            from core.git_tools import GitTools
+            from agents.mutator import MutatorAgent
             
-            # Use the global runtime or create a temporary one
-            runtime = create_runtime(project_root)
+            planner = PlannerAgent(self.brain, self.model)
+            git_tools = GitTools(repo_path=str(project_root))
+            mutator = MutatorAgent(project_root)
             
+            # Note: We don't have easy access to the orchestrator's act/critique agents here,
+            # but EvolutionLoop can instantiate its own if needed, or we can pass None 
+            # if it handles default creation. 
+            # Looking at EvolutionLoop.__init__, it seems to require them.
+            
+            from agents.coder import CoderAgent
+            from agents.critic import CriticAgent
+            
+            coder = CoderAgent(self.brain, self.model)
+            critic = CriticAgent(self.brain, self.model)
+
             evo = EvolutionLoop(
-                planner=runtime["planner"],
-                coder=runtime["orchestrator"].agents.get("act"),
-                critic=runtime["orchestrator"].agents.get("critique"),
-                brain=runtime["brain"],
-                vector_store=runtime["vector_store"],
-                git_tools=runtime["git_tools"],
-                mutator=runtime.get("mutator") or __import__("agents.mutator", fromlist=["MutatorAgent"]).MutatorAgent(project_root)
+                planner=planner,
+                coder=coder,
+                critic=critic,
+                brain=self.brain,
+                vector_store=getattr(self.brain, "vector_store", None),
+                git_tools=git_tools,
+                mutator=mutator
             )
             
             result = evo.run(goal)

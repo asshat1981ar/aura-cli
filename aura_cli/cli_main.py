@@ -101,6 +101,11 @@ def cli_interaction_loop(args, runtime):
 
     print("Type 'help' for commands, or just chat with AURA in natural language.")
     
+    # --- Iteration 3: Proactive State Management (Greeting) ---
+    pending_count = len(runtime["goal_queue"].queue)
+    startup_prompt = f"System: AURA has just started. There are {pending_count} pending goals in the queue. Provide a very brief, friendly 1-2 sentence greeting to the user summarizing this and asking what they would like to do. Use the 'reply' action."
+    interactive_chat(runtime, startup_prompt, chat_history)
+    
     while True:
         try:
             command_line = input("\nAURA > ").strip()

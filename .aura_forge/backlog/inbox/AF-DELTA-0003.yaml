@@ -1,0 +1,13 @@
+id: AF-DELTA-0003
+source_retro: S000
+title: "Add lightweight story template for quick ideas"
+reason: "Current template is verbose; need lighter option for rapid ideation before refinement"
+target_areas:
+  - .aura_forge/templates
+status: proposed
+requires_review: true
+implementation_notes:
+  - "Strip down to essential fields only"
+  - "Keep required: id, title, status, goal"
+  - "Optional: design_passes, constraints, detailed context"
+auto_enqueue: false

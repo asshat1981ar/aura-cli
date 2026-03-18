@@ -3,11 +3,24 @@
 
 proposed:
   - id: AF-DELTA-0001
-    title: "Add reviewable queue-candidate generation"
+    title: "Add capability-gap index generation"
     source: "S000 retro"
     target_areas:
+      - .aura_forge/indexes
+      - docs
+
+  - id: AF-DELTA-0002
+    title: "Add queue-candidate review template"
+    source: "S000 retro"
+    target_areas:
+      - .aura_forge/templates
       - task_queue
-      - plans
+
+  - id: AF-DELTA-0003
+    title: "Add lightweight story template for quick ideas"
+    source: "S000 retro"
+    target_areas:
+      - .aura_forge/templates
 
 under_review: []
 approved: []

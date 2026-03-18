@@ -1,0 +1,14 @@
+id: AF-DELTA-0002
+source_retro: S000
+title: "Add queue-candidate review template"
+reason: "Need structured format for converting lessons into reviewable follow-up work for task_queue"
+target_areas:
+  - .aura_forge/templates
+  - task_queue
+status: proposed
+requires_review: true
+implementation_notes:
+  - "Template should include validation criteria"
+  - "Include safety impact section"
+  - "No automatic enqueueing in phase 1"
+auto_enqueue: false

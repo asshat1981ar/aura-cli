@@ -2,26 +2,48 @@
 # Quick reference for story discovery
 
 by_status:
-  inbox: []
+  inbox:
+    - AF-DELTA-0001
+    - AF-DELTA-0002
+    - AF-DELTA-0003
   refined:
-    - AF-STORY-0002
-    - AF-STORY-0003
+    - AF-STORY-0006
+    - AF-STORY-0007
+    - AF-STORY-0008
+    - AF-STORY-0009
   ready:
-    - AF-STORY-0001
+    - AF-STORY-0004
+    - AF-STORY-0005
   in_progress: []
   review: []
-  done: []
+  done:
+    - AF-STORY-0001
+    - AF-STORY-0002
+    - AF-STORY-0003
 
 by_lane:
   self_evolution:
     - AF-STORY-0001
+    - AF-STORY-0007
+    - AF-STORY-0009
+    - AF-DELTA-0001
+    - AF-DELTA-0002
+    - AF-DELTA-0003
   reliability:
     - AF-STORY-0002
     - AF-STORY-0003
-  capability: []
-  docs: []
+  capability:
+    - AF-STORY-0004
+    - AF-STORY-0005
+  docs:
+    - AF-STORY-0006
+    - AF-STORY-0008
   refactor: []
 
 recent_changes:
+  - date: 2026-03-18
+    action: "S001 planned with 6 new stories"
+  - date: 2026-03-18
+    action: "S000 completed, all stories done"
   - date: 2026-03-18
     action: "Created initial stories for S000"

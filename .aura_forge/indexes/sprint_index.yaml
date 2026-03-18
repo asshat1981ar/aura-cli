@@ -2,12 +2,18 @@
 # Quick reference for sprint discovery
 
 active:
-  - id: S000_forge_foundation
-    title: "Forge Foundation"
-    status: in_progress
+  - id: S001_queue_ready_intelligence
+    title: "Queue-Ready Intelligence"
+    status: planned
     start_date: 2026-03-18
 
-completed: []
+completed:
+  - id: S000_forge_foundation
+    title: "Forge Foundation"
+    status: completed
+    start_date: 2026-03-18
+    end_date: 2026-03-18
+    retro_link: retros/S000_retro.md
 
 planned:
   - id: S001_queue_ready_intelligence

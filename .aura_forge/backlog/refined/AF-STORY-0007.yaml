@@ -1,0 +1,46 @@
+id: AF-STORY-0007
+title: "Link validated heuristics to memory/"
+lane: self_evolution
+status: refined
+repo_areas:
+  - .aura_forge/indexes
+  - memory
+goal:
+  user_goal: "Promote proven patterns to long-term memory"
+  system_goal: "Make validated heuristics discoverable and persistent"
+context:
+  sensed:
+    - memory/ exists for stable patterns
+    - S000 heuristic_index tracks draft patterns
+    - Need promotion path from draft to validated to memory
+  retrieved:
+    - memory/
+    - .aura_forge/indexes/heuristic_index.yaml
+design_passes:
+  - reverse_decomposition
+  - six_hats
+constraints:
+  - manual promotion only
+  - requires validation across multiple stories
+  - no automatic memory updates
+contract_impact:
+  cli_contract_affected: false
+  changes: []
+  snapshot_updates_needed: false
+safety_impact:
+  autonomous_apply_affected: false
+  overwrite_behavior_affected: false
+  safety_notes: ""
+acceptance:
+  - promotion criteria documented
+  - heuristic_index tracks status (draft/validated/promoted)
+  - example of promoted heuristic in memory/
+risks:
+  - heuristics may be promoted prematurely
+rollback:
+  - keep heuristics in Forge only
+outputs:
+  - updated heuristic_index.yaml
+  - promotion guide
+  - example promoted heuristic
+sprint_link: S001_queue_ready_intelligence

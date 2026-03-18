@@ -1,0 +1,45 @@
+id: AF-STORY-0006
+title: "Link story artifacts to plans/"
+lane: docs
+status: refined
+repo_areas:
+  - .aura_forge
+  - plans
+goal:
+  user_goal: "Clear relationship between Forge shaping and implementation planning"
+  system_goal: "Prevent duplication between stories and plans while maintaining separation of concerns"
+context:
+  sensed:
+    - plans/ already exists for implementation
+    - S000 friction: overlap concern between plans/ and stories
+  retrieved:
+    - plans/
+    - .aura_forge/templates/story.md
+design_passes:
+  - reverse_engineering
+  - reverse_decomposition
+constraints:
+  - stories don't replace plans
+  - clear link mechanism required
+  - no plans/ reorganization needed
+contract_impact:
+  cli_contract_affected: false
+  changes: []
+  snapshot_updates_needed: false
+safety_impact:
+  autonomous_apply_affected: false
+  overwrite_behavior_affected: false
+  safety_notes: ""
+acceptance:
+  - story template includes plans_link field
+  - contributor guide explains relationship
+  - example shows story linking to plan
+risks:
+  - confusion about where to put what
+rollback:
+  - remove plans_link field from template
+outputs:
+  - updated story.md template
+  - updated contributor guide
+  - example with plans link
+sprint_link: S001_queue_ready_intelligence

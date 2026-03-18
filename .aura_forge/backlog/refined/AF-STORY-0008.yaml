@@ -1,0 +1,43 @@
+id: AF-STORY-0008
+title: "Add status conventions for Forge-generated follow-ups"
+lane: docs
+status: refined
+repo_areas:
+  - .aura_forge
+  - task_queue
+goal:
+  user_goal: "Clear status tracking for items coming from Forge"
+  system_goal: "Consistent conventions across backlog, queue, and capability deltas"
+context:
+  sensed:
+    - Multiple artifact types need status tracking
+    - Need conventions for cross-referencing
+  retrieved:
+    - .aura_forge/MANIFEST.yaml
+    - task_queue/
+design_passes:
+  - reverse_engineering
+constraints:
+  - align with existing status where possible
+  - document all status values
+  - no status automation
+contract_impact:
+  cli_contract_affected: false
+  changes: []
+  snapshot_updates_needed: false
+safety_impact:
+  autonomous_apply_affected: false
+  overwrite_behavior_affected: false
+  safety_notes: ""
+acceptance:
+  - status conventions documented in README
+  - all templates use consistent status values
+  - cross-reference conventions defined
+risks:
+  - conventions may be too rigid
+rollback:
+  - remove status convention docs
+outputs:
+  - updated README.md with status conventions
+  - status reference doc
+sprint_link: S001_queue_ready_intelligence

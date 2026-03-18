@@ -1,0 +1,14 @@
+id: AF-DELTA-0001
+source_retro: S000
+title: "Add capability-gap index generation"
+reason: "Retros identified need to track proposed capabilities from lessons learned"
+target_areas:
+  - .aura_forge/indexes
+  - docs
+status: proposed
+requires_review: true
+implementation_notes:
+  - "Create script or template to generate index from retros"
+  - "Keep output file-based only"
+  - "No auto-promotion to memory/"
+auto_enqueue: false

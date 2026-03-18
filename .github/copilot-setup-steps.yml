@@ -1,0 +1,25 @@
+# GitHub Copilot Agent Setup Steps
+# This file defines how Copilot should set up, build, and test the AURA CLI project.
+# It follows the best practices documented at: https://gh.io/copilot-coding-agent-tips
+
+steps:
+  - name: Install Python dependencies
+    run: |
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
+
+  - name: Verify project structure
+    run: |
+      python3 main.py --help
+
+  - name: Run test suite
+    run: |
+      python3 -m pytest -q --maxfail=5
+
+  - name: Verify CLI documentation is current
+    run: |
+      python3 scripts/generate_cli_reference.py --check
+
+  - name: Run CLI contract tests
+    run: |
+      python3 -m pytest -q tests/test_cli_contract.py tests/test_cli_options.py tests/test_cli_docs_generator.py

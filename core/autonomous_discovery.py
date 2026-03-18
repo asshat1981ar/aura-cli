@@ -133,7 +133,8 @@ class AutonomousDiscovery:
             if item_hash in self._seen:
                 continue
             self._seen.add(item_hash)
-            self.queue.add(f["goal"])
+            if self.queue:
+                self.queue.add(f["goal"])
             new_goals.append(f["goal"])
             log_json("INFO", "autonomous_discovery_goal_queued",
                      details={"goal": f["goal"][:80], "signal": f["signal"]})

@@ -5,16 +5,34 @@ import hashlib
 import os
 import shlex
 import subprocess
-import requests
 import json
 import time
 from pathlib import Path
 from typing import Any, List
 
+
+class _MissingPackage:
+    """Placeholder for optional dependencies that are not installed."""
+
+    def __init__(self, name: str):
+        self._name = name
+
+    def __getattr__(self, attr: str) -> None:
+        raise ImportError(f"Optional dependency '{self._name}' is required for this operation.")
+
+    def __call__(self, *args: object, **kwargs: object) -> None:
+        raise ImportError(f"Optional dependency '{self._name}' is required for this operation.")
+
+
 try:
-    import numpy as np
-except ImportError:
-    np = None  # type: ignore[assignment]
+    import requests  # type: ignore
+except ImportError:  # pragma: no cover - exercised via optional-deps tests
+    requests = _MissingPackage("requests")  # type: ignore
+
+try:
+    import numpy as np  # type: ignore
+except ImportError:  # pragma: no cover - exercised via optional-deps tests
+    np = _MissingPackage("numpy")  # type: ignore
 
 from core.logging_utils import log_json # Import log_json
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads

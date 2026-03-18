@@ -1,0 +1,64 @@
+# Design Pass Schema
+# Structured design thinking output
+
+type:
+  type: string
+  enum: [reverse_engineering, reverse_decomposition, scamper, autotriz, six_hats, self_ideation]
+  required: true
+
+parent_story:
+  type: string
+  pattern: "^AF-STORY-[0-9]{4}$"
+  required: true
+
+date:
+  type: string
+  format: date
+  required: true
+
+outputs:
+  type: object
+  properties:
+    observations:
+      type: array
+      items:
+        type: string
+    rules:
+      type: array
+      items:
+        type: string
+    contracts:
+      type: array
+      items:
+        type: string
+    opportunities:
+      type: array
+      items:
+        type: string
+    contradictions:
+      type: array
+      items:
+        type: object
+        properties:
+          conflict:
+            type: string
+          resolution:
+            type: string
+    hat_perspectives:
+      type: object
+      properties:
+        white:
+          type: string
+        red:
+          type: string
+        black:
+          type: string
+        yellow:
+          type: string
+        green:
+          type: string
+        blue:
+          type: string
+
+notes:
+  type: string

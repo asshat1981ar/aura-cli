@@ -1,0 +1,46 @@
+# Capability Delta Schema
+# Proposed capability change from retro lessons
+
+id:
+  type: string
+  pattern: "^AF-DELTA-[0-9]{4}$"
+  required: true
+
+source_retro:
+  type: string
+  pattern: "^S[0-9]{3}$"
+  required: true
+
+title:
+  type: string
+  max_length: 120
+  required: true
+
+reason:
+  type: string
+  required: true
+
+target_areas:
+  type: array
+  items:
+    type: string
+  required: true
+
+status:
+  type: string
+  enum: [proposed, under_review, approved, rejected, implemented]
+  required: true
+
+requires_review:
+  type: boolean
+  default: true
+
+implementation_notes:
+  type: array
+  items:
+    type: string
+
+auto_enqueue:
+  type: boolean
+  default: false
+  description: "Phase 1: always false; manual enqueue only"

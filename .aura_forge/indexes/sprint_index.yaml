@@ -1,0 +1,15 @@
+# Sprint Index
+# Quick reference for sprint discovery
+
+active:
+  - id: S000_forge_foundation
+    title: "Forge Foundation"
+    status: in_progress
+    start_date: 2026-03-18
+
+completed: []
+
+planned:
+  - id: S001_queue_ready_intelligence
+    title: "Queue-Ready Intelligence"
+    goal: "Turn Forge lessons into reviewable follow-up work"

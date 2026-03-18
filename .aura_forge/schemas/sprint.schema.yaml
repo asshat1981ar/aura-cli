@@ -1,0 +1,51 @@
+# Sprint Schema
+# Time-boxed iteration with goals and selected stories
+
+id:
+  type: string
+  pattern: "^S[0-9]{3}_.*$"
+  required: true
+
+title:
+  type: string
+  max_length: 80
+  required: true
+
+goal:
+  type: string
+  required: true
+
+selected_stories:
+  type: array
+  items:
+    type: string
+    pattern: "^AF-STORY-[0-9]{4}$"
+  required: true
+
+constraints:
+  type: array
+  items:
+    type: string
+
+success_criteria:
+  type: array
+  items:
+    type: string
+  required: true
+
+timeline:
+  type: object
+  properties:
+    start_date:
+      type: string
+      format: date
+    target_end_date:
+      type: string
+      format: date
+
+actual_completion:
+  type: string
+  format: date
+
+retro_link:
+  type: string

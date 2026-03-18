@@ -1,0 +1,18 @@
+# Capability Gap Index
+# Tracks proposed and validated capability improvements
+
+proposed:
+  - id: AF-DELTA-0001
+    title: "Add reviewable queue-candidate generation"
+    source: "S000 retro"
+    target_areas:
+      - task_queue
+      - plans
+
+under_review: []
+approved: []
+implemented: []
+
+patterns:
+  - "Capability gaps should produce file-based proposals, not auto-enqueue"
+  - "Review queue-candidates before adding to task_queue"

@@ -1,0 +1,107 @@
+# Story Schema
+# A unit of work with design passes and constraints
+
+id:
+  type: string
+  pattern: "^AF-STORY-[0-9]{4}$"
+  required: true
+
+title:
+  type: string
+  max_length: 120
+  required: true
+
+lane:
+  type: string
+  enum: [self_evolution, reliability, capability, docs, refactor]
+  required: true
+
+status:
+  type: string
+  enum: [inbox, refined, ready, in_progress, review, done]
+  required: true
+
+repo_areas:
+  type: array
+  items:
+    type: string
+  required: true
+
+goal:
+  type: object
+  properties:
+    user_goal:
+      type: string
+    system_goal:
+      type: string
+  required: [user_goal, system_goal]
+
+context:
+  type: object
+  properties:
+    sensed:
+      type: array
+      items:
+        type: string
+    retrieved:
+      type: array
+      items:
+        type: string
+
+design_passes:
+  type: array
+  items:
+    type: string
+    enum: [reverse_engineering, reverse_decomposition, scamper, autotriz, six_hats, self_ideation]
+
+constraints:
+  type: array
+  items:
+    type: string
+
+contract_impact:
+  type: object
+  properties:
+    cli_contract_affected:
+      type: boolean
+    changes:
+      type: array
+      items:
+        type: string
+    snapshot_updates_needed:
+      type: boolean
+
+safety_impact:
+  type: object
+  properties:
+    autonomous_apply_affected:
+      type: boolean
+    overwrite_behavior_affected:
+      type: boolean
+    safety_notes:
+      type: string
+
+acceptance:
+  type: array
+  items:
+    type: string
+  required: true
+
+risks:
+  type: array
+  items:
+    type: string
+
+rollback:
+  type: array
+  items:
+    type: string
+
+outputs:
+  type: array
+  items:
+    type: string
+
+sprint_link:
+  type: string
+  pattern: "^S[0-9]{3}_.*$"

@@ -1,0 +1,47 @@
+# Retro Schema
+# Sprint retrospective with lessons and capability deltas
+
+sprint_id:
+  type: string
+  pattern: "^S[0-9]{3}_.*$"
+  required: true
+
+date:
+  type: string
+  format: date
+  required: true
+
+wins:
+  type: array
+  items:
+    type: string
+
+friction:
+  type: array
+  items:
+    type: string
+
+lessons:
+  type: array
+  items:
+    type: string
+  required: true
+
+capability_deltas_proposed:
+  type: array
+  items:
+    type: string
+    pattern: "^AF-DELTA-[0-9]{4}$"
+
+heuristics_to_promote:
+  type: array
+  items:
+    type: object
+    properties:
+      pattern:
+        type: string
+      rationale:
+        type: string
+
+notes:
+  type: string

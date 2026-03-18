@@ -1,0 +1,11 @@
+id: AF-DELTA-0000
+source_retro: S000
+title: ""
+reason: ""
+target_areas: []
+status: proposed
+requires_review: true
+implementation_notes:
+  - "Do not auto-enqueue in phase 1"
+  - "Keep output file-based"
+auto_enqueue: false

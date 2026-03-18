@@ -1,0 +1,45 @@
+id: AF-STORY-0002
+title: "Require CLI contract impact declaration in Forge stories"
+lane: reliability
+status: refined
+repo_areas:
+  - docs
+  - tests
+  - cli
+goal:
+  user_goal: "Reduce accidental CLI contract breakage"
+  system_goal: "Make contract impact explicit before implementation"
+context:
+  sensed:
+    - CLI has generated reference docs
+    - Snapshot checks validate output
+  retrieved:
+    - docs/CLI_REFERENCE.md
+    - core/cli/*.py
+design_passes:
+  - reverse_engineering
+  - autotriz
+  - six_hats
+constraints:
+  - no forced CLI changes
+  - declaration only in phase 1
+contract_impact:
+  cli_contract_affected: true
+  changes:
+    - story template includes contract impact field
+  snapshot_updates_needed: false
+safety_impact:
+  autonomous_apply_affected: false
+  overwrite_behavior_affected: false
+  safety_notes: ""
+acceptance:
+  - story template includes contract impact field
+  - examples show how to fill it
+risks:
+  - extra friction in story creation
+rollback:
+  - remove contract impact section from template
+outputs:
+  - updated story.md template
+  - updated srag_work_item.yaml
+sprint_link: S000_forge_foundation

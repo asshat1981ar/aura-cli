@@ -1,0 +1,71 @@
+# AURA Forge Manifest
+# Defines subsystem version, artifact types, lifecycle states, and promotion rules
+
+forge_version: "0.1.0"
+created: 2026-03-18
+repo: aura-cli
+
+artifact_types:
+  - name: story
+    description: A unit of work with design passes and constraints
+    schema: schemas/story.schema.yaml
+    template: templates/srag_work_item.yaml
+    
+  - name: sprint
+    description: Time-boxed iteration with goals and selected stories
+    schema: schemas/sprint.schema.yaml
+    template: templates/sprint_plan.md
+    
+  - name: retro
+    description: Sprint retrospective with lessons and capability deltas
+    schema: schemas/retro.schema.yaml
+    template: templates/sprint_retro.md
+    
+  - name: capability_delta
+    description: Proposed capability change from retro lessons
+    schema: schemas/capability_delta.schema.yaml
+    template: templates/capability_delta.yaml
+    
+  - name: design_pass
+    description: Structured design thinking output
+    schema: schemas/design_pass.schema.yaml
+    template: templates/reverse_engineering.md
+
+lifecycle_states:
+  - inbox
+  - refined
+  - ready
+  - in_progress
+  - review
+  - done
+
+promotion_rules:
+  inbox_to_refined:
+    - problem_statement
+    - affected_repo_areas
+    - reverse_engineering_note
+    - reverse_decomposition_note
+    
+  refined_to_ready:
+    - scamper_pass
+    - autotriz_contradiction
+    - six_hats_review
+    - constraints_defined
+    - acceptance_criteria
+    - contract_impact_declaration
+    - safety_impact_declaration_if_relevant
+    
+  ready_to_in_progress:
+    - linked_implementation_plan_or_doc_only_note
+    
+  review_to_done:
+    - outputs_created
+    - docs_updated
+    - tests_or_validation_notes
+    - retro_seed_if_needed
+
+repo_integrations:
+  plans: "Forge stories link to implementation plans"
+  memory: "Proven patterns promoted after validation"
+  task_queue: "Candidates generated; not auto-enqueued"
+  docs: "Cross-cutting docs only; Forge artifacts stay in .aura_forge/"

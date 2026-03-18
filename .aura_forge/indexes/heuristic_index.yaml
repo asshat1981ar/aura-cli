@@ -1,0 +1,19 @@
+# Heuristic Index
+# Stable patterns promoted from retros and validation
+
+draft:
+  - pattern: "Every story touching CLI must declare contract impact"
+    origin: "AF-STORY-0002"
+    rationale: "CLI behavior is contract-bound with generated docs and snapshot checks"
+    
+  - pattern: "Every story touching autonomous apply must declare safety impact"
+    origin: "AF-STORY-0003"
+    rationale: "Overwrite safety is centralized and policy-bound"
+
+validated: []
+
+promoted_to_memory: []
+
+notes:
+  - "Heuristics stay in draft until validated across multiple stories"
+  - "Only promote to memory/ after repetition and review"

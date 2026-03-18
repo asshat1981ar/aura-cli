@@ -1,0 +1,44 @@
+id: AF-STORY-0003
+title: "Require safety impact declaration for stories touching autonomous apply"
+lane: reliability
+status: refined
+repo_areas:
+  - core
+  - conductor
+  - task_queue
+goal:
+  user_goal: "Prevent casual changes to safety-sensitive apply flows"
+  system_goal: "Force explicit reasoning when stories affect overwrite policy or apply paths"
+context:
+  sensed:
+    - core/file_tools.py centralizes overwrite safety
+    - autonomous apply is contract-bound
+  retrieved:
+    - core/file_tools.py
+    - conductor/execution.py
+design_passes:
+  - reverse_engineering
+  - reverse_decomposition
+  - six_hats
+constraints:
+  - no change to core/file_tools.py behavior in this story
+  - declaration only
+contract_impact:
+  cli_contract_affected: false
+  changes: []
+  snapshot_updates_needed: false
+safety_impact:
+  autonomous_apply_affected: true
+  overwrite_behavior_affected: false
+  safety_notes: "This story establishes the declaration requirement without changing safety behavior"
+acceptance:
+  - story template includes safety impact field
+  - contributor guide explains when it is mandatory
+risks:
+  - may discourage legitimate safety improvements
+rollback:
+  - remove safety impact section from template
+outputs:
+  - updated story.md template
+  - updated contributor guide
+sprint_link: S000_forge_foundation

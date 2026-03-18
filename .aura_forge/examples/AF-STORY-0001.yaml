@@ -1,0 +1,49 @@
+id: AF-STORY-0001
+title: "Create AURA Forge scaffold"
+lane: self_evolution
+status: ready
+repo_areas:
+  - docs
+  - plans
+  - memory
+  - task_queue
+goal:
+  user_goal: "Give contributors and agents a structured way to shape development work"
+  system_goal: "Establish a cognition layer upstream of implementation"
+context:
+  sensed:
+    - repo already has plans, memory, task_queue, docs, and tests
+  retrieved:
+    - README.md
+    - docs/CLI_REFERENCE.md
+    - docs/INTEGRATION_MAP.md
+design_passes:
+  - reverse_engineering
+  - reverse_decomposition
+constraints:
+  - no runtime mutation changes
+  - no CLI changes
+  - no queue behavior changes
+contract_impact:
+  cli_contract_affected: false
+  changes: []
+  snapshot_updates_needed: false
+safety_impact:
+  autonomous_apply_affected: false
+  overwrite_behavior_affected: false
+  safety_notes: ""
+acceptance:
+  - .aura_forge/ exists
+  - templates exist
+  - example sprint exists
+  - contributor guide exists
+risks:
+  - may overlap with existing plans/ structure
+rollback:
+  - remove .aura_forge/ directory
+  - revert any doc changes
+outputs:
+  - story.md
+  - capability_delta.yaml
+  - sprint link
+sprint_link: S000_forge_foundation

@@ -1,0 +1,27 @@
+# Backlog Index
+# Quick reference for story discovery
+
+by_status:
+  inbox: []
+  refined:
+    - AF-STORY-0002
+    - AF-STORY-0003
+  ready:
+    - AF-STORY-0001
+  in_progress: []
+  review: []
+  done: []
+
+by_lane:
+  self_evolution:
+    - AF-STORY-0001
+  reliability:
+    - AF-STORY-0002
+    - AF-STORY-0003
+  capability: []
+  docs: []
+  refactor: []
+
+recent_changes:
+  - date: 2026-03-18
+    action: "Created initial stories for S000"

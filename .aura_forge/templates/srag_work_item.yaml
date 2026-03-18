@@ -1,0 +1,26 @@
+id: AF-STORY-0000
+title: ""
+lane: self_evolution
+status: inbox
+repo_areas: []
+goal:
+  user_goal: ""
+  system_goal: ""
+context:
+  sensed: []
+  retrieved: []
+design_passes: []
+constraints: []
+contract_impact:
+  cli_contract_affected: false
+  changes: []
+  snapshot_updates_needed: false
+safety_impact:
+  autonomous_apply_affected: false
+  overwrite_behavior_affected: false
+  safety_notes: ""
+acceptance: []
+risks: []
+rollback: []
+outputs: []
+sprint_link: ""

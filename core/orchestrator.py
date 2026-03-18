@@ -1370,19 +1370,57 @@ class LoopOrchestrator:
         history = []
         stop_reason = ""
         started_at = time.time()
-        for _ in range(max_cycles):
+        
+        cycle_count = 0
+        while cycle_count < max_cycles:
+            cycle_count += 1
             entry = self.run_cycle(goal, dry_run=dry_run)
             history.append(entry)
+            
             if entry.get("stop_reason"):
                 stop_reason = entry["stop_reason"]
                 break
+                
             stop_reason = self.policy.evaluate(history, entry.get("phase_outputs", {}).get("verification", {}), started_at=started_at)
+            
             if stop_reason:
+                if stop_reason != "PASS" and sys.stdin.isatty() and os.environ.get("AURA_AUTO_APPROVE", "").strip() != "1":
+                    # Dynamic Loop Steering
+                    print(f"\n[AURA Orchestrator] Loop is halting with reason: {stop_reason}")
+                    try:
+                        hint = input("Provide a hint to continue, or press Enter to halt: ").strip()
+                        if hint:
+                            log_json("INFO", "user_provided_hint", details={"hint": hint})
+                            goal = f"{goal}\n\n[USER HINT]: {hint}"
+                            stop_reason = ""
+                            max_cycles += 1 # grant one more cycle
+                            continue
+                    except EOFError:
+                        pass
+                
                 entry["stop_reason"] = stop_reason
                 self._refresh_cycle_summary(entry)
                 break
+                
         if not stop_reason and history:
-            history[-1]["stop_reason"] = "MAX_CYCLES"
+            if sys.stdin.isatty() and os.environ.get("AURA_AUTO_APPROVE", "").strip() != "1":
+                print(f"\n[AURA Orchestrator] Reached MAX_CYCLES ({max_cycles}).")
+                try:
+                    hint = input("Provide a hint to continue, or press Enter to halt: ").strip()
+                    if hint:
+                        log_json("INFO", "user_provided_hint_max_cycles", details={"hint": hint})
+                        goal = f"{goal}\n\n[USER HINT]: {hint}"
+                        # Execute one more cycle recursively or just loop again
+                        max_cycles += 1
+                        entry = self.run_cycle(goal, dry_run=dry_run)
+                        history.append(entry)
+                        stop_reason = self.policy.evaluate(history, entry.get("phase_outputs", {}).get("verification", {}), started_at=started_at)
+                except EOFError:
+                    pass
+                    
+            if not stop_reason:
+                stop_reason = "MAX_CYCLES"
+            history[-1]["stop_reason"] = stop_reason
             self._refresh_cycle_summary(history[-1])
 
         # If goal was a bead and we passed, close it

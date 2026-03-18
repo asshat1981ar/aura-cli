@@ -63,6 +63,10 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 
 
 def _get_evolution_loop(orchestrator) -> Any:
+    # First check for the explicit attribute (PRD-003 style)
+    if hasattr(orchestrator, "evolution_loop"):
+        return orchestrator.evolution_loop
+    # Fallback for older versions
     for loop in getattr(orchestrator, "_improvement_loops", []):
         if type(loop).__name__ == "EvolutionLoop":
             return loop

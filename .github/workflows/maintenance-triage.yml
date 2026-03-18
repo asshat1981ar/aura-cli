@@ -1,0 +1,313 @@
+name: Maintenance triage
+
+on:
+  schedule:
+    - cron: "0 14 * * 1" # Mondays 14:00 UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+  contents: read
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run stale/closure triage
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const now = Date.now();
+            const DAY_MS = 24 * 60 * 60 * 1000;
+
+            const thresholds = {
+              warnDays: 30,
+              closeDays: 60,
+            };
+
+            const policyLabels = [
+              { name: 'stale-pr', color: 'FBCA04', description: 'PR has no activity for the stale threshold and may be closed.' },
+              { name: 'blocked-needs-author', color: 'D93F0B', description: 'Waiting on author response/changes before maintainer action.' },
+              { name: 'superseded', color: '5319E7', description: 'Replaced by a newer issue or PR.' },
+              { name: 'cannot-reproduce', color: 'BFD4F2', description: 'Maintainers cannot reproduce the reported behavior.' },
+              { name: 'needs-design', color: '0E8A16', description: 'Requires design/product decision before implementation.' },
+              { name: 'close-candidate', color: 'C2E0C6', description: 'Maintainers marked this PR as a closure candidate.' },
+              { name: 'stale-warning', color: 'F9D0C4', description: 'Warning issued before stale auto-close.' },
+            ];
+
+            async function ensureLabels() {
+              const existing = await github.paginate(github.rest.issues.listLabelsForRepo, {
+                owner,
+                repo,
+                per_page: 100,
+              });
+              const existingNames = new Set(existing.map((l) => l.name));
+              for (const label of policyLabels) {
+                if (existingNames.has(label.name)) continue;
+                await github.rest.issues.createLabel({ owner, repo, ...label });
+              }
+            }
+
+            function ageDays(ts) {
+              return Math.floor((now - new Date(ts).getTime()) / DAY_MS);
+            }
+
+            function hasAnyLabel(item, names) {
+              const set = new Set(item.labels.map((l) => l.name));
+              return names.some((name) => set.has(name));
+            }
+
+            async function findMergedLinkedPr(issueNumber) {
+              const timeline = await github.paginate(github.rest.issues.listEventsForTimeline, {
+                owner,
+                repo,
+                issue_number: issueNumber,
+                per_page: 100,
+              });
+              for (const ev of timeline) {
+                const src = ev.source;
+                if (!src || src.type !== 'issue') continue;
+                const maybePr = src.issue?.pull_request;
+                if (!maybePr) continue;
+
+                const prNumber = src.issue.number;
+                const pr = await github.rest.pulls.get({ owner, repo, pull_number: prNumber });
+                if (pr.data.merged_at) {
+                  return prNumber;
+                }
+              }
+              return null;
+            }
+
+            async function closeCandidatePRs(report) {
+              const prs = await github.paginate(github.rest.pulls.list, {
+                owner,
+                repo,
+                state: 'open',
+                per_page: 100,
+              });
+
+              for (const pr of prs) {
+                const issue = await github.rest.issues.get({ owner, repo, issue_number: pr.number });
+                if (!hasAnyLabel(issue.data, ['close-candidate'])) continue;
+
+                const dependencyData = await github.graphql(
+                  `query($owner: String!, $repo: String!, $number: Int!) {
+                     repository(owner: $owner, name: $repo) {
+                       pullRequest(number: $number) {
+                         milestone { state title }
+                         closingIssuesReferences(first: 20, states: OPEN) {
+                           nodes { number title }
+                         }
+                       }
+                     }
+                   }`,
+                  { owner, repo, number: pr.number }
+                );
+
+                const prNode = dependencyData.repository.pullRequest;
+                const hasOpenMilestone = prNode.milestone && prNode.milestone.state === 'OPEN';
+                const openLinkedIssues = prNode.closingIssuesReferences.nodes || [];
+                if (hasOpenMilestone || openLinkedIssues.length > 0) {
+                  report.blocked.push(`#${pr.number} blocked by open dependency`);
+                  continue;
+                }
+
+                const issueLabels = issue.data.labels.map((l) => l.name);
+                const closureLabel = issueLabels.includes('superseded')
+                  ? 'superseded'
+                  : issueLabels.includes('blocked-needs-author')
+                    ? 'blocked-needs-author'
+                    : 'stale-pr';
+                const closeReason = issueLabels.includes('superseded') ? 'completed' : 'not_planned';
+
+                const unblockConditions = [
+                  '1) Re-open with a fresh branch that rebases cleanly on `main`.',
+                  '2) Resolve all review feedback and CI failures.',
+                  '3) Remove or resolve any `blocked-needs-author` / `needs-design` blockers with maintainer confirmation.',
+                ].join('\n');
+
+                await github.rest.issues.createComment({
+                  owner,
+                  repo,
+                  issue_number: pr.number,
+                  body: `Final maintainer notice: this pull request is being closed under triage policy.\n\nTo unblock and request reopen, satisfy all conditions exactly:\n${unblockConditions}`,
+                });
+
+                await github.rest.issues.addLabels({
+                  owner,
+                  repo,
+                  issue_number: pr.number,
+                  labels: [closureLabel],
+                });
+
+                await github.rest.issues.update({
+                  owner,
+                  repo,
+                  issue_number: pr.number,
+                  state: 'closed',
+                  state_reason: closeReason,
+                });
+
+                report.prClosed.push(`#${pr.number} (${closureLabel})`);
+              }
+            }
+
+            async function triageIssues(report) {
+              const issues = await github.paginate(github.rest.issues.listForRepo, {
+                owner,
+                repo,
+                state: 'open',
+                per_page: 100,
+              });
+
+              for (const issue of issues) {
+                if (issue.pull_request) continue;
+
+                const labels = issue.labels.map((l) => l.name);
+
+                if (labels.includes('duplicate') || labels.includes('superseded')) {
+                  await github.rest.issues.update({
+                    owner,
+                    repo,
+                    issue_number: issue.number,
+                    state: 'closed',
+                    state_reason: 'not_planned',
+                  });
+                  report.issueClosed.push(`#${issue.number} (deduplicated)`);
+                  continue;
+                }
+
+                const mergedPr = await findMergedLinkedPr(issue.number);
+                if (mergedPr) {
+                  await github.rest.issues.createComment({
+                    owner,
+                    repo,
+                    issue_number: issue.number,
+                    body: `Automatically closing as solved by merged PR #${mergedPr}.`,
+                  });
+                  await github.rest.issues.update({
+                    owner,
+                    repo,
+                    issue_number: issue.number,
+                    state: 'closed',
+                    state_reason: 'completed',
+                  });
+                  report.issueClosed.push(`#${issue.number} (solved by #${mergedPr})`);
+                  continue;
+                }
+
+                const inactiveDays = ageDays(issue.updated_at);
+                if (inactiveDays >= thresholds.closeDays && labels.includes('stale-warning')) {
+                  await github.rest.issues.update({
+                    owner,
+                    repo,
+                    issue_number: issue.number,
+                    state: 'closed',
+                    state_reason: 'not_planned',
+                  });
+                  report.issueClosed.push(`#${issue.number} (stale)`);
+                  continue;
+                }
+
+                if (inactiveDays >= thresholds.warnDays && !labels.includes('stale-warning')) {
+                  await github.rest.issues.createComment({
+                    owner,
+                    repo,
+                    issue_number: issue.number,
+                    body: `This issue has been inactive for ${inactiveDays} days. It will be closed after ${thresholds.closeDays} days of inactivity unless updated with next steps, owner, or a linked PR.`,
+                  });
+                  await github.rest.issues.addLabels({
+                    owner,
+                    repo,
+                    issue_number: issue.number,
+                    labels: ['stale-warning'],
+                  });
+                  report.warned.push(`#${issue.number}`);
+                }
+
+                if (labels.includes('needs-design') || labels.includes('blocked-needs-author')) {
+                  report.blocked.push(`#${issue.number} needs maintainer decision`);
+                }
+              }
+            }
+
+            async function collectWeeklyMetrics(report) {
+              const since = new Date(now - 7 * DAY_MS).toISOString();
+              const [openIssues, openPRs, closedIssuesRecent, closedPRsRecent] = await Promise.all([
+                github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'open', per_page: 100 }),
+                github.paginate(github.rest.pulls.list, { owner, repo, state: 'open', per_page: 100 }),
+                github.paginate(github.rest.issues.listForRepo, { owner, repo, state: 'closed', since, per_page: 100 }),
+                github.paginate(github.rest.pulls.list, { owner, repo, state: 'closed', sort: 'updated', direction: 'desc', per_page: 100 }),
+              ]);
+
+              const closedIssuesWeek = closedIssuesRecent.filter((i) => !i.pull_request && new Date(i.closed_at || 0).getTime() >= now - 7 * DAY_MS).length;
+              const closedPrWeek = closedPRsRecent.filter((p) => new Date(p.closed_at || 0).getTime() >= now - 7 * DAY_MS).length;
+
+              const recentlyUpdated = await github.paginate(github.rest.issues.listForRepo, {
+                owner,
+                repo,
+                state: 'all',
+                since,
+                per_page: 100,
+              });
+              let reopenedWeek = 0;
+              for (const item of recentlyUpdated.slice(0, 50)) {
+                const events = await github.paginate(github.rest.issues.listEventsForTimeline, {
+                  owner,
+                  repo,
+                  issue_number: item.number,
+                  per_page: 100,
+                });
+                reopenedWeek += events.filter((ev) => ev.event === 'reopened' && new Date(ev.created_at).getTime() >= now - 7 * DAY_MS).length;
+              }
+
+              report.counts = {
+                openIssues: openIssues.filter((i) => !i.pull_request).length,
+                openPRs: openPRs.length,
+                blocked: report.blocked.length,
+                newlyClosedIssues: closedIssuesWeek,
+                newlyClosedPRs: closedPrWeek,
+                reopened: reopenedWeek,
+              };
+            }
+
+            const report = {
+              prClosed: [],
+              issueClosed: [],
+              warned: [],
+              blocked: [],
+              counts: {},
+            };
+
+            await ensureLabels();
+            await closeCandidatePRs(report);
+            await triageIssues(report);
+            await collectWeeklyMetrics(report);
+
+            const lines = [
+              `## Weekly triage report`,
+              `- Open issues: ${report.counts.openIssues}`,
+              `- Open PRs: ${report.counts.openPRs}`,
+              `- Newly closed issues (7d): ${report.counts.newlyClosedIssues}`,
+              `- Newly closed PRs (7d): ${report.counts.newlyClosedPRs}`,
+              `- Reopened items (7d): ${report.counts.reopened}`,
+              `- Blocked items needing maintainer decision: ${report.counts.blocked}`,
+              '',
+              `### PRs closed this run (${report.prClosed.length})`,
+              ...(report.prClosed.length ? report.prClosed : ['- none']),
+              '',
+              `### Issues closed this run (${report.issueClosed.length})`,
+              ...(report.issueClosed.length ? report.issueClosed : ['- none']),
+              '',
+              `### Stale warnings issued (${report.warned.length})`,
+              ...(report.warned.length ? report.warned : ['- none']),
+              '',
+              `### Blocked items`,
+              ...(report.blocked.length ? report.blocked : ['- none']),
+            ];
+
+            await core.summary.addRaw(lines.join('\n')).write();

@@ -8,11 +8,14 @@
     }
   ],
   "summary": {
+    "avg_cycle_time": 50.0,
     "avg_duration": 50.0,
     "count": 1,
     "fails": 0,
+    "sandbox_failures": 0,
     "skipped": 0,
     "successes": 1,
+    "verification_failures": 0,
     "win_rate": 100.0
   }
 }

@@ -1,12 +1,47 @@
 import json
 import dataclasses
-from core.logging_utils import log_json # Import the new logging utility
-from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
+from pathlib import Path
+from core.logging_utils import log_json
+from core.file_tools import _aura_safe_loads
 from core.evolution_prompts import (
     EVOLUTION_HYPOTHESIS_PROMPT,
     EVOLUTION_TASK_DECOMPOSITION_PROMPT,
     EVOLUTION_MUTATION_PROMPT
 )
+from core.config_manager import config as _config
+
+MAX_MUTATIONS_PER_PLAN = 20
+MAX_MUTATION_CONTENT_BYTES = 100_000  # 100 KB
+
+
+def validate_mutation_plan(parsed: dict, project_root: Path) -> list[str]:
+    """Validate a parsed mutation plan for safety. Returns list of error strings."""
+    errors: list[str] = []
+    mutations = parsed.get("mutations", [])
+    if not isinstance(mutations, list):
+        return ["'mutations' must be a list"]
+    if len(mutations) > MAX_MUTATIONS_PER_PLAN:
+        errors.append(f"Too many mutations ({len(mutations)} > {MAX_MUTATIONS_PER_PLAN})")
+    resolved_root = project_root.resolve()
+    for i, m in enumerate(mutations):
+        if not isinstance(m, dict):
+            errors.append(f"Mutation {i}: not a dict")
+            continue
+        file_path = str(m.get("file_path") or "").strip()
+        if not file_path:
+            continue
+        # Reject path traversal
+        try:
+            resolved = (resolved_root / file_path).resolve()
+            if not str(resolved).startswith(str(resolved_root)):
+                errors.append(f"Mutation {i}: path traversal detected: {file_path}")
+        except (ValueError, OSError):
+            errors.append(f"Mutation {i}: invalid path: {file_path}")
+        # Reject oversized content
+        new_content = m.get("new_content")
+        if new_content is not None and len(str(new_content)) > MAX_MUTATION_CONTENT_BYTES:
+            errors.append(f"Mutation {i}: content too large ({len(str(new_content))} bytes)")
+    return errors
 
 class EvolutionLoop:
     """
@@ -39,7 +74,7 @@ class EvolutionLoop:
         self.mutator = mutator
         self.improvement_service = improvement_service
         self._cycle_count = 0
-        self.TRIGGER_EVERY_N = 20
+        self.TRIGGER_EVERY_N = _config.get("evolution_trigger_every_n", 20)
 
     def _get_mutation_response(self, prompt: str, memory_snapshot: str, similar_past_problems: str, known_weaknesses: str) -> str:
         """Request a raw mutation plan instead of forcing planner list parsing."""
@@ -108,10 +143,15 @@ class EvolutionLoop:
 
     def on_cycle_complete(self, entry: dict) -> None:
         """Trigger evolution every N cycles, or immediately for structural hotspot signals."""
+        if isinstance(entry, dict) and bool(entry.get("dry_run")):
+            log_json("INFO", "evolution_loop_skipped_dry_run")
+            return
+
         self._cycle_count += 1
         
         goal = entry.get("goal", "evolve and improve the AURA system")
-        is_hotspot = "structural_hotspot" in str(entry.get("phase_outputs", {}).get("skill_context", {})) or "refactor hotspot" in goal.lower()
+        skill_ctx = entry.get("phase_outputs", {}).get("skill_context", {})
+        is_hotspot = (isinstance(skill_ctx, dict) and skill_ctx.get("structural_hotspot")) or "refactor hotspot" in goal.lower()
         
         # If we have an improvement service, evaluate recent history
         if self.improvement_service and self.brain:
@@ -171,7 +211,7 @@ class EvolutionLoop:
             similar_past_problems=similar_past_problems,
             known_weaknesses=known_weaknesses
         )
-        task_str = "\n".join(task_list)
+        task_str = "\n".join(task_list) if isinstance(task_list, list) else str(task_list)
 
         # 3. Execute
         implementation = self.coder.implement(task_str)
@@ -234,9 +274,18 @@ class EvolutionLoop:
         log_json("INFO", "mutation_validation_result", details={"decision": decision, "confidence": confidence_score, "impact": impact_assessment, "reasoning_snippet": reasoning[:100]})
 
         # Programmatic decision to apply mutation
-        if decision == "APPROVED" and confidence_score >= 0.7: # Example threshold
-            self.mutator.apply_mutation(mutation_str)
-            log_json("INFO", "mutation_approved_and_applied", details={"confidence": confidence_score})
+        if decision == "APPROVED" and confidence_score >= 0.7:
+            # Validate mutation plan for safety before applying
+            if mutation_plan is not None:
+                project_root = Path(self.git.repo_path) if hasattr(self.git, "repo_path") else Path(".")
+                validation_errors = validate_mutation_plan(mutation_plan, project_root)
+                if validation_errors:
+                    log_json("WARN", "mutation_plan_validation_failed",
+                             details={"errors": validation_errors})
+                    decision = "REJECTED"
+            if decision == "APPROVED":
+                self.mutator.apply_mutation(mutation_str)
+                log_json("INFO", "mutation_approved_and_applied", details={"confidence": confidence_score})
         else:
             log_json("INFO", "mutation_rejected", details={"decision": decision, "confidence": confidence_score, "reason": "Programmatic decision"})
 

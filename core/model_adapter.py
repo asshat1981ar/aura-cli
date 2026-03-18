@@ -1,5 +1,4 @@
 import concurrent.futures
-import hashlib
 import os
 import shlex
 import subprocess
@@ -8,13 +7,20 @@ import json
 import time
 from pathlib import Path
 from typing import Any, List
-import numpy as np
 
-from core.logging_utils import log_json # Import log_json
-from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
+from core.logging_utils import log_json
+from core.exceptions import RetryableLLMError
+from core.file_tools import _aura_safe_loads
 from core.config_manager import config
+from core.embedding_service import EmbeddingService
+from core.llm_cache import LLMCache
 from core.runtime_auth import resolve_local_model_profiles, resolve_openai_api_key, resolve_openrouter_api_key
-from memory.embedding_provider import LocalEmbeddingProvider
+
+
+_TIMEOUT_EXECUTOR = concurrent.futures.ThreadPoolExecutor(
+    max_workers=int(os.getenv("AURA_LLM_THREADS", "2")),
+    thread_name_prefix="aura-llm",
+)
 
 # Removed dangerous global IPv4-only monkeypatch for socket.getaddrinfo.
 # This monkeypatch forced all network connections to use IPv4, potentially
@@ -36,36 +42,22 @@ class ModelAdapter:
         and defines an allowlist for executable tools.
         """
         # API keys will be fetched dynamically within their respective call methods
-        self.gemini_cli_path = config.get("gemini_cli_path") # Configurable path to gemini CLI
-        self.codex_cli_path = config.get("codex_cli_path")   # Configurable path to codex CLI
-        self.copilot_cli_path = config.get("copilot_cli_path") # Configurable path to copilot CLI
-        self.mcp_server_url = config.get("mcp_server_url") # Configurable MCP server URL
+        self.gemini_cli_path = config.get("gemini_cli_path")
+        self.codex_cli_path = config.get("codex_cli_path")
+        self.copilot_cli_path = config.get("copilot_cli_path")
+        self.mcp_server_url = config.get("mcp_server_url")
         self.router = None
-        self.cache_db = None
-        self.cache_ttl = config.get("llm_timeout", 3600) # Use llm_timeout for cache as well if appropriate, or keep separate
-        self._embedding_disabled = False
-        self._embedding_disabled_reason = None
-        self._embedding_disabled_logged = False
+        self._cache = LLMCache(ttl_seconds=config.get("llm_timeout", 3600))
         self._local_profile_cooldowns: dict[str, float] = {}
         self._local_profile_cooldown_reasons: dict[str, str] = {}
-        
-        # Configuration
-        semantic_memory = config.get("semantic_memory", {}) or {}
-        configured_embedding_model = semantic_memory.get("embedding_model") or config.get("model_routing", {}).get("embedding") or "text-embedding-3-small"
-        if isinstance(configured_embedding_model, str) and configured_embedding_model.startswith("openai/"):
-            configured_embedding_model = configured_embedding_model.split("/", 1)[1]
-        self._embedding_model = configured_embedding_model # Default from config
-        self._embedding_dims = 1536
-        self._local_embedding_provider = LocalEmbeddingProvider()
-        self._embedding_profile_name = None
-        self._embedding_mode = "openai"
-        self._configure_embedding_backend()
+
+        # Embedding service (extracted — see core/embedding_service.py)
+        self.embedding_service = EmbeddingService(
+            make_request_with_retries=self._make_request_with_retries,
+        )
 
         # Validate CLI paths
         self._validate_cli_paths()
-
-        # In-memory cache (L0) — populated by preload_cache()
-        self._mem_cache: dict = {}
 
         # Define an explicit allowlist for tools
         self.ALLOWED_TOOLS = {
@@ -179,37 +171,6 @@ class ModelAdapter:
             return self._call_local_command_profile(profile, prompt)
         raise ValueError(f"Unsupported local model provider: {provider}")
 
-    def _configure_embedding_backend(self) -> None:
-        semantic_memory = config.get("semantic_memory", {}) or {}
-        embedding_model = semantic_memory.get("embedding_model")
-
-        if isinstance(embedding_model, str) and embedding_model.startswith("local_profile:"):
-            profile_name = embedding_model.split(":", 1)[1]
-            if profile_name in self._get_local_profiles():
-                self._embedding_profile_name = profile_name
-                self._embedding_mode = "local_profile"
-        elif embedding_model in {"local-tfidf-svd-50d", "local/tfidf-svd-50d"}:
-            self._embedding_model = "local-tfidf-svd-50d"
-            self._embedding_dims = self._local_embedding_provider.dimensions()
-            self._embedding_mode = "local_builtin"
-        else:
-            profile_name = self._resolve_local_profile_name("embedding")
-            if profile_name is not None:
-                self._embedding_profile_name = profile_name
-                self._embedding_mode = "local_profile"
-
-        if self._embedding_profile_name:
-            profile = self._get_local_profiles().get(self._embedding_profile_name, {})
-            profile_model = profile.get("embedding_model") or profile.get("model")
-            if isinstance(profile_model, str) and profile_model.strip():
-                self._embedding_model = profile_model
-            dims = profile.get("embedding_dims")
-            if dims is not None:
-                try:
-                    self._embedding_dims = int(dims)
-                except (TypeError, ValueError):
-                    pass
-
     def _call_local_openai_compatible(self, profile: dict, prompt: str) -> str:
         base_url = str(profile.get("base_url") or "http://127.0.0.1:8080/v1").rstrip("/")
         if not base_url.endswith("/v1"):
@@ -310,141 +271,6 @@ class ModelAdapter:
         )
         return result.stdout.strip()
 
-    def _call_local_openai_embeddings(self, profile: dict, texts: List[str]) -> List[np.ndarray]:
-        base_url = str(profile.get("base_url") or "http://127.0.0.1:8080/v1").rstrip("/")
-        if not base_url.endswith("/v1"):
-            base_url = f"{base_url}/v1"
-        url = f"{base_url}/embeddings"
-        model = profile.get("embedding_model") or profile.get("model")
-        if not isinstance(model, str) or not model.strip():
-            raise ValueError("Local openai_compatible embedding profile requires `embedding_model` or `model`.")
-
-        headers = {"Content-Type": "application/json"}
-        api_key = profile.get("api_key")
-        if isinstance(api_key, str) and api_key.strip():
-            headers["Authorization"] = f"Bearer {api_key.strip()}"
-
-        payload: dict[str, Any] = {
-            "model": model,
-            "input": texts,
-        }
-        response = self._make_request_with_retries(
-            "POST",
-            url,
-            headers,
-            payload,
-            retries=self._profile_retries(profile),
-            backoff_factor=self._profile_backoff(profile),
-            timeout=self._profile_timeout(profile, key="request_timeout_seconds", default=float(self.LLM_TIMEOUT)),
-            retry_label=f"local_openai_embeddings:{model}",
-        )
-        data = response.json()
-        sorted_data = sorted(data["data"], key=lambda x: x["index"])
-        vectors = [np.array(item["embedding"], dtype=np.float32) for item in sorted_data]
-        if vectors:
-            self._embedding_dims = int(vectors[0].shape[0])
-        return vectors
-
-    def _call_local_command_embeddings(self, profile: dict, texts: List[str]) -> List[np.ndarray]:
-        command = profile.get("embedding_command") or profile.get("command")
-        if isinstance(command, str):
-            command_parts = shlex.split(command)
-        elif isinstance(command, list) and all(isinstance(part, str) for part in command):
-            command_parts = list(command)
-        else:
-            raise ValueError("Local command embedding profile requires `embedding_command` or `command`.")
-
-        input_json = json.dumps({"texts": texts})
-        use_stdin = True
-        rendered_parts: list[str] = []
-        for part in command_parts:
-            if "{input_json}" in part:
-                use_stdin = False
-                rendered_parts.append(part.replace("{input_json}", input_json))
-            else:
-                rendered_parts.append(part)
-
-        result = subprocess.run(
-            rendered_parts,
-            input=input_json if use_stdin else None,
-            capture_output=True,
-            text=True,
-            check=True,
-            timeout=self._profile_timeout(profile, key="subprocess_timeout_seconds", default=120.0),
-        )
-        payload = _aura_safe_loads(result.stdout, "local_embedding_command")
-        if isinstance(payload, dict) and "data" in payload:
-            payload = [item.get("embedding") for item in payload["data"]]
-        if not isinstance(payload, list):
-            raise ValueError("Embedding command must return a JSON array or OpenAI-style data object.")
-        vectors = [np.array(item, dtype=np.float32) for item in payload]
-        if vectors:
-            self._embedding_dims = int(vectors[0].shape[0])
-        return vectors
-
-    def _call_local_ollama_embeddings(self, profile: dict, texts: List[str]) -> List[np.ndarray]:
-        base_url = str(profile.get("base_url") or "http://127.0.0.1:11434").rstrip("/")
-        model = profile.get("embedding_model") or profile.get("model")
-        if not isinstance(model, str) or not model.strip():
-            raise ValueError("Local ollama embedding profile requires `embedding_model` or `model`.")
-
-        headers = {"Content-Type": "application/json"}
-        payload = {"model": model, "input": texts}
-        try:
-            response = self._make_request_with_retries(
-                "POST",
-                f"{base_url}/api/embed",
-                headers,
-                payload,
-                retries=self._profile_retries(profile),
-                backoff_factor=self._profile_backoff(profile),
-                timeout=self._profile_timeout(profile, key="request_timeout_seconds", default=float(self.LLM_TIMEOUT)),
-                retry_label=f"local_ollama_embeddings:{model}",
-            )
-            data = response.json()
-            embeddings = data.get("embeddings")
-            if isinstance(embeddings, list):
-                vectors = [np.array(item, dtype=np.float32) for item in embeddings]
-                if vectors:
-                    self._embedding_dims = int(vectors[0].shape[0])
-                return vectors
-        except Exception:
-            pass
-
-        vectors: list[np.ndarray] = []
-        for text in texts:
-            response = self._make_request_with_retries(
-                "POST",
-                f"{base_url}/api/embeddings",
-                headers,
-                {"model": model, "prompt": text},
-                retries=self._profile_retries(profile),
-                backoff_factor=self._profile_backoff(profile),
-                timeout=self._profile_timeout(profile, key="request_timeout_seconds", default=float(self.LLM_TIMEOUT)),
-                retry_label=f"local_ollama_embeddings:{model}",
-            )
-            data = response.json()
-            vectors.append(np.array(data["embedding"], dtype=np.float32))
-        if vectors:
-            self._embedding_dims = int(vectors[0].shape[0])
-        return vectors
-
-    def _embed_with_local_profile(self, texts: List[str]) -> List[np.ndarray]:
-        if not self._embedding_profile_name:
-            raise ValueError("No local embedding profile configured.")
-        profile = self._get_local_profiles().get(self._embedding_profile_name)
-        if not isinstance(profile, dict):
-            raise ValueError(f"Unknown local embedding profile: {self._embedding_profile_name}")
-
-        provider = str(profile.get("provider") or "openai_compatible")
-        if provider == "openai_compatible":
-            return self._call_local_openai_embeddings(profile, texts)
-        if provider == "command":
-            return self._call_local_command_embeddings(profile, texts)
-        if provider == "ollama":
-            return self._call_local_ollama_embeddings(profile, texts)
-        raise ValueError(f"Unsupported local embedding provider: {provider}")
-
     def call_local_profile(self, profile_name: str, prompt: str) -> str:
         return self._call_local_profile_with_fallbacks(profile_name, prompt, attempted_profiles=set())
 
@@ -514,52 +340,13 @@ class ModelAdapter:
         self._clear_local_profile_unhealthy(profile_name)
         return response
 
-    # ... [Existing cache methods kept as is] ...
     def enable_cache(self, db_conn, ttl_seconds: int = 3600, momento=None):
-        """Enables prompt-response caching.
-
-        Args:
-            db_conn:      SQLite connection (L2 persistent cache).
-            ttl_seconds:  Cache TTL in seconds (default 1 hour).
-            momento:      Optional :class:`MomentoAdapter` for L1 hot cache.
-        """
-        self.cache_db = db_conn
-        self.cache_ttl = ttl_seconds
-        self._momento = momento  # L1 cache adapter (may be None or unavailable)
-        try:
-            self.cache_db.execute("""
-                CREATE TABLE IF NOT EXISTS prompt_cache (
-                    prompt_hash TEXT PRIMARY KEY,
-                    response TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            self.cache_db.commit()
-            log_json("INFO", "model_cache_enabled", details={
-                "ttl": ttl_seconds,
-                "l1_momento": bool(momento and momento.is_available()),
-            })
-            self.preload_cache()
-        except Exception as e:
-            log_json("ERROR", "model_cache_init_failed", details={"error": str(e)})
+        """Enables prompt-response caching (delegates to LLMCache)."""
+        self._cache.enable(db_conn, ttl_seconds=ttl_seconds, momento=momento)
 
     def preload_cache(self):
-        """Loads the last 50 non-expired entries from the prompt_cache table into _mem_cache."""
-        if not self.cache_db:
-            return
-        try:
-            cursor = self.cache_db.execute(
-                "SELECT prompt_hash, response FROM prompt_cache "
-                "WHERE timestamp > datetime('now', ?) "
-                "ORDER BY timestamp DESC LIMIT 50",
-                (f"-{self.cache_ttl} seconds",)
-            )
-            rows = cursor.fetchall()
-            for prompt_hash, response in rows:
-                self._mem_cache[prompt_hash] = response
-            log_json("INFO", "model_cache_preloaded", details={"count": len(rows)})
-        except Exception as e:
-            log_json("WARN", "model_cache_preload_failed", details={"error": str(e)})
+        """Preloads recent cache entries from SQLite into memory."""
+        self._cache.preload()
 
     def estimate_context_budget(self, goal: str, goal_type: str = "default") -> int:
         """Returns a token budget estimate based on goal_type and goal length."""
@@ -589,73 +376,15 @@ class ModelAdapter:
         log_json("INFO", "model_router_attached")
 
     def _get_cached_response(self, prompt: str) -> str | None:
-        prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
-
-        # L0: in-memory dict (fastest)
-        if prompt_hash in self._mem_cache:
-            log_json("INFO", "model_cache_l0_hit", details={"prompt_hash": prompt_hash})
-            return self._mem_cache[prompt_hash]
-
-        # L1: Momento (sub-ms) — check before touching SQLite
-        momento = getattr(self, "_momento", None)
-        if momento and momento.is_available():
-            try:
-                from memory.momento_adapter import WORKING_MEMORY_CACHE
-                key = f"response:{prompt_hash[:16]}"
-                val = momento.cache_get(WORKING_MEMORY_CACHE, key)
-                if val is not None:
-                    log_json("INFO", "model_cache_l1_hit", details={"key": key})
-                    return val
-            except Exception as exc:
-                log_json("WARN", "model_cache_l1_query_failed", details={"error": str(exc)})
-
-        # L2: SQLite
-        if not self.cache_db:
-            return None
-        try:
-            cursor = self.cache_db.execute(
-                "SELECT response FROM prompt_cache WHERE prompt_hash = ? AND timestamp > datetime('now', ?)",
-                (prompt_hash, f"-{self.cache_ttl} seconds")
-            )
-            row = cursor.fetchone()
-            if row:
-                log_json("INFO", "model_cache_hit", details={"prompt_hash": prompt_hash})
-                return row[0]
-        except Exception as e:
-            log_json("WARN", "model_cache_query_failed", details={"error": str(e)})
-        return None
+        return self._cache.get(prompt)
 
     def _save_to_cache(self, prompt: str, response: str):
-        prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
-
-        # L0: in-memory dict
-        self._mem_cache[prompt_hash] = response
-
-        # L1: Momento write-through
-        momento = getattr(self, "_momento", None)
-        if momento and momento.is_available():
-            try:
-                from memory.momento_adapter import WORKING_MEMORY_CACHE
-                key = f"response:{prompt_hash[:16]}"
-                momento.cache_set(WORKING_MEMORY_CACHE, key, response,
-                                  ttl_seconds=self.cache_ttl)
-            except Exception as exc:
-                log_json("WARN", "model_cache_l1_save_failed", details={"error": str(exc)})
-
-        # L2: SQLite
-        if not self.cache_db:
-            return
-        try:
-            self.cache_db.execute(
-                "INSERT OR REPLACE INTO prompt_cache (prompt_hash, response, timestamp) VALUES (?, ?, CURRENT_TIMESTAMP)",
-                (prompt_hash, response)
-            )
-            self.cache_db.commit()
-        except Exception as e:
-            log_json("WARN", "model_cache_save_failed", details={"error": str(e)})
+        self._cache.put(prompt, response)
 
     def _execute_tool(self, tool_name: str, args: dict) -> str:
-        # [Tool execution logic unchanged]
+        # Validate tool_name against allowlist to prevent arbitrary command execution
+        if tool_name not in self.ALLOWED_TOOLS:
+            return f"Tool not allowed: {tool_name}. Allowed: {', '.join(sorted(self.ALLOWED_TOOLS))}"
         try:
             log_json("INFO", "executing_tool_via_mcp_server", details={"tool_name": tool_name, "args": args})
             if tool_name in ["get_repo", "create_issue", "get_issue_details", "update_file", "get_pull_request_details"]:
@@ -751,6 +480,7 @@ class ModelAdapter:
         return data["choices"][0]["message"]["content"]
 
     def call_gemini(self, prompt: str) -> str:
+        """Call Gemini CLI. Prompt is passed as -p arg (list form, no shell injection risk)."""
         if not self.gemini_cli_path:
             raise ValueError("Gemini CLI path not configured or not executable.")
         try:
@@ -789,7 +519,7 @@ class ModelAdapter:
             raise ValueError("Copilot CLI path not configured or not executable.")
         try:
             result = subprocess.run(
-                [self.copilot_cli_path, "-p", prompt, "--silent", "--allow-all-tools"],
+                [self.copilot_cli_path, "-p", prompt, "--silent"],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -829,14 +559,14 @@ class ModelAdapter:
         local_model_command = config.get("local_model_command")
         if local_model_command:
             try:
-                command_parts = local_model_command.split()
-                command_parts.append(prompt)
+                command_parts = shlex.split(local_model_command)
                 result = subprocess.run(
                     command_parts,
+                    input=prompt,
                     capture_output=True,
                     text=True,
                     check=True,
-                    timeout=120 
+                    timeout=120
                 )
                 return result.stdout.strip()
             except FileNotFoundError:
@@ -875,16 +605,15 @@ class ModelAdapter:
     def _call_with_timeout(self, fn, *args, timeout: int | None = None) -> str:
         """Run *fn(*args)* in a thread and raise TimeoutError if it exceeds *timeout* seconds."""
         _timeout = timeout if timeout is not None else self.LLM_TIMEOUT
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
-            future = ex.submit(fn, *args)
-            try:
-                return future.result(timeout=_timeout)
-            except concurrent.futures.TimeoutError:
-                log_json("ERROR", "llm_call_timeout",
-                         details={"fn": fn.__name__, "timeout_s": _timeout})
-                raise TimeoutError(
-                    f"LLM call to {fn.__name__!r} exceeded {_timeout}s timeout"
-                )
+        future = _TIMEOUT_EXECUTOR.submit(fn, *args)
+        try:
+            return future.result(timeout=_timeout)
+        except concurrent.futures.TimeoutError:
+            log_json("ERROR", "llm_call_timeout",
+                     details={"fn": fn.__name__, "timeout_s": _timeout})
+            raise RetryableLLMError(
+                f"LLM call to {fn.__name__!r} exceeded {_timeout}s timeout"
+            )
 
     def respond(self, prompt: str):
         cached = self._get_cached_response(prompt)
@@ -927,91 +656,19 @@ class ModelAdapter:
             pass
         return model_response
 
-    # --- EmbeddingProvider Interface ---
+    # --- EmbeddingProvider Interface (delegates to EmbeddingService) ---
 
     def model_id(self) -> str:
-        return self._embedding_model
+        return self.embedding_service.model_id()
 
     def dimensions(self) -> int:
-        return self._embedding_dims
+        return self.embedding_service.dimensions()
 
     def healthcheck(self) -> bool:
-        """Checks if the embedding provider is reachable."""
-        try:
-            # Simple check with a dummy embedding
-            self.embed(["test"])
-            return True
-        except Exception:
-            return False
+        return self.embedding_service.healthcheck()
 
-    def embed(self, texts: List[str]) -> List[np.ndarray]:
-        """
-        Generates vector embeddings for a list of texts.
-        Falls back to zero vectors when OPENAI_API_KEY is not set.
-        """
-        if not texts:
-            return []
+    def embed(self, texts: List[str]) -> list:
+        return self.embedding_service.embed(texts)
 
-        if self._embedding_mode == "local_builtin":
-            return [np.array(vec, dtype=np.float32) for vec in self._local_embedding_provider.embed(texts)]
-
-        if self._embedding_mode == "local_profile":
-            try:
-                return self._embed_with_local_profile(texts)
-            except Exception as exc:
-                log_json(
-                    "WARN",
-                    "search_embedding_local_profile_failed",
-                    details={"error": str(exc), "profile": self._embedding_profile_name, "fallback": "local_tfidf_svd"},
-                )
-                self._embedding_model = "local-tfidf-svd-50d"
-                self._embedding_dims = self._local_embedding_provider.dimensions()
-                self._embedding_mode = "local_builtin"
-                return [np.array(vec, dtype=np.float32) for vec in self._local_embedding_provider.embed(texts)]
-
-        openai_api_key = resolve_openai_api_key() or os.environ.get("OPENAI_API_KEY")
-        if not openai_api_key or self._embedding_disabled:
-            reason = self._embedding_disabled_reason or "OPENAI_API_KEY not set for OpenAI embedding call."
-            if not self._embedding_disabled_logged:
-                log_json("WARN", "search_embedding_failed", details={"error": reason})
-                self._embedding_disabled_logged = True
-            # Return zero vectors — VectorStore search will rank all equally (no semantic search)
-            return [np.zeros(self._embedding_dims, dtype=np.float32) for _ in texts]
-
-        # Rate Limit Protection: Small sleep to avoid hitting burst limits
-        import random
-        time.sleep(0.2 + random.uniform(0, 0.1))
-
-        url = "https://api.openai.com/v1/embeddings"
-        headers = {
-            "Authorization": f"Bearer {openai_api_key}",
-            "Content-Type": "application/json"
-        }
-        
-        # OpenAI supports batching
-        payload = {
-            "input": texts,
-            "model": self._embedding_model
-        }
-
-        try:
-            response = self._make_request_with_retries("POST", url, headers, payload)
-            data = response.json()
-        except Exception as exc:
-            self._embedding_disabled = True
-            self._embedding_disabled_reason = f"embedding provider disabled after failure: {exc}"
-            log_json(
-                "WARN",
-                "search_embedding_provider_disabled",
-                details={"error": str(exc), "fallback": "zero_vectors"},
-            )
-            self._embedding_disabled_logged = True
-            return [np.zeros(self._embedding_dims, dtype=np.float32) for _ in texts]
-        
-        # Sort by index to ensure order matches input
-        sorted_data = sorted(data["data"], key=lambda x: x["index"])
-        return [np.array(item["embedding"], dtype=np.float32) for item in sorted_data]
-
-    def get_embedding(self, text: str) -> "np.ndarray":
-        """Legacy wrapper around embed."""
-        return self.embed([text])[0]
+    def get_embedding(self, text: str):
+        return self.embedding_service.get_embedding(text)

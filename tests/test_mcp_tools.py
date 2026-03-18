@@ -11,7 +11,7 @@ def client(token=None):
 
 
 def test_rate_limit_and_health(monkeypatch):
-    monkeypatch.setenv("MCP_API_TOKEN", "t")
+    monkeypatch.setenv("AGENT_API_TOKEN", "t")
     c, hdrs = client("t")
     r = c.get("/health", headers=hdrs)
     assert r.status_code == 200
@@ -20,7 +20,7 @@ def test_rate_limit_and_health(monkeypatch):
 
 
 def test_list_tools(monkeypatch):
-    monkeypatch.setenv("MCP_API_TOKEN", "t")
+    monkeypatch.setenv("AGENT_API_TOKEN", "t")
     c, hdrs = client("t")
     r = c.get("/tools", headers=hdrs)
     assert r.status_code == 200
@@ -32,7 +32,7 @@ def test_list_tools(monkeypatch):
 
 
 def test_read_file_jail(monkeypatch, tmp_path):
-    monkeypatch.setenv("MCP_API_TOKEN", "t")
+    monkeypatch.setenv("AGENT_API_TOKEN", "t")
     # override project root temporarily
     orig_root = server.PROJECT_ROOT
     monkeypatch.setattr(server, "PROJECT_ROOT", tmp_path) # Use monkeypatch to set PROJECT_ROOT

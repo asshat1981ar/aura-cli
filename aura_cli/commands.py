@@ -103,6 +103,10 @@ def _handle_status(
             last_status=getattr(orchestrator, "last_capability_status", None),
         )
         snapshot["capabilities"] = capability_status
+        # Circuit breaker state
+        cb = getattr(orchestrator, "_circuit_breaker", None)
+        if cb is not None:
+            snapshot["circuit_breaker"] = cb.as_dict()
         print(json.dumps(snapshot))
         return
 

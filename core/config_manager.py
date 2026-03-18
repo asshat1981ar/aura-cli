@@ -4,6 +4,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from core.logging_utils import log_json
 from core.exceptions import ConfigurationError
+from core.config_types import (
+    LLMConfig, SecurityConfig, LoopConfig, BeadsConfig,
+    CapabilityConfig, PathsConfig, ExternalToolsConfig,
+)
 
 # ---------------------------------------------------------------------------
 # Value validators — each returns (is_valid: bool, coerced_value, reason: str)
@@ -71,6 +75,13 @@ _KEY_VALIDATORS = {
     "mcp_server_url":   lambda k, v: _validate_string(k, v),
     "local_model_command": lambda k, v: _validate_string(k, v),
     "llm_timeout":      lambda k, v: _validate_positive_int(k, v),
+    "max_sandbox_retries": lambda k, v: _validate_positive_int(k, v),
+    "evolution_trigger_every_n": lambda k, v: _validate_positive_int(k, v),
+    "health_monitor_trigger_every_n": lambda k, v: _validate_positive_int(k, v),
+    "skill_timeout_s":  lambda k, v: _validate_float_range(k, v, 1.0, 3600.0),
+    "subprocess_timeout_s": lambda k, v: _validate_positive_int(k, v),
+    "circuit_breaker_threshold": lambda k, v: _validate_positive_int(k, v),
+    "circuit_breaker_cooldown_s": lambda k, v: _validate_float_range(k, v, 0.0, 3600.0),
 }
 
 DEFAULT_CONFIG = {
@@ -113,6 +124,13 @@ DEFAULT_CONFIG = {
         "fast": None,
     },
     "llm_timeout": 60,
+    "max_sandbox_retries": 3,
+    "evolution_trigger_every_n": 20,
+    "health_monitor_trigger_every_n": 10,
+    "skill_timeout_s": 120.0,
+    "subprocess_timeout_s": 30,
+    "circuit_breaker_threshold": 5,
+    "circuit_breaker_cooldown_s": 60.0,
     "beads": {
         "enabled": True,
         "required": True,
@@ -313,8 +331,9 @@ class ConfigManager:
                 merged[k] = v
                 
         merged.update(self.runtime_overrides)
-        
+
         self.effective_config = merged
+        self._rebuild_typed_views()
 
     def _validate_value(self, key: str, value: Any) -> Any:
         """Validate *value* for *key*; return coerced value or DEFAULT_CONFIG fallback on error."""
@@ -338,6 +357,47 @@ class ConfigManager:
     def show_config(self) -> Dict[str, Any]:
         """Return the effective config dict (for --show-config / diagnostics)."""
         return dict(self.effective_config)
+
+    # ── Typed config views (B5) ───────────────────────────────────────────
+    # Rebuilt on each refresh(); frozen dataclasses for safety.
+
+    def _rebuild_typed_views(self) -> None:
+        d = self.effective_config
+        self._llm = LLMConfig.from_dict(d)
+        self._security = SecurityConfig.from_dict(d)
+        self._loop = LoopConfig.from_dict(d)
+        self._beads = BeadsConfig.from_dict(d)
+        self._capability = CapabilityConfig.from_dict(d)
+        self._paths = PathsConfig.from_dict(d)
+        self._external_tools = ExternalToolsConfig.from_dict(d)
+
+    @property
+    def llm(self) -> LLMConfig:
+        return self._llm
+
+    @property
+    def security(self) -> SecurityConfig:
+        return self._security
+
+    @property
+    def loop(self) -> LoopConfig:
+        return self._loop
+
+    @property
+    def beads(self) -> BeadsConfig:
+        return self._beads
+
+    @property
+    def capability(self) -> CapabilityConfig:
+        return self._capability
+
+    @property
+    def paths(self) -> PathsConfig:
+        return self._paths
+
+    @property
+    def external_tools(self) -> ExternalToolsConfig:
+        return self._external_tools
 
     def set_runtime_override(self, key: str, value: Any):
         """Sets a temporary runtime override."""

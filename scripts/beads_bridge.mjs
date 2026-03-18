@@ -450,7 +450,10 @@ async function main() {
     process.stdout.write(`${JSON.stringify(resultOk(decision, startedAt))}\n`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    process.stdout.write(`${JSON.stringify(resultError(message, startedAt, message))}\n`);
+    const code = message.includes("beads_cli_unavailable")
+      ? "capability_unavailable"
+      : message;
+    process.stdout.write(`${JSON.stringify(resultError(code, startedAt, message))}\n`);
   }
 }
 

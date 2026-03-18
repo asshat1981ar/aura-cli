@@ -189,7 +189,7 @@ class TestModelAdapterCacheWithMomento(unittest.TestCase):
         db = sqlite3.connect(":memory:", check_same_thread=False)
         # Should not raise even with momento=None
         adapter.enable_cache(db, ttl_seconds=60, momento=None)
-        self.assertIs(adapter.cache_db, db)
+        self.assertIs(adapter._cache._db, db)
 
     def test_get_cached_response_miss(self):
         import sqlite3

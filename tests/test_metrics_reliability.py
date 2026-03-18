@@ -20,9 +20,9 @@ class TestMetricsReliability(unittest.TestCase):
     def test_metrics_distinguishes_outcomes(self):
         # Mock cycles with different outcomes
         cycles = [
-            {"cycle_id": "c1", "goal": "g1", "outcome": "SUCCESS", "duration_s": 10.0, "stop_reason": "PASS"},
-            {"cycle_id": "c2", "goal": "g2", "outcome": "FAILED", "duration_s": 20.0, "stop_reason": "MAX_CYCLES"},
-            {"cycle_id": "c3", "goal": "g3", "outcome": "SKIPPED", "duration_s": 5.0, "stop_reason": "PASS"},
+            {"cycle_id": "c1", "goal": "g1", "outcome": "SUCCESS", "duration_s": 10.0, "stop_reason": "PASS", "phase_status": {"sandbox": "pass"}, "verification_status": "pass"},
+            {"cycle_id": "c2", "goal": "g2", "outcome": "FAILED", "duration_s": 20.0, "stop_reason": "MAX_CYCLES", "phase_status": {"sandbox": "fail"}, "verification_status": "fail"},
+            {"cycle_id": "c3", "goal": "g3", "outcome": "SKIPPED", "duration_s": 5.0, "stop_reason": "PASS", "phase_status": {"sandbox": "skip"}, "verification_status": "skip"},
         ]
         
         for c in cycles:
@@ -60,6 +60,8 @@ class TestMetricsReliability(unittest.TestCase):
         self.assertEqual(summary["skipped"], 1)
         self.assertEqual(summary["fails"], 1)
         self.assertEqual(summary["count"], 3)
+        self.assertEqual(summary["sandbox_failures"], 1)
+        self.assertEqual(summary["verification_failures"], 1)
         self.assertAlmostEqual(summary["win_rate"], 33.33333333)
         self.assertAlmostEqual(summary["avg_duration"], 11.66666666)
 

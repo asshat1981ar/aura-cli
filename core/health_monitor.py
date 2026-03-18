@@ -15,9 +15,183 @@ Usage::
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional
 
 from core.logging_utils import log_json
+
+
+# ---------------------------------------------------------------------------
+# Subsystem probe — fast connectivity / availability checks
+# ---------------------------------------------------------------------------
+
+@dataclass
+class CheckResult:
+    name: str
+    ok: bool
+    latency_ms: float
+    detail: str = ""
+    error: str = ""
+
+
+@dataclass
+class HealthReport:
+    timestamp: float
+    all_ok: bool
+    checks: List[CheckResult] = field(default_factory=list)
+
+    @property
+    def failed(self) -> List[CheckResult]:
+        return [c for c in self.checks if not c.ok]
+
+    def as_dict(self) -> Dict:
+        return {
+            "timestamp": self.timestamp,
+            "all_ok": self.all_ok,
+            "checks": [c.__dict__ for c in self.checks],
+            "failed_count": len(self.failed),
+        }
+
+
+class SystemHealthProbe:
+    """Lightweight connectivity and availability probe for AURA subsystems.
+
+    Run at the start of every cycle and after failures.  All checks are
+    independent; a failure in one never prevents the others from running.
+
+    Args:
+        brain: Brain instance (SQLite-backed memory).
+        model: ModelAdapter instance (LLM endpoint wrapper).
+        goal_queue: GoalQueue instance.
+        memory_controller: MemoryController (global singleton).
+        vector_store: VectorStore instance (optional).
+    """
+
+    def __init__(
+        self,
+        brain: Any = None,
+        model: Any = None,
+        goal_queue: Any = None,
+        memory_controller: Any = None,
+        vector_store: Any = None,
+    ):
+        self._brain = brain
+        self._model = model
+        self._goal_queue = goal_queue
+        self._mc = memory_controller
+        self._vs = vector_store
+
+        self._checks: List[Callable[[], CheckResult]] = []
+        if brain is not None:
+            self._checks.append(self.check_brain_db)
+        if memory_controller is not None:
+            self._checks.append(self.check_memory_controller)
+        if model is not None:
+            self._checks.append(self.check_model_adapter)
+
+        # Skill registry importability is meaningful even without a fully
+        # constructed runtime, so always include it in the lightweight probe.
+        self._checks.append(self.check_skill_registry)
+
+        if goal_queue is not None:
+            self._checks.append(self.check_goal_queue)
+        if vector_store is not None:
+            self._checks.append(self.check_vector_store)
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _timed(self, name: str, fn: Callable[[], Optional[str]]) -> CheckResult:
+        t0 = time.monotonic()
+        try:
+            detail = fn() or ""
+            return CheckResult(
+                name=name,
+                ok=True,
+                latency_ms=(time.monotonic() - t0) * 1000,
+                detail=detail,
+            )
+        except Exception as exc:
+            return CheckResult(
+                name=name,
+                ok=False,
+                latency_ms=(time.monotonic() - t0) * 1000,
+                error=str(exc),
+            )
+
+    # ------------------------------------------------------------------
+    # Individual checks
+    # ------------------------------------------------------------------
+
+    def check_brain_db(self) -> CheckResult:
+        """Verify SQLite connectivity and schema version."""
+        def _probe():
+            if self._brain is None:
+                raise RuntimeError("Brain not configured")
+            self._brain.db.execute("SELECT 1").fetchone()
+            return f"schema_v{getattr(self._brain, 'SCHEMA_VERSION', '?')}"
+        return self._timed("brain_db", _probe)
+
+    def check_memory_controller(self) -> CheckResult:
+        """Verify the memory controller has a persistent store attached."""
+        def _probe():
+            if self._mc is None:
+                raise RuntimeError("MemoryController not configured")
+            _ = self._mc.persistent_store
+            return "ok"
+        return self._timed("memory_controller", _probe)
+
+    def check_model_adapter(self) -> CheckResult:
+        """Verify the model adapter has a callable respond method."""
+        def _probe():
+            if self._model is None:
+                raise RuntimeError("ModelAdapter not configured")
+            if not callable(getattr(self._model, "respond", None)):
+                raise RuntimeError("ModelAdapter missing .respond()")
+            provider = getattr(self._model, "provider", "unknown")
+            return f"provider={provider}"
+        return self._timed("model_adapter", _probe)
+
+    def check_skill_registry(self) -> CheckResult:
+        """Verify all skills load without import errors."""
+        def _probe():
+            from agents.skills.registry import all_skills
+            skills = all_skills()
+            return f"{len(skills)} skills loaded"
+        return self._timed("skill_registry", _probe)
+
+    def check_goal_queue(self) -> CheckResult:
+        """Verify the goal queue is accessible and readable."""
+        def _probe():
+            count = len(getattr(self._goal_queue, "queue", []))
+            return f"{count} pending goals"
+        return self._timed("goal_queue", _probe)
+
+    def check_vector_store(self) -> CheckResult:
+        """Verify the vector store index attribute is accessible."""
+        def _probe():
+            if self._vs is None:
+                raise RuntimeError("VectorStore not configured")
+            _ = getattr(self._vs, "index", None)
+            return "index accessible"
+        return self._timed("vector_store", _probe)
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def run_all(self) -> HealthReport:
+        """Run every registered check and return a :class:`HealthReport`."""
+        results = [check() for check in self._checks]
+        report = HealthReport(
+            timestamp=time.time(),
+            all_ok=all(r.ok for r in results) if results else True,
+            checks=results,
+        )
+        level = "INFO" if report.all_ok else "WARN"
+        log_json(level, "system_health_probe_complete", details=report.as_dict())
+        return report
 
 # Skills to run for the health scan
 HEALTH_SKILLS: List[str] = [
@@ -72,7 +246,7 @@ class HealthMonitor:
         TRIGGER_EVERY_N: How many completed cycles between automatic scans.
     """
 
-    TRIGGER_EVERY_N: int = 10
+    TRIGGER_EVERY_N: int = 10  # overridden from config in __init__
 
     def __init__(
         self,
@@ -116,7 +290,7 @@ class HealthMonitor:
         log_json("INFO", "health_monitor_scan_start",
                  details={"skills": list(available.keys()), "root": self.root})
 
-        results = dispatch_skills("default", available, self.root, timeout=30.0)
+        results = dispatch_skills("health_monitor", available, self.root, timeout=30.0)
 
         # Load previous snapshot for drift comparison
         prev_snapshots = self.memory.query("health_snapshots", limit=1)

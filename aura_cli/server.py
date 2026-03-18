@@ -8,6 +8,8 @@ import time
 from pathlib import Path
 from typing import List
 
+SUBPROCESS_TIMEOUT_S = int(os.getenv("AGENT_RUN_TIMEOUT", os.getenv("AURA_SUBPROCESS_TIMEOUT_S", "30")))
+
 from fastapi import FastAPI, HTTPException, Header, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -32,6 +34,20 @@ def _agent_run_enabled() -> bool:
     return os.getenv("AGENT_API_ENABLE_RUN") == "1"
 
 
+def _agent_run_allow() -> set[str]:
+    raw = os.getenv("AGENT_RUN_ALLOW", "python,python3,pytest,ls,cat,echo,pwd")
+    return {part.strip() for part in raw.split(",") if part.strip()}
+
+
+def _enforce_agent_run_command(parts: List[str]) -> None:
+    if not parts:
+        raise HTTPException(status_code=400, detail="Empty command")
+    sanitize_command(parts)
+    binary = Path(parts[0]).name
+    if binary not in _agent_run_allow():
+        raise HTTPException(status_code=403, detail=f"Command not allowed for Agent API run: {binary}")
+
+
 def _provider_snapshot() -> dict[str, bool]:
     config_api_key = runtime.get("config_api_key")
     return {
@@ -45,10 +61,15 @@ def _beads_runtime_snapshot() -> dict | None:
     return build_beads_runtime_metadata(orchestrator)
 
 def require_auth(authorization: str | None = Header(default=None)):
-    """Simple bearer-token auth; disabled if AGENT_API_TOKEN is unset."""
+    """Bearer-token auth; requires AGENT_API_TOKEN unless explicitly opted out."""
     token = os.getenv("AGENT_API_TOKEN")
     if not token:
-        return
+        if os.getenv("AGENT_API_ALLOW_UNAUTHENTICATED") == "1":
+            return
+        raise HTTPException(
+            status_code=500,
+            detail="AGENT_API_TOKEN not configured. Set it or set AGENT_API_ALLOW_UNAUTHENTICATED=1 to allow open access.",
+        )
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
     if authorization != f"Bearer {token}":
@@ -76,6 +97,7 @@ async def health(auth=Depends(require_auth)):
         "status": "ok",
         "providers": _provider_snapshot(),
         "run_enabled": _agent_run_enabled(),
+        "run_allow": sorted(_agent_run_allow()),
     }
 
 
@@ -95,13 +117,24 @@ async def tools(auth=Depends(require_auth)):
 
 async def _run_shell_async(command_str: str) -> dict:
     parts = shlex.split(command_str)
-    sanitize_command(parts)  # raises if not allowed
+    _enforce_agent_run_command(parts)
     proc = await asyncio.create_subprocess_exec(
         *parts,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
     )
-    stdout, stderr = await proc.communicate()
+    try:
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(), timeout=SUBPROCESS_TIMEOUT_S
+        )
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        return {
+            "returncode": -1,
+            "stdout": "",
+            "stderr": f"Process timed out after {SUBPROCESS_TIMEOUT_S}s",
+        }
     return {
         "returncode": proc.returncode,
         "stdout": stdout.decode(errors="replace"),
@@ -140,7 +173,7 @@ async def execute(req: ExecuteRequest, auth=Depends(require_auth)):
 
             async def run_stream():
                 parts = shlex.split(command)
-                sanitize_command(parts)
+                _enforce_agent_run_command(parts)
                 proc = await asyncio.create_subprocess_exec(
                     *parts,
                     stdout=asyncio.subprocess.PIPE,
@@ -148,6 +181,7 @@ async def execute(req: ExecuteRequest, auth=Depends(require_auth)):
                 )
 
                 queue: asyncio.Queue[dict] = asyncio.Queue()
+                deadline = time.monotonic() + SUBPROCESS_TIMEOUT_S
 
                 async def pump(stream, kind: str):
                     while True:
@@ -161,7 +195,12 @@ async def execute(req: ExecuteRequest, auth=Depends(require_auth)):
                     asyncio.create_task(pump(proc.stderr, "stderr")),
                 ]
 
+                timed_out = False
                 while any(not t.done() for t in tasks) or not queue.empty():
+                    if time.monotonic() > deadline:
+                        proc.kill()
+                        timed_out = True
+                        break
                     try:
                         item = await asyncio.wait_for(queue.get(), timeout=0.1)
                         yield f"data: {json.dumps(item)}\n\n"
@@ -171,7 +210,8 @@ async def execute(req: ExecuteRequest, auth=Depends(require_auth)):
                 await proc.wait()
                 for t in tasks:
                     t.cancel()
-                yield f"data: {json.dumps({'type': 'exit', 'code': proc.returncode})}\n\n"
+                exit_code = -1 if timed_out else proc.returncode
+                yield f"data: {json.dumps({'type': 'exit', 'code': exit_code})}\n\n"
 
             return StreamingResponse(run_stream(), media_type="text/event-stream")
 

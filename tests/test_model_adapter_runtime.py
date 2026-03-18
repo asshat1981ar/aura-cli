@@ -12,9 +12,10 @@ def test_model_adapter_normalizes_openai_embedding_model_from_config():
         return default
 
     with patch("core.model_adapter.config.get", side_effect=mock_get), \
+         patch("core.embedding_service.config.get", side_effect=mock_get), \
          patch("core.model_adapter.log_json"):
         adapter = ModelAdapter()
-        assert adapter._embedding_model == "text-embedding-3-small"
+        assert adapter.embedding_service._embedding_model == "text-embedding-3-small"
 
 
 def test_embed_disables_remote_provider_after_failure(monkeypatch):
@@ -32,19 +33,21 @@ def test_embed_disables_remote_provider_after_failure(monkeypatch):
         return default
 
     with patch("core.model_adapter.log_json"), \
-         patch("core.model_adapter.resolve_openai_api_key", return_value="openai-key"), \
+         patch("core.embedding_service.log_json"), \
+         patch("core.embedding_service.resolve_openai_api_key", return_value="openai-key"), \
+         patch("core.embedding_service.config.get", side_effect=mock_get), \
          patch("core.model_adapter.config.get", side_effect=mock_get):
         adapter = ModelAdapter()
 
-        with patch("core.model_adapter.time.sleep"), \
-             patch.object(adapter, "_make_request_with_retries", side_effect=error) as mock_request:
+        with patch("core.embedding_service._EMBEDDING_LIMITER.acquire"), \
+             patch.object(adapter.embedding_service, "_do_request", side_effect=error) as mock_request:
             first = adapter.embed(["alpha"])
             second = adapter.embed(["beta"])
 
         assert len(first) == 1
         assert len(second) == 1
         assert first[0].shape == second[0].shape == (adapter.dimensions(),)
-        assert adapter._embedding_disabled is True
+        assert adapter.embedding_service._embedding_disabled is True
         assert mock_request.call_count == 1
 
 
@@ -68,8 +71,9 @@ def test_model_adapter_uses_local_embedding_profile():
         return default
 
     with patch("core.model_adapter.config.get", side_effect=mock_get), \
+         patch("core.embedding_service.config.get", side_effect=mock_get), \
          patch("core.model_adapter.log_json"), \
-         patch.object(ModelAdapter, "_make_request_with_retries") as mock_request:
+         patch("core.embedding_service.log_json"):
         adapter = ModelAdapter()
         mock_response = MagicMock()
         mock_response.json.return_value = {
@@ -78,9 +82,8 @@ def test_model_adapter_uses_local_embedding_profile():
                 {"index": 1, "embedding": [0.4, 0.5, 0.6]},
             ]
         }
-        mock_request.return_value = mock_response
-
-        vectors = adapter.embed(["alpha", "beta"])
+        with patch.object(adapter.embedding_service, "_do_request", return_value=mock_response) as mock_request:
+            vectors = adapter.embed(["alpha", "beta"])
 
     assert adapter.model_id() == "bge-small"
     assert adapter.dimensions() == 3
@@ -99,6 +102,7 @@ def test_model_adapter_uses_builtin_local_embeddings():
         return default
 
     with patch("core.model_adapter.config.get", side_effect=mock_get), \
+         patch("core.embedding_service.config.get", side_effect=mock_get), \
          patch("core.model_adapter.log_json"):
         adapter = ModelAdapter()
         vectors = adapter.embed(["alpha", "beta"])
@@ -107,3 +111,17 @@ def test_model_adapter_uses_builtin_local_embeddings():
     assert adapter.dimensions() == 50
     assert len(vectors) == 2
     assert vectors[0].shape == (50,)
+
+
+def test_call_with_timeout_uses_shared_executor():
+    with patch("core.model_adapter.log_json"), \
+         patch("core.model_adapter._TIMEOUT_EXECUTOR.submit") as mock_submit:
+        future = MagicMock()
+        future.result.return_value = "ok"
+        mock_submit.return_value = future
+        adapter = ModelAdapter()
+
+        result = adapter._call_with_timeout(lambda: "unused")
+
+    assert result == "ok"
+    mock_submit.assert_called_once()

@@ -417,6 +417,7 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("memory", "search"): "memory_search",
     ("memory", "reindex"): "memory_reindex",
     ("metrics",): "metrics_show",
+    ("skills",): "skills_list",
 }
 
 _LEGACY_PRIMARY_FLAGS: tuple[str, ...] = (

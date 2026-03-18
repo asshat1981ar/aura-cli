@@ -590,18 +590,23 @@
       "summary": "Show performance metrics"
     },
     {
-      "action": null,
+      "action": "skills_list",
       "description": "Show all skills registered in the skill registry, including their names.",
       "examples": [
         "python3 main.py skills",
         "python3 main.py skills --json"
       ],
-      "flags": [],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
       "legacy_flags": [],
       "path": [
         "skills"
       ],
-      "requires_runtime": null,
+      "requires_runtime": false,
       "summary": "List registered skills"
     }
   ],

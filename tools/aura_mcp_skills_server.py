@@ -34,6 +34,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 from core.logging_utils import log_json
+from tools.mcp_common import CallRequest as _CommonCallRequest, make_auth_dependency
 
 # ---------------------------------------------------------------------------
 # Input/output schemas for each skill (used to build MCP tool descriptors)
@@ -248,7 +249,6 @@ app = FastAPI(
     version="1.0.0",
 )
 
-_MCP_TOKEN = os.getenv("MCP_API_TOKEN")
 _skills: Dict[str, Any] = {}
 _load_error: Optional[str] = None
 
@@ -267,19 +267,14 @@ def _load_skills() -> None:
 _load_skills()
 
 
-def require_auth(authorization: Optional[str] = Header(default=None)) -> None:
-    if not _MCP_TOKEN:
-        return
-    if not authorization or authorization != f"Bearer {_MCP_TOKEN}":
-        raise HTTPException(status_code=401, detail="Invalid or missing Authorization header")
+require_auth = make_auth_dependency(token_env_var="MCP_API_TOKEN")
 
 
 # ---------------------------------------------------------------------------
 # Request/response models
 # ---------------------------------------------------------------------------
-class CallRequest(BaseModel):
-    tool_name: str
-    args: Dict[str, Any] = {}
+# Re-export from mcp_common for backward compatibility
+CallRequest = _CommonCallRequest
 
 
 # ---------------------------------------------------------------------------

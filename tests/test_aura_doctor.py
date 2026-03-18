@@ -5,8 +5,14 @@ import sqlite3
 import tempfile
 from pathlib import Path
 from unittest.mock import patch
-from aura_cli.doctor import check_env_vars, check_embedding_index, main as aura_doctor_main
+from aura_cli.doctor import (
+    check_embedding_index,
+    check_env_vars,
+    check_subsystem_probe,
+    main as aura_doctor_main,
+)
 from aura_cli.commands import _handle_doctor
+from core.health_monitor import CheckResult, HealthReport
 
 class TestAuraDoctorOutputParsing(unittest.TestCase):
 
@@ -156,7 +162,9 @@ class TestAuraDoctorOutputParsing(unittest.TestCase):
         self.assertIn("embeddings: OPENAI_API_KEY", message)
 
     @patch.dict("os.environ", {"AURA_LOCAL_MODEL_COMMAND": "ollama run llama2"}, clear=True)
-    def test_check_env_vars_reports_local_only_as_warn_for_embeddings(self):
+    @patch("core.runtime_auth.resolve_local_embedding_profile_name", return_value=None)
+    @patch("core.runtime_auth.resolve_local_embedding_mode", return_value=None)
+    def test_check_env_vars_reports_local_only_as_warn_for_embeddings(self, _mock_mode, _mock_profile):
         status, message = check_env_vars()
 
         self.assertEqual(status, "PASS")
@@ -255,6 +263,34 @@ class TestAuraDoctorOutputParsing(unittest.TestCase):
         output = out.getvalue()
         self.assertIn("Capability", output)
         self.assertIn("matched: docker_analysis", output)
+
+    def test_check_subsystem_probe_passes_when_all_checks_ok(self):
+        report = HealthReport(
+            timestamp=0.0,
+            all_ok=True,
+            checks=[CheckResult(name="skill_registry", ok=True, latency_ms=1.0, detail="35 skills loaded")],
+        )
+
+        status, detail = check_subsystem_probe(probe_factory=lambda: type("Probe", (), {"run_all": lambda self: report})())
+
+        self.assertEqual(status, "PASS")
+        self.assertIn("skill_registry", detail)
+
+    def test_check_subsystem_probe_warns_with_failed_and_passing_checks(self):
+        report = HealthReport(
+            timestamp=0.0,
+            all_ok=False,
+            checks=[
+                CheckResult(name="brain_db", ok=False, latency_ms=1.0, error="sqlite locked"),
+                CheckResult(name="skill_registry", ok=True, latency_ms=1.0, detail="35 skills loaded"),
+            ],
+        )
+
+        status, detail = check_subsystem_probe(probe_factory=lambda: type("Probe", (), {"run_all": lambda self: report})())
+
+        self.assertEqual(status, "WARN")
+        self.assertIn("brain_db: sqlite locked", detail)
+        self.assertIn("skill_registry", detail)
 
 if __name__ == '__main__':
     unittest.main()

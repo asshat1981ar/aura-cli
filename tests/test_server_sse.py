@@ -18,6 +18,7 @@ def test_tools_requires_auth_when_token_set(monkeypatch):
 def test_goal_sse_shape(monkeypatch):
     # disable auth for this test
     monkeypatch.delenv("AGENT_API_TOKEN", raising=False)
+    monkeypatch.setenv("AGENT_API_ALLOW_UNAUTHENTICATED", "1")
     monkeypatch.setattr(server, "_beads_runtime_snapshot", lambda: {"enabled": True, "required": True, "scope": "goal_run"})
     # stub run_cycle to avoid real model calls
     monkeypatch.setattr(server.orchestrator, "run_cycle", lambda goal, dry_run=False: {
@@ -93,6 +94,7 @@ def test_goal_sse_shape(monkeypatch):
 def test_run_sse_stream(monkeypatch):
     # disable auth and use a safe command
     monkeypatch.delenv("AGENT_API_TOKEN", raising=False)
+    monkeypatch.setenv("AGENT_API_ALLOW_UNAUTHENTICATED", "1")
     monkeypatch.setenv("AGENT_API_ENABLE_RUN", "1")
     cmd = "python -m site --user-site"
     with TestClient(server.app) as c:
@@ -122,6 +124,7 @@ def test_run_sse_stream(monkeypatch):
 
 def test_run_disabled_by_default(monkeypatch):
     monkeypatch.delenv("AGENT_API_TOKEN", raising=False)
+    monkeypatch.setenv("AGENT_API_ALLOW_UNAUTHENTICATED", "1")
     monkeypatch.delenv("AGENT_API_ENABLE_RUN", raising=False)
     with TestClient(server.app) as c:
         r = c.post("/execute", json={"tool_name": "run", "args": ["python -V"]})

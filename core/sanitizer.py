@@ -12,8 +12,9 @@ class SecurityError(AuraError):
 
 # Hardcoded safe commands for AURA
 BASE_ALLOWED_COMMANDS = {
-    "python", "python3", "python3.10", "python3.11", "python3.12", "pytest", "git", "ls", "cat", "rm", "mkdir", "mv", "grep", "sed", "npx"
+    "python", "python3", "python3.10", "python3.11", "python3.12", "pytest", "git", "ls", "cat", "mkdir", "mv", "grep", "sed", "npx"
 }
+# rm intentionally excluded from base allowlist — add via config security.allowed_commands if needed
 
 def get_allowed_commands() -> set:
     """Returns the effective set of allowed commands from config + base."""
@@ -61,9 +62,9 @@ def sanitize_command(cmd: List[str]):
     # Flag dangerous flags (shallow check)
     dangerous_args = ["--eval", "-e", "--exec", "-c"]
     if is_python:
+        # Allow dangerous args only when -m is the first flag (e.g. python3 -m pytest)
+        uses_module_flag = len(cmd) > 1 and cmd[1] == "-m"
         for arg in cmd[1:]:
-            if arg in dangerous_args:
-                # We allow -m for pytest/compile/unittest
-                if "-m" in cmd: continue
+            if arg in dangerous_args and not uses_module_flag:
                 raise SecurityError(f"Access denied: Dangerous argument '{arg}' in command.")
 

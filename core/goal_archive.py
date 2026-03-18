@@ -1,6 +1,7 @@
 import json
 from pathlib import Path # Import Path
 from core.logging_utils import log_json # Import log_json
+from core.runtime_state import atomic_write_json, load_json_with_repair
 
 class GoalArchive:
     """
@@ -37,8 +38,7 @@ class GoalArchive:
         Ensures the parent directory exists before writing.
         """
         self.archive_path.parent.mkdir(parents=True, exist_ok=True) # Use Path.parent and mkdir
-        with open(self.archive_path, 'w') as f:
-            json.dump(self.completed, f, indent=4)
+        atomic_write_json(self.archive_path, self.completed, indent=4)
 
     def _load_archive(self):
         """
@@ -48,11 +48,13 @@ class GoalArchive:
         Returns:
             list: The loaded list of completed goals and their scores.
         """
-        if self.archive_path.exists(): # Use Path.exists()
-            with open(self.archive_path, 'r') as f:
-                try:
-                    return json.load(f)
-                except json.JSONDecodeError:
-                    log_json("WARN", "goal_archive_corrupted", details={"path": str(self.archive_path), "message": "Starting with empty archive."})
-                    return []
-        return []
+        payload = load_json_with_repair(
+            self.archive_path,
+            default=[],
+            validator=lambda value: isinstance(value, list),
+            state_name="goal_archive",
+        )
+        if not isinstance(payload, list):
+            log_json("WARN", "goal_archive_invalid_payload", details={"path": str(self.archive_path)})
+            return []
+        return payload

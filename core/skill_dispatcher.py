@@ -17,9 +17,12 @@ Usage::
 from __future__ import annotations
 
 import concurrent.futures
+import copy
+import hashlib
 import threading
 import time
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from core.logging_utils import log_json
@@ -34,10 +37,12 @@ _classify_goal_cache: Dict[str, str] = {}
 SKILL_MAP: Dict[str, list[str]] = {
     "bug_fix":  [
         "symbol_indexer",
+        "test_and_observe",     # run failing tests, capture diagnostics
         "error_pattern_matcher",
         "git_history_analyzer",
         "type_checker",
         "linter_enforcer",
+        "lint",                 # catch pre-existing violations before planning
     ],
     "feature":  [
         "symbol_indexer",
@@ -45,6 +50,7 @@ SKILL_MAP: Dict[str, list[str]] = {
         "api_contract_validator",
         "complexity_scorer",
         "dependency_analyzer",
+        "lint",                 # baseline quality gate before adding code
     ],
     "refactor": [
         "symbol_indexer",
@@ -52,6 +58,8 @@ SKILL_MAP: Dict[str, list[str]] = {
         "code_clone_detector",
         "tech_debt_quantifier",
         "refactoring_advisor",
+        "lint",                 # verify cleanliness after restructuring
+        "test_and_observe",     # confirm tests still pass post-refactor
     ],
     "security": [
         "security_scanner",
@@ -59,6 +67,7 @@ SKILL_MAP: Dict[str, list[str]] = {
         "type_checker",
         "linter_enforcer",
         "architecture_validator",
+        "lint",                 # surface style/hygiene issues in security context
     ],
     "docs": [
         "doc_generator",
@@ -67,13 +76,15 @@ SKILL_MAP: Dict[str, list[str]] = {
     "default": [
         "symbol_indexer",
         "linter_enforcer",
+        "lint",                 # always run a baseline lint pass
     ],
 }
 
 # Keyword hints used to classify a goal string
 _GOAL_TYPE_HINTS: Dict[str, list[str]] = {
     "bug_fix":  ["fix", "bug", "error", "crash", "broken", "fail", "issue",
-                 "regression", "exception", "traceback", "panic"],
+                 "regression", "exception", "traceback", "panic",
+                 "observe", "diagnose"],
     "feature":  ["add", "implement", "feature", "new", "create", "build",
                  "support", "integrate", "introduce"],
     "refactor": ["refactor", "clean", "improve", "simplify", "restructure",
@@ -116,6 +127,87 @@ class SkillMetrics:
 
 
 SKILL_METRICS = SkillMetrics()
+
+_CACHEABLE_SKILLS = {
+    "architecture_validator",
+    "code_clone_detector",
+    "complexity_scorer",
+    "refactoring_advisor",
+    "security_scanner",
+    "symbol_indexer",
+    "tech_debt_quantifier",
+    "test_coverage_analyzer",
+}
+_FINGERPRINT_SKIP_PARTS = {
+    ".git",
+    "__pycache__",
+    "node_modules",
+    ".pytest_cache",
+    ".venv",
+    "venv",
+    "dist",
+    "build",
+}
+_CACHE_TTL_S = 300  # 5 minutes
+_CACHE_MAX_SIZE = 100
+_SKILL_RESULT_CACHE: Dict[tuple[str, str, str], tuple[Dict[str, Any], float]] = {}
+_SKILL_RESULT_CACHE_LOCK = threading.Lock()
+
+
+def _normalize_project_root(project_root: str | Path) -> Path:
+    return Path(project_root).resolve()
+
+
+def _project_python_fingerprint(project_root: str | Path) -> str:
+    root = _normalize_project_root(project_root)
+    digest = hashlib.sha256()
+    file_count = 0
+
+    for py_file in sorted(root.rglob("*.py")):
+        if any(part in _FINGERPRINT_SKIP_PARTS for part in py_file.parts):
+            continue
+        try:
+            stat = py_file.stat()
+        except OSError:
+            continue
+        digest.update(str(py_file.relative_to(root)).encode("utf-8", errors="replace"))
+        digest.update(str(stat.st_mtime_ns).encode("ascii", errors="ignore"))
+        digest.update(str(stat.st_size).encode("ascii", errors="ignore"))
+        file_count += 1
+
+    digest.update(f"count:{file_count}".encode("ascii"))
+    return digest.hexdigest()
+
+
+def _cache_key(skill_name: str, project_root: str | Path, fingerprint: str) -> tuple[str, str, str]:
+    return (skill_name, str(_normalize_project_root(project_root)), fingerprint)
+
+
+def _get_cached_skill_result(skill_name: str, project_root: str | Path, fingerprint: str) -> Optional[Dict[str, Any]]:
+    key = _cache_key(skill_name, project_root, fingerprint)
+    now = time.monotonic()
+    with _SKILL_RESULT_CACHE_LOCK:
+        entry = _SKILL_RESULT_CACHE.get(key)
+        if entry is None:
+            return None
+        result, stored_at = entry
+        if now - stored_at > _CACHE_TTL_S:
+            del _SKILL_RESULT_CACHE[key]
+            return None
+    return copy.deepcopy(result)
+
+
+def _store_cached_skill_result(skill_name: str, project_root: str | Path, fingerprint: str, result: Dict[str, Any]) -> None:
+    if not isinstance(result, dict) or "error" in result:
+        return
+    key = _cache_key(skill_name, project_root, fingerprint)
+    now = time.monotonic()
+    with _SKILL_RESULT_CACHE_LOCK:
+        # Evict oldest entries if cache is full
+        if len(_SKILL_RESULT_CACHE) >= _CACHE_MAX_SIZE and key not in _SKILL_RESULT_CACHE:
+            oldest_key = min(_SKILL_RESULT_CACHE, key=lambda k: _SKILL_RESULT_CACHE[k][1])
+            del _SKILL_RESULT_CACHE[oldest_key]
+        _SKILL_RESULT_CACHE[key] = (copy.deepcopy(result), now)
 
 
 @lru_cache(maxsize=256)
@@ -191,7 +283,11 @@ def dispatch_skills(
     """Run goal-relevant skills concurrently and return their combined output.
 
     Args:
-        goal_type:    One of the keys in :data:`SKILL_MAP` (or ``"default"``).
+        goal_type:    One of the keys in :data:`SKILL_MAP`. When a caller passes
+                      an unknown goal type, the dispatcher runs the provided
+                      ``skills`` dict as-is in insertion order. This keeps
+                      specialized callers (for example health scans) from being
+                      forced through the end-user goal routing table.
         skills:       Dict of ``{skill_name: SkillBase}`` from ``all_skills()``.
         project_root: Absolute or relative path passed to each skill.
         timeout:      Wall-clock seconds to wait for all skills to finish.
@@ -201,7 +297,9 @@ def dispatch_skills(
     Returns:
         ``{skill_name: result_dict}`` — never raises.
     """
-    skill_names = SKILL_MAP.get(goal_type, SKILL_MAP["default"])
+    skill_names = SKILL_MAP.get(goal_type)
+    if skill_names is None:
+        skill_names = list(skills.keys())
     available = [n for n in skill_names if n in skills]
 
     if not available:
@@ -214,28 +312,58 @@ def dispatch_skills(
     )
 
     results: Dict[str, Any] = {}
+    fingerprint: Optional[str] = None
+    submitted: Dict[concurrent.futures.Future, str] = {}
+    cacheable_available = [name for name in available if name in _CACHEABLE_SKILLS]
+    if cacheable_available:
+        fingerprint = _project_python_fingerprint(project_root)
 
-    with concurrent.futures.ThreadPoolExecutor(
+    for name in available:
+        if fingerprint is None or name not in _CACHEABLE_SKILLS:
+            continue
+        cached = _get_cached_skill_result(name, project_root, fingerprint)
+        if cached is None:
+            continue
+        log_json("INFO", "skill_dispatch_cache_hit", details={"skill": name})
+        results[name] = cached
+
+    remaining = [name for name in available if name not in results]
+    if not remaining:
+        log_json(
+            "INFO", "skill_dispatch_done",
+            details={
+                "completed": list(results.keys()),
+                "failed": [],
+            },
+        )
+        return results
+
+    pool = concurrent.futures.ThreadPoolExecutor(
         max_workers=min(len(available), 5), thread_name_prefix="skill"
-    ) as pool:
+    )
+    try:
         def _timed_run(name: str) -> Any:
             t0 = time.monotonic()
             try:
-                result = skills[name].run({"project_root": project_root})
+                raw = skills[name].run({"project_root": project_root})
+                # Normalize SkillResult → dict for downstream consumers
+                result = raw.as_dict() if hasattr(raw, "as_dict") else raw
                 SKILL_METRICS.record(name, (time.monotonic() - t0) * 1000, error=False)
+                if fingerprint is not None and name in _CACHEABLE_SKILLS and isinstance(result, dict):
+                    _store_cached_skill_result(name, project_root, fingerprint, result)
                 return result
             except Exception as exc:
                 SKILL_METRICS.record(name, (time.monotonic() - t0) * 1000, error=True)
                 raise exc
 
-        futures: Dict[concurrent.futures.Future, str] = {
+        submitted = {
             pool.submit(_timed_run, name): name
-            for name in available
+            for name in remaining
         }
-        done, not_done = concurrent.futures.wait(futures, timeout=timeout)
+        done, not_done = concurrent.futures.wait(submitted, timeout=timeout)
 
         for fut in done:
-            name = futures[fut]
+            name = submitted[fut]
             try:
                 result = fut.result()
                 # Distinguish a real skill error ({"error": ...}) from a
@@ -253,7 +381,7 @@ def dispatch_skills(
                                  "is_skill_fault": True}
 
         for fut in not_done:
-            name = futures[fut]
+            name = submitted[fut]
             SKILL_METRICS.record(name, timeout * 1000, error=True)
             log_json("WARN", "skill_dispatch_timeout",
                      details={"skill": name, "timeout_s": timeout,
@@ -261,6 +389,11 @@ def dispatch_skills(
             fut.cancel()
             results[name] = {"error": "timeout", "skill": name,
                              "is_skill_fault": True}
+    finally:
+        # Do not block on timed-out futures. If a running skill eventually
+        # completes, its result can still populate the cache for the current
+        # project fingerprint from inside _timed_run().
+        pool.shutdown(wait=False, cancel_futures=True)
 
     log_json(
         "INFO", "skill_dispatch_done",

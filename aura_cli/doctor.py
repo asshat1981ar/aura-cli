@@ -233,6 +233,29 @@ def check_pytest_and_run_tests(repo_root: Path, run_tests: bool, openrouter_api_
         return "FAIL", f"Failed to run pytest: {e}"
 
 
+def check_subsystem_probe(probe_factory=None):
+    """Run the lightweight subsystem probe and summarize the result for doctor."""
+    if probe_factory is None:
+        from core.health_monitor import SystemHealthProbe
+        probe_factory = SystemHealthProbe
+
+    try:
+        report = probe_factory().run_all()
+    except Exception as exc:
+        return "WARN", f"probe error: {exc}"
+
+    if report.all_ok:
+        names = ", ".join(c.name for c in report.checks)
+        return "PASS", f"All checks OK ({names})"
+
+    failed = [f"{c.name}: {c.error}" for c in report.failed]
+    passing = [c.name for c in report.checks if c.ok]
+    detail = f"Failed: {'; '.join(failed)}"
+    if passing:
+        detail += f" | OK: {', '.join(passing)}"
+    return "WARN", detail
+
+
 def main():
     parser = argparse.ArgumentParser(description="AURA Doctor - System Health Check.")
     parser.add_argument("--run-tests", action="store_true", help="Run pytest to check test suite status.")
@@ -434,6 +457,10 @@ def run_doctor_v2(
         _add("OpenRouter DNS", "PASS", "openrouter.ai resolves")
     except Exception:
         _add("OpenRouter DNS", "WARN", "openrouter.ai not reachable (offline?)")
+
+    # 11. Subsystem health probe
+    subsystem_status, subsystem_detail = check_subsystem_probe()
+    _add("Subsystem probe", subsystem_status, subsystem_detail)
 
     # Print rich table if requested
     if rich_output:

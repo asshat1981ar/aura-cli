@@ -46,6 +46,38 @@ class TestRouteFailure(unittest.TestCase):
         })
         self.assertEqual(result, "skip")
 
+    def test_summary_and_stderr_fields_are_inspected(self):
+        result = self.orc._route_failure({
+            "failures": [],
+            "summary": "verification timed out waiting for dependency registry",
+            "stderr": "connection refused",
+        })
+        self.assertEqual(result, "skip")
+
+    def test_common_structural_phrases_return_plan(self):
+        for signal in ("breaking change", "schema mismatch", "incompatible interface"):
+            with self.subTest(signal=signal):
+                result = self.orc._route_failure({"failures": [f"planner flagged {signal}"]})
+                self.assertEqual(result, "plan")
+
+    def test_common_external_runtime_phrases_return_skip(self):
+        for signal in (
+            "timed out",
+            "connection refused",
+            "read-only file system",
+            "command not found",
+        ):
+            with self.subTest(signal=signal):
+                result = self.orc._route_failure({"failures": [f"fatal: {signal}"]})
+                self.assertEqual(result, "skip")
+
+    def test_code_level_not_found_errors_still_retry_act(self):
+        result = self.orc._route_failure({
+            "failures": ["old_code_not_found while applying patch"],
+            "logs": "",
+        })
+        self.assertEqual(result, "act")
+
     def test_empty_verification_returns_act(self):
         result = self.orc._route_failure({})
         self.assertEqual(result, "act")

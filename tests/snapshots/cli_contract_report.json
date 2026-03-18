@@ -15,13 +15,17 @@
     "json_help",
     "logs",
     "mcp_call",
+    "mcp_check",
+    "mcp_setup",
     "mcp_tools",
+    "memory_reindex",
     "memory_search",
     "metrics_show",
     "queue_clear",
     "queue_list",
     "scaffold",
     "show_config",
+    "skills_list",
     "studio",
     "watch",
     "workflow_run"
@@ -71,7 +75,19 @@
     ],
     [
       "mcp",
+      "check"
+    ],
+    [
+      "mcp",
+      "setup"
+    ],
+    [
+      "mcp",
       "tools"
+    ],
+    [
+      "memory",
+      "reindex"
     ],
     [
       "memory",
@@ -90,6 +106,9 @@
     ],
     [
       "scaffold"
+    ],
+    [
+      "skills"
     ],
     [
       "studio"
@@ -119,13 +138,17 @@
     "json_help",
     "logs",
     "mcp_call",
+    "mcp_check",
+    "mcp_setup",
     "mcp_tools",
+    "memory_reindex",
     "memory_search",
     "metrics_show",
     "queue_clear",
     "queue_list",
     "scaffold",
     "show_config",
+    "skills_list",
     "studio",
     "watch",
     "workflow_run"
@@ -148,13 +171,17 @@
     "help",
     "logs",
     "mcp_call",
+    "mcp_check",
+    "mcp_setup",
     "mcp_tools",
+    "memory_reindex",
     "memory_search",
     "metrics_show",
     "queue_clear",
     "queue_list",
     "scaffold",
     "show_config",
+    "skills_list",
     "studio",
     "watch",
     "workflow_run"
@@ -213,10 +240,22 @@
     ],
     [
       "mcp",
+      "check"
+    ],
+    [
+      "mcp",
+      "setup"
+    ],
+    [
+      "mcp",
       "tools"
     ],
     [
       "memory"
+    ],
+    [
+      "memory",
+      "reindex"
     ],
     [
       "memory",
@@ -238,6 +277,9 @@
     ],
     [
       "scaffold"
+    ],
+    [
+      "skills"
     ],
     [
       "studio"
@@ -300,7 +342,19 @@
     ],
     [
       "mcp",
+      "check"
+    ],
+    [
+      "mcp",
+      "setup"
+    ],
+    [
+      "mcp",
       "tools"
+    ],
+    [
+      "memory",
+      "reindex"
     ],
     [
       "memory",
@@ -319,6 +373,9 @@
     ],
     [
       "scaffold"
+    ],
+    [
+      "skills"
     ],
     [
       "studio"
@@ -407,10 +464,22 @@
     ],
     [
       "mcp",
+      "check"
+    ],
+    [
+      "mcp",
+      "setup"
+    ],
+    [
+      "mcp",
       "tools"
     ],
     [
       "memory"
+    ],
+    [
+      "memory",
+      "reindex"
     ],
     [
       "memory",
@@ -432,6 +501,9 @@
     ],
     [
       "scaffold"
+    ],
+    [
+      "skills"
     ],
     [
       "studio"
@@ -520,10 +592,22 @@
     ],
     [
       "mcp",
+      "check"
+    ],
+    [
+      "mcp",
+      "setup"
+    ],
+    [
+      "mcp",
       "tools"
     ],
     [
       "memory"
+    ],
+    [
+      "memory",
+      "reindex"
     ],
     [
       "memory",
@@ -545,6 +629,9 @@
     ],
     [
       "scaffold"
+    ],
+    [
+      "skills"
     ],
     [
       "studio"

@@ -42,7 +42,7 @@ class TestCLIMainDispatch(unittest.TestCase):
         parsed = parse_cli_args(["help", "goal", "add"])
         runtime_factory = MagicMock()
 
-        with patch("aura_cli.cli_main.render_help", return_value="HELP TEXT"):
+        with patch("aura_cli.dispatch.config.render_help", return_value="HELP TEXT"):
             out = io.StringIO()
             with redirect_stdout(out):
                 code = cli_main.dispatch_command(parsed, project_root=Path("."), runtime_factory=runtime_factory)
@@ -92,7 +92,7 @@ class TestCLIMainDispatch(unittest.TestCase):
         parsed = parse_cli_args(["doctor"])
         runtime_factory = MagicMock()
 
-        with patch("aura_cli.cli_main._handle_doctor") as mock_doctor:
+        with patch("aura_cli.dispatch.config._handle_doctor") as mock_doctor:
             code = cli_main.dispatch_command(parsed, project_root=Path("."), runtime_factory=runtime_factory)
 
         self.assertEqual(code, 0)
@@ -104,7 +104,7 @@ class TestCLIMainDispatch(unittest.TestCase):
         runtime_factory = MagicMock()
 
         out = io.StringIO()
-        with patch("aura_cli.cli_main.config.show_config", return_value={"model_name": "gpt-5"}), redirect_stdout(out):
+        with patch("aura_cli.dispatch.config.config.show_config", return_value={"model_name": "gpt-5"}), redirect_stdout(out):
             code = cli_main.dispatch_command(parsed, project_root=Path("."), runtime_factory=runtime_factory)
 
         self.assertEqual(code, 0)
@@ -177,7 +177,7 @@ class TestCLIMainDispatch(unittest.TestCase):
         runtime_factory = MagicMock()
 
         with patch(
-            "aura_cli.cli_main.config.show_config",
+            "aura_cli.dispatch.config.config.show_config",
             return_value={"policy_max_cycles": 5, "model_name": "gpt-5"},
         ):
             code, out, err, _ = self._dispatch(["config"], runtime_factory=runtime_factory)
@@ -202,7 +202,7 @@ class TestCLIMainDispatch(unittest.TestCase):
         runtime_factory = MagicMock(return_value=fake_runtime)
 
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
-             patch("aura_cli.cli_main._handle_status") as mock_status, \
+             patch("aura_cli.dispatch.goal._handle_status") as mock_status, \
              patch("aura_cli.cli_main.log_json"):
             code = cli_main.dispatch_command(parsed, project_root=Path("."), runtime_factory=runtime_factory)
 
@@ -697,6 +697,70 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertEqual(len(orchestrator.attach_improvement_loops.call_args_list[1].args), 1)
         self.assertEqual(type(orchestrator.attach_improvement_loops.call_args_list[1].args[0]).__name__, "BeadsSyncLoop")
 
+    def test_attach_advanced_loops_wires_health_monitor_with_project_root(self):
+        def _module(name, **attrs):
+            mod = ModuleType(name)
+            for key, value in attrs.items():
+                setattr(mod, key, value)
+            return mod
+
+        class _AcceptAny:
+            def __init__(self, *args, **kwargs):
+                pass
+
+        class _HealthMonitorRecorder:
+            instances = []
+
+            def __init__(self, skills, goal_queue, memory_store, project_root="."):
+                self.skills = skills
+                self.goal_queue = goal_queue
+                self.memory_store = memory_store
+                self.project_root = project_root
+                self.__class__.instances.append(self)
+
+        _HealthMonitorRecorder.instances = []
+        fake_modules = {
+            "core.reflection_loop": _module("core.reflection_loop", DeepReflectionLoop=_AcceptAny),
+            "core.health_monitor": _module("core.health_monitor", HealthMonitor=_HealthMonitorRecorder),
+            "core.weakness_remediator": _module("core.weakness_remediator", WeaknessRemediator=_AcceptAny),
+            "core.skill_weight_adapter": _module("core.skill_weight_adapter", SkillWeightAdapter=_AcceptAny),
+            "core.convergence_escape": _module("core.convergence_escape", ConvergenceEscapeLoop=_AcceptAny),
+            "core.memory_compaction": _module("core.memory_compaction", MemoryCompactionLoop=_AcceptAny),
+            "core.context_graph": _module("core.context_graph", ContextGraph=_AcceptAny),
+            "core.adaptive_pipeline": _module("core.adaptive_pipeline", AdaptivePipeline=_AcceptAny),
+            "core.propagation_engine": _module("core.propagation_engine", PropagationEngine=_AcceptAny),
+            "core.autonomous_discovery": _module("core.autonomous_discovery", AutonomousDiscovery=_AcceptAny),
+            "core.evolution_loop": _module("core.evolution_loop", EvolutionLoop=_AcceptAny),
+            "agents.mutator": _module("agents.mutator", MutatorAgent=_AcceptAny),
+        }
+        orchestrator = MagicMock()
+        orchestrator.skills = {"complexity_scorer": MagicMock()}
+        orchestrator.agents = {"act": MagicMock(), "critique": MagicMock(), "plan": MagicMock()}
+        orchestrator.beads_enabled = False
+        memory_store = SimpleNamespace(root=Path("/tmp/aura-memory/store"))
+        goal_queue = MagicMock()
+        project_root = Path("/tmp/project-root")
+
+        with patch.dict(sys.modules, fake_modules), \
+             patch("aura_cli.cli_main.GitTools", return_value=MagicMock()), \
+             patch("aura_cli.cli_main.log_json"):
+            cli_main._attach_advanced_loops(
+                orchestrator,
+                "full",
+                MagicMock(),
+                memory_store,
+                goal_queue,
+                None,
+                project_root,
+            )
+
+        self.assertEqual(len(_HealthMonitorRecorder.instances), 1)
+        health_monitor = _HealthMonitorRecorder.instances[0]
+        self.assertIs(health_monitor.skills, orchestrator.skills)
+        self.assertIs(health_monitor.goal_queue, goal_queue)
+        self.assertIs(health_monitor.memory_store, memory_store)
+        self.assertEqual(health_monitor.project_root, project_root)
+
 
     def test_main_returns_json_parse_error(self):
         with tempfile.TemporaryDirectory() as d:
@@ -723,7 +787,7 @@ class TestCLIMainDispatch(unittest.TestCase):
         runtime_factory = MagicMock(return_value=fake_runtime)
 
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
-             patch("aura_cli.cli_main._handle_status") as mock_status, \
+             patch("aura_cli.dispatch.goal._handle_status") as mock_status, \
              patch("aura_cli.cli_main.log_json"):
             code1, *_ = self._dispatch(["goal", "status", "--json"], runtime_factory=runtime_factory)
             code2, *_ = self._dispatch(["--status", "--json"], runtime_factory=runtime_factory)
@@ -752,7 +816,7 @@ class TestCLIMainDispatch(unittest.TestCase):
     def test_legacy_and_canonical_mcp_tools_use_same_handler_without_runtime(self):
         runtime_factory = MagicMock()
 
-        with patch("aura_cli.cli_main.cmd_mcp_tools") as mock_tools:
+        with patch("aura_cli.dispatch.mcp.cmd_mcp_tools") as mock_tools:
             code1, *_ = self._dispatch(["mcp", "tools"], runtime_factory=runtime_factory)
             code2, *_ = self._dispatch(["--mcp-tools"], runtime_factory=runtime_factory)
 
@@ -764,7 +828,7 @@ class TestCLIMainDispatch(unittest.TestCase):
     def test_legacy_and_canonical_mcp_check_use_same_handler_without_runtime(self):
         runtime_factory = MagicMock()
 
-        with patch("aura_cli.cli_main.cmd_mcp_check") as mock_check:
+        with patch("aura_cli.dispatch.mcp.cmd_mcp_check") as mock_check:
             code1, *_ = self._dispatch(["mcp", "check"], runtime_factory=runtime_factory)
             code2, *_ = self._dispatch(["--mcp-check"], runtime_factory=runtime_factory)
 
@@ -776,7 +840,7 @@ class TestCLIMainDispatch(unittest.TestCase):
     def test_legacy_and_canonical_mcp_setup_use_same_handler_without_runtime(self):
         runtime_factory = MagicMock()
 
-        with patch("aura_cli.cli_main.cmd_mcp_setup") as mock_setup:
+        with patch("aura_cli.dispatch.mcp.cmd_mcp_setup") as mock_setup:
             code1, *_ = self._dispatch(["mcp", "setup"], runtime_factory=runtime_factory)
             code2, *_ = self._dispatch(["--mcp-setup"], runtime_factory=runtime_factory)
 
@@ -788,7 +852,7 @@ class TestCLIMainDispatch(unittest.TestCase):
     def test_legacy_warning_stderr_text_is_unchanged(self):
         runtime_factory = MagicMock()
 
-        with patch("aura_cli.cli_main.cmd_mcp_tools") as mock_tools:
+        with patch("aura_cli.dispatch.mcp.cmd_mcp_tools") as mock_tools:
             code, out, err, _ = self._dispatch(["--mcp-tools"], runtime_factory=runtime_factory)
 
         self.assertEqual(code, 0)
@@ -803,7 +867,7 @@ class TestCLIMainDispatch(unittest.TestCase):
         def _emit_json():
             print('{"status": 200, "data": {"tools": []}}')
 
-        with patch("aura_cli.cli_main.cmd_mcp_tools", side_effect=_emit_json):
+        with patch("aura_cli.dispatch.mcp.cmd_mcp_tools", side_effect=_emit_json):
             code, out, err, _ = self._dispatch(["--mcp-tools"], runtime_factory=runtime_factory)
 
         self.assertEqual(code, 0)
@@ -821,7 +885,7 @@ class TestCLIMainDispatch(unittest.TestCase):
         def _emit_json():
             print('{"status": 200, "data": {"tools": []}}')
 
-        with patch("aura_cli.cli_main.cmd_mcp_tools", side_effect=_emit_json):
+        with patch("aura_cli.dispatch.mcp.cmd_mcp_tools", side_effect=_emit_json):
             code, out, err, _ = self._dispatch(["--mcp-tools"], runtime_factory=runtime_factory)
 
         self.assertEqual(code, 0)
@@ -835,7 +899,7 @@ class TestCLIMainDispatch(unittest.TestCase):
         def _emit_json():
             print('{"status": 200, "data": {"tools": []}}')
 
-        with patch("aura_cli.cli_main.cmd_mcp_tools", side_effect=_emit_json):
+        with patch("aura_cli.dispatch.mcp.cmd_mcp_tools", side_effect=_emit_json):
             code_c, out_c, err_c, _ = self._dispatch(["mcp", "tools"], runtime_factory=runtime_factory)
             code_l, out_l, err_l, _ = self._dispatch(["--mcp-tools"], runtime_factory=runtime_factory)
 
@@ -858,7 +922,7 @@ class TestCLIMainDispatch(unittest.TestCase):
                 '"metrics":{"status":200,"data":{"skill_metrics":{}}}}'
             )
 
-        with patch("aura_cli.cli_main.cmd_diag", side_effect=_emit_diag_json):
+        with patch("aura_cli.dispatch.mcp.cmd_diag", side_effect=_emit_diag_json):
             code, out, err, _ = self._dispatch(["--diag"], runtime_factory=runtime_factory)
 
         self.assertEqual(code, 0)
@@ -875,7 +939,7 @@ class TestCLIMainDispatch(unittest.TestCase):
                 '"metrics":{"status":200,"data":{"skill_metrics":{}}}}'
             )
 
-        with patch("aura_cli.cli_main.cmd_diag", side_effect=_emit_diag_json):
+        with patch("aura_cli.dispatch.mcp.cmd_diag", side_effect=_emit_diag_json):
             code_c, out_c, err_c, _ = self._dispatch(["diag"], runtime_factory=runtime_factory)
             code_l, out_l, err_l, _ = self._dispatch(["--diag"], runtime_factory=runtime_factory)
 
@@ -892,7 +956,7 @@ class TestCLIMainDispatch(unittest.TestCase):
     def test_legacy_and_canonical_mcp_call_use_same_handler_args(self):
         runtime_factory = MagicMock()
 
-        with patch("aura_cli.cli_main.cmd_mcp_call") as mock_call:
+        with patch("aura_cli.dispatch.mcp.cmd_mcp_call") as mock_call:
             code1, *_ = self._dispatch(["mcp", "call", "limits", "--args", "{\"x\":1}"], runtime_factory=runtime_factory)
             code2, *_ = self._dispatch(["--mcp-call", "limits", "--mcp-args", "{\"x\":1}"], runtime_factory=runtime_factory)
 
@@ -918,7 +982,7 @@ class TestCLIMainDispatch(unittest.TestCase):
                 )
             )
 
-        with patch("aura_cli.cli_main.cmd_mcp_call", side_effect=_emit_mcp_call_json):
+        with patch("aura_cli.dispatch.mcp.cmd_mcp_call", side_effect=_emit_mcp_call_json):
             code, out, err, _ = self._dispatch(
                 ["--mcp-call", "limits", "--mcp-args", "{\"x\":1}"],
                 runtime_factory=runtime_factory,
@@ -946,7 +1010,7 @@ class TestCLIMainDispatch(unittest.TestCase):
                 )
             )
 
-        with patch("aura_cli.cli_main.cmd_mcp_call", side_effect=_emit_mcp_call_json):
+        with patch("aura_cli.dispatch.mcp.cmd_mcp_call", side_effect=_emit_mcp_call_json):
             code_c, out_c, err_c, _ = self._dispatch(
                 ["mcp", "call", "limits", "--args", "{\"x\":1}"],
                 runtime_factory=runtime_factory,
@@ -1199,10 +1263,10 @@ class TestCLIMainDispatch(unittest.TestCase):
 
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
              patch("aura_cli.cli_main.log_json"), \
-             patch("aura_cli.cli_main.default_agents", return_value={"act": MagicMock(), "critique": MagicMock()}), \
-             patch("aura_cli.cli_main.GitTools", return_value=MagicMock()), \
+             patch("aura_cli.dispatch.ops.default_agents", return_value={"act": MagicMock(), "critique": MagicMock()}), \
+             patch("aura_cli.dispatch.ops.GitTools", return_value=MagicMock()), \
              patch("agents.mutator.MutatorAgent", return_value=MagicMock()), \
-             patch("aura_cli.cli_main.VectorStore", return_value=MagicMock()), \
+             patch("aura_cli.dispatch.ops.VectorStore", return_value=MagicMock()), \
              patch("core.evolution_loop.EvolutionLoop", return_value=fake_evo):
             code, out, err, _ = self._dispatch(["--evolve"], runtime_factory=runtime_factory)
 
@@ -1229,10 +1293,10 @@ class TestCLIMainDispatch(unittest.TestCase):
 
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
              patch("aura_cli.cli_main.log_json"), \
-             patch("aura_cli.cli_main.default_agents", return_value={"act": MagicMock(), "critique": MagicMock()}), \
-             patch("aura_cli.cli_main.GitTools", return_value=MagicMock()), \
+             patch("aura_cli.dispatch.ops.default_agents", return_value={"act": MagicMock(), "critique": MagicMock()}), \
+             patch("aura_cli.dispatch.ops.GitTools", return_value=MagicMock()), \
              patch("agents.mutator.MutatorAgent", return_value=MagicMock()), \
-             patch("aura_cli.cli_main.VectorStore", return_value=MagicMock()), \
+             patch("aura_cli.dispatch.ops.VectorStore", return_value=MagicMock()), \
              patch("core.evolution_loop.EvolutionLoop", return_value=fake_evo):
             code_c, out_c, err_c, _ = self._dispatch(["evolve"], runtime_factory=runtime_factory)
             code_l, out_l, err_l, _ = self._dispatch(["--evolve"], runtime_factory=runtime_factory)
@@ -1266,7 +1330,7 @@ class TestCLIMainDispatch(unittest.TestCase):
 
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
              patch("aura_cli.cli_main.log_json"), \
-             patch("aura_cli.cli_main.run_goals_loop") as mock_run_goals:
+             patch("aura_cli.dispatch.goal.run_goals_loop") as mock_run_goals:
             code1, *_ = self._dispatch(["goal", "add", "Fix tests", "--run"], runtime_factory=runtime_factory)
             code2, *_ = self._dispatch(["--add-goal", "Fix tests", "--run-goals"], runtime_factory=runtime_factory)
 
@@ -1295,7 +1359,7 @@ class TestCLIMainDispatch(unittest.TestCase):
 
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
              patch("aura_cli.cli_main.log_json"), \
-             patch("aura_cli.cli_main.run_goals_loop") as mock_run_goals:
+             patch("aura_cli.dispatch.goal.run_goals_loop") as mock_run_goals:
             code, *_ = self._dispatch(["goal", "run"], runtime_factory=runtime_factory)
 
         self.assertEqual(code, 0)
@@ -1339,7 +1403,7 @@ class TestCLIMainDispatch(unittest.TestCase):
             }))
 
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
-             patch("aura_cli.cli_main._handle_status", side_effect=_emit_status_json), \
+             patch("aura_cli.dispatch.goal._handle_status", side_effect=_emit_status_json), \
              patch("aura_cli.cli_main.log_json"):
             code, out, err, _ = self._dispatch(["--status", "--json"], runtime_factory=runtime_factory)
 
@@ -1380,7 +1444,7 @@ class TestCLIMainDispatch(unittest.TestCase):
             }))
 
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
-             patch("aura_cli.cli_main._handle_status", side_effect=_emit_status_json), \
+             patch("aura_cli.dispatch.goal._handle_status", side_effect=_emit_status_json), \
              patch("aura_cli.cli_main.log_json"):
             code, out, err, _ = self._dispatch(["--status", "--json"], runtime_factory=runtime_factory)
 
@@ -1417,7 +1481,7 @@ class TestCLIMainDispatch(unittest.TestCase):
             }))
 
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
-             patch("aura_cli.cli_main._handle_status", side_effect=_emit_status_json), \
+             patch("aura_cli.dispatch.goal._handle_status", side_effect=_emit_status_json), \
              patch("aura_cli.cli_main.log_json"):
             code_c, out_c, err_c, _ = self._dispatch(["goal", "status", "--json"], runtime_factory=runtime_factory)
             code_l, out_l, err_l, _ = self._dispatch(["--status", "--json"], runtime_factory=runtime_factory)
@@ -1551,8 +1615,8 @@ class TestCLIMainDispatch(unittest.TestCase):
 
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
              patch("aura_cli.cli_main.log_json"), \
-             patch("aura_cli.cli_main.Brain"), \
-             patch("aura_cli.cli_main.ScaffolderAgent") as mock_agent_cls:
+             patch("aura_cli.dispatch.ops.Brain"), \
+             patch("agents.scaffolder.ScaffolderAgent") as mock_agent_cls:
             mock_agent = mock_agent_cls.return_value
             mock_agent.scaffold_project.return_value = "Project 'demo' scaffolded successfully at /path/to/demo"
             
@@ -1564,7 +1628,7 @@ class TestCLIMainDispatch(unittest.TestCase):
 
     def test_aura_log_stream_redirects_json_logs_to_stdout(self):
         # We use doctor because it's fast and doesn't need runtime if we mock it
-        with patch("aura_cli.cli_main._handle_doctor") as mock_doctor, \
+        with patch("aura_cli.dispatch.config._handle_doctor") as mock_doctor, \
              patch.dict(os.environ, {"AURA_LOG_STREAM": "stdout", "AURA_SKIP_CHDIR": "1"}):
             mock_doctor.return_value = 0
             

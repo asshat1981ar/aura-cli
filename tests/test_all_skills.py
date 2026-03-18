@@ -20,6 +20,7 @@ os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 
+from agents.skills.base import SkillResult  # noqa: E402
 from agents.skills.registry import all_skills  # noqa: E402
 
 
@@ -52,9 +53,9 @@ def add(a: int, b: int) -> int:
 
 
 def _run_ok(skill, args: dict):
-    """Call skill.run(args) and assert it returns a dict."""
+    """Call skill.run(args) and assert it returns a dict-like result."""
     result = skill.run(args)
-    assert isinstance(result, dict), f"Skill '{skill.name}' returned {type(result)}, expected dict"
+    assert isinstance(result, (dict, SkillResult)), f"Skill '{skill.name}' returned {type(result)}, expected dict or SkillResult"
     return result
 
 
@@ -71,7 +72,7 @@ class TestDependencyAnalyzer:
 
     def test_with_project_root(self, skills, project_root):
         r = _run_ok(skills["dependency_analyzer"], {"project_root": project_root})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -87,7 +88,7 @@ class TestArchitectureValidator:
 
     def test_with_project_root(self, skills, project_root):
         r = _run_ok(skills["architecture_validator"], {"project_root": project_root})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +104,7 @@ class TestComplexityScorer:
 
     def test_with_code(self, skills):
         r = _run_ok(skills["complexity_scorer"], {"code": SIMPLE_CODE})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +120,7 @@ class TestTestCoverageAnalyzer:
 
     def test_with_project_root(self, skills, project_root):
         r = _run_ok(skills["test_coverage_analyzer"], {"project_root": project_root})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -135,7 +136,7 @@ class TestDocGenerator:
 
     def test_with_code(self, skills):
         r = _run_ok(skills["doc_generator"], {"code": SIMPLE_CODE})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +152,7 @@ class TestPerformanceProfiler:
 
     def test_with_code(self, skills):
         r = _run_ok(skills["performance_profiler"], {"code": SIMPLE_CODE})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -167,7 +168,7 @@ class TestRefactoringAdvisor:
 
     def test_with_code(self, skills):
         r = _run_ok(skills["refactoring_advisor"], {"code": SIMPLE_CODE})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +186,7 @@ class TestSchemaValidator:
         schema = {"type": "object", "properties": {"name": {"type": "string"}}}
         data = {"name": "Alice"}
         r = _run_ok(skills["schema_validator"], {"schema": schema, "data": data})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +202,7 @@ class TestSecurityScanner:
 
     def test_detects_hardcoded_secret(self, skills):
         r = _run_ok(skills["security_scanner"], {"code": 'password = "hunter2"'})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +218,7 @@ class TestTypeChecker:
 
     def test_with_project_root(self, skills, project_root):
         r = _run_ok(skills["type_checker"], {"project_root": project_root})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -233,7 +234,7 @@ class TestLinterEnforcer:
 
     def test_with_project_root(self, skills, project_root):
         r = _run_ok(skills["linter_enforcer"], {"project_root": project_root})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -252,7 +253,7 @@ class TestIncrementalDiffer:
             "before": "def foo(): pass",
             "after": "def foo():\n    return 42",
         })
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -268,7 +269,7 @@ class TestTechDebtQuantifier:
 
     def test_with_project_root(self, skills, project_root):
         r = _run_ok(skills["tech_debt_quantifier"], {"project_root": project_root})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -284,7 +285,7 @@ class TestAPIContractValidator:
 
     def test_with_code(self, skills):
         r = _run_ok(skills["api_contract_validator"], {"code": SIMPLE_CODE})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -300,7 +301,7 @@ class TestGenerationQualityChecker:
 
     def test_with_good_code(self, skills):
         r = _run_ok(skills["generation_quality_checker"], {"code": SIMPLE_CODE})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -316,7 +317,7 @@ class TestGitHistoryAnalyzer:
 
     def test_with_project_root(self, skills, project_root):
         r = _run_ok(skills["git_history_analyzer"], {"project_root": project_root})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -332,7 +333,7 @@ class TestSkillComposer:
 
     def test_with_goal(self, skills):
         r = _run_ok(skills["skill_composer"], {"goal": "refactor the codebase"})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -350,7 +351,7 @@ class TestErrorPatternMatcher:
         r = _run_ok(skills["error_pattern_matcher"], {
             "error": "ImportError: No module named 'missing_pkg'"
         })
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -366,7 +367,7 @@ class TestCodeCloneDetector:
 
     def test_with_project_root(self, skills, project_root):
         r = _run_ok(skills["code_clone_detector"], {"project_root": project_root})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -382,7 +383,7 @@ class TestAdaptiveStrategySelector:
 
     def test_recommendation(self, skills):
         r = _run_ok(skills["adaptive_strategy_selector"], {"goal": "fix flaky tests"})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -399,7 +400,7 @@ class TestWebFetcher:
 
     def test_invalid_url(self, skills):
         r = _run_ok(skills["web_fetcher"], {"url": "not-a-url"})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -415,7 +416,7 @@ class TestSymbolIndexer:
 
     def test_indexes_project(self, skills, project_root):
         r = _run_ok(skills["symbol_indexer"], {"project_root": "agents/skills"})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -450,7 +451,7 @@ class TestDockerfileAnalyzer:
     def test_with_content(self, skills):
         dockerfile = "FROM ubuntu:latest\nRUN apt-get install -y curl\nUSER root\n"
         r = _run_ok(skills["dockerfile_analyzer"], {"content": dockerfile, "file_path": "Dockerfile"})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -467,7 +468,7 @@ class TestObservabilityChecker:
     def test_with_silent_except(self, skills):
         code = "def foo():\n    try:\n        pass\n    except Exception:\n        pass\n"
         r = _run_ok(skills["observability_checker"], {"code": code, "file_path": "test.py"})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -483,7 +484,7 @@ class TestChangelogGenerator:
 
     def test_with_project_root(self, skills, project_root):
         r = _run_ok(skills["changelog_generator"], {"project_root": project_root})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -499,7 +500,7 @@ class TestDatabaseQueryAnalyzer:
 
     def test_with_query(self, skills):
         r = _run_ok(skills["database_query_analyzer"], {"query": "SELECT * FROM users WHERE id = 1"})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -519,7 +520,7 @@ class TestSkillFailureAnalyzer:
             "error": "FileNotFoundError: ruff not found",
             "args": {"project_root": "/nonexistent"},
         })
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
 
 
 # ---------------------------------------------------------------------------
@@ -535,7 +536,7 @@ class TestStructuralAnalyzer:
 
     def test_with_project_root(self, skills, project_root):
         r = _run_ok(skills["structural_analyzer"], {"project_root": project_root})
-        assert isinstance(r, dict)
+        assert isinstance(r, (dict, SkillResult))
         assert "hotspots" in r
         assert "circular_dependencies" in r
 
@@ -576,10 +577,10 @@ def test_all_skills_have_callable_run(skills):
         assert callable(skill.run), f"Skill '{name}'.run is not callable"
 
 
-def test_all_skills_return_dict_on_empty_input(skills):
-    """Every skill must return a dict (never raise) when given an empty dict."""
+def test_all_skills_return_result_on_empty_input(skills):
+    """Every skill must return a dict or SkillResult (never raise) when given an empty dict."""
     for name, skill in skills.items():
         result = skill.run({})
-        assert isinstance(result, dict), (
-            f"Skill '{name}' returned {type(result)} for empty input, expected dict"
+        assert isinstance(result, (dict, SkillResult)), (
+            f"Skill '{name}' returned {type(result)} for empty input, expected dict or SkillResult"
         )

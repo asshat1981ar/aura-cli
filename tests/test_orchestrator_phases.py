@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 from unittest.mock import MagicMock, patch, call
 
+from core.phases import Phase
 from core.orchestrator import BeadsSyncLoop, LoopOrchestrator
 from core.policy import Policy
 from memory.controller import memory_controller
@@ -42,9 +43,16 @@ class TestOrchestratorPhases(unittest.TestCase):
 
     def test_phase_1_ingest(self):
         self.agents["ingest"].run.return_value = {"goal": "test goal", "context": "some context"}
-        # We can't easily test internal phase methods as they are mostly inlined in run_cycle
-        # But we can test the orchestrator behavior when agents are called.
-        pass
+        self.orchestrator.run_cycle("test goal", dry_run=True)
+        assert self.agents["ingest"].run.called
+        call_args = self.agents["ingest"].run.call_args
+        assert "goal" in call_args[0][0]
+        assert call_args[0][0]["goal"] == "test goal"
+
+    def test_phase_registry_exposes_modular_phase_wrappers(self):
+        expected = {"ingest", "plan", "critique", "act", "sandbox", "apply", "verify", "reflect"}
+        self.assertTrue(expected.issubset(self.orchestrator.phase_registry.keys()))
+        self.assertTrue(all(isinstance(phase, Phase) for phase in self.orchestrator.phase_registry.values()))
 
     def test_phase_2_skill_dispatch(self):
         # Verify skill dispatcher is called
@@ -102,7 +110,7 @@ class TestOrchestratorPhases(unittest.TestCase):
         type(mock_discovery).__name__ = "AutonomousDiscovery"
         
         self.orchestrator.run_cycle("test goal", dry_run=True)
-        assert mock_discovery.run_scan.called
+        assert mock_discovery.on_cycle_complete.called
 
     def test_phase_11_evolve(self):
         mock_evolution = MagicMock()
@@ -251,6 +259,32 @@ class TestOrchestratorPhases(unittest.TestCase):
 
         self.assertEqual(goals, ["bead:bd-1: Fix tests", "bead:bd-2: Refresh snapshots"])
         beads_skill.run.assert_called_once_with({"cmd": "ready"})
+
+    def test_circuit_breaker_blocks_cycle(self):
+        """When the circuit breaker is open, run_cycle returns early."""
+        # Force the circuit breaker open
+        for _ in range(5):
+            self.orchestrator._circuit_breaker.record_failure()
+        assert self.orchestrator._circuit_breaker.is_open()
+
+        result = self.orchestrator.run_cycle("test goal", dry_run=False)
+
+        self.assertEqual(result["stop_reason"], "CIRCUIT_BREAKER_OPEN")
+        # No agents should have been called
+        self.agents["ingest"].run.assert_not_called()
+        self.agents["plan"].run.assert_not_called()
+
+    def test_circuit_breaker_resets_on_success(self):
+        """A successful cycle resets the circuit breaker."""
+        self.orchestrator._circuit_breaker.record_failure()
+        self.orchestrator._circuit_breaker.record_failure()
+        self.assertEqual(self.orchestrator._circuit_breaker.consecutive_fails, 2)
+
+        self.agents["verify"].run.return_value = {"status": "pass"}
+        self.orchestrator.run_cycle("test goal", dry_run=True)
+
+        self.assertEqual(self.orchestrator._circuit_breaker.consecutive_fails, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

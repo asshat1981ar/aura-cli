@@ -164,26 +164,19 @@ def replace_code(file_path: str, old_code: str, new_code: str, dry_run: bool = F
                 raise ValueError("When overwrite_file is True, old_code must be an empty string.")
             new_content = new_code
         elif old_code == "":
-            # If old_code is empty but overwrite_file is False, this is likely an error or no-op.
-            # If overwrite_file is True, we proceed with overwriting the entire file,
-            # even if it's not empty, as implied by an empty old_code.
-            if not overwrite_file:
-                # If old_code is empty and overwrite_file is False, do nothing.
-                return
-            # If overwrite_file is True, and old_code is empty, new_content is already new_code.
-            # The next block will handle the atomic write.
+            return
         else: # Normal replacement logic
             if old_code not in current_content:
                 raise OldCodeNotFoundError(f"'{old_code}' not found in '{file_path}'.")
             new_content = current_content.replace(old_code, new_code)
 
         if dry_run:
-            print(f"--- DRY RUN: Changes for {file_path} ---")
+            print(f"DRY RUN: Changes for {file_path}")
             print("--- OLD CODE ---")
-            print(old_code if not overwrite_file else "Entire file content")
+            print(old_code)
             print("--- NEW CODE ---")
             print(new_code)
-            print("--------------------------------------")
+            log_json("INFO", "replace_code_dry_run", details={"file": file_path, "overwrite": overwrite_file})
         else:
             # Atomic write: write to temp file, then rename/replace
             # Using tempfile.NamedTemporaryFile for safety and automatic cleanup (on close/delete)
@@ -215,16 +208,15 @@ def replace_code(file_path: str, old_code: str, new_code: str, dry_run: bool = F
                     log_json("ERROR", "replace_code_os_error", details={"file": str(path), "error": str(e), "errno": e.errno})
                     raise # Re-raise other OSErrors
 
-            print(f"Successfully replaced code in '{file_path}'")
+            log_json("INFO", "replace_code_success", details={"file": file_path})
 
-    except FileToolsError as e:
-        print(f"Error in FileTools: {e}")
+    except FileToolsError:
         raise
-    except OSError as e: # Catch OSError specifically during os.replace
-        print(f"File system error during atomic replacement: {e}")
+    except OSError as e:
+        log_json("ERROR", "replace_code_os_error_outer", details={"file": file_path, "error": str(e)})
         raise FileToolsError(f"File system error during atomic replacement: {e}")
     except Exception as e:
-        print(f"An unexpected error occurred during code replacement: {e}")
+        log_json("ERROR", "replace_code_unexpected_error", details={"file": file_path, "error": str(e)})
         raise
 
 def _aura_clean_json(raw: str) -> str:

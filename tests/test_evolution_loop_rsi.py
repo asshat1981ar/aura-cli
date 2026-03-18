@@ -8,7 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from core.evolution_loop import EvolutionLoop
+from core.evolution_loop import EvolutionLoop, validate_mutation_plan
 
 
 class TestEvolutionLoopRSIContracts(unittest.TestCase):
@@ -53,6 +53,26 @@ class TestEvolutionLoopRSIContracts(unittest.TestCase):
         self.improvement_service.observe_cycle.assert_called_once_with(entry)
         self.improvement_service.evaluate_candidates.assert_called_once_with([entry])
         self.improvement_service.log_proposal.assert_called_once()
+
+    def test_on_cycle_complete_skips_dry_run_entries(self):
+        entry = {
+            "cycle_id": "cycle-dry",
+            "goal": "fix parser",
+            "dry_run": True,
+            "phase_outputs": {
+                "verification": {"status": "pass"},
+                "retry_count": 0,
+                "skill_context": {"structural_hotspot": {"files": ["core/demo.py"]}},
+            },
+        }
+        self.loop.run = MagicMock()
+
+        self.loop.on_cycle_complete(entry)
+
+        self.improvement_service.observe_cycle.assert_not_called()
+        self.improvement_service.log_proposal.assert_not_called()
+        self.loop.run.assert_not_called()
+        self.assertEqual(self.loop._cycle_count, 0)
 
     def test_run_translates_structured_mutation_plan_before_applying(self):
         self.planner.plan.side_effect = [
@@ -99,6 +119,33 @@ class TestEvolutionLoopRSIContracts(unittest.TestCase):
             with contextlib.redirect_stdout(captured):
                 importlib.import_module(module_name)
         self.assertEqual(captured.getvalue(), "")
+
+
+class TestValidateMutationPlan(unittest.TestCase):
+    def test_valid_plan_passes(self):
+        plan = {"mutations": [{"file_path": "core/foo.py", "new_content": "x = 1"}]}
+        errors = validate_mutation_plan(plan, Path("."))
+        assert errors == []
+
+    def test_path_traversal_rejected(self):
+        plan = {"mutations": [{"file_path": "../../etc/passwd", "new_content": "bad"}]}
+        errors = validate_mutation_plan(plan, Path("."))
+        assert any("path traversal" in e for e in errors)
+
+    def test_too_many_mutations_rejected(self):
+        mutations = [{"file_path": f"f{i}.py", "new_content": "x"} for i in range(25)]
+        plan = {"mutations": mutations}
+        errors = validate_mutation_plan(plan, Path("."))
+        assert any("Too many" in e for e in errors)
+
+    def test_oversized_content_rejected(self):
+        plan = {"mutations": [{"file_path": "big.py", "new_content": "x" * 200_000}]}
+        errors = validate_mutation_plan(plan, Path("."))
+        assert any("too large" in e for e in errors)
+
+    def test_missing_mutations_key(self):
+        errors = validate_mutation_plan({"mutations": "not a list"}, Path("."))
+        assert any("must be a list" in e for e in errors)
 
 
 if __name__ == "__main__":

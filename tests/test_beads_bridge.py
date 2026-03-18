@@ -205,7 +205,7 @@ def test_beads_bridge_handles_missing_command(tmp_path: Path):
         result = bridge.run(payload)
 
     assert result["ok"] is False
-    assert result["error"] == "bridge_not_found"
+    assert result["error"] == "capability_unavailable"
 
 
 def test_beads_bridge_handles_timeout(tmp_path: Path):

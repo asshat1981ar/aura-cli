@@ -1,6 +1,7 @@
 """Fast quality metrics after each cycle — runs in < 500ms."""
 from __future__ import annotations
 import py_compile
+import re
 import subprocess
 import sys
 import time
@@ -64,6 +65,10 @@ def run_quality_snapshot(
                 try:
                     rel = p.relative_to(project_root)
                     module = str(rel).replace("/", ".").removesuffix(".py")
+                    # Validate module name to prevent code injection via crafted filenames
+                    if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_.]*$", module):
+                        import_errors.append(f"{fpath}: invalid module name '{module}'")
+                        continue
                     result = subprocess.run(
                         [sys.executable, "-c", f"import {module}"],
                         capture_output=True,

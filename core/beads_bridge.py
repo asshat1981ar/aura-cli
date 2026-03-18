@@ -1,4 +1,10 @@
-"""Python bridge for invoking the Node-based BEADS adapter."""
+"""Python bridge for invoking the Node-based BEADS adapter.
+
+E5 enhancements:
+- Retry with exponential backoff on transient failures
+- Offline queue for persisting failed calls
+- Last-result caching for conflict detection
+"""
 
 from __future__ import annotations
 
@@ -7,7 +13,7 @@ import os
 import subprocess
 import time
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, List, Mapping, Sequence
 
 from core.beads_contract import (
     BEADS_SCHEMA_VERSION,
@@ -207,12 +213,24 @@ def validate_beads_result(payload: Any) -> BeadsResult:
     return payload  # type: ignore[return-value]
 
 
+_TRANSIENT_ERRORS = frozenset({"timeout", "process_error", "capability_unavailable"})
+
+
 class BeadsBridge:
-    """Adapter that invokes the BEADS Node bridge as a subprocess."""
+    """Adapter that invokes the BEADS Node bridge as a subprocess.
+
+    E5 enhancements:
+    - ``run_with_retry()`` — retries transient failures with backoff.
+    - ``offline_queue`` — persists failed payloads for later replay.
+    - ``last_result`` / ``has_conflict()`` — detect decision conflicts.
+    """
 
     def __init__(self, config: BeadsBridgeConfig, *, project_root: Path) -> None:
         self.config = config
         self.project_root = Path(project_root)
+        self.last_result: BeadsResult | None = None
+        self._offline_queue_path = self.project_root / "memory" / "beads_offline_queue.jsonl"
+        self._offline_dead_letter_path = self.project_root / "memory" / "beads_offline_queue.bad.jsonl"
 
     @classmethod
     def from_defaults(
@@ -265,7 +283,7 @@ class BeadsBridge:
         except FileNotFoundError as exc:
             duration_ms = int((time.monotonic() - started_at) * 1000)
             log_json("WARN", "beads_bridge_missing", details={"error": str(exc), "command": command})
-            return _result(ok=False, status="error", error="bridge_not_found", stderr=str(exc), duration_ms=duration_ms)
+            return _result(ok=False, status="error", error="capability_unavailable", stderr=str(exc), duration_ms=duration_ms)
         except subprocess.TimeoutExpired as exc:
             duration_ms = int((time.monotonic() - started_at) * 1000)
             log_json("WARN", "beads_bridge_timeout", details={"timeout_seconds": self.config.timeout_seconds})
@@ -332,6 +350,200 @@ class BeadsBridge:
         )
         return validated
 
+    def run_with_retry(
+        self,
+        payload: BeadsInput,
+        *,
+        max_retries: int = 2,
+        backoff_base: float = 1.0,
+    ) -> BeadsResult:
+        """Run with exponential backoff on transient failures.
+
+        Retries on timeout, process_error, and capability_unavailable.
+        Non-transient errors (invalid_json, invalid_contract) are returned immediately.
+        On final failure, the payload is queued offline if persist_artifacts is enabled.
+        """
+        last_result: BeadsResult | None = None
+        for attempt in range(1 + max_retries):
+            result = self.run(payload)
+            self.last_result = result
+
+            if result["ok"]:
+                return result
+
+            error = result.get("error", "")
+            if error not in _TRANSIENT_ERRORS:
+                return result  # non-transient, don't retry
+
+            last_result = result
+            if attempt < max_retries:
+                delay = backoff_base * (2 ** attempt)
+                log_json("INFO", "beads_bridge_retry", details={
+                    "attempt": attempt + 1,
+                    "max_retries": max_retries,
+                    "delay_s": delay,
+                    "error": error,
+                })
+                time.sleep(delay)
+
+        # All retries exhausted — queue for offline replay
+        if self.config.persist_artifacts:
+            self._enqueue_offline(payload)
+
+        return last_result  # type: ignore[return-value]
+
+    def _enqueue_offline(self, payload: BeadsInput) -> None:
+        """Append a failed payload to the offline queue file."""
+        try:
+            self._offline_queue_path.parent.mkdir(parents=True, exist_ok=True)
+            entry = {
+                "ts": time.time(),
+                "payload": payload,
+            }
+            with open(self._offline_queue_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry) + "\n")
+            log_json("INFO", "beads_offline_queued", details={
+                "path": str(self._offline_queue_path),
+                "goal": payload.get("goal", ""),
+            })
+        except OSError as exc:
+            log_json("WARN", "beads_offline_queue_failed", details={"error": str(exc)})
+
+    def _load_offline_entries(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+        """Load valid offline entries and quarantine malformed rows separately."""
+        valid_entries: list[dict[str, Any]] = []
+        invalid_entries: list[dict[str, Any]] = []
+
+        try:
+            with open(self._offline_queue_path, "r", encoding="utf-8") as handle:
+                for line_number, raw_line in enumerate(handle, start=1):
+                    line = raw_line.strip()
+                    if not line:
+                        continue
+                    try:
+                        entry = json.loads(line)
+                    except json.JSONDecodeError as exc:
+                        invalid_entries.append(
+                            {
+                                "ts": time.time(),
+                                "line_number": line_number,
+                                "error": "invalid_json",
+                                "detail": str(exc),
+                                "raw_line": line,
+                            }
+                        )
+                        continue
+
+                    payload = entry.get("payload") if isinstance(entry, dict) else None
+                    if not isinstance(entry, dict) or not isinstance(payload, dict):
+                        invalid_entries.append(
+                            {
+                                "ts": time.time(),
+                                "line_number": line_number,
+                                "error": "invalid_payload",
+                                "detail": "offline queue entry must be an object with a dict payload",
+                                "raw_line": line,
+                            }
+                        )
+                        continue
+
+                    valid_entries.append(entry)
+        except OSError as exc:
+            log_json("WARN", "beads_offline_queue_read_failed", details={"error": str(exc)})
+            return [], []
+
+        return valid_entries, invalid_entries
+
+    def _write_dead_letters(self, entries: list[dict[str, Any]]) -> None:
+        """Append malformed offline rows to a dead-letter log for later inspection."""
+        if not entries:
+            return
+        try:
+            self._offline_dead_letter_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(self._offline_dead_letter_path, "a", encoding="utf-8") as handle:
+                for entry in entries:
+                    handle.write(json.dumps(entry) + "\n")
+            log_json(
+                "WARN",
+                "beads_offline_dead_lettered",
+                details={"count": len(entries), "path": str(self._offline_dead_letter_path)},
+            )
+        except OSError as exc:
+            log_json("WARN", "beads_offline_dead_letter_failed", details={"error": str(exc)})
+
+    def replay_offline_queue(self) -> List[BeadsResult]:
+        """Replay all queued payloads, returning results. Clears queue on success."""
+        if not self._offline_queue_path.exists():
+            return []
+
+        entries, invalid_entries = self._load_offline_entries()
+        self._write_dead_letters(invalid_entries)
+
+        if not entries and not invalid_entries:
+            return []
+
+        results: List[BeadsResult] = []
+        remaining: list = []
+        for entry in entries:
+            payload = entry.get("payload", {})
+            result = self.run(payload)
+            results.append(result)
+            if not result["ok"]:
+                remaining.append(entry)
+
+        # Rewrite queue with only failed entries
+        try:
+            if remaining:
+                with open(self._offline_queue_path, "w", encoding="utf-8") as f:
+                    for entry in remaining:
+                        f.write(json.dumps(entry) + "\n")
+            else:
+                self._offline_queue_path.unlink(missing_ok=True)
+            log_json("INFO", "beads_offline_replay_complete", details={
+                "total": len(entries),
+                "succeeded": len(entries) - len(remaining),
+                "remaining": len(remaining),
+                "dead_lettered": len(invalid_entries),
+            })
+        except OSError as exc:
+            log_json("WARN", "beads_offline_queue_write_failed", details={"error": str(exc)})
+
+        return results
+
+    def has_conflict(self, new_result: BeadsResult) -> bool:
+        """Check if a new result's decision conflicts with the last cached result.
+
+        A conflict occurs when both results have decisions but they disagree
+        on the status (allow vs block vs revise).
+        """
+        if self.last_result is None:
+            return False
+        old_decision = self.last_result.get("decision")
+        new_decision = new_result.get("decision")
+        if old_decision is None or new_decision is None:
+            return False
+        return old_decision.get("status") != new_decision.get("status")
+
+    def offline_queue_size(self) -> int:
+        """Return the number of entries in the offline queue."""
+        if not self._offline_queue_path.exists():
+            return 0
+        try:
+            with open(self._offline_queue_path, "r", encoding="utf-8") as f:
+                return sum(1 for line in f if line.strip())
+        except OSError:
+            return 0
+
+    def offline_dead_letter_size(self) -> int:
+        """Return the number of malformed offline entries that were quarantined."""
+        if not self._offline_dead_letter_path.exists():
+            return 0
+        try:
+            with open(self._offline_dead_letter_path, "r", encoding="utf-8") as f:
+                return sum(1 for line in f if line.strip())
+        except OSError:
+            return 0
+
     def to_runtime_metadata(self) -> dict[str, Any]:
         return {
             "enabled": self.config.enabled,
@@ -340,4 +552,6 @@ class BeadsBridge:
             "timeout_seconds": self.config.timeout_seconds,
             "command": list(self.config.command),
             "persist_artifacts": self.config.persist_artifacts,
+            "offline_queue_size": self.offline_queue_size(),
+            "offline_dead_letter_size": self.offline_dead_letter_size(),
         }

@@ -275,7 +275,7 @@ def test_goal_capability_plan_can_trigger_mcp_provisioning(tmp_path: Path):
     }
 
     with patch(
-        "core.orchestrator.provision_capability_actions",
+        "core.capability_coordinator.provision_capability_actions",
         return_value={"attempted": True, "results": [{"action": "ensure_mcp_servers", "status": "applied"}]},
     ) as mock_provision, patch("core.orchestrator.dispatch_skills", return_value={}):
         result = orchestrator.run_cycle("Review GitHub pull requests and release notes", dry_run=False)

@@ -161,6 +161,7 @@ def _analyse_project(
         "module_count": len(graph),
         "total_import_edges": total_edges,
         "coupling_score": coupling_score,
+        "circular_imports": cycles,
         "circular_deps": [" → ".join(c) for c in cycles],
         "cycle_count": len(cycles),
         "hub_modules": hubs,
@@ -234,7 +235,6 @@ class ArchitectureValidatorSkill(SkillBase):
 
         root = Path(project_root_str or ".")
         result = _analyse_project(root, forbidden_patterns)
-        result["circular_imports"] = self.detect_circular_imports(str(root))
         log_json("INFO", "architecture_validator_complete", details={
             "modules": result["module_count"],
             "cycles": result["cycle_count"],

@@ -2,6 +2,7 @@ import json
 from collections import deque
 from pathlib import Path # Import Path
 from core.logging_utils import log_json # Import log_json
+from core.runtime_state import atomic_write_json, load_json_with_repair
 
 class GoalQueue:
     """
@@ -82,9 +83,10 @@ class GoalQueue:
         Persists the current state of the goal queue to the configured JSON file.
         Uses a compact encoding because this path is on the hot add/pop loop.
         """
-        self.queue_path.write_text(
-            json.dumps(list(self.queue), separators=(",", ":")),
-            encoding="utf-8",
+        atomic_write_json(
+            self.queue_path,
+            list(self.queue),
+            separators=(",", ":"),
         )
 
     def _load_queue(self):
@@ -95,11 +97,13 @@ class GoalQueue:
         Returns:
             collections.deque: The loaded goal queue.
         """
-        if self.queue_path.exists(): # Use Path.exists()
-            with self.queue_path.open('r', encoding='utf-8') as f:
-                try:
-                    return deque(json.load(f))
-                except json.JSONDecodeError:
-                    log_json("WARN", "goal_queue_corrupted", details={"path": str(self.queue_path), "message": "Starting with empty queue."})
-                    return deque()
-        return deque()
+        payload = load_json_with_repair(
+            self.queue_path,
+            default=[],
+            validator=lambda value: isinstance(value, list),
+            state_name="goal_queue",
+        )
+        if not isinstance(payload, list):
+            log_json("WARN", "goal_queue_invalid_payload", details={"path": str(self.queue_path)})
+            return deque()
+        return deque(payload)

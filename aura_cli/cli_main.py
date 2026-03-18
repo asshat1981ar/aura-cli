@@ -1,12 +1,7 @@
 import os
 import sys
 import json
-import io
 import copy
-import subprocess
-import urllib.request
-import urllib.error
-from contextlib import redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -34,6 +29,7 @@ from agents.scaffolder import ScaffolderAgent
 from core.vector_store import VectorStore
 from core.beads_bridge import BeadsBridge
 from core.runtime_paths import resolve_project_path
+from core.runtime_state import validate_brain_schema
 from core.runtime_auth import (
     resolve_config_api_key,
     runtime_provider_status,
@@ -48,104 +44,52 @@ from aura_cli.cli_options import (
     cli_parse_error_payload,
     parse_cli_args,
     render_help,
-    unknown_command_help_topic_payload,
 )
 from aura_cli.options import action_runtime_required, action_default_canonical_path
 
+# Dispatch handler modules (B4 extraction)
+from aura_cli.dispatch._helpers import _print_json_payload, _run_json_printing_callable_with_warnings
+from aura_cli.dispatch.goal import (
+    handle_goal_once as _handle_goal_once_dispatch,
+    handle_goal_run as _handle_goal_run_dispatch,
+    handle_goal_add as _handle_goal_add_dispatch,
+    handle_goal_add_run as _handle_goal_add_run_dispatch,
+    handle_goal_status as _handle_goal_status_dispatch,
+    handle_interactive as _handle_interactive_dispatch,
+)
+from aura_cli.dispatch.memory import (
+    handle_memory_search as _handle_memory_search_dispatch,
+    handle_memory_reindex as _handle_memory_reindex_dispatch,
+)
+from aura_cli.dispatch.mcp import (
+    _mcp_headers, _mcp_base_url, _mcp_request,
+    cmd_mcp_tools, cmd_mcp_call, cmd_diag, cmd_mcp_check, cmd_mcp_setup,
+    handle_mcp_tools as _handle_mcp_tools_dispatch,
+    handle_mcp_call as _handle_mcp_call_dispatch,
+    handle_diag as _handle_diag_dispatch,
+    handle_mcp_check as _handle_mcp_check_dispatch,
+    handle_mcp_setup as _handle_mcp_setup_dispatch,
+)
+from aura_cli.dispatch.ops import (
+    handle_queue_list as _handle_queue_list_dispatch,
+    handle_queue_clear as _handle_queue_clear_dispatch,
+    handle_skills_list as _handle_skills_list_dispatch,
+    handle_metrics_show as _handle_metrics_show_dispatch,
+    handle_workflow_run as _handle_workflow_run_dispatch,
+    handle_scaffold as _handle_scaffold_dispatch,
+    handle_evolve as _handle_evolve_dispatch,
+    handle_logs as _handle_logs_dispatch,
+    handle_watch as _handle_watch_dispatch,
+)
+from aura_cli.dispatch.config import (
+    handle_help as _handle_help_dispatch,
+    handle_json_help as _handle_json_help_dispatch,
+    handle_doctor as _handle_doctor_dispatch,
+    handle_bootstrap as _handle_bootstrap_dispatch,
+    handle_show_config as _handle_show_config_dispatch,
+    handle_contract_report as _handle_contract_report_dispatch,
+)
 
-def _mcp_headers():
-    """Return auth headers for MCP requests, if MCP_API_TOKEN is set."""
-    token = os.getenv("MCP_API_TOKEN")
-    return {"Authorization": f"Bearer {token}"} if token else {}
-
-
-def _mcp_base_url():
-    """Base URL for MCP server (default http://localhost:8001)."""
-    return os.getenv("MCP_SERVER_URL", "http://localhost:8001")
-
-
-def _mcp_request(method: str, path: str, data: dict | None = None):
-    """Small HTTP helper for MCP server; returns (status, json/dict)."""
-    url = f"{_mcp_base_url()}{path}"
-    headers = {"Content-Type": "application/json", **_mcp_headers()}
-    body = json.dumps(data).encode() if data is not None else None
-    req = urllib.request.Request(url, data=body, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            return resp.status, json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        try:
-            return e.code, json.loads(e.read().decode())
-        except Exception:
-            return e.code, {"error": str(e)}
-    except Exception as e:
-        return 500, {"error": str(e)}
-
-
-def cmd_mcp_tools():
-    """List MCP tools via HTTP client."""
-    status, data = _mcp_request("GET", "/tools")
-    print(json.dumps({"status": status, "data": data}, indent=2))
-
-
-def cmd_mcp_call(tool: str, args_json: str | None):
-    """Call an MCP tool by name with JSON args."""
-    try:
-        args_obj = json.loads(args_json) if args_json else {}
-    except json.JSONDecodeError as exc:
-        print(f"Invalid args JSON: {exc}")
-        return
-    payload = {"tool_name": tool, "args": args_obj}
-    status, data = _mcp_request("POST", "/call", payload)
-    print(json.dumps({"status": status, "data": data}, indent=2))
-
-
-def cmd_diag():
-    """Fetch MCP health/metrics/limits/log tail and linter capabilities."""
-    health = _mcp_request("GET", "/health")
-    metrics = _mcp_request("GET", "/metrics")
-    limits = _mcp_request("POST", "/call", {"tool_name": "limits", "args": {}})
-    lcap = _mcp_request("POST", "/call", {"tool_name": "linter_capabilities", "args": {}})
-    tail = _mcp_request("POST", "/call", {"tool_name": "tail_logs", "args": {"lines": 50}})
-    print(json.dumps({
-        "health": {"status": health[0], "data": health[1]},
-        "metrics": {"status": metrics[0], "data": metrics[1]},
-        "limits": {"status": limits[0], "data": limits[1]},
-        "linter_capabilities": {"status": lcap[0], "data": lcap[1]},
-        "tail_logs": {"status": tail[0], "data": tail[1]},
-    }, indent=2))
-
-
-def _run_local_script(script_name: str) -> dict:
-    script = Path(__file__).resolve().parent.parent / "scripts" / script_name
-    if not script.exists():
-        return {"status": 1, "ok": False, "error": f"script not found: {script}"}
-
-    proc = subprocess.run(
-        [str(script)],
-        capture_output=True,
-        text=True,
-        env=os.environ.copy(),
-        cwd=str(script.parent.parent),
-        check=False,
-    )
-    return {
-        "status": proc.returncode,
-        "ok": proc.returncode == 0,
-        "stdout": proc.stdout,
-        "stderr": proc.stderr,
-        "script": str(script),
-    }
-
-
-def cmd_mcp_check():
-    """Run local MCP readiness checker script and print structured results."""
-    print(json.dumps(_run_local_script("mcp_server_check.sh"), indent=2))
-
-
-def cmd_mcp_setup():
-    """Run local MCP setup script and print structured results."""
-    print(json.dumps(_run_local_script("mcp_server_setup.sh"), indent=2))
 
 def cli_interaction_loop(args, runtime):
     def _get_runtime_part(key):
@@ -282,10 +226,23 @@ def _init_memory_and_brain(brain_db_path: Path):
         _momento = create_cache_adapter()
         brain_instance = MomentoBrain(_momento, db_path=str(brain_db_path))
         log_json("INFO", "runtime_cache_adapter_active", details={"adapter": type(_momento).__name__})
+        validation = validate_brain_schema(brain_db_path)
+        log_json(
+            "INFO" if validation["ok"] else "WARN",
+            "brain_schema_validated",
+            details=validation,
+        )
         return brain_instance, _momento
     except Exception as _exc:
         log_json("WARN", "cache_adapter_init_failed", details={"error": str(_exc)})
-        return Brain(db_path=str(brain_db_path)), None
+        brain_instance = Brain(db_path=str(brain_db_path))
+        validation = validate_brain_schema(brain_db_path)
+        log_json(
+            "INFO" if validation["ok"] else "WARN",
+            "brain_schema_validated",
+            details=validation,
+        )
+        return brain_instance, None
 
 
 def _start_background_sync(project_root: Path, vector_store, context_graph):
@@ -387,7 +344,9 @@ def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal
             propagation_engine=_propagation,
             context_graph=_context_graph,
         )
-        orchestrator.attach_improvement_loops(_discovery, _evo)
+        orchestrator.discovery_loop = _discovery
+        orchestrator.evolution_loop = _evo
+        # No longer attaching to improvement_loops as they are explicit phases in PRD-003
     except Exception as _exc:
         log_json("WARN", "caspa_setup_failed", details={"error": str(_exc)})
 
@@ -500,6 +459,11 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     orchestrator.beads_runtime_override = beads_cli_override
 
     _attach_advanced_loops(orchestrator, runtime_mode, brain_instance, memory_store, goal_queue, _momento, project_root)
+    try:
+        git_tools = GitTools(repo_path=str(project_root))
+    except Exception as exc:
+        log_json("WARN", "git_tools_runtime_unavailable", details={"error": str(exc), "project_root": str(project_root)})
+        git_tools = None
 
     return {
         "goal_queue": goal_queue,
@@ -508,7 +472,7 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         "beads_bridge": beads_bridge,
         "debugger": debugger_instance,
         "planner": planner_instance,
-        "git_tools": GitTools(repo_path=str(project_root)),
+        "git_tools": git_tools,
         "project_root": project_root,
         "model_adapter": model_adapter,
         "memory_store": memory_store,
@@ -605,530 +569,6 @@ def _prepare_runtime_context(ctx: DispatchContext) -> int | None:
         log_json("CRITICAL", "aura_cli_startup_aborted_not_writable")
         return 1
     return None
-
-
-def _handle_help_dispatch(ctx: DispatchContext) -> int:
-    try:
-        print(render_help(getattr(ctx.args, "help_topics", None)))
-    except ValueError as exc:
-        if getattr(ctx.args, "json", False):
-            print(json.dumps(attach_cli_warnings(unknown_command_help_topic_payload(str(exc)), ctx.parsed)))
-        else:
-            print(f"Error: {exc}", file=sys.stderr)
-        return 2
-    return 0
-
-
-def _handle_json_help_dispatch(_ctx: DispatchContext) -> int:
-    print(render_help(format="json"))
-    return 0
-
-
-def _handle_doctor_dispatch(ctx: DispatchContext) -> int:
-    _handle_doctor(ctx.project_root)
-    return 0
-
-
-def _handle_bootstrap_dispatch(_ctx: DispatchContext) -> int:
-    config.interactive_bootstrap()
-    return 0
-
-
-def _handle_show_config_dispatch(_ctx: DispatchContext) -> int:
-    """Print the resolved effective configuration as JSON."""
-    print(json.dumps(config.show_config(), indent=2, default=str))
-    return 0
-
-
-def _handle_contract_report_dispatch(ctx: DispatchContext) -> int:
-    from aura_cli.contract_report import (
-        build_cli_contract_report,
-        cli_contract_report_exit_code,
-        cli_contract_report_failure_message,
-        render_cli_contract_report,
-    )
-
-    report = build_cli_contract_report(
-        include_dispatch=not getattr(ctx.args, "no_dispatch", False),
-        dispatch_registry=COMMAND_DISPATCH_REGISTRY,
-    )
-    print(render_cli_contract_report(report, compact=getattr(ctx.args, "compact", False)), end="")
-
-    exit_code = cli_contract_report_exit_code(report, check=getattr(ctx.args, "check", False))
-    if exit_code:
-        print(cli_contract_report_failure_message(report), file=sys.stderr)
-    return exit_code
-
-
-def _print_json_payload(payload: dict, *, parsed=None, **json_kwargs) -> None:
-    print(json.dumps(attach_cli_warnings(payload, parsed), **json_kwargs))
-
-
-def _run_json_printing_callable_with_warnings(ctx: DispatchContext, func, *args, **kwargs) -> None:
-    warning_records = getattr(ctx.parsed, "warning_records", None) or []
-    if not warning_records:
-        func(*args, **kwargs)
-        return
-
-    buf = io.StringIO()
-    with redirect_stdout(buf):
-        func(*args, **kwargs)
-    raw = buf.getvalue()
-    if raw == "":
-        return
-
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError:
-        print(raw, end="")
-        return
-
-    _print_json_payload(payload, parsed=ctx.parsed, indent=2)
-
-
-def _handle_mcp_tools_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_tools)
-    return 0
-
-
-def _handle_mcp_call_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_call, ctx.args.mcp_call, ctx.args.mcp_args)
-    return 0
-
-
-def _handle_diag_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_diag)
-    return 0
-
-
-def _handle_mcp_check_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_check)
-    return 0
-
-
-def _handle_mcp_setup_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_setup)
-    return 0
-
-
-def _handle_logs_dispatch(ctx: DispatchContext) -> int:
-    from aura_cli.tui.log_streamer import LogStreamer
-
-    streamer = LogStreamer(level_filter=getattr(ctx.args, "level", "info"))
-    if getattr(ctx.args, "file", None):
-        streamer.stream_file(Path(ctx.args.file), tail=getattr(ctx.args, "tail", None), follow=getattr(ctx.args, "follow", False))
-    else:
-        streamer.stream_stdin(tail=getattr(ctx.args, "tail", None))
-    return 0
-
-
-def _handle_watch_dispatch(ctx: DispatchContext) -> int:
-    from aura_cli.tui.app import AuraStudio
-
-    studio = AuraStudio(runtime=ctx.runtime or {})
-    orchestrator = ctx.runtime.get("orchestrator")
-    if orchestrator:
-        orchestrator.attach_ui_callback(studio)
-    
-    studio.run(autonomous=getattr(ctx.args, "autonomous", False))
-    return 0
-
-
-def _handle_queue_list_dispatch(ctx: DispatchContext) -> int:
-    goal_queue = ctx.runtime["goal_queue"]
-    if getattr(ctx.args, "json", False):
-        _print_json_payload({"queue": list(goal_queue.queue), "count": len(goal_queue.queue)}, parsed=ctx.parsed, indent=2)
-        return 0
-
-    if not goal_queue.queue:
-        print("Goal queue is empty.")
-        return 0
-    
-    print(f"Goal Queue ({len(goal_queue.queue)} goals):")
-    for i, goal in enumerate(goal_queue.queue, 1):
-        print(f"  {i}. {goal}")
-    return 0
-
-
-def _handle_queue_clear_dispatch(ctx: DispatchContext) -> int:
-    goal_queue = ctx.runtime["goal_queue"]
-    count = len(goal_queue.queue)
-    goal_queue.queue = []
-    goal_queue._save()
-    if getattr(ctx.args, "json", False):
-        _print_json_payload({"cleared_count": count}, parsed=ctx.parsed, indent=2)
-    else:
-        print(f"Cleared {count} goals from the queue.")
-    return 0
-
-
-def _handle_memory_search_dispatch(ctx: DispatchContext) -> int:
-    from core.memory_types import RetrievalQuery
-    
-    vector_store = ctx.runtime["vector_store"]
-    query = RetrievalQuery(
-        query_text=ctx.args.query,
-        k=ctx.args.limit
-    )
-    hits = vector_store.search(query)
-    
-    if getattr(ctx.args, "json", False):
-        payload = {
-            "query": ctx.args.query,
-            "hits": [
-                {
-                    "score": hit.score,
-                    "source_ref": hit.source_ref,
-                    "content_preview": hit.content[:200] + "..." if len(hit.content) > 200 else hit.content
-                }
-                for hit in hits
-            ]
-        }
-        _print_json_payload(payload, parsed=ctx.parsed, indent=2)
-        return 0
-
-    if not hits:
-        print(f"No results found for '{ctx.args.query}'")
-        return 0
-        
-    print(f"Memory Search Results for '{ctx.args.query}':\n")
-    for i, hit in enumerate(hits, 1):
-        print(f"[{i}] Score: {hit.score:.3f} | Source: {hit.source_ref}")
-        print(f"Content: {hit.content[:200]}...")
-        print("-" * 40)
-    return 0
-
-
-def _handle_memory_reindex_dispatch(ctx: DispatchContext) -> int:
-    from core.project_syncer import ProjectKnowledgeSyncer
-
-    runtime = ctx.runtime
-    vector_store = runtime["vector_store"]
-    model_adapter = runtime["model_adapter"]
-
-    rebuild_stats = vector_store.rebuild({
-        "exclude_source_types": ["file"],
-        "drop_existing_embeddings": True,
-    })
-    syncer = ProjectKnowledgeSyncer(vector_store, None, project_root=str(ctx.project_root))
-    sync_stats = syncer.sync_all(force=True)
-
-    payload = {
-        "status": "ok" if "error" not in rebuild_stats else "error",
-        "embedding_model": model_adapter.model_id(),
-        "embedding_dims": model_adapter.dimensions(),
-        "rebuild": rebuild_stats,
-        "project_sync": sync_stats,
-    }
-
-    if getattr(ctx.args, "json", False):
-        _print_json_payload(payload, parsed=ctx.parsed, indent=2)
-        return 0 if payload["status"] == "ok" else 1
-
-    print("Semantic memory reindex complete.")
-    print(f"Embedding model: {payload['embedding_model']} ({payload['embedding_dims']} dims)")
-    print(
-        "Non-file records rebuilt: "
-        f"{rebuild_stats.get('embeddings_written', 0)}/{rebuild_stats.get('records_seen', 0)}"
-    )
-    print(
-        "Project sync: "
-        f"{sync_stats.get('files_processed', 0)} files processed, "
-        f"{sync_stats.get('chunks_created', 0)} chunks created, "
-        f"{sync_stats.get('files_skipped', 0)} skipped"
-    )
-    if payload["status"] != "ok":
-        print(f"Error: {rebuild_stats.get('error')}", file=sys.stderr)
-        return 1
-    return 0
-
-
-def _handle_skills_list_dispatch(ctx: DispatchContext) -> int:
-    """List all registered skills by name."""
-    try:
-        from agents.skills.registry import all_skills
-        skills = all_skills()
-        skill_names = sorted(skills.keys())
-    except Exception as exc:
-        if getattr(ctx.args, "json", False):
-            _print_json_payload({"error": str(exc), "skills": []}, parsed=ctx.parsed, indent=2)
-        else:
-            print(f"Error loading skills: {exc}", file=sys.stderr)
-        return 1
-
-    if getattr(ctx.args, "json", False):
-        _print_json_payload({"skills": skill_names, "count": len(skill_names)}, parsed=ctx.parsed, indent=2)
-        return 0
-
-    print(f"Registered skills ({len(skill_names)}):")
-    for name in skill_names:
-        print(f"  {name}")
-    return 0
-
-
-def _handle_metrics_show_dispatch(ctx: DispatchContext) -> int:
-    memory_store = ctx.runtime["memory_store"]
-    log_entries = memory_store.read_log(limit=100)
-
-    recent_data = []
-    successes = 0
-    skipped = 0
-    fails = 0
-    total_time = 0.0
-
-    # 1. Try structured summaries from decision log
-    summaries = [e["cycle_summary"] for e in log_entries if "cycle_summary" in e]
-    if summaries:
-        for s in summaries[-10:]:
-            outcome = s.get("outcome", "FAILED")
-            duration = s.get("duration_s", 0.0)
-
-            if outcome == "SUCCESS": successes += 1
-            elif outcome == "SKIPPED": skipped += 1
-            else: fails += 1
-
-            total_time += duration
-            recent_data.append({
-                "cycle_id": s.get("cycle_id"),
-                "status": outcome,
-                "duration": duration,
-                "goal": s.get("goal")
-            })
-
-    # 2. Fallback to legacy outcome strings in brain
-    if not recent_data:
-        brain = ctx.runtime["brain"]
-        outcomes = [e for e in brain.recall_recent(limit=100) if "outcome:" in e]
-        for raw in outcomes[:10]:
-            try:
-                # Format: outcome:id -> json
-                data = json.loads(raw.split("->", 1)[1])
-                status = "SUCCESS" if data.get("success") else "FAILED"
-                duration = data.get("completed_at", 0) - data.get("started_at", 0)
-
-                if data.get("success"): successes += 1
-                else: fails += 1
-
-                total_time += duration
-                recent_data.append({
-                    "cycle_id": data.get("cycle_id"),
-                    "status": status,
-                    "duration": duration,
-                    "goal": data.get("goal")
-                })
-            except Exception:
-                continue
-
-    count = len(recent_data)
-    avg_time = total_time / count if count else 0
-    win_rate = (successes / count * 100) if count else 0
-
-    if getattr(ctx.args, "json", False):
-        payload = {
-            "recent_cycles": recent_data,
-            "summary": {
-                "win_rate": win_rate,
-                "avg_duration": avg_time,
-                "count": count,
-                "successes": successes,
-                "skipped": skipped,
-                "fails": fails
-            }
-        }
-        for i, s in enumerate(summaries[-10:]):
-            recent_data[i]["stop_reason"] = s.get("stop_reason")
-        _print_json_payload(payload, parsed=ctx.parsed, indent=2)
-        return 0
-
-    if not recent_data:
-        print("No metrics recorded yet.")
-        return 0
-
-    print("Recent Cycle Metrics (last 10 cycles):\n")
-    print(f"{'Cycle ID':<10} | {'Status':<8} | {'Dur':<6} | {'Stop Reason':<15} | {'Goal'}")
-    print("-" * 85)
-
-    for i, item in enumerate(recent_data):
-        cid = (item['cycle_id'] or "unknown")[:8]
-        stop = (summaries[-len(recent_data):][i].get("stop_reason") or "N/A") if summaries else "N/A"
-        print(f"{cid:<10} | {item['status']:<8} | {item['duration']:>5.1f}s | {stop:<15} | {item['goal'][:30]}...")
-
-    print("-" * 85)
-    print(f"Summary: {win_rate:.1f}% success rate | {successes} pass, {skipped} skip, {fails} fail")
-    print(f"Avg duration: {avg_time:.1f}s")
-    return 0
-
-
-def _handle_workflow_run_dispatch(ctx: DispatchContext) -> int:
-    from core.operator_runtime import build_beads_runtime_metadata
-
-    args = ctx.args
-    orchestrator = ctx.runtime["orchestrator"]
-    result = orchestrator.run_loop(
-        args.workflow_goal,
-        max_cycles=args.workflow_max_cycles or args.max_cycles or config.get("policy_max_cycles", config.get("max_cycles", 5)),
-        dry_run=args.dry_run,
-    )
-    _print_json_payload(
-        {
-            "goal": args.workflow_goal,
-            "stop_reason": result.get("stop_reason"),
-            "cycles": len(result.get("history", [])),
-            "beads_runtime": build_beads_runtime_metadata(orchestrator),
-        },
-        parsed=ctx.parsed,
-        indent=2,
-    )
-    return 0
-
-
-def _handle_scaffold_dispatch(ctx: DispatchContext) -> int:
-    args = ctx.args
-    runtime = ctx.runtime
-
-    scaffolder = ScaffolderAgent(runtime.get("brain", None) or Brain(), runtime["model_adapter"])
-    result = scaffolder.scaffold_project(args.scaffold, args.scaffold_desc)
-    
-    if getattr(args, "json", False):
-        _print_json_payload({"result": result, "project_name": args.scaffold}, parsed=ctx.parsed, indent=2)
-    else:
-        print(result)
-    return 0
-
-
-def _handle_evolve_dispatch(ctx: DispatchContext) -> int:
-    from core.evolution_loop import EvolutionLoop
-    from agents.mutator import MutatorAgent
-
-    args = ctx.args
-    runtime = ctx.runtime
-
-    _brain = runtime.get("brain") or Brain()
-    _model = runtime["model_adapter"]
-    _planner = runtime["planner"]
-    _agents = default_agents(_brain, _model)
-    _coder_adapter = _agents.get("act")
-    _critic_adapter = _agents.get("critique")
-    _planner_adapter = _agents.get("plan")
-    _coder = getattr(_coder_adapter, "agent", _coder_adapter)
-    _critic = getattr(_critic_adapter, "agent", _critic_adapter)
-    _planner = getattr(_planner_adapter, "agent", _planner_adapter)
-    _git = GitTools(repo_path=str(ctx.project_root))
-    _mutator = MutatorAgent(ctx.project_root)
-    _vec = VectorStore(_model, _brain)
-    from core.recursive_improvement import RecursiveImprovementService
-    _ri_service = RecursiveImprovementService()
-    evo = EvolutionLoop(_planner, _coder, _critic, _brain, _vec, _git, _mutator, improvement_service=_ri_service)
-    goal = args.goal or args.workflow_goal or "evolve and improve the AURA system"
-    result = evo.run(goal)
-    _print_json_payload(result, parsed=ctx.parsed, indent=2, default=str)
-    return 0
-
-
-def _handle_goal_status_dispatch(ctx: DispatchContext) -> int:
-    runtime = ctx.runtime
-    if ctx.args.json:
-        _run_json_printing_callable_with_warnings(
-            ctx,
-            _handle_status,
-            runtime["goal_queue"],
-            runtime["goal_archive"],
-            runtime["orchestrator"],
-            as_json=True,
-            project_root=ctx.project_root,
-            memory_persistence_path=runtime.get("memory_persistence_path"),
-        )
-    else:
-        _handle_status(
-            runtime["goal_queue"],
-            runtime["goal_archive"],
-            runtime["orchestrator"],
-            as_json=False,
-            project_root=ctx.project_root,
-            memory_persistence_path=runtime.get("memory_persistence_path"),
-        )
-    return 0
-
-
-def _maybe_add_goal(ctx: DispatchContext) -> None:
-    if not getattr(ctx.args, "add_goal", None):
-        return
-    goal_queue = ctx.runtime["goal_queue"]
-    goal_queue.add(ctx.args.add_goal)
-    log_json("INFO", "goal_added_from_cli", goal=ctx.args.add_goal)
-    if not getattr(ctx.args, "json", False):
-        print(f"Added goal: {ctx.args.add_goal}")
-        print(f"Queue length: {len(goal_queue.queue)}")
-
-
-def _handle_goal_once_dispatch(ctx: DispatchContext) -> int:
-    from core.explain import format_decision_log
-    from core.operator_runtime import build_beads_runtime_metadata
-
-    args = ctx.args
-    orchestrator = ctx.runtime["orchestrator"]
-    result = orchestrator.run_loop(
-        args.goal,
-        max_cycles=args.max_cycles or config.get("policy_max_cycles", config.get("max_cycles", 5)),
-        dry_run=args.dry_run,
-    )
-    history = result.get("history", [])
-    if args.explain:
-        print(format_decision_log(history))
-    
-    if getattr(args, "json", False):
-        _print_json_payload(
-            {
-                "goal": args.goal,
-                "stop_reason": result.get("stop_reason"),
-                "cycles": len(history),
-                "dry_run": args.dry_run,
-                "beads_runtime": build_beads_runtime_metadata(orchestrator),
-            },
-            parsed=ctx.parsed,
-            indent=2,
-        )
-    else:
-        print(f"\n--- Goal Result Summary ---")
-        print(f"Goal: {args.goal}")
-        print(f"Stop Reason: {result.get('stop_reason')}")
-        print(f"Cycles Completed: {len(history)}")
-        if args.dry_run:
-            print("Mode: Dry-run (read-only)")
-        print("---------------------------\n")
-    return 0
-
-
-def _handle_goal_run_dispatch(ctx: DispatchContext) -> int:
-    args = ctx.args
-    runtime = ctx.runtime
-    run_goals_loop(
-        args,
-        runtime["goal_queue"],
-        runtime["orchestrator"],
-        runtime["debugger"],
-        runtime["planner"],
-        runtime["goal_archive"],
-        ctx.project_root,
-        decompose=args.decompose,
-    )
-    return 0
-
-
-def _handle_goal_add_dispatch(ctx: DispatchContext) -> int:
-    _maybe_add_goal(ctx)
-    return 0
-
-
-def _handle_goal_add_run_dispatch(ctx: DispatchContext) -> int:
-    _maybe_add_goal(ctx)
-    return _handle_goal_run_dispatch(ctx)
-
-
-def _handle_interactive_dispatch(ctx: DispatchContext) -> int:
-    runtime = ctx.runtime
-    cli_interaction_loop(ctx.args, runtime)
-    return 0
 
 
 def _dispatch_rule(action: str, handler) -> DispatchRule:

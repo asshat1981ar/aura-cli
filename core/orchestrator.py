@@ -129,6 +129,8 @@ class LoopOrchestrator:
         beads_enabled: bool = False,
         beads_required: bool = False,
         beads_scope: str = "goal_run",
+        discovery_loop: Any = None,
+        evolution_loop: Any = None,
     ):
         """Initialise the orchestrator with its agents and supporting services.
 
@@ -172,6 +174,8 @@ class LoopOrchestrator:
         self.beads_enabled = beads_enabled
         self.beads_required = beads_required
         self.beads_scope = beads_scope
+        self.discovery_loop = discovery_loop
+        self.evolution_loop = evolution_loop
         self.git_tools = GitTools(str(self.project_root))
         self.codex_manager = CodexManager(self.model, self.git_tools, str(self.project_root), brain=self.brain)
         # Backward-compat properties — delegate to self.capabilities
@@ -1123,15 +1127,19 @@ class LoopOrchestrator:
 
         # Phase 10: discover()
         self._notify_ui("on_phase_start", "discover")
-        # Discovery now happens via on_cycle_complete (TRIGGER_EVERY_N=15)
+        if self.discovery_loop:
+            log_json("INFO", "orchestrator_triggering_discovery")
+            self.discovery_loop.on_cycle_complete(entry)
         self._notify_ui("on_phase_complete", "discover", 0)
-        self._emit_phase_telemetry(cycle_id, goal, "discover", 0, {"status": "skip"})
+        self._emit_phase_telemetry(cycle_id, goal, "discover", 0, {"status": "ok" if self.discovery_loop else "skip"})
 
         # Phase 11: evolve()
         self._notify_ui("on_phase_start", "evolve")
-        # Evolution now happens via on_cycle_complete (TRIGGER_EVERY_N=20)
+        if self.evolution_loop:
+            log_json("INFO", "orchestrator_triggering_evolution")
+            self.evolution_loop.on_cycle_complete(entry)
         self._notify_ui("on_phase_complete", "evolve", 0)
-        self._emit_phase_telemetry(cycle_id, goal, "evolve", 0, {"status": "skip"})
+        self._emit_phase_telemetry(cycle_id, goal, "evolve", 0, {"status": "ok" if self.evolution_loop else "skip"})
 
         if self.propagation_engine is not None:
             try:

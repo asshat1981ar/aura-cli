@@ -49,7 +49,10 @@ def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
     from agents.skills.structural_analyzer import StructuralAnalyzerSkill
     from agents.skills.evolution_skill import EvolutionSkill
     from agents.skills.skill_generator import SkillGeneratorSkill
+    from agents.skills.mcp_tool_generator import McpToolGeneratorSkill
+    from agents.skills.agent_generator import AgentGeneratorSkill
     from agents.skills.test_and_observe import TestAndObserveSkill
+    from agents.skills.lint import LintSkill
 
     return {
         "beads_skill": BeadsSkill(brain=brain, model=model),
@@ -85,5 +88,8 @@ def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
         "structural_analyzer": StructuralAnalyzerSkill(brain=brain, model=model),
         "evolution_skill": EvolutionSkill(brain=brain, model=model),
         "skill_generator": SkillGeneratorSkill(brain=brain, model=model),
-        "test_and_observe": TestAndObserveSkill(),
+        "mcp_tool_generator": McpToolGeneratorSkill(brain=brain, model=model),
+        "agent_generator": AgentGeneratorSkill(brain=brain, model=model),
+        "test_and_observe": TestAndObserveSkill(brain=brain, model=model),
+        "lint": LintSkill(brain=brain, model=model),
     }

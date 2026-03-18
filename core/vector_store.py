@@ -1,13 +1,30 @@
+from __future__ import annotations
+
 import json
 import time
 import uuid
 import hashlib
-try:
-    import numpy as np
-except ImportError:
-    np = None  # type: ignore[assignment]
 import sqlite3
 from typing import List, Dict, Any, Union
+
+
+class _MissingPackage:
+    """Placeholder for optional dependencies that are not installed."""
+
+    def __init__(self, name: str):
+        self._name = name
+
+    def __getattr__(self, attr: str) -> None:
+        raise ImportError(f"Optional dependency '{self._name}' is required for this operation.")
+
+    def __call__(self, *args: object, **kwargs: object) -> None:
+        raise ImportError(f"Optional dependency '{self._name}' is required for this operation.")
+
+
+try:
+    import numpy as np  # type: ignore
+except ImportError:  # pragma: no cover - exercised via optional-deps tests
+    np = _MissingPackage("numpy")  # type: ignore
 from core.logging_utils import log_json
 from core.memory_types import MemoryRecord, RetrievalQuery, SearchHit
 

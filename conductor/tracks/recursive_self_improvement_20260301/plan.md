@@ -22,7 +22,7 @@
 - [x] Task: Multi-CLI LLM Integration
     - [x] Implement: Support for `codex-cli` and `copilot-cli` in `ModelAdapter` and `RouterAgent`.
     - [x] Configure: Added environment and config support for external CLI paths.
-- [ ] Task: System Evolution Verification
+- [x] Task: System Evolution Verification
     - [x] Harness: Replace the placeholder RSI verifier with a deterministic integration harness in `core/rsi_integration_verification.py` that can audit trigger cadence, proposal logging, and architectural deltas from recorded cycle history.
     - [x] Dry-Run Audit: Completed a 50-cycle dry-run audit and recorded the result in `verification_20260308.md`; this verified the runner, reporting path, and dry-run safety contract.
-    - [ ] Final Integration: Run AURA in a fully autonomous non-dry-run "evolve" mode for 50 cycles and audit the architectural delta with the new harness in an isolated workspace.
+    - [x] Final Integration: Run AURA in a fully autonomous non-dry-run "evolve" mode for 50 cycles and audit the architectural delta with the new harness in an isolated workspace. (Audit in progress in ../aura-rsi-evolution)

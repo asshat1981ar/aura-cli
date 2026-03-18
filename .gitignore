@@ -48,6 +48,8 @@ memory/skill_weights.json
 memory/task_hierarchy_v2.json
 memory/strategy_stats.json
 memory/store/
+memory/beads_offline_queue.jsonl
+memory/beads_offline_queue.bad.jsonl
 *.db
 *.db-shm
 *.db-wal

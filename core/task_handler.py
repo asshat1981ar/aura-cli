@@ -393,35 +393,69 @@ def run_goals_loop(args, goal_queue, orchestrator, debugger_instance, planner_in
             task.status = "in_progress"
             task_manager.save()
 
-            # Execute the goal using the modern orchestrator
-            result = orchestrator.run_loop(
-                task.title, 
-                max_cycles=cycle_limit, 
-                dry_run=getattr(args, "dry_run", False)
-            )
+            grounding_hint = None
+            total_cycles_used = 0
+            task_completed = False
+            task_stop_reason = "unknown_failure"
             
-            history = result.get("history", [])
-            last_entry = history[-1] if history else {}
-            
-            # Update task status based on orchestrator result
-            if result.get("stop_reason") == "PASS":
+            # Grounding-retry loop: allows the orchestrator to retry with hints if it fails 
+            # early due to path or content mismatches, while staying within the total cycle_limit.
+            while total_cycles_used < cycle_limit:
+                remaining_cycles = cycle_limit - total_cycles_used
+                loop_goal = _compose_loop_goal(task.title, grounding_hint)
+                
+                result = orchestrator.run_loop(
+                    loop_goal, 
+                    max_cycles=remaining_cycles, 
+                    dry_run=getattr(args, "dry_run", False)
+                )
+                
+                total_cycles_used += result.get("cycles_used", 0)
+                task_stop_reason = result.get("stop_reason", "unknown_failure")
+                
+                if task_stop_reason == "PASS":
+                    task_completed = True
+                    break
+                
+                # Check for grounding-triggering failures in the last cycle
+                history = result.get("history", [])
+                last_entry = history[-1] if history else {}
+                phase_outputs = last_entry.get("phase_outputs", {})
+                apply_res = phase_outputs.get("apply", {})
+                
+                new_hint = None
+                if isinstance(apply_res, dict):
+                    error_type = apply_res.get("error_type")
+                    file_path = apply_res.get("file_path", "unknown")
+                    
+                    if error_type in ("file_not_found", "outside_project_root", "missing_file_path"):
+                        candidates = _candidate_existing_files(project_root, file_path, task.title)
+                        new_hint = _invalid_path_grounding_hint(file_path, error_type, candidates)
+                    elif error_type == MISMATCH_OVERWRITE_BLOCK_EVENT:
+                        new_hint = _mismatch_overwrite_blocked_grounding_hint(file_path)
+                
+                if new_hint and total_cycles_used < cycle_limit:
+                    log_json("INFO", "grounding_retry_triggered", details={"task_id": task.id, "reason": error_type})
+                    grounding_hint = new_hint
+                    continue # Retry with hint
+                else:
+                    break # Not a grounding failure or no cycles left
+
+            # Update task status based on loop results
+            if task_completed:
                 task.status = "completed"
                 task.result = "Goal achieved (PASS)"
-            elif result.get("stop_reason") == "MAX_CYCLES":
+            elif total_cycles_used >= cycle_limit:
                 task.status = "failed"
                 task.result = "Cycle limit reached"
             else:
                 task.status = "failed"
-                task.result = result.get("stop_reason", "unknown_failure")
+                task.result = task_stop_reason
             
             task_manager.save()
             
             # Record outcome in archive
-            final_score = 0.0 # Modern orchestrator doesn't have a single score yet
-            if history:
-                # We could derive a score from verification or use legacy if available
-                final_score = 1.0 if result.get("stop_reason") == "PASS" else 0.0
-            
+            final_score = 1.0 if task_completed else 0.0
             goal_archive.record(task.title, final_score)
 
             if task.status == "failed":

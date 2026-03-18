@@ -38,6 +38,7 @@ SKILL_MAP: Dict[str, list[str]] = {
     "bug_fix":  [
         "symbol_indexer",
         "test_and_observe",     # run failing tests, capture diagnostics
+        "test_coverage_analyzer",
         "error_pattern_matcher",
         "git_history_analyzer",
         "type_checker",
@@ -54,7 +55,9 @@ SKILL_MAP: Dict[str, list[str]] = {
     ],
     "refactor": [
         "symbol_indexer",
+        "structural_analyzer",
         "complexity_scorer",
+        "test_coverage_analyzer",
         "code_clone_detector",
         "tech_debt_quantifier",
         "refactoring_advisor",
@@ -75,6 +78,7 @@ SKILL_MAP: Dict[str, list[str]] = {
     ],
     "default": [
         "symbol_indexer",
+        "structural_analyzer",
         "linter_enforcer",
         "lint",                 # always run a baseline lint pass
     ],
@@ -137,6 +141,7 @@ _CACHEABLE_SKILLS = {
     "symbol_indexer",
     "tech_debt_quantifier",
     "test_coverage_analyzer",
+    "structural_analyzer",
 }
 _FINGERPRINT_SKIP_PARTS = {
     ".git",
@@ -278,7 +283,7 @@ def dispatch_skills(
     goal_type: str,
     skills: Dict[str, Any],
     project_root: str,
-    timeout: float = 120.0,
+    timeout: float = 300.0,
 ) -> Dict[str, Any]:
     """Run goal-relevant skills concurrently and return their combined output.
 

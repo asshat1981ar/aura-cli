@@ -408,6 +408,7 @@ class SandboxAdapter:
 
         act_output = input_data.get("act") or {}
         changes = act_output.get("changes") or []
+        project_root = input_data.get("project_root")
 
         # Collect all new_code snippets to validate
         snippets = [c.get("new_code", "") for c in changes if c.get("new_code")]
@@ -419,7 +420,7 @@ class SandboxAdapter:
         for snippet in snippets:
             if not snippet.strip():
                 continue
-            res = self.agent.run_code(snippet)
+            res = self.agent.run_code(snippet, project_root=project_root)
             results.append(res)
 
         if not results:

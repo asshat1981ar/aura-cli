@@ -31,34 +31,41 @@ class StructuralAnalyzerSkill(SkillBase):
         if not project_root:
             return {"error": "Provide 'project_root'"}
 
-        # 1. Populate graph from symbol indexer if it looks empty or needs refresh
+        top_k = input_data.get("top_k", 10)
+
+        # 1. Populate graph from symbol indexer
+        # Try to use existing index if available to save time
         index_results = self.symbol_indexer.run({"project_root": project_root})
         import_graph = index_results.get("import_graph", {})
         
+        if not import_graph:
+            log_json("WARN", "structural_analyzer_no_imports_found")
+        
         # Build mapping from module path to file path
-        # core.logging_utils -> core/logging_utils.py
         mod_to_file = {}
         for f in import_graph.keys():
             if f.endswith(".py"):
                 mod_name = f[:-3].replace("/", ".").replace("\\", ".")
                 mod_to_file[mod_name] = f
-                # Also handle __init__.py modules
                 if mod_name.endswith(".__init__"):
                     mod_to_file[mod_name[:-9]] = f
 
         for file_path, imports in import_graph.items():
             for imp in imports:
-                # Try resolving to project file
                 resolved = mod_to_file.get(imp)
                 if resolved:
                     self.cg.add_edge(file_path, resolved, "imports")
                 else:
-                    # Fallback for 3rd party or unresolved local
                     self.cg.add_edge(file_path, f"module:{imp}", "imports")
 
         # 2. Graph Analysis
-        cycles = self.cg.find_circular_dependencies()
-        bottlenecks = self.cg.find_bottleneck_files(limit=20)
+        try:
+            cycles = self.cg.find_circular_dependencies()
+            bottlenecks = self.cg.find_bottleneck_files(limit=top_k * 2)
+        except Exception as e:
+            log_json("ERROR", "structural_analyzer_graph_analysis_failed", details={"error": str(e)})
+            cycles = []
+            bottlenecks = []
 
         # 3. Complexity Analysis
         comp_results = self.complexity_scorer.run({"project_root": project_root})
@@ -68,59 +75,57 @@ class StructuralAnalyzerSkill(SkillBase):
         hotspots = []
         for b in bottlenecks:
             fname = b["file"]
+            if fname.startswith("module:"):
+                continue
+                
             centrality = b["centrality_score"]
-            
-            # Find max complexity in this file
             funcs = detailed_comp.get(fname, [])
-            max_cc = max([f["complexity"] for f in funcs], default=0)
+            max_cc = max([f.get("complexity", 0) for f in funcs], default=0)
             
-            if max_cc > 8 and centrality > 0.03: # Heuristic thresholds
+            # Thresholds for hotspots
+            if max_cc > 8 and centrality > 0.01:
                 hotspots.append({
                     "file": fname,
                     "centrality": centrality,
                     "max_complexity": max_cc,
-                    "risk_level": "CRITICAL" if max_cc > 20 else ("HIGH" if max_cc > 12 else "MEDIUM")
+                    "risk_level": "CRITICAL" if max_cc > 20 or (max_cc > 15 and centrality > 0.1) else ("HIGH" if max_cc > 12 else "MEDIUM")
                 })
+
+        hotspots.sort(key=lambda x: (x["centrality"] * x["max_complexity"]), reverse=True)
+        hotspots = hotspots[:top_k]
 
         # 5. Coverage Analysis (Optional)
         coverage_gaps = []
         if input_data.get("report_coverage"):
-            from agents.skills.test_coverage_analyzer import TestCoverageAnalyzerSkill
-            cov_analyzer = TestCoverageAnalyzerSkill()
-            cov_results = cov_analyzer.run({"project_root": project_root})
-            
-            # Identify high-risk files with low/zero coverage
-            # For now, focus on files identified as bottlenecks or hotspots
-            monitored_files = set([h["file"] for h in hotspots] + [b["file"] for b in bottlenecks])
-            
-            # Missing files (0% coverage)
-            for f in cov_results.get("missing_files", []):
-                # Clean path if absolute
-                rel_f = f
-                if Path(f).is_absolute():
-                    try:
-                        rel_f = str(Path(f).relative_to(project_root))
-                    except ValueError:
-                        pass
+            try:
+                from agents.skills.test_coverage_analyzer import TestCoverageAnalyzerSkill
+                cov_analyzer = TestCoverageAnalyzerSkill(brain=self.brain, model=self.model)
+                cov_results = cov_analyzer.run({"project_root": project_root})
                 
-                coverage_gaps.append({
-                    "file": rel_f,
-                    "coverage_pct": 0.0,
-                    "risk_priority": "HIGH" if rel_f in monitored_files else "MEDIUM"
-                })
+                monitored_files = set([h["file"] for h in hotspots] + [b["file"] for b in bottlenecks])
+                for f in cov_results.get("missing_files", []):
+                    rel_f = f
+                    if Path(f).is_absolute():
+                        try:
+                            rel_f = str(Path(f).relative_to(project_root))
+                        except ValueError:
+                            pass
+                    
+                    if rel_f in monitored_files:
+                        coverage_gaps.append({
+                            "file": rel_f,
+                            "coverage_pct": 0.0,
+                            "risk_priority": "HIGH"
+                        })
+            except Exception as e:
+                log_json("WARN", "structural_analyzer_coverage_failed", details={"error": str(e)})
 
-        summary = f"Detected {len(cycles)} cycles and {len(hotspots)} architectural hotspots."
+        summary = f"Detected {len(cycles)} circular dependencies and {len(hotspots)} hotspots."
         
-        res = {
-            "circular_dependencies": cycles,
-            "bottlenecks": bottlenecks,
+        return {
+            "circular_dependencies": cycles[:top_k],
+            "bottlenecks": bottlenecks[:top_k],
             "hotspots": hotspots,
+            "coverage_gaps": coverage_gaps[:top_k],
             "summary": summary
         }
-
-        if input_data.get("report_coverage"):
-            if coverage_gaps:
-                res["summary"] += f" Found {len(coverage_gaps)} coverage gaps."
-            res["coverage_gaps"] = coverage_gaps
-
-        return res

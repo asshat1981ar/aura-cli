@@ -72,6 +72,18 @@ Each `run_cycle()` call executes 10 phases in order:
 | `MemoryStore` | `memory/store/` | Per-cycle summaries (ReflectorAgent) | File-based append |
 | `GoalQueue` | `memory/goal_queue_v2.json` | Pending and in-progress goals | `add()`, `next()`, `batch_add()` |
 
+### Runtime Memory Files (not tracked by git)
+
+Treat live runtime files as disposable local state, not reviewable source
+artifacts. In particular:
+
+- `memory/brain.db`
+- `memory/capability_status.json`
+- `memory/project_sync_hashes.json`
+- `memory/goal_queue.json`
+- `memory/goal_archive.json`
+- `memory/skill_weights.json`
+
 ### HTTP APIs
 
 | Server | Port | File | Auth |

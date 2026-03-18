@@ -1,5 +1,6 @@
-Wrote docs/CLI_REFERENCE.md
-rom `aura_cli.options.help_schema`.
+# CLI Reference
+
+Generated from `aura_cli.options.help_schema`.
 
 Schema version: `3`
 Deterministic output: `true`
@@ -76,6 +77,8 @@ Known record codes:
 - [`mcp`](#mcp)
   - [`aura mcp tools`](#aura-mcp-tools)
   - [`aura mcp call`](#aura-mcp-call)
+  - [`aura mcp check`](#aura-mcp-check)
+  - [`aura mcp setup`](#aura-mcp-setup)
 - [`scaffold`](#scaffold)
 - [`evolve`](#evolve)
 - [`queue`](#queue)
@@ -85,6 +88,7 @@ Known record codes:
   - [`aura memory search`](#aura-memory-search)
   - [`aura memory reindex`](#aura-memory-reindex)
 - [`metrics`](#metrics)
+- [`skills`](#skills)
 
 ## `help`
 
@@ -351,6 +355,34 @@ Examples:
 - `python3 main.py mcp call limits`
 - `python3 main.py mcp call tail_logs --args '{"lines": 10}'`
 
+### `aura mcp check`
+
+Check MCP server readiness
+
+Run local MCP readiness checks for aura-mcp and mcpcodeserver.
+
+`action`: `mcp_check` `requires_runtime`: `false`
+
+Legacy flags:
+- `--mcp-check`
+
+Examples:
+- `python3 main.py mcp check`
+
+### `aura mcp setup`
+
+Setup MCP servers
+
+Patch MCP configs, start servers, and run readiness probes.
+
+`action`: `mcp_setup` `requires_runtime`: `false`
+
+Legacy flags:
+- `--mcp-setup`
+
+Examples:
+- `python3 main.py mcp setup`
+
 ## `scaffold`
 
 ### `aura scaffold`
@@ -470,3 +502,17 @@ Display cycle success rates and timing stats.
 Examples:
 - `python3 main.py metrics`
 - `python3 main.py metrics --json`
+
+## `skills`
+
+### `aura skills`
+
+List registered skills
+
+Show all skills registered in the skill registry, including their names.
+
+`action`: `skills_list` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py skills`
+- `python3 main.py skills --json`

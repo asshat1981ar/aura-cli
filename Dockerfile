@@ -1,22 +1,33 @@
-# Use a lightweight Python image as the base
-FROM python:3.12-slim-buster
+# syntax=docker/dockerfile:1
 
-# Set the working directory in the container
+# --- Stage 1: builder -------------------------------------------------------
+FROM python:3.12-slim-bookworm AS builder
+
+WORKDIR /build
+COPY pyproject.toml requirements.txt ./
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# --- Stage 2: runtime -------------------------------------------------------
+FROM python:3.12-slim-bookworm AS runtime
+
 WORKDIR /app
 
-# Copy the requirements file and install dependencies
-COPY ./tools/requirements.txt /app/tools/requirements.txt
-RUN pip install --no-cache-dir -r /app/tools/requirements.txt
+# Bring in installed packages from builder
+COPY --from=builder /install /usr/local
 
-# Copy the rest of the application code
-COPY . /app
+# Copy application code
+COPY . .
 
-# Expose the port that Uvicorn will listen on
+# Clean bytecode caches
+RUN find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null; true
+
+# Run as non-root
+RUN useradd --create-home appuser
+USER appuser
+
 EXPOSE 8000
 
-# Set the GITHUB_PAT environment variable securely (e.g., via Kubernetes Secret or Docker secret)
-# For local testing, you can pass it via -e GITHUB_PAT=YOUR_PAT during docker run
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
 
-# Command to run the Uvicorn server
-# Make sure to run the mcp_server.py from the tools directory
 CMD ["uvicorn", "tools.mcp_server:app", "--host", "0.0.0.0", "--port", "8000"]

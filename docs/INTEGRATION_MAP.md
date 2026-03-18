@@ -218,6 +218,18 @@ There is no single persistence mechanism; AURA uses several:
   - [core/vector_store.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/vector_store.py)
   - [core/project_syncer.py](/data/data/com.termux/files/home/aura_cli/aura-cli/core/project_syncer.py)
 - task hierarchy persistence:
+
+### Runtime Memory Files (not tracked by git)
+
+These files are runtime state, not source-of-truth project artifacts, and
+should stay out of commits even when they exist locally:
+
+- `memory/brain.db`
+- `memory/capability_status.json`
+- `memory/project_sync_hashes.json`
+- `memory/goal_queue.json`
+- `memory/goal_archive.json`
+- `memory/skill_weights.json`
   - [memory/task_hierarchy_v2.json](/data/data/com.termux/files/home/aura_cli/aura-cli/memory/task_hierarchy_v2.json)
 
 ## Configuration

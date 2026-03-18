@@ -142,7 +142,7 @@ class SandboxAgent:
     # Public API
     # ------------------------------------------------------------------
 
-    def run_code(self, code: str, extra_files: Optional[dict] = None) -> SandboxResult:
+    def run_code(self, code: str, extra_files: Optional[dict] = None, project_root: Optional[str] = None) -> SandboxResult:
         """Execute a raw Python code string in a fresh temporary directory.
 
         Writes *code* to ``aura_exec.py`` in a new temp dir, optionally writes
@@ -153,6 +153,7 @@ class SandboxAgent:
             extra_files: Optional dict of ``{filename: content}`` pairs.  Each
                 entry is written as a sibling file to the main script before
                 execution, allowing the script to import helpers.
+            project_root: Optional path to the project root to include in sys.path.
 
         Returns:
             :class:`SandboxResult` with execution outcome.
@@ -161,7 +162,14 @@ class SandboxAgent:
         """
         with tempfile.TemporaryDirectory(prefix="aura_sandbox_") as tmpdir:
             script = Path(tmpdir) / "aura_exec.py"
-            script.write_text(code, encoding="utf-8")
+            
+            final_code = code
+            if project_root:
+                # Inject project root into sys.path so local imports work
+                header = f"import sys\nsys.path.insert(0, {repr(str(Path(project_root).resolve()))})\n"
+                final_code = header + code
+                
+            script.write_text(final_code, encoding="utf-8")
 
             if extra_files:
                 for fname, content in extra_files.items():
@@ -350,6 +358,8 @@ class SandboxAgent:
         return counts
 
     def _record(self, result: SandboxResult, label: str, code_snippet: str):
+        if not self.brain:
+            return
         self.brain.remember(
             f"SandboxAgent [{label}]: {result.summary()} | "
             f"code='{code_snippet[:80]}...'"

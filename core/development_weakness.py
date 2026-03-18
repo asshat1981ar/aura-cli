@@ -101,6 +101,9 @@ def build_recursive_self_improvement_inventory(project_root: Path) -> dict[str, 
                 "paths": deprecated_paths,
             }
         )
+    
+    # Validation status only matters if we are actually doing RSI work
+    # but we'll report it as a weakness regardless if incomplete.
     if validation_status != "validated":
         weaknesses.append(
             {
@@ -150,8 +153,13 @@ def build_development_context(
     target_subsystem = identify_development_target(goal, active_context)
 
     if target_subsystem == inventory["subsystem"]:
+        # Only classify as overlapping if deprecated paths actually exist
+        if inventory["deprecated_paths"]:
+            overlap_classification = inventory["overlap_classification"]
+        else:
+            overlap_classification = "canonical_only"
+        
         canonical_path = inventory["canonical_runtime_path"]
-        overlap_classification = inventory["overlap_classification"]
         validation_status = inventory["validation_status"]
     else:
         canonical_path = None

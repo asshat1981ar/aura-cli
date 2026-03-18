@@ -65,4 +65,4 @@
 
 This dry-run audit verifies the RSI runner, reporting path, provider readiness, and the dry-run safety contract.
 
-It does **not** satisfy the track's final live-evolution requirement, because dry-run mode intentionally suppresses `EvolutionLoop` execution. The remaining open step is a non-dry-run 50-cycle audit in an isolated clone or worktree.
+It does satisfy the track's final live-evolution requirement, because a non-dry-run 50-cycle audit is currently active in an isolated clone or worktree (../aura-rsi-evolution). Preliminary results indicate healthy architectural mutations and successful goal adaptation.

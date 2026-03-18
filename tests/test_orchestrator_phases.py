@@ -189,6 +189,50 @@ class TestOrchestratorPhases(unittest.TestCase):
         self.assertIn("beads_gate", result["phase_outputs"])
         self.agents["plan"].run.assert_not_called()
 
+    def test_beads_gate_builds_recursive_self_improvement_development_context(self):
+        beads_bridge = MagicMock()
+        beads_bridge.run.return_value = {
+            "schema_version": 1,
+            "ok": True,
+            "status": "ok",
+            "decision": {
+                "schema_version": 1,
+                "decision_id": "beads-rsi-1",
+                "status": "allow",
+                "summary": "Proceed.",
+                "rationale": [],
+                "required_constraints": [],
+                "required_skills": [],
+                "required_tests": [],
+                "follow_up_goals": [],
+                "target_subsystem": "recursive_self_improvement",
+                "canonical_path": "core/recursive_improvement.py",
+                "overlap_classification": "legacy_overlap_present",
+                "validation_status": "pending_live_evolution_audit",
+                "required_remediation": [],
+                "stop_reason": None,
+            },
+            "error": None,
+            "stderr": None,
+            "duration_ms": 5,
+        }
+        orchestrator = LoopOrchestrator(
+            agents=self.agents,
+            brain=self.mock_brain,
+            project_root=Path("."),
+            policy=Policy.from_config({}),
+            beads_bridge=beads_bridge,
+            beads_enabled=True,
+            beads_required=True,
+        )
+
+        orchestrator.run_cycle("Harden recursive self-improvement routing", dry_run=True)
+
+        payload = beads_bridge.run.call_args[0][0]
+        self.assertEqual(payload["development_context"]["target_subsystem"], "recursive_self_improvement")
+        self.assertEqual(payload["development_context"]["canonical_path"], "core/recursive_improvement.py")
+        self.assertEqual(payload["development_context"]["overlap_classification"], "legacy_overlap_present")
+
     def test_bead_side_effects_are_disabled_when_beads_disabled(self):
         beads_skill = MagicMock()
         orchestrator = LoopOrchestrator(

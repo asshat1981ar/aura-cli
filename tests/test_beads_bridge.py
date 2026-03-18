@@ -88,6 +88,7 @@ def test_build_beads_input_sets_canonical_shape(tmp_path: Path):
     assert payload["runtime_mode"] == "full"
     assert payload["project_root"] == str(tmp_path)
     assert payload["queue_summary"]["pending_count"] == 1
+    assert payload["development_context"] is None
 
 
 def test_build_beads_runtime_input_loads_prd_and_track_context(tmp_path: Path):
@@ -119,6 +120,8 @@ def test_build_beads_runtime_input_loads_prd_and_track_context(tmp_path: Path):
     assert payload["prd_context"]["title"] == "BEADS PRD"
     assert payload["conductor_track"]["track_id"] == "beads_orchestrator_20260302"
     assert payload["queue_summary"]["pending_count"] == 1
+    assert payload["development_context"]["target_subsystem"] == "general"
+    assert payload["development_context"]["validation_status"] == "not_applicable"
 
 
 def test_beads_bridge_returns_validated_result(tmp_path: Path):
@@ -149,6 +152,11 @@ def test_beads_bridge_returns_validated_result(tmp_path: Path):
                     "required_skills": [],
                     "required_tests": ["tests/test_beads_bridge.py"],
                     "follow_up_goals": [],
+                    "target_subsystem": "general",
+                    "canonical_path": None,
+                    "overlap_classification": "not_targeted",
+                    "validation_status": "not_applicable",
+                    "required_remediation": [],
                     "stop_reason": None,
                 },
                 "error": None,
@@ -346,6 +354,8 @@ def test_live_bridge_script_returns_allow_and_imports_ready_followups(tmp_path: 
     assert "bead:bd-1: Review BEADS telemetry" in result["decision"]["follow_up_goals"]
     assert "bead:bd-2: Refresh operator docs" in result["decision"]["follow_up_goals"]
     assert "lint" in result["decision"]["required_skills"]
+    assert result["decision"]["target_subsystem"] == "general"
+    assert result["decision"]["validation_status"] == "unknown"
 
 
 def test_live_bridge_script_revises_when_capabilities_are_missing(tmp_path: Path):
@@ -386,6 +396,7 @@ def test_live_bridge_script_revises_when_capabilities_are_missing(tmp_path: Path
         for line in result["decision"]["rationale"]
     )
     assert any(goal.startswith("Add AURA skill 'github_bridge'") for goal in result["decision"]["follow_up_goals"])
+    assert result["decision"]["required_remediation"]
 
 
 def test_live_bridge_script_prefers_repo_pinned_bd_without_env_override(tmp_path: Path):
@@ -416,3 +427,44 @@ def test_live_bridge_script_prefers_repo_pinned_bd_without_env_override(tmp_path
     assert result["ok"] is True
     assert result["decision"]["status"] == "allow"
     assert "bead:bd-7: Use repo-local BD" in result["decision"]["follow_up_goals"]
+
+
+def test_live_bridge_script_blocks_deprecated_recursive_self_improvement_paths(tmp_path: Path):
+    fake_bd = _write_fake_bd(
+        tmp_path,
+        info_payload={"issue_count": 0, "mode": "direct"},
+    )
+    bridge = _script_bridge(tmp_path, env={"BEADS_CLI": str(fake_bd)})
+    payload = build_beads_input(
+        goal="Expand scripts/autonomous_rsi_run.py for recursive self-improvement experiments",
+        goal_type="feature",
+        runtime_mode="full",
+        project_root=tmp_path,
+        queue_summary={"pending_count": 0},
+        active_context={},
+        development_context={
+            "target_subsystem": "recursive_self_improvement",
+            "canonical_path": "core/recursive_improvement.py",
+            "overlap_classification": "legacy_overlap_present",
+            "validation_status": "pending_live_evolution_audit",
+            "prototype_inventory": {
+                "deprecated_paths": ["core/evolution_plan.py", "scripts/autonomous_rsi_run.py"],
+                "canonical_paths": ["core/recursive_improvement.py", "core/fitness.py"],
+                "validation_notes": ["The tracked RSI verification still requires a non-dry-run 50-cycle audit."],
+            },
+            "weaknesses": [
+                {"code": "prototype_overlap", "summary": "Legacy RSI prototype entrypoints still overlap the canonical runtime path."},
+            ],
+        },
+        prd_context={"title": "BEADS PRD", "path": "plans/beads-orchestrator-prd.md"},
+        conductor_track={"track_id": "recursive_self_improvement_20260301", "path": "conductor/tracks/recursive_self_improvement_20260301"},
+    )
+
+    result = bridge.run(payload)
+
+    assert result["ok"] is True
+    assert result["decision"]["status"] == "block"
+    assert result["decision"]["target_subsystem"] == "recursive_self_improvement"
+    assert result["decision"]["canonical_path"] == "core/recursive_improvement.py"
+    assert result["decision"]["stop_reason"] == "deprecated_recursive_self_improvement_path"
+    assert any("Port the work to core/recursive_improvement.py" in step for step in result["decision"]["required_remediation"])

@@ -52,6 +52,11 @@ def _decision(status: str = "allow") -> dict:
         "required_skills": [],
         "required_tests": [],
         "follow_up_goals": [],
+        "target_subsystem": "general",
+        "canonical_path": None,
+        "overlap_classification": "not_targeted",
+        "validation_status": "not_applicable",
+        "required_remediation": [],
         "stop_reason": None,
     }
 
@@ -65,6 +70,7 @@ def _payload() -> dict:
         "project_root": "/tmp/test",
         "queue_summary": {},
         "active_context": {},
+        "development_context": None,
         "prd_context": None,
         "conductor_track": None,
     }

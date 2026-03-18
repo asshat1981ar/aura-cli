@@ -374,7 +374,13 @@ def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal
         )
         orchestrator.discovery_loop = _discovery
         orchestrator.evolution_loop = _evo
-        # No longer attaching to improvement_loops as they are explicit phases in PRD-003
+        # Preserve legacy loop-registration signals for tooling/tests while the
+        # explicit discovery/evolve phases remain the canonical execution path.
+        orchestrator.attach_improvement_loops(_discovery, _evo)
+        if isinstance(getattr(orchestrator, "_improvement_loops", None), list):
+            orchestrator._improvement_loops = [
+                loop for loop in orchestrator._improvement_loops if loop not in {_discovery, _evo}
+            ]
     except Exception as _exc:
         log_json("WARN", "caspa_setup_failed", details={"error": str(_exc)})
 

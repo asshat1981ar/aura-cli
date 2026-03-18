@@ -24,6 +24,7 @@ from core.beads_contract import (
 )
 from core.beads_cli import resolve_beads_cli
 from core.logging_utils import log_json
+from core.development_weakness import build_development_context
 from core.operator_runtime import build_queue_summary
 
 
@@ -38,6 +39,7 @@ def build_beads_input(
     runtime_mode: str,
     queue_summary: Mapping[str, Any],
     active_context: Mapping[str, Any] | None = None,
+    development_context: Mapping[str, Any] | None = None,
     prd_context: Mapping[str, Any] | None = None,
     conductor_track: Mapping[str, Any] | None = None,
     goal_type: str | None = None,
@@ -50,6 +52,7 @@ def build_beads_input(
         "project_root": str(project_root),
         "queue_summary": dict(queue_summary),
         "active_context": dict(active_context or {}),
+        "development_context": dict(development_context) if development_context is not None else None,
         "prd_context": dict(prd_context) if prd_context is not None else None,
         "conductor_track": dict(conductor_track) if conductor_track is not None else None,
     }
@@ -124,6 +127,7 @@ def build_beads_runtime_input(
     goal_archive: Any = None,
     active_goal: str | None = None,
     active_context: Mapping[str, Any] | None = None,
+    development_context: Mapping[str, Any] | None = None,
     goal_type: str | None = None,
 ) -> BeadsInput:
     return build_beads_input(
@@ -137,6 +141,13 @@ def build_beads_runtime_input(
             active_goal=active_goal or goal,
         ),
         active_context=active_context or {},
+        development_context=development_context
+        if development_context is not None
+        else build_development_context(
+            Path(project_root),
+            goal=goal,
+            active_context=active_context,
+        ),
         prd_context=load_prd_context(Path(project_root)),
         conductor_track=load_conductor_track_context(Path(project_root)),
     )
@@ -196,9 +207,19 @@ def validate_beads_result(payload: Any) -> BeadsResult:
             "required_skills",
             "required_tests",
             "follow_up_goals",
+            "required_remediation",
         ):
             if not _is_string_list(decision.get(key)):
                 raise ValueError(f"BEADS decision field '{key}' must be a list of strings.")
+        if not isinstance(decision.get("target_subsystem"), str):
+            raise ValueError("BEADS decision requires a target_subsystem string.")
+        canonical_path = decision.get("canonical_path")
+        if canonical_path is not None and not isinstance(canonical_path, str):
+            raise ValueError("BEADS decision canonical_path must be a string or null.")
+        if not isinstance(decision.get("overlap_classification"), str):
+            raise ValueError("BEADS decision requires an overlap_classification string.")
+        if not isinstance(decision.get("validation_status"), str):
+            raise ValueError("BEADS decision requires a validation_status string.")
         stop_reason = decision.get("stop_reason")
         if stop_reason is not None and not isinstance(stop_reason, str):
             raise ValueError("BEADS decision stop_reason must be a string or null.")

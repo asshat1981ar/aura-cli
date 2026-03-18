@@ -20,6 +20,7 @@ class BeadsInput(TypedDict):
     project_root: str
     queue_summary: dict[str, Any]
     active_context: dict[str, Any]
+    development_context: dict[str, Any] | None
     prd_context: dict[str, Any] | None
     conductor_track: dict[str, Any] | None
 
@@ -34,6 +35,11 @@ class BeadsDecision(TypedDict):
     required_skills: list[str]
     required_tests: list[str]
     follow_up_goals: list[str]
+    target_subsystem: str
+    canonical_path: str | None
+    overlap_classification: str
+    validation_status: str
+    required_remediation: list[str]
     stop_reason: str | None
 
 

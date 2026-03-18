@@ -153,6 +153,15 @@ function uniqueStrings(values) {
   return output;
 }
 
+function stringList(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item) => typeof item === "string" && item.trim())
+    .map((item) => item.trim());
+}
+
 function goalTypeRequiredSkills(goalType) {
   switch (goalType) {
     case "bug_fix":
@@ -225,6 +234,64 @@ function capabilitySignals(payload) {
   };
 }
 
+function developmentSignals(payload) {
+  const developmentContext = payload && typeof payload.development_context === "object" && payload.development_context
+    ? payload.development_context
+    : {};
+  const prototypeInventory = developmentContext && typeof developmentContext.prototype_inventory === "object" && developmentContext.prototype_inventory
+    ? developmentContext.prototype_inventory
+    : {};
+  const weaknesses = Array.isArray(developmentContext.weaknesses)
+    ? developmentContext.weaknesses.filter((item) => item && typeof item === "object")
+    : [];
+
+  return {
+    targetSubsystem:
+      typeof developmentContext.target_subsystem === "string" && developmentContext.target_subsystem.trim()
+        ? developmentContext.target_subsystem.trim()
+        : "general",
+    canonicalPath:
+      typeof developmentContext.canonical_path === "string" && developmentContext.canonical_path.trim()
+        ? developmentContext.canonical_path.trim()
+        : null,
+    overlapClassification:
+      typeof developmentContext.overlap_classification === "string" && developmentContext.overlap_classification.trim()
+        ? developmentContext.overlap_classification.trim()
+        : "unknown",
+    validationStatus:
+      typeof developmentContext.validation_status === "string" && developmentContext.validation_status.trim()
+        ? developmentContext.validation_status.trim()
+        : "unknown",
+    deprecatedPaths: stringList(prototypeInventory.deprecated_paths),
+    canonicalPaths: stringList(prototypeInventory.canonical_paths),
+    validationNotes: stringList(prototypeInventory.validation_notes),
+    weaknesses,
+  };
+}
+
+function goalMentionsPath(goalText, filePath) {
+  if (typeof goalText !== "string" || !goalText.trim() || typeof filePath !== "string" || !filePath.trim()) {
+    return false;
+  }
+  const goalLower = goalText.toLowerCase();
+  const normalizedPath = filePath.replace(/\\/g, "/").toLowerCase();
+  const baseName = normalizedPath.split("/").pop();
+  return goalLower.includes(normalizedPath) || (baseName ? goalLower.includes(baseName) : false);
+}
+
+function isRetirementGoal(goalText) {
+  const goalLower = typeof goalText === "string" ? goalText.toLowerCase() : "";
+  return [
+    "retire",
+    "remove",
+    "delete",
+    "deprecate",
+    "replace",
+    "migrate",
+    "port",
+  ].some((token) => goalLower.includes(token));
+}
+
 function buildDecision(payload, beadsSignals) {
   const goal = typeof payload.goal === "string" ? payload.goal.trim() : "";
   const goalType = typeof payload.goal_type === "string" ? payload.goal_type : "default";
@@ -238,9 +305,15 @@ function buildDecision(payload, beadsSignals) {
     "LoopOrchestrator remains the sole execution authority.",
   ];
   const followUpGoals = [];
+  const requiredRemediation = [];
   const capability = capabilitySignals(payload);
+  const development = developmentSignals(payload);
   const requiredSkills = [...goalTypeRequiredSkills(goalType), ...capability.recommendedSkills, ...capability.missingSkills];
   const requiredTests = [...goalTypeRequiredTests(goalType)];
+  let targetSubsystem = development.targetSubsystem;
+  let canonicalPath = development.canonicalPath;
+  let overlapClassification = development.overlapClassification;
+  let validationStatus = development.validationStatus;
 
   if (!goal) {
     return normalizeDecision({
@@ -251,6 +324,11 @@ function buildDecision(payload, beadsSignals) {
       required_skills: uniqueStrings(requiredSkills),
       required_tests: uniqueStrings(requiredTests),
       follow_up_goals: [],
+      target_subsystem: targetSubsystem,
+      canonical_path: canonicalPath,
+      overlap_classification: overlapClassification,
+      validation_status: validationStatus,
+      required_remediation: [],
       stop_reason: "invalid_goal",
     });
   }
@@ -304,22 +382,83 @@ function buildDecision(payload, beadsSignals) {
   let status = "allow";
   let summary = "Proceed with a scoped BEADS-backed execution plan.";
   let stopReason = null;
+  const setRevise = (nextSummary, nextStopReason) => {
+    if (status === "block") {
+      return;
+    }
+    status = "revise";
+    summary = nextSummary;
+    if (!stopReason) {
+      stopReason = nextStopReason;
+    }
+  };
+  const setBlock = (nextSummary, nextStopReason) => {
+    status = "block";
+    summary = nextSummary;
+    stopReason = nextStopReason;
+  };
 
   if (
     capability.missingSkills.length > 0 ||
     capability.provisioningActions.length > 0 ||
     capability.queuedGoals.length > 0
   ) {
-    status = "revise";
-    summary = "Revise before execution: capability prerequisites are still pending.";
-    stopReason = "capability_prerequisites_missing";
+    setRevise("Revise before execution: capability prerequisites are still pending.", "capability_prerequisites_missing");
     requiredConstraints.push("Resolve or queue missing capability work before broad implementation changes.");
+    requiredRemediation.push("Resolve the queued capability prerequisites before broad implementation changes.");
   } else if (planningGaps.length > 0) {
-    status = "revise";
-    summary = "Revise before execution: canonical planning context is incomplete.";
-    stopReason = "planning_context_incomplete";
+    setRevise("Revise before execution: canonical planning context is incomplete.", "planning_context_incomplete");
     rationale.push(`Missing planning inputs: ${planningGaps.join(", ")}.`);
     requiredConstraints.push("Refresh the canonical PRD and conductor context before large-scope execution.");
+    requiredRemediation.push("Refresh the canonical PRD and conductor context before large-scope execution.");
+  }
+
+  for (const note of development.validationNotes) {
+    rationale.push(note);
+  }
+  for (const weakness of development.weaknesses) {
+    if (typeof weakness.summary === "string" && weakness.summary.trim()) {
+      rationale.push(`Weakness scan: ${weakness.summary.trim()}`);
+    }
+  }
+
+  if (targetSubsystem === "recursive_self_improvement") {
+    if (canonicalPath) {
+      rationale.push(`Canonical RSI runtime path: ${canonicalPath}.`);
+    }
+    if (development.deprecatedPaths.length > 0) {
+      rationale.push(`Deprecated RSI prototype paths remain present: ${development.deprecatedPaths.join(", ")}.`);
+    }
+    requiredConstraints.push("Do not add or restore runtime logic in deprecated RSI prototype paths.");
+    requiredTests.push("Run tests/test_recursive_improvement.py and tests/test_fitness.py.");
+    requiredTests.push("Run tests/test_evolution_loop_rsi.py and tests/test_rsi_integration_verification.py.");
+
+    const touchesDeprecatedPath = development.deprecatedPaths.some((filePath) => goalMentionsPath(goal, filePath));
+    if (touchesDeprecatedPath && !isRetirementGoal(goal)) {
+      setBlock(
+        "Blocked: the goal targets a retired recursive self-improvement prototype path.",
+        "deprecated_recursive_self_improvement_path",
+      );
+      requiredRemediation.push(`Port the work to ${canonicalPath || "the canonical RSI runtime path"} instead of reviving a retired prototype entrypoint.`);
+    } else if (touchesDeprecatedPath) {
+      rationale.push("Goal references a deprecated RSI path, but the wording suggests a retirement or migration task.");
+    }
+
+    if (overlapClassification !== "canonical_only") {
+      setRevise(
+        "Revise before execution: recursive self-improvement work must converge on the canonical path.",
+        "recursive_self_improvement_overlap",
+      );
+      requiredRemediation.push("Retire or shrink overlapping RSI prototype entrypoints before expanding the workflow.");
+    }
+
+    if (validationStatus !== "validated" && validationStatus !== "not_applicable") {
+      setRevise(
+        "Revise before execution: recursive self-improvement validation is still incomplete.",
+        "recursive_self_improvement_validation_pending",
+      );
+      requiredRemediation.push("Complete the non-dry-run 50-cycle RSI audit in an isolated workspace before broadening autonomous mutation scope.");
+    }
   }
 
   return normalizeDecision({
@@ -330,6 +469,11 @@ function buildDecision(payload, beadsSignals) {
     required_skills: uniqueStrings(requiredSkills),
     required_tests: uniqueStrings(requiredTests),
     follow_up_goals: uniqueStrings(followUpGoals),
+    target_subsystem: targetSubsystem,
+    canonical_path: canonicalPath,
+    overlap_classification: overlapClassification,
+    validation_status: validationStatus,
+    required_remediation: uniqueStrings(requiredRemediation),
     stop_reason: stopReason,
   });
 }
@@ -365,6 +509,25 @@ function normalizeDecision(raw) {
       : [],
     follow_up_goals: Array.isArray(decision.follow_up_goals)
       ? decision.follow_up_goals.filter((item) => typeof item === "string")
+      : [],
+    target_subsystem:
+      typeof decision.target_subsystem === "string" && decision.target_subsystem.trim()
+        ? decision.target_subsystem.trim()
+        : "general",
+    canonical_path:
+      typeof decision.canonical_path === "string" && decision.canonical_path.trim()
+        ? decision.canonical_path.trim()
+        : null,
+    overlap_classification:
+      typeof decision.overlap_classification === "string" && decision.overlap_classification.trim()
+        ? decision.overlap_classification.trim()
+        : "unknown",
+    validation_status:
+      typeof decision.validation_status === "string" && decision.validation_status.trim()
+        ? decision.validation_status.trim()
+        : "unknown",
+    required_remediation: Array.isArray(decision.required_remediation)
+      ? decision.required_remediation.filter((item) => typeof item === "string")
       : [],
     stop_reason:
       typeof decision.stop_reason === "string" ? decision.stop_reason : null,

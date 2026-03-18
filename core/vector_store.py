@@ -2,7 +2,10 @@ import json
 import time
 import uuid
 import hashlib
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    np = None  # type: ignore[assignment]
 import sqlite3
 from typing import List, Dict, Any, Union
 from core.logging_utils import log_json

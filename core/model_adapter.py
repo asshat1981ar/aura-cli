@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import concurrent.futures
 import hashlib
 import os
@@ -8,7 +10,11 @@ import json
 import time
 from pathlib import Path
 from typing import Any, List
-import numpy as np
+
+try:
+    import numpy as np
+except ImportError:
+    np = None  # type: ignore[assignment]
 
 from core.logging_utils import log_json # Import log_json
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads

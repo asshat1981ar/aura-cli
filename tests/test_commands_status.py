@@ -37,6 +37,11 @@ def test_handle_status_json_includes_beads_runtime_and_cycle_fields():
             "applied_files": [],
             "failed_files": [],
             "queued_follow_up_goals": [],
+            "self_dev_mode": "propose",
+            "proposal_count": 2,
+            "proposals": [{"proposal_id": "ri-1"}],
+            "auto_queued_goals": [],
+            "queue_block_reasons": [],
             "beads_status": "allow",
             "beads_decision_id": "beads-1",
             "beads_summary": "Proceed.",
@@ -53,6 +58,10 @@ def test_handle_status_json_includes_beads_runtime_and_cycle_fields():
         beads_required=True,
         beads_scope="goal_run",
         runtime_mode="full",
+        ralph_enabled=True,
+        ralph_mode="propose",
+        ralph_max_proposals_per_cycle=3,
+        ralph_max_auto_queue_per_cycle=2,
     )
 
     out = io.StringIO()
@@ -68,8 +77,11 @@ def test_handle_status_json_includes_beads_runtime_and_cycle_fields():
     payload = json.loads(out.getvalue())
     assert payload["beads_runtime"]["enabled"] is True
     assert payload["beads_runtime"]["required"] is True
+    assert payload["ralph_runtime"]["enabled"] is True
+    assert payload["ralph_runtime"]["mode"] == "propose"
     assert payload["active_cycle"]["beads_status"] == "allow"
     assert payload["active_cycle"]["beads_decision_id"] == "beads-1"
+    assert payload["active_cycle"]["proposal_count"] == 2
 
 
 def test_handle_status_text_renders_beads_sections():
@@ -92,6 +104,11 @@ def test_handle_status_text_renders_beads_sections():
             "applied_files": [],
             "failed_files": [],
             "queued_follow_up_goals": [],
+            "self_dev_mode": "auto_queue",
+            "proposal_count": 1,
+            "proposals": [{"proposal_id": "ri-2"}],
+            "auto_queued_goals": ["Review telemetry"],
+            "queue_block_reasons": [],
             "beads_status": "allow",
             "beads_decision_id": "beads-2",
             "beads_summary": "Proceed with the scoped patch.",
@@ -106,6 +123,10 @@ def test_handle_status_text_renders_beads_sections():
         beads_required=True,
         beads_scope="goal_run",
         runtime_mode="full",
+        ralph_enabled=True,
+        ralph_mode="auto_queue",
+        ralph_max_proposals_per_cycle=3,
+        ralph_max_auto_queue_per_cycle=2,
     )
 
     out = io.StringIO()
@@ -114,7 +135,10 @@ def test_handle_status_text_renders_beads_sections():
 
     rendered = out.getvalue()
     assert "--- BEADS Gate ---" in rendered
+    assert "--- Ralph Loop ---" in rendered
+    assert "Mode: auto_queue" in rendered
     assert "Mode: required" in rendered
     assert "--- Last Cycle ---" in rendered
     assert "BEADS: allow (beads-2)" in rendered
     assert "BEADS Summary: Proceed with the scoped patch." in rendered
+    assert "Ralph Auto-Queued: Review telemetry" in rendered

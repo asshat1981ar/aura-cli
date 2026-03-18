@@ -80,12 +80,17 @@ def _handle_status(
 ):
     log_json("INFO", "aura_status_requested")
     
-    from core.operator_runtime import build_beads_runtime_metadata, build_operator_runtime_snapshot
+    from core.operator_runtime import (
+        build_beads_runtime_metadata,
+        build_operator_runtime_snapshot,
+        build_ralph_runtime_metadata,
+    )
     from core.capability_manager import build_capability_status_report
 
     active_cycle = getattr(orchestrator, "active_cycle_summary", None)
     last_cycle = getattr(orchestrator, "last_cycle_summary", None)
     beads_runtime = build_beads_runtime_metadata(orchestrator)
+    ralph_runtime = build_ralph_runtime_metadata(orchestrator)
     
     snapshot = build_operator_runtime_snapshot(
         goal_queue=goal_queue,
@@ -93,6 +98,7 @@ def _handle_status(
         active_cycle=active_cycle,
         last_cycle=last_cycle,
         beads_runtime=beads_runtime,
+        ralph_runtime=ralph_runtime,
     )
 
     if as_json:
@@ -127,6 +133,23 @@ def _handle_status(
         print(f"Mode: {gate_mode}")
         print(f"Scope: {beads_runtime.get('scope', 'goal_run')}")
 
+    if ralph_runtime:
+        print("\n--- Ralph Loop ---")
+        print(f"Enabled: {'yes' if ralph_runtime.get('enabled') else 'no'}")
+        print(f"Mode: {ralph_runtime.get('mode', 'propose')}")
+        print(f"Max proposals/cycle: {ralph_runtime.get('max_proposals_per_cycle', 0)}")
+        print(f"Max auto-queued goals/cycle: {ralph_runtime.get('max_auto_queue_per_cycle', 0)}")
+
+    def _render_self_dev(summary):
+        if summary.get("self_dev_mode"):
+            print(f"Ralph Mode: {summary['self_dev_mode']}")
+        if summary.get("proposal_count") is not None:
+            print(f"Ralph Proposals: {summary.get('proposal_count', 0)}")
+        if summary.get("ralph_trigger_cause"):
+            print(f"Ralph Trigger: {summary['ralph_trigger_cause']}")
+        if summary.get("auto_queued_goals"):
+            print(f"Ralph Auto-Queued: {', '.join(summary['auto_queued_goals'])}")
+
     if active_cycle:
         print("\n--- Active Cycle ---")
         print(f"ID: {active_cycle['cycle_id']}")
@@ -139,6 +162,7 @@ def _handle_status(
             print(f"BEADS: {beads_label}")
             if active_cycle.get("beads_summary"):
                 print(f"BEADS Summary: {active_cycle['beads_summary']}")
+        _render_self_dev(active_cycle)
     elif last_cycle:
         print("\n--- Last Cycle ---")
         print(f"ID: {last_cycle['cycle_id']}")
@@ -152,6 +176,7 @@ def _handle_status(
             print(f"BEADS: {beads_label}")
             if last_cycle.get("beads_summary"):
                 print(f"BEADS Summary: {last_cycle['beads_summary']}")
+        _render_self_dev(last_cycle)
 
     # Task Hierarchy
     task_manager = TaskManager(persistence_path=memory_persistence_path)

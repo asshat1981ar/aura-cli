@@ -1,7 +1,7 @@
 # Codebase Unfinished Work Plan
 
-**Date:** 2026-03-07
-**Status:** Active
+**Date:** 2026-03-18
+**Status:** Completed
 **Purpose:** Consolidate unfinished work in the repo into one grounded plan, then execute the highest-value stabilization slice immediately.
 
 ## Grounded Findings
@@ -51,7 +51,7 @@ Recent execution in this phase:
 
 - [x] Finish BEADS bridge/adapter/runtime gating work from `beads_orchestrator_20260302`
 - [x] Build the RSI evolution verification harness for the open final track task
-- [ ] Consolidate or retire overlapping self-improvement prototype files per `plans/recursive-improvement-prototype-formalization.md`
+- [x] Consolidate or retire overlapping self-improvement prototype files per `plans/recursive-improvement-prototype-formalization.md`
 
 Recent execution in this phase:
 - Replaced the placeholder RSI verifier in `core/rsi_integration_verification.py` with a deterministic harness that can drive `EvolutionLoop.on_cycle_complete()` across recorded cycle history, count scheduled versus hotspot-triggered runs, measure proposal logging, and audit basic architectural metric drift.
@@ -62,9 +62,9 @@ Recent execution in this phase:
 
 ### Phase 4: Cleanup and Documentation Alignment
 
-- [ ] Decide whether legacy artifacts like `core/tests/test_aura.py` should be repaired, migrated, or retired
-- [ ] Refresh high-level planning docs so "missing" vs "implemented but incomplete" is accurate
-- [ ] Prune or quarantine untracked prototype/runtime scratch files that are not part of the canonical product path
+- [x] Decide whether legacy artifacts like `core/tests/test_aura.py` should be repaired, migrated, or retired (Archived to `archive/`)
+- [x] Refresh high-level planning docs so "missing" vs "implemented but incomplete" is accurate (Updated `MASTER_DEVELOPMENT_PLAN.md`)
+- [x] Prune or quarantine untracked prototype/runtime scratch files that are not part of the canonical product path (Cleaned up `.rsi_pid`, `coverage.json`, and dead scripts)
 
 ## Acceptance Criteria For This Execution Slice
 

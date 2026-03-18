@@ -231,7 +231,7 @@ class TestOrchestratorPhases(unittest.TestCase):
         payload = beads_bridge.run.call_args[0][0]
         self.assertEqual(payload["development_context"]["target_subsystem"], "recursive_self_improvement")
         self.assertEqual(payload["development_context"]["canonical_path"], "core/recursive_improvement.py")
-        self.assertEqual(payload["development_context"]["overlap_classification"], "legacy_overlap_present")
+        self.assertEqual(payload["development_context"]["overlap_classification"], "canonical_only")
 
     def test_bead_side_effects_are_disabled_when_beads_disabled(self):
         beads_skill = MagicMock()

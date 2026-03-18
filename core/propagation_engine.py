@@ -104,20 +104,26 @@ class PropagationEngine:
         self._rules[rule.name] = rule
         log_json("INFO", "propagation_rule_registered", details={"rule": rule.name})
 
-    def on_cycle_complete(self, cycle_entry: Dict[str, Any]) -> List[str]:
-        """Fire all matching rules for this cycle.  Returns list of queued goals."""
+    def on_cycle_complete(self, cycle_entry: Dict[str, Any], *, queue: bool = True) -> List[Any]:
+        """Fire all matching rules for this cycle or return FoT candidates."""
         try:
-            return self._process(cycle_entry)
+            return self._process(cycle_entry, queue=queue)
         except Exception as exc:
             log_json("ERROR", "propagation_engine_error", details={"error": str(exc)})
             return []
 
+    def collect_candidates(self, cycle_entry: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Return normalized propagation candidates without mutating the goal queue."""
+        results = self.on_cycle_complete(cycle_entry, queue=False)
+        return [item for item in results if isinstance(item, dict)]
+
     # ── Internal ─────────────────────────────────────────────────────────────
 
-    def _process(self, entry: Dict) -> List[str]:
+    def _process(self, entry: Dict, *, queue: bool = True) -> List[Any]:
         events = self._extract_events(entry)
         context = self._build_context(entry, events)
         queued: List[str] = []
+        candidates: List[Dict[str, Any]] = []
 
         for event in events:
             for rule in self._rules.values():
@@ -127,24 +133,31 @@ class PropagationEngine:
                     if not rule.condition(context):
                         continue
                     result = rule.action(context)
-                    if result and self._can_fire(rule.name, result):
+                    if not result:
+                        continue
+                    queueable = self._can_fire(rule.name, result)
+                    if queue:
+                        if not queueable:
+                            continue
                         self.queue.add(result)
                         self._record_fire(rule.name, result)
                         queued.append(result)
                         log_json("INFO", "propagation_rule_fired",
                                  details={"rule": rule.name, "event": event,
                                           "goal": result[:80]})
+                    else:
+                        candidates.append(self._build_candidate(rule.name, event, result, queueable))
                 except Exception as exc:
                     log_json("WARN", "propagation_rule_error",
                              details={"rule": rule.name, "error": str(exc)})
 
-        if queued:
+        if queue and queued:
             self.memory.put("propagation_events", {
                 "cycle_id": entry.get("cycle_id"),
                 "goals_generated": queued,
                 "timestamp": time.time(),
             })
-        return queued
+        return queued if queue else candidates
 
     def _extract_events(self, entry: Dict) -> List[str]:
         """Translate a cycle entry into a list of event strings."""
@@ -228,6 +241,26 @@ class PropagationEngine:
     def _record_fire(self, rule_name: str, goal_text: str) -> None:
         key = f"{rule_name}:{hashlib.sha256(goal_text.encode()).hexdigest()[:12]}"
         self._propagation_log[key] = self._propagation_log.get(key, 0) + 1
+
+    def _build_candidate(self, rule_name: str, event: str, goal_text: str, queueable: bool) -> Dict[str, Any]:
+        priority = "high" if event in {"weakness_detected", "phase_failure_spike", "consecutive_failures"} else (
+            "medium" if event in {"verification_fail", "coverage_drop"} else "low"
+        )
+        return {
+            "candidate_id": f"propagation:{rule_name}:{hashlib.sha256(goal_text.encode()).hexdigest()[:12]}",
+            "source": "propagation",
+            "summary": f"Propagation rule '{rule_name}' matched event '{event}'.",
+            "recommended_goal": goal_text,
+            "priority": priority,
+            "confidence": 0.65,
+            "queueable": queueable,
+            "queue_block_reason": None if queueable else "duplicate_or_depth_limit",
+            "requires_human_review": False,
+            "beads_recheck_required": False,
+            "evidence": [f"rule:{rule_name}", f"event:{event}"],
+            "rule_name": rule_name,
+            "event": event,
+        }
 
     # ── Built-in rules ────────────────────────────────────────────────────────
 

@@ -21,6 +21,7 @@ import os
 import json
 import dataclasses
 import heapq
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -29,6 +30,7 @@ from typing import Dict, List, Any, Optional, Tuple
 from core.logging_utils import log_json
 from core.circuit_breaker import CircuitBreaker
 from core.beads_bridge import build_beads_runtime_input
+from core.fot_arbiter import FoTArbiter
 from core.operator_runtime import build_cycle_summary
 from core.cycle_outcome import CycleOutcome
 from core.capability_coordinator import CapabilityCoordinator
@@ -129,8 +131,15 @@ class LoopOrchestrator:
         beads_enabled: bool = False,
         beads_required: bool = False,
         beads_scope: str = "goal_run",
+        ralph_enabled: bool = True,
+        ralph_mode: str = "propose",
+        ralph_max_proposals_per_cycle: int = 3,
+        ralph_max_auto_queue_per_cycle: int = 2,
         discovery_loop: Any = None,
         evolution_loop: Any = None,
+        fot_enabled: bool = True,
+        fot_max_candidates_per_cycle: int | None = None,
+        fot_max_auto_queue_per_cycle: int | None = None,
     ):
         """Initialise the orchestrator with its agents and supporting services.
 
@@ -174,8 +183,29 @@ class LoopOrchestrator:
         self.beads_enabled = beads_enabled
         self.beads_required = beads_required
         self.beads_scope = beads_scope
+        self.ralph_enabled = bool(ralph_enabled)
+        self.ralph_mode = str(ralph_mode or "propose")
+        self.ralph_max_proposals_per_cycle = max(1, int(ralph_max_proposals_per_cycle or 1))
+        self.ralph_max_auto_queue_per_cycle = max(1, int(ralph_max_auto_queue_per_cycle or 1))
         self.discovery_loop = discovery_loop
         self.evolution_loop = evolution_loop
+        self.fot_enabled = bool(fot_enabled)
+        self.fot_max_candidates_per_cycle = max(
+            1,
+            int(
+                fot_max_candidates_per_cycle
+                if fot_max_candidates_per_cycle is not None
+                else max(self.ralph_max_proposals_per_cycle, 5)
+            ),
+        )
+        self.fot_max_auto_queue_per_cycle = max(
+            0,
+            int(
+                fot_max_auto_queue_per_cycle
+                if fot_max_auto_queue_per_cycle is not None
+                else self.ralph_max_auto_queue_per_cycle
+            ),
+        )
         self.git_tools = GitTools(str(self.project_root))
         self.codex_manager = CodexManager(self.model, self.git_tools, str(self.project_root), brain=self.brain)
         # Backward-compat properties — delegate to self.capabilities
@@ -202,6 +232,12 @@ class LoopOrchestrator:
         self.context_graph = None       # ContextGraph
         self._circuit_breaker = CircuitBreaker(threshold=5, cooldown_s=60.0)
         self._ui_callbacks: list = []
+        self.fot_arbiter = FoTArbiter(
+            goal_queue=self.goal_queue,
+            max_selected=self.fot_max_candidates_per_cycle,
+            max_auto_queue=self.fot_max_auto_queue_per_cycle,
+            goal_validator=self._validate_self_dev_goal,
+        )
 
     @property
     def last_capability_plan(self) -> dict:
@@ -297,6 +333,358 @@ class LoopOrchestrator:
             "propagation_engine": propagation_engine is not None,
             "context_graph": context_graph is not None,
         })
+
+    def _validate_self_dev_goal(self, goal: str) -> tuple[bool, str | None]:
+        goal = str(goal or "").strip()
+        if not goal:
+            return False, "empty_goal"
+        if len(goal) > 500:
+            return False, "goal_too_long"
+        if any(token in goal for token in [";", "&&", "||", "`", "$("]):
+            return False, "suspicious_goal_content"
+
+        try:
+            from core.development_weakness import build_development_context
+
+            dev_context = build_development_context(self.project_root, goal=goal)
+        except Exception:
+            dev_context = {}
+        if (
+            isinstance(dev_context, dict)
+            and dev_context.get("target_subsystem") == "recursive_self_improvement"
+            and dev_context.get("overlap_classification") == "legacy_overlap_present"
+            and any(path in goal for path in ("core/evolution_plan.py", "scripts/autonomous_rsi_run.py"))
+        ):
+            return False, "deprecated_rsi_path"
+        return True, None
+
+    def _queue_self_dev_goals(
+        self,
+        *,
+        proposals: list[dict] | None = None,
+        beads_follow_up_goals: list[str] | None = None,
+        max_to_queue: int | None = None,
+    ) -> tuple[list[str], list[dict]]:
+        if self.goal_queue is None:
+            return [], [{"goal": "", "reason": "goal_queue_unavailable"}]
+
+        max_to_queue = max_to_queue or self.ralph_max_auto_queue_per_cycle
+        existing_goals = {str(item) for item in list(getattr(self.goal_queue, "queue", []))}
+        queued: list[str] = []
+        blocked: list[dict] = []
+        candidates: list[tuple[str, str, str | None]] = []
+
+        for proposal in proposals or []:
+            goal = str(proposal.get("recommended_goal") or "").strip()
+            if proposal.get("queueable") and goal:
+                candidates.append(("proposal", goal, proposal.get("proposal_id")))
+            elif goal:
+                blocked.append({"goal": goal, "reason": proposal.get("queue_block_reason") or "proposal_not_queueable"})
+
+        for goal in beads_follow_up_goals or []:
+            normalized_goal = str(goal).strip()
+            if normalized_goal:
+                candidates.append(("beads", normalized_goal, None))
+
+        for source, goal, proposal_id in candidates:
+            if len(queued) >= max_to_queue:
+                blocked.append({"goal": goal, "reason": "auto_queue_limit_reached", "source": source, "proposal_id": proposal_id})
+                continue
+            if goal in existing_goals or goal in queued:
+                blocked.append({"goal": goal, "reason": "duplicate_goal", "source": source, "proposal_id": proposal_id})
+                continue
+            ok, reason = self._validate_self_dev_goal(goal)
+            if not ok:
+                blocked.append({"goal": goal, "reason": reason or "invalid_goal", "source": source, "proposal_id": proposal_id})
+                continue
+            self.goal_queue.add(goal)
+            queued.append(goal)
+            existing_goals.add(goal)
+
+        return queued, blocked
+
+    def run_self_development(self, goal: str | None = None, mode: str | None = None) -> Dict[str, Any]:
+        effective_mode = str(mode or self.ralph_mode or "propose")
+        if not self.ralph_enabled:
+            return {
+                "status": "disabled",
+                "goal": goal,
+                "self_dev_mode": effective_mode,
+                "proposal_count": 0,
+                "proposals": [],
+                "follow_up_goals": [],
+                "auto_queued_goals": [],
+                "queue_block_reasons": [],
+            }
+
+        improvement_service = getattr(self.evolution_loop, "improvement_service", None) if self.evolution_loop else None
+        if improvement_service is None:
+            return {
+                "status": "unavailable",
+                "goal": goal,
+                "self_dev_mode": effective_mode,
+                "proposal_count": 0,
+                "proposals": [],
+                "follow_up_goals": [],
+                "auto_queued_goals": [],
+                "queue_block_reasons": [{"goal": "", "reason": "recursive_improvement_service_unavailable"}],
+            }
+
+        recent_entries = []
+        if self.memory_controller and self.memory_controller.persistent_store:
+            try:
+                recent_entries = self.memory_controller.persistent_store.read_log(limit=25)
+            except Exception as exc:
+                log_json("WARN", "self_dev_history_read_failed", details={"error": str(exc)})
+
+        history = [
+            improvement_service.normalize_cycle_entry(entry)
+            for entry in recent_entries
+            if isinstance(entry, dict)
+        ]
+        proposals = list(improvement_service.evaluate_candidates(history))[: self.ralph_max_proposals_per_cycle]
+        source = "history"
+        if goal:
+            proposals.insert(
+                0,
+                improvement_service.create_goal_proposal(
+                    goal,
+                    summary="Manual Ralph-loop goal request queued through the canonical runtime path.",
+                ),
+            )
+            source = "manual_goal"
+        elif not proposals:
+            try:
+                from core.goal_generator import ContextualGoalGenerator
+
+                generated_goal = ContextualGoalGenerator(
+                    self.project_root,
+                    brain=self.brain,
+                    model=self.model,
+                ).generate_impactful_goal()
+            except Exception as exc:
+                log_json("WARN", "self_dev_goal_generation_failed", details={"error": str(exc)})
+                generated_goal = "evolve and improve the AURA system via recursive self-improvement"
+            proposals = [
+                improvement_service.create_goal_proposal(
+                    generated_goal,
+                    summary="Contextual Ralph-loop follow-up goal synthesized from the current repo state.",
+                )
+            ]
+            source = "contextual_goal"
+
+        proposals = proposals[: self.ralph_max_proposals_per_cycle]
+        queued: list[str] = []
+        blocked: list[dict] = []
+        if effective_mode == "auto_queue":
+            queued, blocked = self._queue_self_dev_goals(
+                proposals=proposals,
+                beads_follow_up_goals=[],
+                max_to_queue=self.ralph_max_auto_queue_per_cycle,
+            )
+
+        return {
+            "status": "ok",
+            "goal": goal,
+            "source": source,
+            "self_dev_mode": effective_mode,
+            "history_count": len(history),
+            "proposal_count": len(proposals),
+            "proposals": proposals,
+            "follow_up_goals": [
+                proposal.get("recommended_goal")
+                for proposal in proposals
+                if proposal.get("recommended_goal")
+            ],
+            "auto_queued_goals": queued,
+            "queue_block_reasons": blocked,
+        }
+
+    def _load_latest_memory_report(self, bucket: str) -> Dict[str, Any] | None:
+        store = getattr(self.memory_controller, "persistent_store", None)
+        if store is None:
+            return None
+        try:
+            items = store.query(bucket, limit=1)
+        except Exception as exc:
+            log_json("WARN", "memory_report_query_failed", details={"bucket": bucket, "error": str(exc)})
+            return None
+        if not items:
+            return None
+        latest = items[-1]
+        return latest if isinstance(latest, dict) else None
+
+    def _build_review_candidates(self, entry: Dict[str, Any]) -> List[Dict[str, Any]]:
+        phase_outputs = entry.get("phase_outputs", {}) if isinstance(entry, dict) else {}
+        critique = phase_outputs.get("critique", {}) if isinstance(phase_outputs, dict) else {}
+        verification = phase_outputs.get("verification", {}) if isinstance(phase_outputs, dict) else {}
+        candidates: List[Dict[str, Any]] = []
+
+        issues = critique.get("issues", []) if isinstance(critique, dict) else []
+        if issues:
+            issue_text = "; ".join(str(item) for item in issues[:2] if str(item).strip())
+            candidates.append({
+                "candidate_id": f"critique:{entry.get('cycle_id', 'unknown')}",
+                "source": "critique",
+                "summary": issue_text or "Critique surfaced follow-up risks.",
+                "recommended_goal": "Address critique findings from the latest implementation plan before broadening scope",
+                "priority": "medium",
+                "confidence": 0.7,
+                "queueable": True,
+                "requires_human_review": False,
+                "beads_recheck_required": False,
+                "evidence": ["phase:critique"],
+            })
+
+        failures = verification.get("failures", []) if isinstance(verification, dict) else []
+        if failures:
+            failure_text = "; ".join(str(item) for item in failures[:2] if str(item).strip())
+            candidates.append({
+                "candidate_id": f"review:{entry.get('cycle_id', 'unknown')}",
+                "source": "review",
+                "summary": failure_text or "Verification surfaced follow-up failures.",
+                "recommended_goal": "Stabilize the latest verification failures with a focused regression fix",
+                "priority": "high",
+                "confidence": 0.8,
+                "queueable": True,
+                "requires_human_review": False,
+                "beads_recheck_required": False,
+                "evidence": ["phase:verify"],
+            })
+
+        return candidates
+
+    def _build_beads_candidates(self, beads_state: Dict[str, Any] | None) -> List[Dict[str, Any]]:
+        if not isinstance(beads_state, dict):
+            return []
+        target_subsystem = beads_state.get("target_subsystem")
+        return [
+            {
+                "candidate_id": f"beads:{idx}:{goal}",
+                "source": "beads",
+                "summary": beads_state.get("summary") or "BEADS requested follow-up work.",
+                "recommended_goal": str(goal).strip(),
+                "target_subsystem": target_subsystem,
+                "priority": "high",
+                "confidence": 0.85,
+                "queueable": True,
+                "requires_human_review": False,
+                "beads_recheck_required": False,
+                "evidence": ["beads_follow_up_goal"],
+            }
+            for idx, goal in enumerate(beads_state.get("follow_up_goals", []), start=1)
+            if str(goal).strip()
+        ]
+
+    def _run_fot_arbiter(
+        self,
+        entry: Dict[str, Any],
+        *,
+        discovery_report: Dict[str, Any] | None = None,
+        propagation_candidates: List[Dict[str, Any]] | None = None,
+    ) -> Dict[str, Any]:
+        if not self.fot_enabled:
+            fot_payload = {
+                "status": "disabled",
+                "candidates_considered": 0,
+                "candidates_selected": 0,
+                "selected_candidates": [],
+                "queue_delta": 0,
+                "auto_queued_goals": [],
+                "blocked_candidates": [],
+                "sources": [],
+                "requires_human_review": 0,
+                "beads_rechecks": 0,
+            }
+            entry.setdefault("phase_outputs", {})["fot"] = fot_payload
+            return fot_payload
+
+        phase_outputs = entry.setdefault("phase_outputs", {})
+        ralph_payload = phase_outputs.get("ralph", {}) if isinstance(phase_outputs, dict) else {}
+        if not isinstance(ralph_payload, dict):
+            ralph_payload = {}
+
+        reflection_report = self._load_latest_memory_report("reflection_reports")
+        candidates: List[Dict[str, Any]] = []
+        candidates.extend(self._build_review_candidates(entry))
+        candidates.extend(self._build_beads_candidates(entry.get("beads")))
+        candidates.extend(
+            candidate
+            for candidate in list(ralph_payload.get("proposals", []))
+            if isinstance(candidate, dict)
+        )
+        if isinstance(reflection_report, dict):
+            candidates.extend(
+                candidate
+                for candidate in list(reflection_report.get("fot_candidates", []))
+                if isinstance(candidate, dict)
+            )
+        if isinstance(discovery_report, dict):
+            candidates.extend(
+                candidate
+                for candidate in list(discovery_report.get("fot_candidates", []))
+                if isinstance(candidate, dict)
+            )
+        candidates.extend(candidate for candidate in (propagation_candidates or []) if isinstance(candidate, dict))
+
+        auto_queue = bool(self.ralph_enabled and self.ralph_mode == "auto_queue" and not bool(entry.get("dry_run")))
+        arbiter = self.fot_arbiter
+        arbiter.goal_queue = self.goal_queue
+        arbiter.max_selected = self.fot_max_candidates_per_cycle
+        arbiter.max_auto_queue = self.fot_max_auto_queue_per_cycle
+        result = arbiter.arbitrate(candidates, auto_queue=auto_queue, dry_run=bool(entry.get("dry_run")))
+        fot_payload = {
+            "status": "ok",
+            "candidates_considered": int(result.get("candidates_considered", 0) or 0),
+            "candidates_selected": int(result.get("candidates_selected", 0) or 0),
+            "selected_candidates": list(result.get("selected_candidates", [])),
+            "queue_delta": int(result.get("queue_delta", 0) or 0),
+            "auto_queued_goals": list(result.get("auto_queued_goals", [])),
+            "blocked_candidates": list(result.get("blocked_candidates", [])),
+            "sources": list(result.get("sources", [])),
+            "requires_human_review": int(result.get("requires_human_review", 0) or 0),
+            "beads_rechecks": int(result.get("beads_rechecks", 0) or 0),
+        }
+        phase_outputs["fot"] = fot_payload
+
+        if isinstance(ralph_payload, dict):
+            ralph_selected_goals = [
+                str(candidate.get("recommended_goal") or "").strip()
+                for candidate in fot_payload["selected_candidates"]
+                if candidate.get("source") == "recursive_improvement" and str(candidate.get("recommended_goal") or "").strip() in fot_payload["auto_queued_goals"]
+            ]
+            ralph_payload["auto_queued_goals"] = ralph_selected_goals
+            ralph_payload["queue_block_reasons"] = [
+                blocked
+                for blocked in fot_payload["blocked_candidates"]
+                if blocked.get("source") == "recursive_improvement"
+            ]
+            phase_outputs["ralph"] = ralph_payload
+
+        store = getattr(self.memory_controller, "persistent_store", None)
+        if store is not None:
+            try:
+                store.put("fot_reports", {
+                    "cycle_id": entry.get("cycle_id"),
+                    "goal": entry.get("goal"),
+                    "timestamp": time.time(),
+                    **fot_payload,
+                })
+            except Exception as exc:
+                log_json("WARN", "fot_report_store_failed", details={"error": str(exc)})
+
+        log_json(
+            "INFO",
+            "fot_arbiter_complete",
+            details={
+                "cycle_id": entry.get("cycle_id"),
+                "considered": fot_payload["candidates_considered"],
+                "selected": fot_payload["candidates_selected"],
+                "queue_delta": fot_payload["queue_delta"],
+                "sources": fot_payload["sources"],
+            },
+        )
+        return fot_payload
 
     def _retrieve_hints(self, goal: str, limit: int = 5) -> list[dict]:
         """Return the most relevant past cycle summaries for *goal*.
@@ -1095,18 +1483,7 @@ class LoopOrchestrator:
         self._notify_ui("on_phase_start", "learn")
         t0_learn = time.time()
         summary = self._refresh_cycle_summary(entry)
-        self._notify_ui("on_cycle_complete", summary)
-        self.current_goal = None
-        self.active_cycle_summary = None
-        if self.memory_controller.persistent_store:
-            self.memory_controller.persistent_store.append_log(entry)
-            # Store structured outcome for learning
-            self.memory_controller.store(
-                MemoryTier.PROJECT,
-                json.dumps(summary),
-                metadata={"type": "cycle_summary", "goal": goal, "cycle_id": cycle_id}
-            )
-        
+
         if self.brain:
             try:
                 self.brain.set(f"outcome:{cycle_id}", outcome.to_json())
@@ -1132,11 +1509,24 @@ class LoopOrchestrator:
 
         # Phase 10: discover()
         self._notify_ui("on_phase_start", "discover")
+        discovery_report: Dict[str, Any] | None = None
         if self.discovery_loop:
             log_json("INFO", "orchestrator_triggering_discovery")
-            self.discovery_loop.on_cycle_complete(entry)
+            try:
+                discovery_report = self.discovery_loop.on_cycle_complete(entry, queue=False)
+            except TypeError:
+                discovery_report = self.discovery_loop.on_cycle_complete(entry)
         self._notify_ui("on_phase_complete", "discover", 0)
-        self._emit_phase_telemetry(cycle_id, goal, "discover", 0, {"status": "ok" if self.discovery_loop else "skip"})
+        self._emit_phase_telemetry(
+            cycle_id,
+            goal,
+            "discover",
+            0,
+            {
+                "status": "ok" if self.discovery_loop else "skip",
+                "candidate_count": len((discovery_report or {}).get("fot_candidates", [])) if isinstance(discovery_report, dict) else 0,
+            },
+        )
 
         # Phase 11: evolve()
         self._notify_ui("on_phase_start", "evolve")
@@ -1146,11 +1536,36 @@ class LoopOrchestrator:
         self._notify_ui("on_phase_complete", "evolve", 0)
         self._emit_phase_telemetry(cycle_id, goal, "evolve", 0, {"status": "ok" if self.evolution_loop else "skip"})
 
+        propagation_candidates: List[Dict[str, Any]] = []
         if self.propagation_engine is not None:
             try:
-                self.propagation_engine.on_cycle_complete(entry)
+                propagation_candidates = list(self.propagation_engine.on_cycle_complete(entry, queue=False))
+            except TypeError:
+                collector = getattr(self.propagation_engine, "collect_candidates", None)
+                if callable(collector):
+                    propagation_candidates = list(collector(entry))
+                else:
+                    self.propagation_engine.on_cycle_complete(entry)
             except Exception as exc:
                 log_json("WARN", "propagation_engine_error", details={"error": str(exc)})
+
+        self._run_fot_arbiter(
+            entry,
+            discovery_report=discovery_report,
+            propagation_candidates=propagation_candidates,
+        )
+
+        summary = self._refresh_cycle_summary(entry)
+        self._notify_ui("on_cycle_complete", summary)
+        self.current_goal = None
+        self.active_cycle_summary = None
+        if self.memory_controller.persistent_store:
+            self.memory_controller.persistent_store.append_log(entry)
+            self.memory_controller.store(
+                MemoryTier.PROJECT,
+                json.dumps(summary),
+                metadata={"type": "cycle_summary", "goal": goal, "cycle_id": cycle_id}
+            )
         return entry
 
     def _parse_bead_id(self, goal: str) -> Optional[str]:
@@ -1438,4 +1853,5 @@ class LoopOrchestrator:
             "goal": goal,
             "stop_reason": stop_reason or "MAX_CYCLES",
             "history": history,
+            "cycles_used": len(history),
         }

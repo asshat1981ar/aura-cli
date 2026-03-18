@@ -56,6 +56,7 @@ def _heuristic_coverage(root: Path) -> Dict[str, Any]:
 
 
 class TestCoverageAnalyzerSkill(SkillBase):
+    __test__ = False
     name = "test_coverage_analyzer"
 
     def run_incremental(self, project_root: str, changed_files: Optional[List[str]] = None) -> Dict[str, Any]:

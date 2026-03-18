@@ -51,7 +51,19 @@ class EvolutionLoop:
     driving continuous self-improvement of the AURA system.
     """
 
-    def __init__(self, planner, coder, critic, brain, vector_store, git_tools, mutator, improvement_service=None):
+    def __init__(
+        self,
+        planner,
+        coder,
+        critic,
+        brain,
+        vector_store,
+        git_tools,
+        mutator,
+        improvement_service=None,
+        self_dev_mode: str = "propose",
+        max_proposals_per_cycle: int = 3,
+    ):
         """
         Initializes the EvolutionLoop with instances of various agents and core tools.
 
@@ -73,8 +85,38 @@ class EvolutionLoop:
         self.git = git_tools
         self.mutator = mutator
         self.improvement_service = improvement_service
+        self.self_dev_mode = self_dev_mode
+        self.max_proposals_per_cycle = max(1, int(max_proposals_per_cycle or 1))
         self._cycle_count = 0
         self.TRIGGER_EVERY_N = _config.get("evolution_trigger_every_n", 20)
+
+    def _attach_cycle_metadata(
+        self,
+        entry: dict,
+        *,
+        trigger_cause: str | None,
+        proposals: list[dict],
+        mutation_status: str,
+        auto_queued_goals: list[str] | None = None,
+        queue_block_reasons: list[dict] | None = None,
+    ) -> None:
+        phase_outputs = entry.setdefault("phase_outputs", {}) if isinstance(entry, dict) else {}
+        if not isinstance(phase_outputs, dict):
+            return
+        existing = phase_outputs.get("ralph", {})
+        if not isinstance(existing, dict):
+            existing = {}
+        phase_outputs["ralph"] = {
+            **existing,
+            "status": existing.get("status", "ok"),
+            "self_dev_mode": existing.get("self_dev_mode", self.self_dev_mode),
+            "trigger_cause": trigger_cause,
+            "proposal_count": len(proposals),
+            "proposals": proposals,
+            "mutation_status": mutation_status,
+            "auto_queued_goals": list(auto_queued_goals or existing.get("auto_queued_goals", [])),
+            "queue_block_reasons": list(queue_block_reasons or existing.get("queue_block_reasons", [])),
+        }
 
     def _get_mutation_response(self, prompt: str, memory_snapshot: str, similar_past_problems: str, known_weaknesses: str) -> str:
         """Request a raw mutation plan instead of forcing planner list parsing."""
@@ -148,23 +190,54 @@ class EvolutionLoop:
             return
 
         self._cycle_count += 1
-        
+
         goal = entry.get("goal", "evolve and improve the AURA system")
         skill_ctx = entry.get("phase_outputs", {}).get("skill_context", {})
         is_hotspot = (isinstance(skill_ctx, dict) and skill_ctx.get("structural_hotspot")) or "refactor hotspot" in goal.lower()
-        
+        trigger_cause = None
+        if is_hotspot:
+            trigger_cause = "hotspot"
+        elif self.TRIGGER_EVERY_N > 0 and self._cycle_count % self.TRIGGER_EVERY_N == 0:
+            trigger_cause = "scheduled"
+
+        proposals: list[dict] = []
+        auto_queued_goals: list[str] = []
+        queue_block_reasons: list[dict] = []
         # If we have an improvement service, evaluate recent history
         if self.improvement_service and self.brain:
-            recent_history = self.improvement_service.observe_cycle(entry)
-            proposals = self.improvement_service.evaluate_candidates(recent_history)
+            build_cycle_payload = getattr(type(self.improvement_service), "build_cycle_payload", None)
+            if callable(build_cycle_payload):
+                ralph_payload = self.improvement_service.build_cycle_payload(
+                    entry,
+                    mode=self.self_dev_mode,
+                    allow_queue=False,
+                )
+                proposals = list(ralph_payload.get("proposals", []))[: self.max_proposals_per_cycle]
+                auto_queued_goals = list(ralph_payload.get("auto_queued_goals", []))
+                queue_block_reasons = list(ralph_payload.get("queue_block_reasons", []))
+            else:
+                recent_history = self.improvement_service.observe_cycle(entry)
+                proposals = list(self.improvement_service.evaluate_candidates(recent_history))[: self.max_proposals_per_cycle]
             for p in proposals:
                 self.improvement_service.log_proposal(p)
-                # In the future, we could auto-enqueue these proposals as goals
-        
-        if self._cycle_count % self.TRIGGER_EVERY_N == 0 or is_hotspot:
+
+        mutation_status = "disabled"
+        if trigger_cause and self.self_dev_mode == "full_mutation":
             if is_hotspot:
                 log_json("INFO", "evolution_loop_triggered_by_hotspot_signal", details={"goal": goal})
+            mutation_status = "triggered"
             self.run(goal)
+        elif trigger_cause:
+            mutation_status = "suppressed_by_mode"
+
+        self._attach_cycle_metadata(
+            entry,
+            trigger_cause=trigger_cause,
+            proposals=proposals,
+            mutation_status=mutation_status,
+            auto_queued_goals=auto_queued_goals,
+            queue_block_reasons=queue_block_reasons,
+        )
 
     def run(self, goal):
         """

@@ -336,6 +336,13 @@ def _customize_scaffold(parser: argparse.ArgumentParser) -> None:
 def _customize_evolve(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(evolve=True)
     parser.add_argument("goal", nargs="?", help="Optional evolution goal override.")
+    parser.add_argument(
+        "--mode",
+        dest="evolve_mode",
+        choices=("propose", "auto_queue"),
+        default=None,
+        help="Ralph-loop mode: emit proposals only or auto-queue bounded follow-up goals.",
+    )
 
 
 

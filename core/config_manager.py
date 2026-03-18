@@ -139,6 +139,12 @@ DEFAULT_CONFIG = {
         "scope": "goal_run",
         "persist_artifacts": True,
     },
+    "ralph": {
+        "enabled": True,
+        "mode": "propose",
+        "max_proposals_per_cycle": 3,
+        "max_auto_queue_per_cycle": 2,
+    },
     "model_routing": {
         "code_generation": "google/gemini-2.0-flash-exp:free",
         "planning": "google/gemini-2.0-flash-exp:free",

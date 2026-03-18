@@ -87,6 +87,13 @@ class TestCLIOptions(unittest.TestCase):
         self.assertTrue(watch.namespace.autonomous)
         self.assertTrue(studio.namespace.autonomous)
 
+    def test_evolve_subcommand_accepts_mode_flag(self):
+        parsed = parse_cli_args(["evolve", "--mode", "auto_queue", "Harden loop"])
+
+        self.assertEqual(parsed.action, "evolve")
+        self.assertEqual(parsed.namespace.evolve_mode, "auto_queue")
+        self.assertEqual(parsed.namespace.goal, "Harden loop")
+
     def test_render_help_json_contains_canonical_command(self):
         payload = json.loads(render_help(format="json"))
         paths = [tuple(item["path"]) for item in payload["commands"]]

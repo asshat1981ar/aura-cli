@@ -20,6 +20,7 @@ def test_goal_sse_shape(monkeypatch):
     monkeypatch.delenv("AGENT_API_TOKEN", raising=False)
     monkeypatch.setenv("AGENT_API_ALLOW_UNAUTHENTICATED", "1")
     monkeypatch.setattr(server, "_beads_runtime_snapshot", lambda: {"enabled": True, "required": True, "scope": "goal_run"})
+    monkeypatch.setattr(server, "_ralph_runtime_snapshot", lambda: {"enabled": True, "mode": "propose", "max_proposals_per_cycle": 3, "max_auto_queue_per_cycle": 2})
     # stub run_cycle to avoid real model calls
     monkeypatch.setattr(server.orchestrator, "run_cycle", lambda goal, dry_run=False: {
         "cycle_id": "stub-1",
@@ -41,6 +42,11 @@ def test_goal_sse_shape(monkeypatch):
             "applied_files": [],
             "failed_files": [],
             "queued_follow_up_goals": [],
+            "self_dev_mode": "propose",
+            "proposal_count": 1,
+            "proposals": [{"proposal_id": "ri-1"}],
+            "auto_queued_goals": [],
+            "queue_block_reasons": [],
             "beads_status": "allow",
             "beads_decision_id": "beads-1",
             "beads_summary": "Proceed with the scoped change.",
@@ -79,11 +85,18 @@ def test_goal_sse_shape(monkeypatch):
         for key in ["openai", "openrouter", "gemini"]:
             assert key in providers
         assert health["beads_runtime"] == {"enabled": True, "required": True, "scope": "goal_run"}
+        assert health["ralph_runtime"] == {
+            "enabled": True,
+            "mode": "propose",
+            "max_proposals_per_cycle": 3,
+            "max_auto_queue_per_cycle": 2,
+        }
         cycle = next(e for e in events if isinstance(e, dict) and e.get("type") == "cycle")
         assert cycle["summary"]["cycle_id"] == "stub-1"
         assert cycle["summary"]["goal"] == "sample goal"
         assert cycle["summary"]["verification_status"] == "pass"
         assert cycle["summary"]["outcome"] == "SUCCESS"
+        assert cycle["summary"]["proposal_count"] == 1
         assert cycle["summary"]["beads_status"] == "allow"
         assert cycle["summary"]["beads_decision_id"] == "beads-1"
         complete = next(e for e in events if isinstance(e, dict) and e.get("type") == "complete")

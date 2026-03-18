@@ -3,12 +3,14 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+from unittest.mock import patch
 
 from core.operator_runtime import (
     build_beads_runtime_metadata,
     build_cycle_summary,
     build_operator_runtime_snapshot,
     build_queue_summary,
+    build_ralph_runtime_metadata,
 )
 from core.orchestrator import LoopOrchestrator
 from memory.store import MemoryStore
@@ -40,12 +42,13 @@ def _make_orchestrator(tmp_path: Path) -> LoopOrchestrator:
         "verify": _make_agent({"passed": True, "score": 1.0, "failures": [], "logs": ""}),
         "reflect": _make_agent({"summary": "done", "weaknesses": [], "learnings": [], "next_actions": []}),
     }
-    return LoopOrchestrator(
-        agents=agents,
-        memory_store=MemoryStore(tmp_path / "mem"),
-        project_root=tmp_path,
-        strict_schema=False,
-    )
+    with patch("core.orchestrator.GitTools", return_value=MagicMock()):
+        return LoopOrchestrator(
+            agents=agents,
+            memory_store=MemoryStore(tmp_path / "mem"),
+            project_root=tmp_path,
+            strict_schema=False,
+        )
 
 
 def test_build_queue_summary_normalizes_goal_queue_and_archive():
@@ -98,6 +101,15 @@ def test_build_cycle_summary_derives_operator_fields():
             "verification": {"status": "fail", "failures": ["assertion error"], "logs": ""},
             "reflection": {"summary": "retry later"},
             "capability_goal_queue": {"queued": ["Follow-up goal"]},
+            "ralph": {
+                "self_dev_mode": "auto_queue",
+                "proposal_count": 2,
+                "proposals": [{"proposal_id": "ri-1"}, {"proposal_id": "ri-2"}],
+                "auto_queued_goals": ["Review telemetry"],
+                "queue_block_reasons": [{"goal": "broad", "reason": "goal_too_broad"}],
+                "trigger_cause": "scheduled",
+                "mutation_status": "suppressed_by_mode",
+            },
         },
     }
 
@@ -115,6 +127,12 @@ def test_build_cycle_summary_derives_operator_fields():
     assert summary["applied_files"] == ["tests/test_example.py"]
     assert summary["failed_files"] == []
     assert summary["queued_follow_up_goals"] == ["Follow-up goal"]
+    assert summary["self_dev_mode"] == "auto_queue"
+    assert summary["proposal_count"] == 2
+    assert summary["auto_queued_goals"] == ["Review telemetry"]
+    assert summary["queue_block_reasons"] == [{"goal": "broad", "reason": "goal_too_broad"}]
+    assert summary["ralph_trigger_cause"] == "scheduled"
+    assert summary["ralph_mutation_status"] == "suppressed_by_mode"
     assert summary["beads_status"] == "allow"
     assert summary["beads_decision_id"] == "beads-123"
     assert summary["beads_summary"] == "Proceed with additional test coverage."
@@ -143,6 +161,13 @@ def test_build_operator_runtime_snapshot_composes_queue_and_cycle_summaries():
         "applied_files": [],
         "failed_files": [],
         "queued_follow_up_goals": [],
+        "self_dev_mode": "propose",
+        "proposal_count": 0,
+        "proposals": [],
+        "auto_queued_goals": [],
+        "queue_block_reasons": [],
+        "ralph_trigger_cause": None,
+        "ralph_mutation_status": None,
         "started_at": 10.0,
         "completed_at": None,
         "duration_s": None,
@@ -156,6 +181,7 @@ def test_build_operator_runtime_snapshot_composes_queue_and_cycle_summaries():
         active_goal="Fix failing tests",
         updated_at=55.0,
         beads_runtime={"enabled": True, "required": True, "scope": "goal_run"},
+        ralph_runtime={"enabled": True, "mode": "propose", "max_proposals_per_cycle": 3, "max_auto_queue_per_cycle": 2},
     )
 
     assert snapshot["schema_version"] == 1
@@ -164,6 +190,7 @@ def test_build_operator_runtime_snapshot_composes_queue_and_cycle_summaries():
     assert snapshot["active_cycle"]["cycle_id"] == "cycle_123"
     assert snapshot["last_cycle"] is None
     assert snapshot["beads_runtime"]["scope"] == "goal_run"
+    assert snapshot["ralph_runtime"]["mode"] == "propose"
 
 
 def test_build_beads_runtime_metadata_reads_orchestrator_contract():
@@ -184,6 +211,24 @@ def test_build_beads_runtime_metadata_reads_orchestrator_contract():
         "required": True,
         "scope": "goal_run",
         "runtime_mode": "full",
+    }
+
+
+def test_build_ralph_runtime_metadata_reads_orchestrator_contract():
+    orchestrator = SimpleNamespace(
+        ralph_enabled=True,
+        ralph_mode="auto_queue",
+        ralph_max_proposals_per_cycle=4,
+        ralph_max_auto_queue_per_cycle=2,
+    )
+
+    metadata = build_ralph_runtime_metadata(orchestrator)
+
+    assert metadata == {
+        "enabled": True,
+        "mode": "auto_queue",
+        "max_proposals_per_cycle": 4,
+        "max_auto_queue_per_cycle": 2,
     }
 
 

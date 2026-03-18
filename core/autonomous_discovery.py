@@ -81,16 +81,21 @@ class AutonomousDiscovery:
 
     # ── Public API ───────────────────────────────────────────────────────────
 
-    def on_cycle_complete(self, _entry: Dict[str, Any]) -> None:
+    def on_cycle_complete(self, _entry: Dict[str, Any], *, queue: bool = True) -> Dict[str, Any]:
         """Trigger a scan every TRIGGER_EVERY_N cycles."""
         self._cycle_count += 1
         if self._cycle_count % TRIGGER_EVERY_N == 0:
-            self.run_scan()
+            return self.run_scan(queue=queue)
+        return {
+            "skipped": True,
+            "reason": "not_due",
+            "cycles_until_next": TRIGGER_EVERY_N - (self._cycle_count % TRIGGER_EVERY_N),
+        }
 
-    def run_scan(self) -> Dict[str, Any]:
+    def run_scan(self, *, queue: bool = True) -> Dict[str, Any]:
         """Run all discovery scanners.  Never raises."""
         try:
-            return self._scan()
+            return self._scan(queue=queue)
         except Exception as exc:
             log_json("ERROR", "autonomous_discovery_failed", details={"error": str(exc)})
             return {"error": str(exc)}
@@ -111,7 +116,7 @@ class AutonomousDiscovery:
 
     # ── Internal ─────────────────────────────────────────────────────────────
 
-    def _scan(self) -> Dict[str, Any]:
+    def _scan(self, *, queue: bool = True) -> Dict[str, Any]:
         log_json("INFO", "autonomous_discovery_scan_start",
                  details={"root": str(self.root)})
 
@@ -126,30 +131,66 @@ class AutonomousDiscovery:
 
         # Deduplicate and cap
         new_goals: List[str] = []
+        retained_hashes: List[str] = []
+        fot_candidates: List[Dict[str, Any]] = []
         for f in findings:
             if len(new_goals) >= MAX_GOALS_PER_SCAN:
                 break
             item_hash = f["hash"]
-            if item_hash in self._seen:
+            if queue and item_hash in self._seen:
                 continue
-            self._seen.add(item_hash)
-            if self.queue:
+            candidate = self._finding_to_candidate(f)
+            fot_candidates.append(candidate)
+            if queue:
+                self._seen.add(item_hash)
+                retained_hashes.append(item_hash)
+            if queue and self.queue:
                 self.queue.add(f["goal"])
             new_goals.append(f["goal"])
-            log_json("INFO", "autonomous_discovery_goal_queued",
-                     details={"goal": f["goal"][:80], "signal": f["signal"]})
+            if queue:
+                log_json("INFO", "autonomous_discovery_goal_queued",
+                         details={"goal": f["goal"][:80], "signal": f["signal"]})
 
-        self._save_seen()
+        if queue and retained_hashes:
+            self._save_seen()
         report = {
             "scan_timestamp": time.time(),
             "findings_total": len(findings),
             "new_goals": len(new_goals),
             "goals": new_goals,
+            "items": findings[:MAX_GOALS_PER_SCAN],
+            "fot_candidates": fot_candidates,
+            "queue_mode": "queue" if queue else "propose",
         }
         self.memory.put("discovery_reports", report)
         log_json("INFO", "autonomous_discovery_scan_complete",
                  details={"new_goals": len(new_goals), "seen_total": len(self._seen)})
         return report
+
+    def _finding_to_candidate(self, finding: Dict[str, Any]) -> Dict[str, Any]:
+        signal = str(finding.get("signal") or "discovery")
+        priority = str(finding.get("priority") or "low")
+        goal = str(finding.get("goal") or "").strip()
+        rel = str(finding.get("file") or "").strip()
+        line = int(finding.get("line") or 0)
+        evidence = [f"signal:{signal}"]
+        if rel:
+            evidence.append(f"file:{rel}")
+        if line:
+            evidence.append(f"line:{line}")
+        return {
+            "candidate_id": f"discovery:{finding.get('hash') or signal}",
+            "source": "discovery",
+            "summary": f"Discovery signal '{signal}' identified follow-up work.",
+            "recommended_goal": goal,
+            "priority": priority,
+            "confidence": 0.6 if priority != "high" else 0.8,
+            "queueable": bool(goal),
+            "requires_human_review": False,
+            "beads_recheck_required": False,
+            "evidence": evidence,
+            "hash": finding.get("hash"),
+        }
 
     def _scan_code_signals(self) -> List[Dict]:
         """Scan Python files for TODO, FIXME, type:ignore patterns."""

@@ -10,10 +10,7 @@ from pathlib import Path
 
 from aura_cli.dispatch._helpers import _print_json_payload
 
-from agents.registry import default_agents
 from core.config_manager import config
-from core.git_tools import GitTools
-from core.vector_store import VectorStore
 from memory.brain import Brain
 
 
@@ -79,6 +76,9 @@ def handle_metrics_show(ctx) -> int:
     total_time = 0.0
     sandbox_failures = 0
     verification_failures = 0
+    total_proposals = 0
+    total_auto_queued_goals = 0
+    total_queue_blocks = 0
 
     # 1. Try structured summaries from decision log
     summaries = [e["cycle_summary"] for e in log_entries if "cycle_summary" in e]
@@ -90,6 +90,21 @@ def handle_metrics_show(ctx) -> int:
         verification_failures = sum(
             1 for s in summaries
             if isinstance(s, dict) and s.get("verification_status") == "fail"
+        )
+        total_proposals = sum(
+            int((s.get("proposal_count", 0) or 0))
+            for s in summaries
+            if isinstance(s, dict)
+        )
+        total_auto_queued_goals = sum(
+            len(s.get("auto_queued_goals", []))
+            for s in summaries
+            if isinstance(s, dict)
+        )
+        total_queue_blocks = sum(
+            len(s.get("queue_block_reasons", []))
+            for s in summaries
+            if isinstance(s, dict)
         )
         for s in summaries[-10:]:
             outcome = s.get("outcome", "FAILED")
@@ -104,7 +119,10 @@ def handle_metrics_show(ctx) -> int:
                 "cycle_id": s.get("cycle_id"),
                 "status": outcome,
                 "duration": duration,
-                "goal": s.get("goal")
+                "goal": s.get("goal"),
+                "proposal_count": int(s.get("proposal_count", 0) or 0),
+                "self_dev_mode": s.get("self_dev_mode"),
+                "auto_queued_goals": list(s.get("auto_queued_goals", [])),
             })
 
     # 2. Fallback to legacy outcome strings in brain
@@ -148,6 +166,9 @@ def handle_metrics_show(ctx) -> int:
                 "fails": fails,
                 "sandbox_failures": sandbox_failures,
                 "verification_failures": verification_failures,
+                "proposal_count": total_proposals,
+                "auto_queued_goals": total_auto_queued_goals,
+                "queue_block_reasons": total_queue_blocks,
             }
         }
         for i, s in enumerate(summaries[-10:]):
@@ -172,6 +193,7 @@ def handle_metrics_show(ctx) -> int:
     print(f"Summary: {win_rate:.1f}% success rate | {successes} pass, {skipped} skip, {fails} fail")
     print(f"Avg duration: {avg_time:.1f}s")
     print(f"Sandbox failures: {sandbox_failures} | Verification failures: {verification_failures}")
+    print(f"Ralph proposals: {total_proposals} | Auto-queued goals: {total_auto_queued_goals} | Queue blocks: {total_queue_blocks}")
 
     # 3. Add strategy win rates from Brain KV store
     brain = ctx.runtime["brain"]
@@ -234,30 +256,11 @@ def handle_scaffold(ctx) -> int:
 
 
 def handle_evolve(ctx) -> int:
-    from core.evolution_loop import EvolutionLoop
-    from agents.mutator import MutatorAgent
-    from core.recursive_improvement import RecursiveImprovementService
-
     args = ctx.args
     runtime = ctx.runtime
-
-    _brain = runtime.get("brain") or Brain()
-    _model = runtime["model_adapter"]
-    _planner = runtime["planner"]
-    _agents = default_agents(_brain, _model)
-    _coder_adapter = _agents.get("act")
-    _critic_adapter = _agents.get("critique")
-    _planner_adapter = _agents.get("plan")
-    _coder = getattr(_coder_adapter, "agent", _coder_adapter)
-    _critic = getattr(_critic_adapter, "agent", _critic_adapter)
-    _planner = getattr(_planner_adapter, "agent", _planner_adapter)
-    _git = GitTools(repo_path=str(ctx.project_root))
-    _mutator = MutatorAgent(ctx.project_root)
-    _vec = VectorStore(_model, _brain)
-    _ri_service = RecursiveImprovementService()
-    evo = EvolutionLoop(_planner, _coder, _critic, _brain, _vec, _git, _mutator, improvement_service=_ri_service)
+    orchestrator = runtime.get("orchestrator")
     goal = args.goal or args.workflow_goal or "evolve and improve the AURA system"
-    result = evo.run(goal)
+    result = orchestrator.run_self_development(goal=goal, mode=getattr(args, "evolve_mode", None))
     _print_json_payload(result, parsed=ctx.parsed, indent=2, default=str)
     return 0
 

@@ -216,6 +216,7 @@ def _build_runtime_config(overrides: dict | None = None) -> dict:
 
     for nested_key in (
         "beads",
+        "ralph",
         "model_routing",
         "semantic_memory",
         "local_model_profiles",
@@ -303,7 +304,7 @@ def _start_background_sync(project_root: Path, vector_store, context_graph):
     log_json("INFO", "background_sync_started")
 
 
-def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal_queue, momento, project_root):
+def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal_queue, momento, project_root, runtime_config=None):
     """Attach improvement loops and CASPA-W workflow to the orchestrator."""
     if runtime_mode in ("lean", "queue"):
         return
@@ -344,6 +345,7 @@ def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal
         from agents.mutator import MutatorAgent
 
         _context_graph = ContextGraph()
+        _ralph_cfg = ((runtime_config or {}).get("ralph", DEFAULT_CONFIG.get("ralph", {})) or {})
         _adaptive_pipeline = AdaptivePipeline(
             context_graph=_context_graph,
             skill_weight_adapter=_skill_adapt if "_skill_adapt" in locals() else None,
@@ -355,7 +357,14 @@ def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal
         
         # Evolution Loop
         from core.recursive_improvement import RecursiveImprovementService
-        _ri_service = RecursiveImprovementService()
+        _ri_service = RecursiveImprovementService(
+            project_root=project_root,
+            goal_queue=goal_queue,
+            enabled=bool(_ralph_cfg.get("enabled", True)),
+            mode=str(_ralph_cfg.get("mode", "propose")),
+            max_proposals=int(_ralph_cfg.get("max_proposals_per_cycle", 3) or 3),
+            max_auto_queue=int(_ralph_cfg.get("max_auto_queue_per_cycle", 2) or 2),
+        )
         # EvolutionLoop expects the raw agents, not the orchestrator's adapters
         _coder_adapter = orchestrator.agents.get("act")
         _critic_adapter = orchestrator.agents.get("critique")
@@ -365,7 +374,18 @@ def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal
         _planner = getattr(_planner_adapter, "agent", _planner_adapter)
         _git = GitTools(repo_path=str(project_root))
         _mutator = MutatorAgent(project_root)
-        _evo = EvolutionLoop(_planner, _coder, _critic, brain, getattr(brain, "vector_store", None), _git, _mutator, improvement_service=_ri_service)
+        _evo = EvolutionLoop(
+            _planner,
+            _coder,
+            _critic,
+            brain,
+            getattr(brain, "vector_store", None),
+            _git,
+            _mutator,
+            improvement_service=_ri_service,
+            self_dev_mode=str(_ralph_cfg.get("mode", "propose")),
+            max_proposals_per_cycle=int(_ralph_cfg.get("max_proposals_per_cycle", 3) or 3),
+        )
 
         orchestrator.attach_caspa(
             adaptive_pipeline=_adaptive_pipeline,
@@ -462,6 +482,7 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     memory_controller.set_store(memory_store)
 
     beads_config = runtime_config.get("beads", DEFAULT_CONFIG["beads"]) or {}
+    ralph_config = runtime_config.get("ralph", DEFAULT_CONFIG.get("ralph", {})) or {}
     bridge_command = beads_config.get("bridge_command")
     beads_bridge = BeadsBridge.from_defaults(
         project_root,
@@ -489,10 +510,23 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         beads_enabled=bool(beads_config.get("enabled", True)),
         beads_required=bool(beads_config.get("required", True)),
         beads_scope=str(beads_config.get("scope", "goal_run")),
+        ralph_enabled=bool(ralph_config.get("enabled", True)),
+        ralph_mode=str(ralph_config.get("mode", "propose")),
+        ralph_max_proposals_per_cycle=int(ralph_config.get("max_proposals_per_cycle", 3) or 3),
+        ralph_max_auto_queue_per_cycle=int(ralph_config.get("max_auto_queue_per_cycle", 2) or 2),
     )
     orchestrator.beads_runtime_override = beads_cli_override
 
-    _attach_advanced_loops(orchestrator, runtime_mode, brain_instance, memory_store, goal_queue, _momento, project_root)
+    _attach_advanced_loops(
+        orchestrator,
+        runtime_mode,
+        brain_instance,
+        memory_store,
+        goal_queue,
+        _momento,
+        project_root,
+        runtime_config=runtime_config,
+    )
     try:
         git_tools = GitTools(repo_path=str(project_root))
     except Exception as exc:
@@ -564,6 +598,8 @@ def _prepare_runtime_context(ctx: DispatchContext) -> int | None:
         overrides["decompose"] = True
     if getattr(args, "model", None):
         overrides["model_name"] = args.model
+    if getattr(args, "evolve_mode", None):
+        overrides["ralph"] = {"mode": args.evolve_mode}
 
     beads_config = dict(config.get("beads", DEFAULT_CONFIG["beads"]) or {})
     beads_override_requested = False

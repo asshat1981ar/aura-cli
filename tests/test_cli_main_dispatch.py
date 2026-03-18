@@ -1246,58 +1246,73 @@ class TestCLIMainDispatch(unittest.TestCase):
         })
 
     def test_legacy_evolve_json_output_matches_snapshot(self):
+        fake_orchestrator = MagicMock()
+        fake_orchestrator.run_self_development.return_value = {
+            "status": "ok",
+            "goal": "evolve and improve the AURA system",
+            "source": "manual_goal",
+            "self_dev_mode": "propose",
+            "history_count": 0,
+            "proposal_count": 1,
+            "proposals": [
+                {
+                    "proposal_id": "ri_manual",
+                    "summary": "Manual Ralph-loop goal request queued through the canonical runtime path.",
+                    "recommended_goal": "evolve and improve the AURA system",
+                    "queueable": True,
+                    "queue_block_reason": None,
+                }
+            ],
+            "follow_up_goals": ["evolve and improve the AURA system"],
+            "auto_queued_goals": [],
+            "queue_block_reasons": [],
+        }
         fake_runtime = {
-            "planner": MagicMock(),
-            "model_adapter": MagicMock(),
-            "brain": MagicMock(),
+            "orchestrator": fake_orchestrator,
         }
         runtime_factory = MagicMock(return_value=fake_runtime)
 
-        fake_evo = MagicMock()
-        fake_evo.run.return_value = {
-            "status": "ok",
-            "mutations": 2,
-            "artifacts": ["core/vector_store.py", "aura_cli/cli_main.py"],
-            "meta": {"score": 0.9},
-        }
-
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
-             patch("aura_cli.cli_main.log_json"), \
-             patch("aura_cli.dispatch.ops.default_agents", return_value={"act": MagicMock(), "critique": MagicMock()}), \
-             patch("aura_cli.dispatch.ops.GitTools", return_value=MagicMock()), \
-             patch("agents.mutator.MutatorAgent", return_value=MagicMock()), \
-             patch("aura_cli.dispatch.ops.VectorStore", return_value=MagicMock()), \
-             patch("core.evolution_loop.EvolutionLoop", return_value=fake_evo):
+             patch("aura_cli.cli_main.log_json"):
             code, out, err, _ = self._dispatch(["--evolve"], runtime_factory=runtime_factory)
 
         self.assertEqual(code, 0)
         self.assertEqual(err, "Warning: Legacy flags are deprecated; use `aura evolve` instead.\n")
         self._assert_json_snapshot(out, "cli_legacy_evolve_dispatch.json")
-        fake_evo.run.assert_called_once_with("evolve and improve the AURA system")
+        fake_orchestrator.run_self_development.assert_called_once_with(
+            goal="evolve and improve the AURA system",
+            mode=None,
+        )
 
     def test_canonical_evolve_json_output_matches_snapshot_and_legacy_base_shape(self):
+        fake_orchestrator = MagicMock()
+        fake_orchestrator.run_self_development.return_value = {
+            "status": "ok",
+            "goal": "evolve and improve the AURA system",
+            "source": "manual_goal",
+            "self_dev_mode": "propose",
+            "history_count": 0,
+            "proposal_count": 1,
+            "proposals": [
+                {
+                    "proposal_id": "ri_manual",
+                    "summary": "Manual Ralph-loop goal request queued through the canonical runtime path.",
+                    "recommended_goal": "evolve and improve the AURA system",
+                    "queueable": True,
+                    "queue_block_reason": None,
+                }
+            ],
+            "follow_up_goals": ["evolve and improve the AURA system"],
+            "auto_queued_goals": [],
+            "queue_block_reasons": [],
+        }
         fake_runtime = {
-            "planner": MagicMock(),
-            "model_adapter": MagicMock(),
-            "brain": MagicMock(),
+            "orchestrator": fake_orchestrator,
         }
         runtime_factory = MagicMock(return_value=fake_runtime)
 
-        fake_evo = MagicMock()
-        fake_evo.run.return_value = {
-            "status": "ok",
-            "mutations": 2,
-            "artifacts": ["core/vector_store.py", "aura_cli/cli_main.py"],
-            "meta": {"score": 0.9},
-        }
-
         with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
-             patch("aura_cli.cli_main.log_json"), \
-             patch("aura_cli.dispatch.ops.default_agents", return_value={"act": MagicMock(), "critique": MagicMock()}), \
-             patch("aura_cli.dispatch.ops.GitTools", return_value=MagicMock()), \
-             patch("agents.mutator.MutatorAgent", return_value=MagicMock()), \
-             patch("aura_cli.dispatch.ops.VectorStore", return_value=MagicMock()), \
-             patch("core.evolution_loop.EvolutionLoop", return_value=fake_evo):
+             patch("aura_cli.cli_main.log_json"):
             code_c, out_c, err_c, _ = self._dispatch(["evolve"], runtime_factory=runtime_factory)
             code_l, out_l, err_l, _ = self._dispatch(["--evolve"], runtime_factory=runtime_factory)
 
@@ -1309,10 +1324,39 @@ class TestCLIMainDispatch(unittest.TestCase):
         legacy_payload = json.loads(out_l)
         self.assertEqual(canonical_payload, self._without_cli_warnings(legacy_payload))
         self._assert_json_snapshot(out_c, "cli_canonical_evolve_dispatch.json")
-        self.assertEqual(fake_evo.run.call_args_list, [
-            call("evolve and improve the AURA system"),
-            call("evolve and improve the AURA system"),
+        self.assertEqual(fake_orchestrator.run_self_development.call_args_list, [
+            call(goal="evolve and improve the AURA system", mode=None),
+            call(goal="evolve and improve the AURA system", mode=None),
         ])
+
+    def test_canonical_evolve_passes_explicit_mode_to_runtime(self):
+        fake_orchestrator = MagicMock()
+        fake_orchestrator.run_self_development.return_value = {
+            "status": "ok",
+            "goal": "Harden loop",
+            "source": "manual_goal",
+            "self_dev_mode": "auto_queue",
+            "history_count": 0,
+            "proposal_count": 0,
+            "proposals": [],
+            "follow_up_goals": [],
+            "auto_queued_goals": [],
+            "queue_block_reasons": [],
+        }
+        fake_runtime = {
+            "orchestrator": fake_orchestrator,
+        }
+        runtime_factory = MagicMock(return_value=fake_runtime)
+
+        with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"):
+            code, *_ = self._dispatch(["evolve", "--mode", "auto_queue", "Harden loop"], runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        fake_orchestrator.run_self_development.assert_called_once_with(
+            goal="Harden loop",
+            mode="auto_queue",
+        )
 
     def test_legacy_and_canonical_goal_add_run_use_same_queue_and_runner(self):
         goal_queue = MagicMock()

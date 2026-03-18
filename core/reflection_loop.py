@@ -105,6 +105,7 @@ class DeepReflectionLoop:
                         ss["actionable"] += 1
 
         insights = self._extract_insights(phase_stats, skill_stats, goal_type_outcomes)
+        fot_candidates = self._build_fot_candidates(insights)
         self._write_to_brain(insights)
 
         report = {
@@ -115,6 +116,7 @@ class DeepReflectionLoop:
             "skill_stats": skill_stats,
             "goal_type_outcomes": goal_type_outcomes,
             "insights": insights,
+            "fot_candidates": fot_candidates,
         }
         self.memory.put("reflection_reports", report)
         log_json("INFO", "reflection_loop_complete",
@@ -181,6 +183,44 @@ class DeepReflectionLoop:
                 })
 
         return insights
+
+    def _build_fot_candidates(self, insights: List[Dict]) -> List[Dict[str, Any]]:
+        candidates: List[Dict[str, Any]] = []
+        for insight in insights:
+            insight_type = str(insight.get("type") or "").strip()
+            message = str(insight.get("message") or "").strip()
+            severity = str(insight.get("severity") or "LOW").upper()
+            priority = "high" if severity == "HIGH" else ("medium" if severity == "MEDIUM" else "low")
+            candidate = {
+                "candidate_id": f"reflection:{insight_type}:{insight.get('phase') or insight.get('skill') or insight.get('goal_type') or len(candidates)}",
+                "source": "reflection",
+                "summary": message or f"Reflection detected {insight_type}",
+                "priority": priority,
+                "confidence": 0.75 if severity == "HIGH" else (0.6 if severity == "MEDIUM" else 0.4),
+                "queueable": True,
+                "requires_human_review": False,
+                "beads_recheck_required": False,
+                "evidence": [insight_type, severity],
+            }
+            if insight_type == "phase_failure":
+                phase = str(insight.get("phase") or "unknown")
+                candidate["recommended_goal"] = (
+                    f"Investigate and reduce repeated '{phase}' phase failures with targeted regression coverage"
+                )
+            elif insight_type == "low_value_skill":
+                skill = str(insight.get("skill") or "unknown")
+                candidate["recommended_goal"] = (
+                    f"Improve or retire low-signal skill '{skill}' to reduce noisy planning context"
+                )
+            elif insight_type == "goal_type_struggling":
+                goal_type = str(insight.get("goal_type") or "unknown")
+                candidate["recommended_goal"] = (
+                    f"Stabilize struggling '{goal_type}' goals by narrowing scope and adding focused regression coverage"
+                )
+            else:
+                candidate["recommended_goal"] = message
+            candidates.append(candidate)
+        return candidates
 
     def _write_to_brain(self, insights: List[Dict]) -> None:
         import json

@@ -25,7 +25,7 @@ def _make_cycle_entry(cycle_id: str, *, hotspot: bool = False, status: str = "pa
     }
 
 
-def _make_evolution_loop(improvement_service=None):
+def _make_evolution_loop(improvement_service=None, *, self_dev_mode="propose"):
     planner = MagicMock()
     coder = MagicMock()
     critic = MagicMock()
@@ -44,12 +44,13 @@ def _make_evolution_loop(improvement_service=None):
         git_tools,
         mutator,
         improvement_service=improvement_service,
+        self_dev_mode=self_dev_mode,
     )
 
 
 class TestRSIIntegrationVerification(unittest.TestCase):
     def test_verify_rsi_integration_tracks_hotspot_and_scheduled_runs(self):
-        loop = _make_evolution_loop(improvement_service=None)
+        loop = _make_evolution_loop(improvement_service=None, self_dev_mode="full_mutation")
         loop.run = MagicMock(return_value={"status": "ok"})
 
         entries = []

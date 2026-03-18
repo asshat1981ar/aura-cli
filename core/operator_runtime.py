@@ -164,6 +164,12 @@ def build_cycle_summary(
     verification = phase_outputs.get("verification", {}) if isinstance(phase_outputs, dict) else {}
     apply_result = phase_outputs.get("apply_result", {}) if isinstance(phase_outputs, dict) else {}
     capability_goal_queue = phase_outputs.get("capability_goal_queue", {}) if isinstance(phase_outputs, dict) else {}
+    ralph = phase_outputs.get("ralph", {}) if isinstance(phase_outputs, dict) else {}
+    fot = phase_outputs.get("fot", {}) if isinstance(phase_outputs, dict) else {}
+    if not isinstance(ralph, dict):
+        ralph = {}
+    if not isinstance(fot, dict):
+        fot = {}
 
     verification_status = _normalize_verification_status(verification)
     failures = list(verification.get("failures", [])) if isinstance(verification, dict) else []
@@ -177,6 +183,10 @@ def build_cycle_summary(
     beads = entry.get("beads") or phase_outputs.get("beads_gate", {}) if isinstance(phase_outputs, dict) else {}
     if not isinstance(beads, dict):
         beads = {}
+    proposals = list(ralph.get("proposals", []))
+    auto_queued_goals = list(ralph.get("auto_queued_goals", []))
+    queue_block_reasons = list(ralph.get("queue_block_reasons", []))
+    fot_blocked_candidates = list(fot.get("blocked_candidates", []))
 
     duration_s = None
     if started_at is not None and completed_at is not None:
@@ -207,6 +217,20 @@ def build_cycle_summary(
         "applied_files": applied_files,
         "failed_files": failed_files,
         "queued_follow_up_goals": queued_follow_up_goals,
+        "self_dev_mode": ralph.get("self_dev_mode"),
+        "proposal_count": int(ralph.get("proposal_count", len(proposals)) or 0),
+        "proposals": proposals,
+        "auto_queued_goals": auto_queued_goals,
+        "queue_block_reasons": queue_block_reasons,
+        "ralph_trigger_cause": ralph.get("trigger_cause"),
+        "ralph_mutation_status": ralph.get("mutation_status"),
+        "fot_candidates_considered": int(fot.get("candidates_considered", 0) or 0),
+        "fot_candidates_selected": int(fot.get("candidates_selected", 0) or 0),
+        "fot_queue_delta": int(fot.get("queue_delta", len(fot.get("auto_queued_goals", []))) or 0),
+        "fot_blocked_candidates": fot_blocked_candidates,
+        "fot_sources": list(fot.get("sources", [])),
+        "fot_requires_human_review": int(fot.get("requires_human_review", 0) or 0),
+        "fot_beads_rechecks": int(fot.get("beads_rechecks", 0) or 0),
         "beads_status": beads.get("status"),
         "beads_decision_id": beads.get("decision_id"),
         "beads_summary": beads.get("summary"),
@@ -253,6 +277,45 @@ def build_beads_runtime_metadata(orchestrator: Any = None) -> Dict[str, Any] | N
     return metadata or None
 
 
+def build_ralph_runtime_metadata(orchestrator: Any = None) -> Dict[str, Any] | None:
+    if orchestrator is None:
+        return None
+
+    enabled = getattr(orchestrator, "ralph_enabled", None)
+    mode = getattr(orchestrator, "ralph_mode", None)
+    max_proposals = getattr(orchestrator, "ralph_max_proposals_per_cycle", None)
+    max_auto_queue = getattr(orchestrator, "ralph_max_auto_queue_per_cycle", None)
+
+    metadata: Dict[str, Any] = {}
+    if isinstance(enabled, bool):
+        metadata["enabled"] = enabled
+    if isinstance(mode, str):
+        metadata["mode"] = mode
+    if isinstance(max_proposals, int):
+        metadata["max_proposals_per_cycle"] = max_proposals
+    if isinstance(max_auto_queue, int):
+        metadata["max_auto_queue_per_cycle"] = max_auto_queue
+    return metadata or None
+
+
+def build_fot_runtime_metadata(orchestrator: Any = None) -> Dict[str, Any] | None:
+    if orchestrator is None:
+        return None
+
+    enabled = getattr(orchestrator, "fot_enabled", None)
+    max_selected = getattr(orchestrator, "fot_max_candidates_per_cycle", None)
+    max_auto_queue = getattr(orchestrator, "fot_max_auto_queue_per_cycle", None)
+
+    metadata: Dict[str, Any] = {}
+    if isinstance(enabled, bool):
+        metadata["enabled"] = enabled
+    if isinstance(max_selected, int):
+        metadata["max_candidates_per_cycle"] = max_selected
+    if isinstance(max_auto_queue, int):
+        metadata["max_auto_queue_per_cycle"] = max_auto_queue
+    return metadata or None
+
+
 def build_operator_runtime_snapshot(
     goal_queue: Any = None,
     goal_archive: Any = None,
@@ -262,6 +325,8 @@ def build_operator_runtime_snapshot(
     active_goal: str | None = None,
     updated_at: float | None = None,
     beads_runtime: Dict[str, Any] | None = None,
+    ralph_runtime: Dict[str, Any] | None = None,
+    fot_runtime: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     if active_goal is None and isinstance(active_cycle, dict):
         active_goal = active_cycle.get("goal")
@@ -276,4 +341,6 @@ def build_operator_runtime_snapshot(
         "active_cycle": active_cycle,
         "last_cycle": last_cycle,
         "beads_runtime": beads_runtime,
+        "ralph_runtime": ralph_runtime,
+        "fot_runtime": fot_runtime,
     }

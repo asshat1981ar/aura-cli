@@ -82,6 +82,7 @@ def _handle_status(
     
     from core.operator_runtime import (
         build_beads_runtime_metadata,
+        build_fot_runtime_metadata,
         build_operator_runtime_snapshot,
         build_ralph_runtime_metadata,
     )
@@ -91,6 +92,7 @@ def _handle_status(
     last_cycle = getattr(orchestrator, "last_cycle_summary", None)
     beads_runtime = build_beads_runtime_metadata(orchestrator)
     ralph_runtime = build_ralph_runtime_metadata(orchestrator)
+    fot_runtime = build_fot_runtime_metadata(orchestrator)
     
     snapshot = build_operator_runtime_snapshot(
         goal_queue=goal_queue,
@@ -99,6 +101,7 @@ def _handle_status(
         last_cycle=last_cycle,
         beads_runtime=beads_runtime,
         ralph_runtime=ralph_runtime,
+        fot_runtime=fot_runtime,
     )
 
     if as_json:
@@ -140,6 +143,12 @@ def _handle_status(
         print(f"Max proposals/cycle: {ralph_runtime.get('max_proposals_per_cycle', 0)}")
         print(f"Max auto-queued goals/cycle: {ralph_runtime.get('max_auto_queue_per_cycle', 0)}")
 
+    if fot_runtime:
+        print("\n--- FoT Arbiter ---")
+        print(f"Enabled: {'yes' if fot_runtime.get('enabled') else 'no'}")
+        print(f"Max candidates/cycle: {fot_runtime.get('max_candidates_per_cycle', 0)}")
+        print(f"Max auto-queued goals/cycle: {fot_runtime.get('max_auto_queue_per_cycle', 0)}")
+
     def _render_self_dev(summary):
         if summary.get("self_dev_mode"):
             print(f"Ralph Mode: {summary['self_dev_mode']}")
@@ -149,6 +158,16 @@ def _handle_status(
             print(f"Ralph Trigger: {summary['ralph_trigger_cause']}")
         if summary.get("auto_queued_goals"):
             print(f"Ralph Auto-Queued: {', '.join(summary['auto_queued_goals'])}")
+        if summary.get("fot_candidates_considered") is not None:
+            print(f"FoT Candidates: {summary.get('fot_candidates_selected', 0)}/{summary.get('fot_candidates_considered', 0)} selected")
+        if summary.get("fot_queue_delta") is not None:
+            print(f"FoT Queue Delta: {summary.get('fot_queue_delta', 0)}")
+        if summary.get("fot_sources"):
+            print(f"FoT Sources: {', '.join(summary['fot_sources'])}")
+        if summary.get("fot_requires_human_review"):
+            print(f"FoT Human Review: {summary['fot_requires_human_review']}")
+        if summary.get("fot_beads_rechecks"):
+            print(f"FoT BEADS Rechecks: {summary['fot_beads_rechecks']}")
 
     if active_cycle:
         print("\n--- Active Cycle ---")

@@ -79,6 +79,10 @@ def handle_metrics_show(ctx) -> int:
     total_proposals = 0
     total_auto_queued_goals = 0
     total_queue_blocks = 0
+    total_fot_considered = 0
+    total_fot_selected = 0
+    total_fot_queue_delta = 0
+    total_fot_blocked = 0
 
     # 1. Try structured summaries from decision log
     summaries = [e["cycle_summary"] for e in log_entries if "cycle_summary" in e]
@@ -106,6 +110,26 @@ def handle_metrics_show(ctx) -> int:
             for s in summaries
             if isinstance(s, dict)
         )
+        total_fot_considered = sum(
+            int((s.get("fot_candidates_considered", 0) or 0))
+            for s in summaries
+            if isinstance(s, dict)
+        )
+        total_fot_selected = sum(
+            int((s.get("fot_candidates_selected", 0) or 0))
+            for s in summaries
+            if isinstance(s, dict)
+        )
+        total_fot_queue_delta = sum(
+            int((s.get("fot_queue_delta", 0) or 0))
+            for s in summaries
+            if isinstance(s, dict)
+        )
+        total_fot_blocked = sum(
+            len(s.get("fot_blocked_candidates", []))
+            for s in summaries
+            if isinstance(s, dict)
+        )
         for s in summaries[-10:]:
             outcome = s.get("outcome", "FAILED")
             duration = s.get("duration_s", 0.0)
@@ -123,6 +147,8 @@ def handle_metrics_show(ctx) -> int:
                 "proposal_count": int(s.get("proposal_count", 0) or 0),
                 "self_dev_mode": s.get("self_dev_mode"),
                 "auto_queued_goals": list(s.get("auto_queued_goals", [])),
+                "fot_candidates_selected": int(s.get("fot_candidates_selected", 0) or 0),
+                "fot_queue_delta": int(s.get("fot_queue_delta", 0) or 0),
             })
 
     # 2. Fallback to legacy outcome strings in brain
@@ -169,6 +195,10 @@ def handle_metrics_show(ctx) -> int:
                 "proposal_count": total_proposals,
                 "auto_queued_goals": total_auto_queued_goals,
                 "queue_block_reasons": total_queue_blocks,
+                "fot_candidates_considered": total_fot_considered,
+                "fot_candidates_selected": total_fot_selected,
+                "fot_queue_delta": total_fot_queue_delta,
+                "fot_blocked_candidates": total_fot_blocked,
             }
         }
         for i, s in enumerate(summaries[-10:]):
@@ -194,6 +224,7 @@ def handle_metrics_show(ctx) -> int:
     print(f"Avg duration: {avg_time:.1f}s")
     print(f"Sandbox failures: {sandbox_failures} | Verification failures: {verification_failures}")
     print(f"Ralph proposals: {total_proposals} | Auto-queued goals: {total_auto_queued_goals} | Queue blocks: {total_queue_blocks}")
+    print(f"FoT considered: {total_fot_considered} | FoT selected: {total_fot_selected} | FoT queue delta: {total_fot_queue_delta} | FoT blocked: {total_fot_blocked}")
 
     # 3. Add strategy win rates from Brain KV store
     brain = ctx.runtime["brain"]

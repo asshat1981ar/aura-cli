@@ -23,6 +23,7 @@ if str(project_root) not in sys.path:
 from aura_cli.cli_main import create_runtime
 from core.logging_utils import log_json
 from core.rsi_integration_verification import summarize_rsi_audit
+from core.goal_generator import ContextualGoalGenerator
 
 try:
     from dotenv import load_dotenv
@@ -40,8 +41,13 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--goal",
-        default="evolve and improve the AURA system via recursive self-improvement",
-        help="Goal to run for each audit cycle.",
+        default=None,
+        help="Specific goal to run for each audit cycle. If not provided, a default or adaptive goal is used.",
+    )
+    parser.add_argument(
+        "--adaptive",
+        action="store_true",
+        help="Dynamically generate context-aware goals based on codebase hotspots and signals.",
     )
     parser.add_argument(
         "--dry-run",
@@ -107,10 +113,15 @@ def main(argv: List[str] | None = None) -> int:
     try:
         runtime = create_runtime(project_root)
         orchestrator = runtime["orchestrator"]
+        brain = runtime.get("brain")
+        model = runtime.get("model")
     except Exception as exc:
         print(json.dumps({"status": "init_error", "error": str(exc)}, indent=2))
         return 1
 
+    goal_generator = ContextualGoalGenerator(project_root, brain=brain, model=model)
+    default_goal = "evolve and improve the AURA system via recursive self-improvement"
+    
     evolution_loop = _get_evolution_loop(orchestrator)
     notes: List[str] = []
     trigger_events: List[Dict[str, Any]] = []
@@ -168,10 +179,20 @@ def main(argv: List[str] | None = None) -> int:
         for cycle_index in range(1, args.cycles + 1):
             current_cycle_index = cycle_index
             started_at = time.time()
-            print(f">>> Cycle {cycle_index}/{args.cycles} starting...", flush=True)
+            
+            # Determine the goal for this cycle
+            if args.goal:
+                current_goal = args.goal
+            elif args.adaptive:
+                print(f">>> Cycle {cycle_index}/{args.cycles}: Generating impactful goal...", flush=True)
+                current_goal = goal_generator.generate_impactful_goal()
+            else:
+                current_goal = default_goal
+
+            print(f">>> Cycle {cycle_index}/{args.cycles} starting with goal: {current_goal}", flush=True)
 
             try:
-                result = orchestrator.run_cycle(args.goal, dry_run=args.dry_run)
+                result = orchestrator.run_cycle(current_goal, dry_run=args.dry_run)
                 entries.append(result)
                 verification = result.get("phase_outputs", {}).get("verification", {})
                 status = verification.get("status", "unknown") if isinstance(verification, dict) else "unknown"

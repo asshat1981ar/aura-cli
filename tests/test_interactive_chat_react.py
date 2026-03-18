@@ -66,6 +66,21 @@ class TestInteractiveChatReAct(unittest.TestCase):
         self.assertEqual(roles, ["user", "assistant", "system", "assistant"])
         self.assertIn("SearchResult", history[2]["content"])
 
+    def test_react_add_goals(self):
+        self.model.respond.return_value = json.dumps({
+            "action": "add_goals",
+            "text": "Queueing sub-goals",
+            "goals": ["Goal 1", "Goal 2"]
+        })
+        
+        history = []
+        action = interactive_chat(self.runtime, "Yes, queue those", history)
+        
+        self.assertEqual(action, "continue")
+        self.assertEqual(self.goal_queue.add.call_count, 2)
+        self.goal_queue.add.assert_any_call("Goal 1")
+        self.goal_queue.add.assert_any_call("Goal 2")
+
     def test_react_max_iterations(self):
         # Simulate LLM caught in a loop
         self.model.respond.return_value = json.dumps({"action": "search", "query": "loop"})

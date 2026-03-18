@@ -37,15 +37,17 @@ If you need to look at code to answer accurately, use "read_file" or "search".
 Your available actions are:
 1. "read_file": Read the contents of a specific file. Provide "path".
 2. "search": Semantically search the codebase. Provide "query".
-3. "reply": Use this to talk to the user. Provide "text".
-4. "add_goal": Use this if the user wants you to build, fix, refactor, or implement something. Provide "goal" description, and optional conversational "text".
-5. "run": Use this if the user tells you to start working, execute the queue, or "go". Provide optional "text".
+3. "reply": Use this to talk to the user. If the user asks for a complex feature or large refactor, DO NOT queue it immediately. Instead, use "reply" to propose a 3-5 step breakdown of sub-goals and ask if they look good to queue.
+4. "add_goal": Use this if the user wants you to build, fix, refactor, or implement a single, concrete thing. Provide "goal" description.
+5. "add_goals": Use this if the user approved a multi-step breakdown. Provide a list of strings in "goals".
+6. "run": Use this if the user tells you to start working, execute the queue, or "go".
 
 Respond ONLY with a valid JSON object in this exact format:
 {{
-  "action": "reply" | "add_goal" | "run" | "read_file" | "search",
-  "text": "Your conversational reply (for reply, add_goal, or run)",
+  "action": "reply" | "add_goal" | "add_goals" | "run" | "read_file" | "search",
+  "text": "Your conversational reply (for reply, add_goal, add_goals, or run)",
   "goal": "The technical goal (only if action is add_goal)",
+  "goals": ["Goal 1", "Goal 2"],
   "path": "File path (only if action is read_file)",
   "query": "Search query (only if action is search)"
 }}
@@ -121,6 +123,12 @@ Chat History:
                 if goal:
                     print(f"[AURA Auto-Queuing Goal]: {goal}")
                     _handle_add(runtime["goal_queue"], f"add {goal}")
+            elif action == "add_goals":
+                goals = data.get("goals", [])
+                for goal in goals:
+                    if goal:
+                        print(f"[AURA Auto-Queuing Goal]: {goal}")
+                        _handle_add(runtime["goal_queue"], f"add {goal}")
             elif action == "run":
                 print("\n[AURA Auto-Running Goals]")
                 return "run_goals"

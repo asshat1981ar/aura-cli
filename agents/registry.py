@@ -29,6 +29,8 @@ from agents.planner import PlannerAgent
 from agents.critic import CriticAgent
 from agents.coder import CoderAgent
 from agents.sandbox import SandboxAgent
+from core.codex_manager import CodexManager
+from core.git_tools import GitTools
 
 
 class PlannerAdapter:
@@ -324,6 +326,33 @@ class ActAdapter:
         }
 
 
+class CodexActAdapter:
+    """Pipeline adapter for :class:`~core.codex_manager.CodexManager` (phase name: ``"act"``).
+    """
+
+    name = "act"
+
+    def __init__(self, agent: CodexManager):
+        """Initialise the adapter with a configured codex manager agent.
+
+        Args:
+            agent: The :class:`~core.codex_manager.CodexManager` instance to wrap.
+        """
+        self.agent = agent
+
+    def run(self, input_data):
+        """Execute the parallel code-generation (act) phase.
+
+        Args:
+            input_data: Dict with keys ``"task"``, ``"task_bundle"``,
+                ``"project_root"``, and ``"dry_run"``.
+
+        Returns:
+            A change-set dict with a merged list of ``changes``.
+        """
+        return self.agent.run(input_data)
+
+
 class SandboxAdapter:
     """Pipeline adapter for :class:`~agents.sandbox.SandboxAgent` (phase name: ``"sandbox"``).
 
@@ -414,7 +443,7 @@ class SandboxAdapter:
         }
 
 
-def default_agents(brain, model, context_manager=None):
+def default_agents(brain, model, context_manager=None, use_codex_parallel=False, project_root="."):
     """Build and return the full agent dict used by :class:`~core.orchestrator.LoopOrchestrator`.
 
     Instantiates every pipeline phase adapter with the provided *brain* and
@@ -450,7 +479,13 @@ def default_agents(brain, model, context_manager=None):
     sandbox_agent = SandboxAgent(brain, timeout=30)
     planner = PlannerAdapter(PlannerAgent(brain, model))
     critic = CriticAdapter(CriticAgent(brain, model))
-    act = ActAdapter(CoderAgent(brain, model))
+    
+    if use_codex_parallel:
+        git_tools = GitTools(project_root)
+        act = CodexActAdapter(CodexManager(model, git_tools, project_root, brain=brain))
+    else:
+        act = ActAdapter(CoderAgent(brain, model))
+
     sandbox = SandboxAdapter(sandbox_agent)
     return {
         "ingest": IngestAgent(brain, context_manager=context_manager),

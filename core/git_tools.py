@@ -1,5 +1,9 @@
-from git import Repo
-from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError
+try:
+    from git import Repo
+    from git.exc import InvalidGitRepositoryError, GitCommandError, NoSuchPathError
+except ImportError:  # pragma: no cover - optional dependency
+    Repo = None
+    InvalidGitRepositoryError = GitCommandError = NoSuchPathError = None
 from core.logging_utils import log_json  # Import the new logging utility
 
 # R2: Exception classes are now canonical in core/exceptions.py — import from there.
@@ -12,11 +16,15 @@ from core.exceptions import (  # noqa: F401 (re-exported for backward-compat)
     GitBranchError,
     GitStashError,
     GitStashPopError,
+    GitWorktreeError,
 )
 
 
 class GitTools:
     def __init__(self, repo_path: str = None):
+        if Repo is None:
+            log_json("WARN", "gitpython_unavailable")
+            raise GitToolsError("GitPython is not installed. Git features are unavailable.")
         try:
             if repo_path:
                 self.repo = Repo(repo_path, search_parent_directories=True)
@@ -90,3 +98,49 @@ class GitTools:
         except GitCommandError as e:
             log_json("ERROR", "git_stash_pop_failed", details={"error": str(e)})
             raise GitStashPopError(f"Failed to pop stash: {e}")
+
+    def create_worktree(self, path: str, branch: str = None):
+        """Creates a new git worktree at the specified path."""
+        try:
+            args = ['add', path]
+            if branch:
+                args.append(branch)
+            self.repo.git.worktree(*args)
+            log_json("INFO", "git_worktree_created", details={"path": path, "branch": branch})
+        except GitCommandError as e:
+            log_json("ERROR", "git_worktree_creation_failed", details={"error": str(e), "path": path})
+            raise GitWorktreeError(f"Failed to create worktree at {path}: {e}")
+
+    def list_worktrees(self) -> list:
+        """Lists all active git worktrees."""
+        try:
+            output = self.repo.git.worktree('list', '--porcelain')
+            worktrees = []
+            current = {}
+            for line in output.splitlines():
+                if line.startswith('worktree '):
+                    if current:
+                        worktrees.append(current)
+                    current = {'path': line[9:].strip()}
+                elif line.startswith('HEAD '):
+                    current['head'] = line[5:].strip()
+                elif line.startswith('branch '):
+                    current['branch'] = line[7:].strip()
+            if current:
+                worktrees.append(current)
+            return worktrees
+        except GitCommandError as e:
+            log_json("ERROR", "git_worktree_list_failed", details={"error": str(e)})
+            raise GitWorktreeError(f"Failed to list worktrees: {e}")
+
+    def remove_worktree(self, path: str, force: bool = False):
+        """Removes the git worktree at the specified path."""
+        try:
+            args = ['remove', path]
+            if force:
+                args.insert(1, '--force')
+            self.repo.git.worktree(*args)
+            log_json("INFO", "git_worktree_removed", details={"path": path})
+        except GitCommandError as e:
+            log_json("ERROR", "git_worktree_removal_failed", details={"error": str(e), "path": path})
+            raise GitWorktreeError(f"Failed to remove worktree at {path}: {e}")

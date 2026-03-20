@@ -68,6 +68,40 @@ class GoalQueue:
             return goal
 
 
+    def contains(self, goal) -> bool:
+        """Return ``True`` if *goal* is already present in the queue.
+
+        Uses an exact-equality check.  Prefer :meth:`add_if_absent` when you
+        want to enqueue a goal only when it is not already pending.
+
+        Args:
+            goal: The goal object to search for.
+
+        Returns:
+            ``True`` when the goal is already in the queue, ``False`` otherwise.
+        """
+        return goal in self.queue
+
+    def add_if_absent(self, goal) -> bool:
+        """Add *goal* to the queue only if an identical goal is not already pending.
+
+        This prevents the same remediation or follow-up goal from being queued
+        multiple times across successive cycles, avoiding redundant work.
+
+        Args:
+            goal: The goal to conditionally enqueue.
+
+        Returns:
+            ``True`` when the goal was added, ``False`` when it was skipped
+            because a duplicate was found.
+        """
+        if self.contains(goal):
+            log_json("DEBUG", "goal_queue_duplicate_skipped",
+                     details={"goal_preview": str(goal)[:120]})
+            return False
+        self.add(goal)
+        return True
+
     def has_goals(self):
         """
         Checks if there are any goals currently in the queue.

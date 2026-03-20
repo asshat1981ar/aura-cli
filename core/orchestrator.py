@@ -485,11 +485,16 @@ class LoopOrchestrator:
 
         structural_signals = [
             "architecture", "circular", "api_breaking", "breaking_change",
-            "design", "interface", "contract",
+            "design", "interface", "contract", "incompatible", "type mismatch",
+            "schema mismatch",
         ]
         external_signals = [
             "dependency", "network", "env", "environment", "permission",
             "not found", "no module", "import error",
+            # Transient LLM / infrastructure failures — retrying won't help
+            "rate limit", "429", "quota exceeded", "too many requests",
+            "timeout", "timed out", "connection refused", "connection error",
+            "unauthorized", "401", "403", "forbidden",
         ]
 
         if any(s in combined for s in structural_signals):
@@ -656,7 +661,15 @@ class LoopOrchestrator:
                 break
             elif route == "skip":
                 break
-            task_bundle["fix_hints"] = verification.get("failures", [])
+            # Enrich fix_hints with both the failure list and any log snippet so
+            # the coder receives maximum context for the next retry.
+            failures = verification.get("failures", [])
+            raw_logs = verification.get("logs") or ""
+            logs_snippet = str(raw_logs)[:500]
+            fix_hints = list(failures)
+            if logs_snippet and logs_snippet not in " ".join(str(f) for f in failures):
+                fix_hints.append(f"Logs: {logs_snippet}")
+            task_bundle["fix_hints"] = fix_hints
 
         return verification, replan_needed, None
 
@@ -1189,14 +1202,21 @@ class LoopOrchestrator:
                 
         return new_goals
 
-    def run_loop(self, goal: str, max_cycles: int = 5, dry_run: bool = False) -> Dict:
+    def run_loop(
+        self,
+        goal: str,
+        max_cycles: int = 5,
+        dry_run: bool = False,
+        max_wall_seconds: Optional[float] = None,
+    ) -> Dict:
         """Run :meth:`run_cycle` repeatedly until a stopping condition is met.
 
         Stopping conditions (checked after every cycle in priority order):
 
         1. The cycle itself sets ``stop_reason`` (e.g. ``"INVALID_OUTPUT"``).
         2. :attr:`policy` returns a non-empty stop reason based on cycle history.
-        3. *max_cycles* have been executed.
+        3. The wall-clock budget *max_wall_seconds* is exhausted (when set).
+        4. *max_cycles* have been executed.
 
         Args:
             goal: Natural-language description of the coding task to complete.
@@ -1204,13 +1224,19 @@ class LoopOrchestrator:
                 Defaults to 5.
             dry_run: Passed through to each :meth:`run_cycle` call.  When
                 ``True``, no filesystem changes are made.
+            max_wall_seconds: Optional hard wall-clock timeout (seconds).  When
+                the elapsed time *before* starting a new cycle exceeds this
+                value the loop stops immediately with ``stop_reason="WALL_TIMEOUT"``
+                rather than launching another (potentially slow) cycle.  This
+                provides a safety net beyond the cycle-count limit.
 
         Returns:
             A dict with the following keys:
 
             * ``"goal"`` (str) — the original goal string.
             * ``"stop_reason"`` (str) — why the loop terminated.  One of the
-              policy-defined reasons, a cycle-level ``"INVALID_OUTPUT"``, or
+              policy-defined reasons, a cycle-level ``"INVALID_OUTPUT"``,
+              ``"WALL_TIMEOUT"`` when the wall-clock budget is exhausted, or
               ``"MAX_CYCLES"`` when the hard limit was reached.
             * ``"history"`` (list[dict]) — list of cycle-result dicts in
               execution order, each as returned by :meth:`run_cycle`.
@@ -1226,6 +1252,20 @@ class LoopOrchestrator:
         stop_reason = ""
         started_at = time.time()
         for _ in range(max_cycles):
+            # Hard wall-clock guard: stop before launching a new cycle if the
+            # budget is already exhausted.
+            if max_wall_seconds is not None and (time.time() - started_at) >= max_wall_seconds:
+                stop_reason = "WALL_TIMEOUT"
+                log_json(
+                    "WARN", "run_loop_wall_timeout",
+                    details={"elapsed_s": time.time() - started_at,
+                             "max_wall_seconds": max_wall_seconds,
+                             "cycles_completed": len(history)},
+                )
+                if history:
+                    history[-1]["stop_reason"] = stop_reason
+                    self._refresh_cycle_summary(history[-1])
+                break
             entry = self.run_cycle(goal, dry_run=dry_run)
             history.append(entry)
             if entry.get("stop_reason"):

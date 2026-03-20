@@ -664,6 +664,54 @@ class TestSkillChainerSimulation:
         assert isinstance(queued, list)
         print(f"\n  [PASS] chain_skill_results: {len(queued)} goals queued from mixed skill results")
 
+    def test_chains_on_high_tech_debt(self):
+        chainer, queue = self._make_chainer_and_queue()
+        result = {"debt_score": 75, "debt_items": ["file1.py", "file2.py"]}
+        queued = chainer.maybe_chain("tech_debt_quantifier", result, queue)
+        assert len(queued) > 0
+        assert queue.add.called
+        assert "75" in queued[0]
+
+    def test_no_chain_on_low_tech_debt(self):
+        chainer, queue = self._make_chainer_and_queue()
+        result = {"debt_score": 30, "debt_items": []}
+        queued = chainer.maybe_chain("tech_debt_quantifier", result, queue)
+        assert len(queued) == 0
+        assert not queue.add.called
+
+    def test_chains_on_many_type_errors(self):
+        chainer, queue = self._make_chainer_and_queue()
+        type_errors = [f"error_{i}" for i in range(15)]
+        result = {"type_errors": type_errors, "annotation_coverage_pct": 42}
+        queued = chainer.maybe_chain("type_checker", result, queue)
+        assert len(queued) > 0
+        assert queue.add.called
+        assert "15" in queued[0]
+
+    def test_no_chain_on_few_type_errors(self):
+        chainer, queue = self._make_chainer_and_queue()
+        result = {"type_errors": ["err1", "err2"], "annotation_coverage_pct": 90}
+        queued = chainer.maybe_chain("type_checker", result, queue)
+        assert len(queued) == 0
+        assert not queue.add.called
+
+    def test_chain_skill_results_includes_debt_and_type_goals(self):
+        from core.skill_dispatcher import chain_skill_results
+        skill_results = {
+            "security_scanner": {"critical_count": 2},
+            "tech_debt_quantifier": {"debt_score": 80, "debt_items": ["a.py"]},
+            "type_checker": {
+                "type_errors": [f"e{i}" for i in range(20)],
+                "annotation_coverage_pct": 30,
+            },
+        }
+        mock_queue = MagicMock()
+        mock_queue.add = MagicMock(return_value=None)
+        queued = chain_skill_results(skill_results, mock_queue)
+        # All three skills should trigger goals
+        assert len(queued) == 3
+        assert mock_queue.add.call_count == 3
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 10. END-TO-END PERFORMANCE: FULL ORCHESTRATOR CYCLE TIMING

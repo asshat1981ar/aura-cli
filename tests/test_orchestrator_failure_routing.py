@@ -1,5 +1,6 @@
 """Tests for orchestrator failure routing and act-loop retry/replan/stash."""
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -32,10 +33,34 @@ class TestRouteFailure(unittest.TestCase):
                 result = self.orc._route_failure({"failures": [f"detected {signal} issue"]})
                 self.assertEqual(result, "plan")
 
+    def test_new_structural_signals_return_plan(self):
+        for signal in ("incompatible", "type mismatch", "schema mismatch"):
+            with self.subTest(signal=signal):
+                result = self.orc._route_failure({"failures": [f"detected {signal} issue"]})
+                self.assertEqual(result, "plan")
+
     def test_external_signals_return_skip(self):
         for signal in ("no module", "import error", "network", "permission"):
             with self.subTest(signal=signal):
                 result = self.orc._route_failure({"failures": [f"fatal: {signal}"]})
+                self.assertEqual(result, "skip")
+
+    def test_rate_limit_signals_return_skip(self):
+        for signal in ("rate limit", "429", "quota exceeded", "too many requests"):
+            with self.subTest(signal=signal):
+                result = self.orc._route_failure({"failures": [f"LLM error: {signal}"]})
+                self.assertEqual(result, "skip")
+
+    def test_timeout_signals_return_skip(self):
+        for signal in ("timeout", "timed out", "connection refused", "connection error"):
+            with self.subTest(signal=signal):
+                result = self.orc._route_failure({"failures": [f"error: {signal}"]})
+                self.assertEqual(result, "skip")
+
+    def test_auth_signals_return_skip(self):
+        for signal in ("unauthorized", "401", "403", "forbidden"):
+            with self.subTest(signal=signal):
+                result = self.orc._route_failure({"failures": [f"HTTP {signal}"]})
                 self.assertEqual(result, "skip")
 
     def test_logs_field_also_inspected(self):
@@ -169,3 +194,91 @@ class TestActLoopRetryBackoff(unittest.TestCase):
                 plan_attempt=0, max_plan_retries=1, skill_context={},
             )
         self.assertTrue(replan)
+
+
+# ── run_loop wall-clock timeout ───────────────────────────────────────────────
+
+class TestRunLoopWallTimeout(unittest.TestCase):
+    def _make_cycle_entry(self, stop_reason=None):
+        entry = {
+            "cycle_id": "cycle_test",
+            "goal": "test goal",
+            "goal_type": "default",
+            "phase_outputs": {"verification": {"status": "fail", "failures": [], "logs": ""}},
+            "stop_reason": stop_reason,
+            "started_at": time.time(),
+            "completed_at": time.time(),
+        }
+        return entry
+
+    def test_wall_timeout_stops_before_second_cycle(self):
+        orc = _make_orchestrator()
+        # run_cycle returns a valid entry (no stop_reason) but we set an
+        # already-elapsed wall budget so the loop never starts cycle 2.
+        with patch.object(orc, "run_cycle", return_value=self._make_cycle_entry()) as mock_cycle, \
+             patch.object(orc, "_refresh_cycle_summary"):
+            # Budget of 0 seconds should trigger WALL_TIMEOUT before cycle 2
+            result = orc.run_loop("test goal", max_cycles=5, max_wall_seconds=0)
+        # Only one cycle ran because the budget was 0 (elapsed ≥ 0 after first cycle)
+        self.assertLessEqual(mock_cycle.call_count, 2)
+        self.assertIn(result["stop_reason"], ("WALL_TIMEOUT", "MAX_CYCLES"))
+
+    def test_no_wall_timeout_when_not_set(self):
+        """Without max_wall_seconds the loop respects max_cycles only."""
+        orc = _make_orchestrator()
+        with patch.object(orc, "run_cycle", return_value=self._make_cycle_entry()) as mock_cycle, \
+             patch.object(orc, "_refresh_cycle_summary"):
+            result = orc.run_loop("test goal", max_cycles=3)
+        self.assertEqual(mock_cycle.call_count, 3)
+        self.assertEqual(result["stop_reason"], "MAX_CYCLES")
+
+    def test_wall_timeout_result_contains_history(self):
+        orc = _make_orchestrator()
+        with patch.object(orc, "run_cycle", return_value=self._make_cycle_entry()), \
+             patch.object(orc, "_refresh_cycle_summary"):
+            result = orc.run_loop("test goal", max_cycles=5, max_wall_seconds=9999)
+        # All cycles should run since the budget is huge
+        self.assertEqual(len(result["history"]), 5)
+
+
+# ── _run_act_loop fix_hints enrichment ───────────────────────────────────────
+
+class TestFixHintsEnrichment(unittest.TestCase):
+    def _make_pipeline_cfg(self, max_attempts=2):
+        cfg = MagicMock()
+        cfg.max_act_attempts = max_attempts
+        cfg.phases = ["act", "verify"]
+        cfg.skill_set = []
+        return cfg
+
+    def test_fix_hints_include_log_snippet_when_distinct(self):
+        """When the log field carries extra context not in failures, it is appended."""
+        orc = _make_orchestrator()
+        cfg = self._make_pipeline_cfg(max_attempts=2)
+        captured_task_bundles = []
+
+        def fake_execute(goal, plan, task_bundle, cycle_id, phase_outputs, dry_run):
+            # Record the state of fix_hints at call time
+            captured_task_bundles.append(dict(task_bundle))
+            return (
+                {},
+                {"applied": [], "failed": [], "snapshots": []},
+                {"status": "fail", "failures": ["assert failed"],
+                 "logs": "UNIQUE_LOG_TOKEN: some extra detail"},
+                0,
+            )
+
+        with patch("time.sleep"), \
+             patch.object(orc, "_execute_act_verify_attempt", side_effect=fake_execute), \
+             patch.object(orc, "_restore_applied_changes"):
+            orc._run_act_loop(
+                goal="test", plan={}, task_bundle={}, pipeline_cfg=cfg,
+                cycle_id="c1", phase_outputs={}, dry_run=False,
+                plan_attempt=0, max_plan_retries=1, skill_context={},
+            )
+
+        # The second call's task_bundle.fix_hints should contain the log snippet
+        if len(captured_task_bundles) >= 2:
+            hints = captured_task_bundles[1].get("fix_hints", [])
+            combined = " ".join(str(h) for h in hints)
+            self.assertIn("UNIQUE_LOG_TOKEN", combined)

@@ -285,6 +285,10 @@ class SkillChainer:
         Currently handles:
         - ``security_scanner``: queues a remediation goal when
           ``critical_count > 0``.
+        - ``tech_debt_quantifier``: queues a refactoring goal when
+          ``debt_score`` exceeds 50.
+        - ``type_checker``: queues a type-annotation goal when
+          ``type_errors`` count exceeds 10.
 
         Args:
             skill_name:  Name of the skill that produced *result*.
@@ -311,6 +315,48 @@ class SkillChainer:
                 except Exception as exc:
                     log_json("WARN", "skill_chainer_queue_failed",
                              details={"skill": skill_name, "error": str(exc)})
+
+        elif skill_name == "tech_debt_quantifier":
+            debt_score = result.get("debt_score", 0)
+            if debt_score and debt_score > 50:
+                debt_items = result.get("debt_items", [])
+                summary = f"{len(debt_items)} item(s)" if debt_items else f"score {debt_score}"
+                goal = (
+                    f"Reduce technical debt (score {debt_score}): address the "
+                    f"highest-priority {summary} flagged by the tech debt quantifier."
+                )
+                try:
+                    goal_queue.add(goal)
+                    queued.append(goal)
+                    log_json("INFO", "skill_chainer_queued",
+                             details={"skill": skill_name, "goal": goal})
+                except Exception as exc:
+                    log_json("WARN", "skill_chainer_queue_failed",
+                             details={"skill": skill_name, "error": str(exc)})
+
+        elif skill_name == "type_checker":
+            type_errors = result.get("type_errors", [])
+            # type_errors is expected to be a list; fall back to 0 for any other type.
+            if isinstance(type_errors, list):
+                error_count = len(type_errors)
+            else:
+                error_count = 0
+            if error_count > 10:
+                goal = (
+                    f"Fix {error_count} type errors and improve type annotation "
+                    f"coverage (annotation_coverage_pct="
+                    f"{result.get('annotation_coverage_pct', 'unknown')}%) "
+                    f"reported by the type checker."
+                )
+                try:
+                    goal_queue.add(goal)
+                    queued.append(goal)
+                    log_json("INFO", "skill_chainer_queued",
+                             details={"skill": skill_name, "goal": goal})
+                except Exception as exc:
+                    log_json("WARN", "skill_chainer_queue_failed",
+                             details={"skill": skill_name, "error": str(exc)})
+
         return queued
 
 

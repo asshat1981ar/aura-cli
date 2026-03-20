@@ -84,5 +84,35 @@ class TestGoalQueue(unittest.TestCase):
             content = json.load(f)
         self.assertEqual(content, ["First priority", "Second priority", "Existing goal"])
 
+    def test_contains_returns_true_when_goal_present(self):
+        self.goal_queue.add("Fix the login bug")
+        self.assertTrue(self.goal_queue.contains("Fix the login bug"))
+
+    def test_contains_returns_false_when_goal_absent(self):
+        self.goal_queue.add("Fix the login bug")
+        self.assertFalse(self.goal_queue.contains("Refactor auth module"))
+
+    def test_contains_empty_queue_returns_false(self):
+        self.assertFalse(self.goal_queue.contains("anything"))
+
+    def test_add_if_absent_adds_new_goal(self):
+        added = self.goal_queue.add_if_absent("Implement feature X")
+        self.assertTrue(added)
+        self.assertEqual(len(self.goal_queue.queue), 1)
+        self.assertEqual(self.goal_queue.queue[0], "Implement feature X")
+
+    def test_add_if_absent_skips_duplicate(self):
+        self.goal_queue.add("Implement feature X")
+        added = self.goal_queue.add_if_absent("Implement feature X")
+        self.assertFalse(added)
+        # Queue still has only one entry
+        self.assertEqual(len(self.goal_queue.queue), 1)
+
+    def test_add_if_absent_does_not_skip_different_goal(self):
+        self.goal_queue.add("Implement feature X")
+        added = self.goal_queue.add_if_absent("Implement feature Y")
+        self.assertTrue(added)
+        self.assertEqual(len(self.goal_queue.queue), 2)
+
 if __name__ == '__main__':
     unittest.main()

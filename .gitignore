@@ -42,6 +42,8 @@ memory/goal_queue_v2.json
 memory/goal_archive_v2.json
 memory/task_hierarchy_v2.json
 memory/strategy_stats.json
+memory/quality_trends.json
+memory/skill_correlations.json
 memory/capability_status.json
 memory/store/
 memory/experiments.jsonl

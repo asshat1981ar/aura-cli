@@ -1,0 +1,51 @@
+# Example AURA Configuration File
+# Copy this to aura.config.json and fill in your values
+
+{
+  "api_key": "YOUR_OPENROUTER_API_KEY_HERE",
+  "default_model": "google/gemini-2.0-flash-exp:free",
+
+  "model_routing": {
+    "code_generation": "google/gemini-2.0-flash-exp:free",
+    "planning": "google/gemini-2.0-flash-exp:free",
+    "analysis": "google/gemini-2.0-flash-exp:free",
+    "critique": "google/gemini-2.0-flash-exp:free",
+    "embedding": "openai/text-embedding-3-small",
+    "fast": "google/gemini-2.0-flash-exp:free",
+    "quality": "anthropic/claude-3.5-sonnet"
+  },
+
+  "memory_dir": "memory",
+  "strict_schema": false,
+  "dry_run": false,
+
+  "auto_add_capabilities": true,
+  "auto_queue_missing_capabilities": true,
+  "auto_provision_mcp": false,
+  "auto_start_mcp_servers": false,
+
+  "mcp_ports": {
+    "agentic_loop": 8001,
+    "aura_control": 8002,
+    "github_copilot": 8003,
+    "skills": 8004,
+    "sequential_thinking": 8005
+  },
+
+  "a2a": {
+    "enabled": false,
+    "port": 8080
+  },
+
+  "experiment_tracking": {
+    "enabled": true
+  },
+
+  "memory_consolidation": {
+    "enabled": true,
+    "interval_cycles": 10,
+    "threshold": 0.7
+  },
+
+  "hooks": {}
+}

@@ -91,3 +91,7 @@ skips = ["B101"]  # assert used in tests
 
 [tool.ruff]
 extend = "ruff.toml"
+
+[project.entry-points."aura.skills"]
+# Third-party plugin registration example
+# custom_linter = "my_plugin.linter:CustomLinterSkill"

@@ -31,6 +31,7 @@ from core.operator_runtime import build_cycle_summary
 from core.cycle_outcome import CycleOutcome
 from core.hooks import HookEngine
 from core.phase_result import PhaseResult, ConfidenceRouter
+from core.quality_trends import QualityTrendAnalyzer
 from core.capability_manager import (
     analyze_capability_needs,
     provision_capability_actions,
@@ -190,6 +191,14 @@ class LoopOrchestrator:
         self.hook_engine = HookEngine(self._load_config_file())
         # Confidence router: data-driven phase routing based on confidence scores
         self.confidence_router = ConfidenceRouter()
+        # Quality trend analyzer: cross-cycle regression detection
+        self.quality_trends = QualityTrendAnalyzer()
+        # Skill correlation matrix: self-organizing skill system
+        try:
+            from core.skill_correlation import SkillCorrelationMatrix
+            self.skill_correlation = SkillCorrelationMatrix()
+        except Exception:
+            self.skill_correlation = None
 
         # Self-improvement loops (all optional — never block the main loop)
         self._improvement_loops: list = []
@@ -622,6 +631,22 @@ class LoopOrchestrator:
         self._notify_ui("on_phase_start", "act")
         t0_act = time.time()
 
+        # RAG: retrieve similar past implementations as context
+        rag_context = None
+        try:
+            from core.code_rag import CodeRAG
+            code_rag = CodeRAG(
+                vector_store=getattr(self, 'vector_store', None),
+                brain=self.brain,
+            )
+            rag_context = code_rag.retrieve_context(goal, task_bundle)
+            if rag_context and rag_context.examples:
+                task_bundle = dict(task_bundle) if isinstance(task_bundle, dict) else {}
+                task_bundle["rag_examples"] = [e.get("content", "")[:300] for e in rag_context.examples[:3]]
+                task_bundle["rag_anti_patterns"] = rag_context.anti_patterns[:3]
+        except Exception:
+            pass
+
         if n_best > 1 and self.model and not dry_run:
             # N-Best code generation with critic tournament
             from core.nbest import NBestEngine
@@ -728,10 +753,57 @@ class LoopOrchestrator:
         return verification, replan_needed, None
 
     def _execute_plan_critique_synthesize(self, goal: str, context: Dict, skill_context: Dict, pipeline_cfg: Any, phase_outputs: Dict) -> Tuple[Dict, Dict]:
-        """Section 3-5: PLAN -> CRITIQUE -> SYNTHESIZE."""
+        """Section 3-5: PLAN -> CRITIQUE -> SYNTHESIZE.
+
+        When tree_of_thought_candidates > 1 in config, generates N plan
+        candidates with varied strategies and selects the best one.
+        """
         beads_decision = phase_outputs.get("beads_gate", {})
+        config = self._load_config_file()
+        tot_candidates = config.get("tree_of_thought_candidates", 1)
+
         self._notify_ui("on_phase_start", "plan")
         t0 = time.time()
+
+        # Tree-of-Thought: generate N plans with varied strategies
+        if tot_candidates > 1 and self.model:
+            try:
+                from core.tree_of_thought import TreeOfThoughtPlanner
+                tot = TreeOfThoughtPlanner(n_candidates=tot_candidates)
+                candidates = tot.generate_plans(self.model, goal, {
+                    "memory_snapshot": context.get("memory_summary", ""),
+                    "known_weaknesses": "",
+                    "skill_context": skill_context,
+                })
+                winner = tot.score_plans(self.model, candidates, goal)
+                plan = {"steps": winner.steps, "strategy": winner.strategy,
+                        "confidence": winner.total_score, "tree_of_thought": True}
+                self._notify_ui("on_phase_complete", "plan", (time.time() - t0) * 1000)
+                phase_outputs["plan"] = plan
+                phase_outputs["tot_strategy"] = winner.strategy
+
+                # Record high confidence — may skip critique
+                plan_confidence = min(winner.total_score, 0.95)
+                plan_result = PhaseResult(phase="plan", output=plan, confidence=plan_confidence)
+                self.confidence_router.record(plan_result)
+                phase_outputs["plan_confidence"] = plan_confidence
+
+                # Synthesize directly (ToT already self-scored)
+                self._notify_ui("on_phase_start", "synthesize")
+                t0 = time.time()
+                task_bundle = self._run_phase("synthesize", {
+                    "goal": goal, "plan": plan,
+                    "critique": {"status": "skipped", "reason": "tree_of_thought_self_scored"},
+                    "beads_decision": beads_decision,
+                })
+                self._notify_ui("on_phase_complete", "synthesize", (time.time() - t0) * 1000)
+                phase_outputs["task_bundle"] = task_bundle
+                return plan, task_bundle
+            except Exception as exc:
+                log_json("WARN", "tree_of_thought_failed_fallback",
+                         details={"error": str(exc)})
+                # Fall through to standard planning
+
         plan = self._run_phase("plan", {
             "goal": goal,
             "memory_snapshot": context.get("memory_summary", ""),
@@ -881,6 +953,19 @@ class LoopOrchestrator:
         skill_context: Dict = {}
         if self.skills and pipeline_cfg.skill_set:
             active_skills = {k: self.skills[k] for k in pipeline_cfg.skill_set if k in self.skills}
+            # Check skill correlation for suggested additions
+            if self.skill_correlation:
+                try:
+                    base_skill_names = list(active_skills.keys())
+                    suggestions = self.skill_correlation.suggest_skills(base_skill_names, goal_type)
+                    for suggested_name, corr_score in suggestions:
+                        if suggested_name in self.skills and suggested_name not in active_skills:
+                            active_skills[suggested_name] = self.skills[suggested_name]
+                            log_json("INFO", "skill_correlation_added",
+                                     details={"skill": suggested_name, "correlation": round(corr_score, 3)})
+                except Exception:
+                    pass
+
             skill_context = dispatch_skills(goal_type, active_skills, str(self.project_root))
         phase_outputs["skill_context"] = skill_context
         self._notify_ui("on_phase_complete", "skill_dispatch", (time.monotonic() - t0) * 1000)
@@ -1016,6 +1101,22 @@ class LoopOrchestrator:
         quality = run_quality_snapshot(self.project_root, changed_files=changed_files)
         phase_outputs["quality"] = quality
         self._notify_ui("on_phase_complete", "measure", (time.time() - t0_measure) * 1000)
+
+        # ── Quality Trend Analysis ──
+        try:
+            alerts = self.quality_trends.record_from_cycle({
+                "cycle_id": cycle_id, "goal": goal,
+                "completed_at": time.time(),
+                "duration_s": time.time() - started_at,
+                "phase_outputs": phase_outputs,
+            })
+            if alerts and self.goal_queue:
+                for goal_text in self.quality_trends.get_remediation_goals():
+                    self.goal_queue.add(goal_text)
+                    log_json("INFO", "quality_remediation_goal_enqueued",
+                             details={"goal": goal_text[:100]})
+        except Exception as exc:
+            log_json("WARN", "quality_trend_record_failed", details={"error": str(exc)})
 
         # ── Learning Loop: CycleOutcome ──
         outcome = CycleOutcome(

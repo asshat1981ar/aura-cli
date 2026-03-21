@@ -40,6 +40,18 @@ _DB_PATH = Path(__file__).resolve().parent.parent / "memory" / "workflow_engine.
 _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 
 
+def _invoke_create_runtime(project_root: Path, overrides=None):
+    """Thin wrapper around aura_cli.cli_main.create_runtime.
+
+    Extracted to module level so tests can reliably patch
+    ``core.workflow_engine._invoke_create_runtime`` regardless of Python
+    version — ``from X import Y`` inside a function body is not patchable
+    via ``patch("X.Y")`` on some Python 3.10 builds.
+    """
+    from aura_cli.cli_main import create_runtime
+    return create_runtime(project_root, overrides=overrides)
+
+
 # ---------------------------------------------------------------------------
 # Data models
 # ---------------------------------------------------------------------------
@@ -830,8 +842,7 @@ class WorkflowEngine:
         if not hasattr(self, "_orchestrator"):
             project_root = Path(__file__).resolve().parent.parent
             try:
-                from aura_cli.cli_main import create_runtime
-                rt = create_runtime(project_root, overrides=None)
+                rt = _invoke_create_runtime(project_root, overrides=None)
                 orchestrator = rt.get("orchestrator")
                 if orchestrator is None:
                     raise KeyError("Runtime factory returned no orchestrator")

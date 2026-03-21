@@ -21,12 +21,15 @@ class CodeRAG:
     """Retrieval-Augmented Generation for code — grounds generation in past successes."""
 
     def __init__(self, vector_store=None, brain=None, max_examples: int = 3,
-                 max_tokens: int = 2000, min_similarity: float = 0.6):
+                 max_tokens: int = 2000, min_similarity: float = 0.6,
+                 improvement_loop=None):
         self.vector_store = vector_store
         self.brain = brain
         self.max_examples = max_examples
         self.max_tokens = max_tokens
         self.min_similarity = min_similarity
+        # Optional continuous self-improvement loop for async metrics collection
+        self.improvement_loop = improvement_loop
 
     def retrieve_context(self, goal: str, task_bundle: dict | None = None) -> RAGContext:
         """Retrieve relevant past implementations for a goal."""
@@ -59,6 +62,17 @@ class CodeRAG:
             "anti_patterns": len(context.anti_patterns),
             "retrieval_ms": round(context.retrieval_time_ms, 1),
         })
+
+        # Notify improvement loop with retrieval metrics (non-blocking)
+        if self.improvement_loop is not None:
+            self.improvement_loop.record_retrieval(
+                goal=goal,
+                retrieved_count=len(context.examples),
+                retrieval_ms=context.retrieval_time_ms,
+                hit=bool(context.examples),
+                similarity_threshold_used=self.min_similarity,
+            )
+
         return context
 
     def augment_prompt(self, base_prompt: str, rag_context: RAGContext) -> str:
@@ -86,7 +100,15 @@ class CodeRAG:
             return base_prompt
 
         rag_section = "\n".join(sections)
-        return f"{base_prompt}\n\n{rag_section}"
+        base_with_rag = f"{base_prompt}\n\n{rag_section}"
+
+        # Append active prompt-variant suffix from improvement loop if present
+        if self.improvement_loop is not None:
+            suffix = self.improvement_loop.current_prompt_suffix()
+            if suffix:
+                base_with_rag = base_with_rag + suffix
+
+        return base_with_rag
 
     def store_successful_implementation(self, goal: str, changes: list[dict],
                                          goal_type: str = ""):

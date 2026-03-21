@@ -3,14 +3,14 @@ Tests for the bugs fixed in the refactor-and-debug pass:
 
 1. core/goal_archive.py  — dead/unreachable duplicate code removed from _load_archive
 2. aura_cli/cli_main.py  — _handle_doctor and _handle_clear available in canonical CLI
-3. core/hybrid_loop.py   — incorrect _safe_apply_change call and missing exception imports
+3. core/orchestrator.py  — correct apply_change_with_explicit_overwrite_policy call
+                           signature and exception imports (migrated from HybridClosedLoop)
 """
 
 import sys
 import tempfile
 import json
 import unittest
-import warnings
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -91,48 +91,44 @@ class TestCliMainImports(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Bug 3 & 4 – hybrid_loop.py: OldCodeNotFoundError/FileToolsError imports
-#             and correct _safe_apply_change call signature
+# Bug 3 & 4 – orchestrator.py: OldCodeNotFoundError/FileToolsError imports
+#             and correct apply_change_with_explicit_overwrite_policy call signature
+#             (migrated from HybridClosedLoop to LoopOrchestrator)
 # ---------------------------------------------------------------------------
 
-class TestHybridLoopImports(unittest.TestCase):
-    """OldCodeNotFoundError and FileToolsError must be importable from
-    core.hybrid_loop (they are used there and must not cause a NameError)."""
+class TestOrchestratorImports(unittest.TestCase):
+    """OldCodeNotFoundError and MismatchOverwriteBlockedError must be importable from
+    core.orchestrator (they are used there and must not cause a NameError)."""
 
     def test_exception_classes_importable(self):
         from core.file_tools import OldCodeNotFoundError, FileToolsError  # noqa: F401
 
-    def test_hybrid_loop_can_be_imported_without_name_error(self):
+    def test_orchestrator_can_be_imported_without_name_error(self):
         # Verify that the exception classes used in except-clauses of
-        # _apply_change_with_debug are the same objects exported by file_tools,
+        # _apply_change_set are the same objects exported by file_tools,
         # i.e. they were imported correctly and won't cause NameError at runtime.
-        from core import hybrid_loop
-        from core.file_tools import OldCodeNotFoundError, FileToolsError
-        self.assertIs(hybrid_loop.OldCodeNotFoundError, OldCodeNotFoundError)
-        self.assertIs(hybrid_loop.FileToolsError, FileToolsError)
+        from core import orchestrator
+        from core.file_tools import OldCodeNotFoundError, MismatchOverwriteBlockedError
+        self.assertIs(orchestrator.OldCodeNotFoundError, OldCodeNotFoundError)
+        self.assertIs(orchestrator.MismatchOverwriteBlockedError, MismatchOverwriteBlockedError)
 
 
-class TestHybridLoopApplyChangeCallSignature(unittest.TestCase):
-    """_apply_change_with_debug must call _safe_apply_change with the correct
+class TestLoopOrchestratorApplyChangeSet(unittest.TestCase):
+    """LoopOrchestrator._apply_change_set must call
+    apply_change_with_explicit_overwrite_policy with the correct
     argument order: (project_root, file_path, old_code, new_code, overwrite_file)."""
 
-    def _make_loop(self):
-        brain = MagicMock()
-        model = MagicMock()
-        git = MagicMock()
-        from core.hybrid_loop import HybridClosedLoop
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            return HybridClosedLoop(model, brain, git)
+    def _make_orchestrator(self, project_root):
+        from core.orchestrator import LoopOrchestrator
+        return LoopOrchestrator(agents={}, project_root=project_root)
 
     def test_apply_change_calls_safe_apply_with_correct_args(self):
-        loop = self._make_loop()
         project_root = Path(tempfile.mkdtemp())
         file_path = "subdir/test_file.py"
         old_code = "old content"
         new_code = "new content"
 
-        # Create the file so _safe_apply_change has something to work with
+        # Create the file so _snapshot_file_state has something to read
         target = project_root / file_path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(old_code)
@@ -146,20 +142,17 @@ class TestHybridLoopApplyChangeCallSignature(unittest.TestCase):
             captured["new_code"] = nc
             captured["overwrite_file"] = overwrite_file
 
-        with patch("core.hybrid_loop.apply_change_with_explicit_overwrite_policy", side_effect=fake_safe_apply):
-            result = loop._apply_change_with_debug(
-                project_root=project_root,
-                sanitized_file_path=file_path,
-                old_code=old_code,
-                new_code=new_code,
-                overwrite_file=False,
-                current_goal="test goal",
-                change_idx=0,
-                result_json={},
-                change={},
-            )
+        orchestrator = self._make_orchestrator(project_root)
+        change_set = {
+            "changes": [
+                {"file_path": file_path, "old_code": old_code, "new_code": new_code}
+            ]
+        }
+        with patch("core.orchestrator.apply_change_with_explicit_overwrite_policy",
+                   side_effect=fake_safe_apply):
+            result = orchestrator._apply_change_set(change_set, dry_run=False)
 
-        self.assertTrue(result, "Expected successful apply")
+        self.assertIn(file_path, result["applied"], "Expected successful apply")
         self.assertEqual(captured["root"], project_root, "project_root must be passed as first arg")
         self.assertEqual(captured["file_path"], file_path, "file_path must be passed as second arg")
         self.assertEqual(captured["old_code"], old_code)
@@ -168,87 +161,55 @@ class TestHybridLoopApplyChangeCallSignature(unittest.TestCase):
 
     def test_apply_change_handles_old_code_not_found(self):
         from core.file_tools import OldCodeNotFoundError
-        brain = MagicMock()
-        model = MagicMock()
-        model.respond.return_value = '{"summary":"err","diagnosis":"d","fix_strategy":"f","severity":"HIGH"}'
-        git = MagicMock()
-        from core.hybrid_loop import HybridClosedLoop
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            loop = HybridClosedLoop(model, brain, git)
         project_root = Path(tempfile.mkdtemp())
+        orchestrator = self._make_orchestrator(project_root)
+        change_set = {
+            "changes": [
+                {"file_path": "file.py", "old_code": "missing", "new_code": "new"}
+            ]
+        }
 
-        with patch("core.hybrid_loop.apply_change_with_explicit_overwrite_policy", side_effect=OldCodeNotFoundError("not found")):
-            result = loop._apply_change_with_debug(
-                project_root=project_root,
-                sanitized_file_path="file.py",
-                old_code="missing",
-                new_code="new",
-                overwrite_file=False,
-                current_goal="test goal",
-                change_idx=0,
-                result_json={},
-                change={},
-            )
-        self.assertFalse(result, "OldCodeNotFoundError should return False")
+        with patch("core.orchestrator.apply_change_with_explicit_overwrite_policy",
+                   side_effect=OldCodeNotFoundError("not found")):
+            result = orchestrator._apply_change_set(change_set, dry_run=False)
+
+        self.assertIn("file.py", [f["file"] for f in result["failed"]],
+                      "OldCodeNotFoundError should result in a failed entry")
 
     def test_apply_change_handles_mismatch_overwrite_blocked(self):
         from core.file_tools import MismatchOverwriteBlockedError
-        brain = MagicMock()
-        model = MagicMock()
-        model.respond.return_value = '{"summary":"err","diagnosis":"d","fix_strategy":"f","severity":"HIGH"}'
-        git = MagicMock()
-        from core.hybrid_loop import HybridClosedLoop
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            loop = HybridClosedLoop(model, brain, git)
         project_root = Path(tempfile.mkdtemp())
+        orchestrator = self._make_orchestrator(project_root)
+        change_set = {
+            "changes": [
+                {"file_path": "file.py", "old_code": "missing", "new_code": "new"}
+            ]
+        }
 
-        with patch("core.hybrid_loop.apply_change_with_explicit_overwrite_policy", side_effect=MismatchOverwriteBlockedError("blocked")), \
-             patch.object(loop, "_log_and_diagnose_error", return_value=False) as mock_diag:
-            result = loop._apply_change_with_debug(
-                project_root=project_root,
-                sanitized_file_path="file.py",
-                old_code="missing",
-                new_code="new",
-                overwrite_file=False,
-                current_goal="test goal",
-                change_idx=0,
-                result_json={},
-                change={},
-            )
-        self.assertFalse(result, "MismatchOverwriteBlockedError should return False")
-        self.assertEqual(mock_diag.call_args.args[5], "old_code_mismatch_overwrite_blocked")
-        self.assertEqual(
-            mock_diag.call_args.kwargs["extra_details"]["policy"],
-            "explicit_overwrite_file_required",
-        )
+        with patch("core.orchestrator.apply_change_with_explicit_overwrite_policy",
+                   side_effect=MismatchOverwriteBlockedError("blocked")):
+            result = orchestrator._apply_change_set(change_set, dry_run=False)
+
+        failed_files = [f["file"] for f in result["failed"]]
+        self.assertIn("file.py", failed_files,
+                      "MismatchOverwriteBlockedError should result in a failed entry")
 
     def test_apply_change_handles_file_tools_error(self):
         from core.file_tools import FileToolsError
-        brain = MagicMock()
-        model = MagicMock()
-        model.respond.return_value = '{"summary":"err","diagnosis":"d","fix_strategy":"f","severity":"HIGH"}'
-        git = MagicMock()
-        from core.hybrid_loop import HybridClosedLoop
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", DeprecationWarning)
-            loop = HybridClosedLoop(model, brain, git)
         project_root = Path(tempfile.mkdtemp())
+        orchestrator = self._make_orchestrator(project_root)
+        change_set = {
+            "changes": [
+                {"file_path": "file.py", "old_code": "x", "new_code": "y"}
+            ]
+        }
 
-        with patch("core.hybrid_loop.apply_change_with_explicit_overwrite_policy", side_effect=FileToolsError("fs error")):
-            result = loop._apply_change_with_debug(
-                project_root=project_root,
-                sanitized_file_path="file.py",
-                old_code="x",
-                new_code="y",
-                overwrite_file=False,
-                current_goal="test goal",
-                change_idx=0,
-                result_json={},
-                change={},
-            )
-        self.assertFalse(result, "FileToolsError should return False")
+        with patch("core.orchestrator.apply_change_with_explicit_overwrite_policy",
+                   side_effect=FileToolsError("fs error")):
+            result = orchestrator._apply_change_set(change_set, dry_run=False)
+
+        self.assertIn("file.py", [f["file"] for f in result["failed"]],
+                      "FileToolsError should result in a failed entry")
 
 
 if __name__ == "__main__":

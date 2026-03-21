@@ -7,7 +7,6 @@ This replaces single-path code generation with diversity-driven selection.
 import json
 import re
 from dataclasses import dataclass, field
-from typing import Any, Optional
 
 from core.logging_utils import log_json
 

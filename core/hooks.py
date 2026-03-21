@@ -28,7 +28,6 @@ import subprocess
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
 
 from core.logging_utils import log_json
 
@@ -154,7 +153,7 @@ class HookEngine:
         start = time.time()
 
         try:
-            proc = subprocess.run(
+            proc = subprocess.run(  # nosec B602 — hooks are user-configured shell commands by design
                 hook.command,
                 shell=True,
                 capture_output=True,

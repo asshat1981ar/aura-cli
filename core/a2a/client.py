@@ -7,7 +7,6 @@ import json
 import time
 import urllib.request
 from dataclasses import dataclass
-from typing import Any, Optional
 
 from core.a2a.agent_card import AgentCard
 from core.logging_utils import log_json
@@ -36,7 +35,7 @@ class A2AClient:
                 agent_json_url,
                 headers={"Accept": "application/json"},
             )
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 — URL from trusted peer config
                 data = json.loads(resp.read())
                 card = AgentCard.from_dict(data)
                 self.peers[url] = PeerAgent(
@@ -67,7 +66,7 @@ class A2AClient:
                 data=payload,
                 headers={"Content-Type": "application/json"},
             )
-            with urllib.request.urlopen(req, timeout=60) as resp:
+            with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310
                 result = json.loads(resp.read())
                 log_json("INFO", "a2a_task_delegated",
                          details={"peer": peer_url, "capability": capability,

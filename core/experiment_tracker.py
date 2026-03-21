@@ -10,7 +10,7 @@ import json
 import time
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from core.logging_utils import log_json
 

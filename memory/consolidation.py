@@ -15,7 +15,7 @@ import json
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Callable
 
 from core.logging_utils import log_json
 
@@ -204,7 +204,7 @@ class MemoryConsolidator:
 
     def _fingerprint(self, text: str) -> str:
         normalized = " ".join(text.lower().split())
-        return hashlib.md5(normalized.encode()).hexdigest()
+        return hashlib.md5(normalized.encode(), usedforsecurity=False).hexdigest()  # nosec B324
 
 
 class NegativeExampleStore:

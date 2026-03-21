@@ -6,7 +6,7 @@ Integrates with AURA's existing FastAPI infrastructure to add A2A endpoints:
 - GET  /a2a/tasks/{id}          — Get task status
 - POST /a2a/tasks/{id}/cancel   — Cancel a task
 """
-from typing import Any, Callable
+from typing import Callable
 
 from core.a2a.agent_card import AgentCard
 from core.a2a.task import A2ATask, TaskState

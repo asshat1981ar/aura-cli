@@ -30,7 +30,7 @@ from core.beads_bridge import build_beads_runtime_input
 from core.operator_runtime import build_cycle_summary
 from core.cycle_outcome import CycleOutcome
 from core.hooks import HookEngine
-from core.phase_result import PhaseResult, ConfidenceRouter, NextAction
+from core.phase_result import PhaseResult, ConfidenceRouter
 from core.capability_manager import (
     analyze_capability_needs,
     provision_capability_actions,

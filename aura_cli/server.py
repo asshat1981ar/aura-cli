@@ -76,7 +76,7 @@ a2a_server.register_handler("plan_generation", _a2a_goal_handler)
 a2a_server.register_fastapi_routes(app)
 
 # ── MCP Events: SSE event streaming for bi-directional communication ──
-from core.mcp_events import EventBus, MCPEvent, EventType
+from core.mcp_events import EventBus, MCPEvent
 
 event_bus = EventBus()
 

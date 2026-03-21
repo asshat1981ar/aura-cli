@@ -10,6 +10,7 @@ tmp2*
 
 # ── Environment and secrets ───────────────────────────────────────────────
 .env
+.env.save
 *.key
 *.pat
 .aura_history
@@ -43,6 +44,8 @@ memory/task_hierarchy_v2.json
 memory/strategy_stats.json
 memory/capability_status.json
 memory/store/
+memory/experiments.jsonl
+memory/negative_examples.json
 *.db
 *.db-shm
 *.db-wal
@@ -74,3 +77,5 @@ changed.txt
 # Dolt database files (added by bd init)
 .dolt/
 cli/__pycache__/
+.venv/
+.coverage

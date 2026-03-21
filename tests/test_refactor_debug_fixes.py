@@ -2,7 +2,7 @@
 Tests for the bugs fixed in the refactor-and-debug pass:
 
 1. core/goal_archive.py  — dead/unreachable duplicate code removed from _load_archive
-2. cli/cli_main.py       — missing imports for _handle_doctor and _handle_clear
+2. aura_cli/cli_main.py  — _handle_doctor and _handle_clear available in canonical CLI
 3. core/hybrid_loop.py   — incorrect _safe_apply_change call and missing exception imports
 """
 
@@ -62,31 +62,31 @@ class TestGoalArchiveLoadArchive(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Bug 2 – cli/cli_main.py: missing imports for _handle_doctor / _handle_clear
+# Bug 2 – aura_cli/cli_main.py: _handle_doctor / _handle_clear available
 # ---------------------------------------------------------------------------
 
 class TestCliMainImports(unittest.TestCase):
-    """_handle_doctor and _handle_clear must be importable from cli.commands
-    and must be available in the cli.cli_main module's namespace."""
+    """_handle_doctor and _handle_clear must be importable from aura_cli.commands
+    and must be available in the aura_cli.cli_main module's namespace."""
 
     def test_handle_doctor_importable_from_commands(self):
-        from cli.commands import _handle_doctor  # noqa: F401
+        from aura_cli.commands import _handle_doctor  # noqa: F401
 
     def test_handle_clear_importable_from_commands(self):
-        from cli.commands import _handle_clear  # noqa: F401
+        from aura_cli.commands import _handle_clear  # noqa: F401
 
     def test_cli_main_imports_handle_doctor(self):
-        import cli.cli_main as m
+        import aura_cli.cli_main as m
         self.assertTrue(
             hasattr(m, "_handle_doctor"),
-            "_handle_doctor must be imported into cli.cli_main",
+            "_handle_doctor must be imported into aura_cli.cli_main",
         )
 
     def test_cli_main_imports_handle_clear(self):
-        import cli.cli_main as m
+        import aura_cli.cli_main as m
         self.assertTrue(
             hasattr(m, "_handle_clear"),
-            "_handle_clear must be imported into cli.cli_main",
+            "_handle_clear must be imported into aura_cli.cli_main",
         )
 
 

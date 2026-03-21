@@ -68,6 +68,7 @@ addopts = [
 
 [tool.coverage.run]
 source = ["aura_cli", "core", "agents", "memory"]
+branch = false
 omit = [
     "*/tests/*",
     "*/test_*",

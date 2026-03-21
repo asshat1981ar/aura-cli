@@ -304,7 +304,7 @@ class TestAgenticLoop:
         expected_root = Path(wfe.__file__).resolve().parent.parent
         sentinel_orchestrator = object()
 
-        with patch("aura_cli.cli_main.create_runtime", return_value={"orchestrator": sentinel_orchestrator}) as mock_create:
+        with patch("core.workflow_engine._invoke_create_runtime", return_value={"orchestrator": sentinel_orchestrator}) as mock_create:
             orchestrator = fresh_engine._get_orchestrator()
 
         assert orchestrator is sentinel_orchestrator
@@ -322,7 +322,7 @@ class TestAgenticLoop:
         fake_model = MagicMock()
         fake_agents = {"ingest": MagicMock()}
 
-        with patch("aura_cli.cli_main.create_runtime", side_effect=TypeError("missing project_root")), \
+        with patch("core.workflow_engine._invoke_create_runtime", side_effect=TypeError("missing project_root")), \
              patch("memory.store.MemoryStore", return_value=fake_memory_store) as mock_store, \
              patch("memory.brain.Brain", return_value=fake_brain) as mock_brain_cls, \
              patch("core.model_adapter.ModelAdapter", return_value=fake_model), \
@@ -354,7 +354,7 @@ class TestAgenticLoop:
             "memory_store_path": "state/workflow_store",
         }.get(key, default)
 
-        with patch("aura_cli.cli_main.create_runtime", side_effect=TypeError("missing project_root")), \
+        with patch("core.workflow_engine._invoke_create_runtime", side_effect=TypeError("missing project_root")), \
              patch("core.workflow_engine.ConfigManager", return_value=fake_config), \
              patch("memory.store.MemoryStore", return_value=fake_memory_store) as mock_store, \
              patch("memory.brain.Brain", return_value=fake_brain) as mock_brain_cls, \

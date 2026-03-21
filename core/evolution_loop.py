@@ -1,6 +1,10 @@
 import json
+import time
+import uuid
+from pathlib import Path
 from core.logging_utils import log_json # Import the new logging utility
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
+from core.experiment_tracker import ExperimentTracker, MetricsCollector
 from core.evolution_prompts import (
     EVOLUTION_HYPOTHESIS_PROMPT,
     EVOLUTION_TASK_DECOMPOSITION_PROMPT,
@@ -39,6 +43,13 @@ class EvolutionLoop:
         self.improvement_service = improvement_service
         self._cycle_count = 0
         self.TRIGGER_EVERY_N = 20
+
+        # Experiment tracking (Karpathy-style measure→keep/discard)
+        memory_dir = Path(__file__).parent.parent / "memory"
+        metrics_collector = MetricsCollector(memory_dir)
+        self.experiment_tracker = ExperimentTracker(
+            memory_dir / "experiments.jsonl", metrics_collector,
+        )
 
     def _get_mutation_response(self, prompt: str, memory_snapshot: str, similar_past_problems: str, known_weaknesses: str) -> str:
         """Request a raw mutation plan instead of forcing planner list parsing."""
@@ -142,6 +153,13 @@ class EvolutionLoop:
             dict: A dictionary containing the results of various phases of the loop,
                   such as hypothesis, tasks, implementation, evaluation, and mutation.
         """
+        # ── Experiment tracking: capture baseline ──
+        experiment_id = f"evo_{uuid.uuid4().hex[:8]}"
+        t0_experiment = time.time()
+        baseline_metrics = self.experiment_tracker.start_experiment(
+            experiment_id, f"Evolution: {goal[:100]}",
+        )
+
         # Gather system state for PlannerAgent
         memory_snapshot = "\n".join(self.brain.recall_with_budget(max_tokens=3000))
         similar_past_problems = "\n".join(self.vector.search(goal)) if self.vector else ""
@@ -251,10 +269,37 @@ class EvolutionLoop:
         # 7. Commit evolution
         self.git.commit_all(f"AURA evolutionary update: {goal}")
 
+        # ── Experiment tracking: measure and decide keep/discard ──
+        experiment_result = self.experiment_tracker.finish_experiment(
+            experiment_id=experiment_id,
+            hypothesis=hypothesis_str[:200],
+            change_description=f"Evolution: {goal[:100]}",
+            metrics_before=baseline_metrics,
+            cycle_number=self._cycle_count,
+            duration=time.time() - t0_experiment,
+        )
+        if not experiment_result.kept:
+            log_json("WARN", "evolution_experiment_discarded",
+                     details={"id": experiment_id,
+                              "reason": experiment_result.reason})
+            # Revert the commit if experiment regressed
+            try:
+                self.git.run(["git", "revert", "--no-commit", "HEAD"])
+                self.git.commit_all(f"Revert evolution (experiment {experiment_id} regressed)")
+                log_json("INFO", "evolution_reverted", details={"id": experiment_id})
+            except Exception as revert_err:
+                log_json("WARN", "evolution_revert_failed",
+                         details={"error": str(revert_err)})
+
         return {
             "hypothesis": hypothesis,
             "tasks": task_list,
             "implementation": implementation,
             "evaluation": evaluation,
-            "mutation": mutation_plan if mutation_plan is not None else mutation_str
+            "mutation": mutation_plan if mutation_plan is not None else mutation_str,
+            "experiment": {
+                "id": experiment_id,
+                "kept": experiment_result.kept,
+                "net_improvement": experiment_result.net_improvement,
+            },
         }

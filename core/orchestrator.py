@@ -29,6 +29,8 @@ from core.logging_utils import log_json
 from core.beads_bridge import build_beads_runtime_input
 from core.operator_runtime import build_cycle_summary
 from core.cycle_outcome import CycleOutcome
+from core.hooks import HookEngine
+from core.phase_result import PhaseResult, ConfidenceRouter, NextAction
 from core.capability_manager import (
     analyze_capability_needs,
     provision_capability_actions,
@@ -183,6 +185,12 @@ class LoopOrchestrator:
             log_json("WARN", "skills_load_failed", details={"error": str(exc)})
             self.skills = {}
 
+        # ── Innovation modules ──
+        # Hook engine: guaranteed-execution lifecycle hooks at phase boundaries
+        self.hook_engine = HookEngine(self._load_config_file())
+        # Confidence router: data-driven phase routing based on confidence scores
+        self.confidence_router = ConfidenceRouter()
+
         # Self-improvement loops (all optional — never block the main loop)
         self._improvement_loops: list = []
 
@@ -315,12 +323,21 @@ class LoopOrchestrator:
         )
         return [s for _, s in ranked[:limit]]
 
+    def _load_config_file(self) -> dict:
+        """Load aura.config.json for hook engine and other config."""
+        config_path = self.project_root / "aura.config.json"
+        if config_path.exists():
+            try:
+                return json.loads(config_path.read_text())
+            except (json.JSONDecodeError, OSError):
+                pass
+        return {}
+
     def _run_phase(self, name: str, input_data: Dict) -> Dict:
         """Dispatch a single pipeline phase to its registered agent.
 
-        Looks up the agent by *name* in :attr:`agents` and calls
-        ``agent.run(input_data)``.  If no agent is registered for *name* the
-        phase is silently skipped.
+        Wraps execution with guaranteed-execution pre/post hooks and
+        records confidence scores for routing decisions.
 
         Args:
             name: The phase identifier (e.g. ``"plan"``, ``"act"``, ``"verify"``).
@@ -330,10 +347,22 @@ class LoopOrchestrator:
             The dict returned by ``agent.run()``, or an empty dict ``{}`` when
             no agent is registered for *name*.
         """
+        # Pre-phase hooks (guaranteed execution — cannot be bypassed by model)
+        should_proceed, input_data = self.hook_engine.run_pre_hooks(name, input_data)
+        if not should_proceed:
+            log_json("WARN", "phase_blocked_by_hook", details={"phase": name})
+            return {"_blocked_by_hook": True, "phase": name}
+
         agent = self.agents.get(name)
         if not agent:
             return {}
-        return agent.run(input_data)
+
+        result = agent.run(input_data)
+
+        # Post-phase hooks (observational)
+        self.hook_engine.run_post_hooks(name, result if isinstance(result, dict) else {})
+
+        return result
 
     def _snapshot_file_state(self, file_path: str) -> Dict:
         """Capture a restorable snapshot of a target file before mutation."""
@@ -582,14 +611,52 @@ class LoopOrchestrator:
         return act, sandbox_passed, act_attempts_used
 
     def _execute_act_verify_attempt(self, goal: str, plan: Dict, task_bundle: Dict, cycle_id: str, phase_outputs: Dict, dry_run: bool):
-        """Execute one attempt of act -> sandbox -> apply -> verify."""
+        """Execute one attempt of act -> sandbox -> apply -> verify.
+
+        When ``n_best_candidates`` > 1 in config, generates multiple code
+        variants and uses critic tournament to select the best one.
+        """
+        config = self._load_config_file()
+        n_best = config.get("n_best_candidates", 1)
+
         self._notify_ui("on_phase_start", "act")
         t0_act = time.time()
-        act = self._run_phase("act", {
-            "task": goal, "task_bundle": task_bundle, "dry_run": dry_run,
-            "project_root": str(self.project_root), "fix_hints": task_bundle.get("fix_hints", []),
-        })
+
+        if n_best > 1 and self.model and not dry_run:
+            # N-Best code generation with critic tournament
+            from core.nbest import NBestEngine
+            engine = NBestEngine(
+                n_candidates=n_best,
+                temperature_spread=tuple(config.get("n_best_temperature_spread", [0.2, 0.5, 0.8])),
+            )
+            act_prompt = f"Goal: {goal}\nTask bundle: {json.dumps(task_bundle, default=str)[:3000]}"
+            candidates = engine.generate_candidates(self.model, act_prompt)
+            sandbox_agent = self.agents.get("sandbox")
+            if sandbox_agent:
+                candidates = engine.sandbox_all(sandbox_agent, candidates)
+            try:
+                winner = engine.critic_tournament(self.model, candidates, goal)
+                act = {"changes": winner.changes, "confidence": winner.total_score,
+                       "variant_id": winner.variant_id, "n_best": True}
+            except ValueError:
+                # Fallback to single-path if no valid candidates
+                act = self._run_phase("act", {
+                    "task": goal, "task_bundle": task_bundle, "dry_run": dry_run,
+                    "project_root": str(self.project_root), "fix_hints": task_bundle.get("fix_hints", []),
+                })
+        else:
+            act = self._run_phase("act", {
+                "task": goal, "task_bundle": task_bundle, "dry_run": dry_run,
+                "project_root": str(self.project_root), "fix_hints": task_bundle.get("fix_hints", []),
+            })
+
         self._notify_ui("on_phase_complete", "act", (time.time() - t0_act) * 1000)
+
+        # Record act confidence
+        act_confidence = self._estimate_confidence(act, "act")
+        act_result_pr = PhaseResult(phase="act", output=act, confidence=act_confidence)
+        self.confidence_router.record(act_result_pr)
+        phase_outputs["act_confidence"] = act_confidence
 
         if validate_phase_output("change_set", act) and self.debugger:
             debug_hint = self.debugger.diagnose(error="CoderAgent produced invalid change_set", context={"goal": goal, "plan": plan, "task_bundle": task_bundle})
@@ -681,6 +748,28 @@ class LoopOrchestrator:
         })
         self._notify_ui("on_phase_complete", "plan", (time.time() - t0) * 1000)
         phase_outputs["plan"] = plan
+
+        # Record plan confidence and check routing
+        plan_confidence = self._estimate_confidence(plan, "plan")
+        plan_result = PhaseResult(phase="plan", output=plan, confidence=plan_confidence)
+        self.confidence_router.record(plan_result)
+        phase_outputs["plan_confidence"] = plan_confidence
+
+        # Skip critique if plan confidence is very high
+        if self.confidence_router.should_skip_optional(plan_result, "critique"):
+            log_json("INFO", "critique_skipped_high_confidence",
+                     details={"plan_confidence": plan_confidence})
+            critique = {"status": "skipped", "reason": "high_plan_confidence"}
+            phase_outputs["critique"] = critique
+            self._notify_ui("on_phase_start", "synthesize")
+            t0 = time.time()
+            task_bundle = self._run_phase("synthesize", {
+                "goal": goal, "plan": plan, "critique": critique,
+                "beads_decision": beads_decision,
+            })
+            self._notify_ui("on_phase_complete", "synthesize", (time.time() - t0) * 1000)
+            phase_outputs["task_bundle"] = task_bundle
+            return plan, task_bundle
 
         self._notify_ui("on_phase_start", "critique")
         t0 = time.time()
@@ -1014,6 +1103,30 @@ class LoopOrchestrator:
                 self.propagation_engine.on_cycle_complete(entry)
             except Exception as exc:
                 log_json("WARN", "propagation_engine_error", details={"error": str(exc)})
+
+        # ── Memory Consolidation (periodic) ──
+        # Run every 10 cycles to prune, merge, and summarize old memories
+        cycle_num = int(cycle_id.split("_")[-1], 16) if "_" in cycle_id else 0
+        if self.brain and cycle_num % 10 == 0:
+            try:
+                from memory.consolidation import MemoryConsolidator, MemoryEntry
+                consolidator = MemoryConsolidator()
+                # Convert brain memories to MemoryEntry format
+                raw_memories = self.brain.recall_with_budget(max_tokens=50000)
+                entries = [
+                    MemoryEntry(id=str(i), content=m, memory_type="decision")
+                    for i, m in enumerate(raw_memories)
+                ]
+                if len(entries) > 50:
+                    retained, result = consolidator.consolidate(entries)
+                    log_json("INFO", "memory_consolidation_complete",
+                             details={"before": result.memories_before,
+                                      "after": result.memories_after,
+                                      "compression": f"{result.compression_ratio:.1%}"})
+            except Exception as exc:
+                log_json("WARN", "memory_consolidation_error",
+                         details={"error": str(exc)})
+
         return entry
 
     def _parse_bead_id(self, goal: str) -> Optional[str]:
@@ -1051,6 +1164,7 @@ class LoopOrchestrator:
         cycle_id = f"cycle_{uuid.uuid4().hex[:12]}"
         started_at = time.time()
         phase_outputs = {"retry_count": 0, "dry_run": dry_run}
+        self.confidence_router.reset()
         self._notify_ui("on_cycle_start", goal)
 
         bead_id = self._parse_bead_id(goal)
@@ -1151,8 +1265,49 @@ class LoopOrchestrator:
                 beads=phase_outputs.get("beads_gate"),
             )
 
+        # Record cycle confidence for telemetry
+        phase_outputs["cycle_confidence"] = self.confidence_router.get_cycle_confidence()
+
         phase_outputs.pop("_failure_context", None)
         return self._record_cycle_outcome(cycle_id, goal, goal_type, phase_outputs, started_at)
+
+    def _estimate_confidence(self, output: Dict, phase: str) -> float:
+        """Heuristically estimate confidence for a phase output.
+
+        Returns a float between 0.0 and 1.0 based on phase-specific signals.
+        """
+        if not isinstance(output, dict):
+            return 0.3
+        confidence = 0.5  # baseline
+
+        if phase == "plan":
+            steps = output.get("steps", [])
+            if isinstance(steps, list):
+                if len(steps) >= 2:
+                    confidence += 0.2
+                if any("test" in str(s).lower() for s in steps):
+                    confidence += 0.1
+            if output.get("estimated_complexity"):
+                confidence += 0.05
+        elif phase == "act":
+            changes = output.get("changes", [])
+            if isinstance(changes, list) and len(changes) > 0:
+                confidence += 0.2
+                if all(c.get("file_path") for c in changes if isinstance(c, dict)):
+                    confidence += 0.1
+        elif phase == "verify":
+            status = output.get("status", "")
+            if status == "pass":
+                confidence = 0.95
+            elif status == "skip":
+                confidence = 0.6
+            elif status == "fail":
+                confidence = 0.1
+        elif phase == "critique":
+            if output.get("issues") or output.get("suggestions"):
+                confidence += 0.2
+
+        return min(1.0, max(0.0, confidence))
 
     def poll_external_goals(self) -> List[str]:
         """Poll external systems (like BEADS) for new goals.

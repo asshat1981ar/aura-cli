@@ -415,7 +415,9 @@ def parser_required_subcommand_parent_paths() -> set[tuple[str, ...]]:
 
 
 def build_parser() -> AuraArgumentParser:
+    from aura_cli import __version__
     parser = AuraArgumentParser(prog="aura", allow_abbrev=False, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--json-help", dest="json_help", action="store_true", help="Emit machine-readable CLI help schema.")
     _add_common_flags(parser)
     _add_root_legacy_flags(parser)

@@ -1,5 +1,5 @@
 Error: Cannot mix canonical subcommands with legacy flags in one invocation.
-usage: aura [-h] [--json-help] [--json] [--dry-run] [--decompose]
+usage: aura [-h] [--version] [--json-help] [--json] [--dry-run] [--decompose]
             [--model MODEL] [--beads] [--no-beads] [--beads-required]
             [--beads-optional] [--explain] [--max-cycles MAX_CYCLES]
             [--add-goal ADD_GOAL] [--run-goals] [--status] [--goal GOAL]

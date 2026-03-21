@@ -10,6 +10,7 @@ tmp2*
 
 # ── Environment and secrets ───────────────────────────────────────────────
 .env
+.env.save
 *.key
 *.pat
 .aura_history

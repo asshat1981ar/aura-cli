@@ -63,9 +63,17 @@ class NBestEngine:
             try:
                 respond_fn = getattr(model, "respond_for_role", None)
                 if callable(respond_fn):
-                    response = respond_fn("code_generation", variant_prompt)
+                    try:
+                        response = respond_fn("code_generation", variant_prompt, temperature=temp)
+                    except TypeError:
+                        # Backward compatibility for adapters without a temperature parameter
+                        response = respond_fn("code_generation", variant_prompt)
                 else:
-                    response = model.respond(variant_prompt)
+                    try:
+                        response = model.respond(variant_prompt, temperature=temp)
+                    except TypeError:
+                        # Backward compatibility for adapters without a temperature parameter
+                        response = model.respond(variant_prompt)
                 candidate.raw_response = response
                 candidate.changes = self._parse_changes(response)
             except Exception as exc:
@@ -81,14 +89,36 @@ class NBestEngine:
 
     def sandbox_all(self, sandbox_agent, candidates: list[CodeCandidate],
                     context: dict | None = None) -> list[CodeCandidate]:
-        """Run all candidates through sandbox, mark pass/fail."""
+        """Run all candidates through sandbox, mark pass/fail.
+
+        Supports the SandboxAdapter's expected input shape:
+        ``{"act": {"changes": [...]}, "dry_run": bool}``.
+        """
         for candidate in candidates:
             if not candidate.changes:
                 continue
             try:
                 run_fn = getattr(sandbox_agent, "run", None)
                 if callable(run_fn):
-                    result = run_fn(candidate.changes, context or {})
+                    # Build the input dict expected by the orchestrator SandboxAdapter
+                    dry_run = bool((context or {}).get("dry_run", True))
+                    input_data: dict = {
+                        "act": {"changes": candidate.changes},
+                        "dry_run": dry_run,
+                    }
+                    try:
+                        result = run_fn(input_data)
+                    except TypeError:
+                        # Backward-compatible fallback for legacy (changes, context) API
+                        result = run_fn(candidate.changes, context or {})
+                elif callable(sandbox_agent):
+                    # Support sandbox_agent being directly callable
+                    dry_run = bool((context or {}).get("dry_run", True))
+                    input_data = {"act": {"changes": candidate.changes}, "dry_run": dry_run}
+                    try:
+                        result = sandbox_agent(input_data)
+                    except TypeError:
+                        result = sandbox_agent(candidate.changes, context or {})
                 else:
                     result = {"success": True, "output": "sandbox_skipped"}
                 candidate.sandbox_passed = result.get("success", False)
@@ -150,20 +180,41 @@ class NBestEngine:
         return "\n".join(parts)
 
     def _parse_scores(self, response: str, candidates: list[CodeCandidate]):
-        """Parse critic scoring response and assign to candidates."""
-        json_match = re.search(r'\{.*\}', response, re.DOTALL)
-        if not json_match:
-            return
-        try:
-            data = json.loads(json_match.group())
-            scores_data = data.get("scores", {})
+        """Parse critic scoring response and assign to candidates.
+
+        Falls back to a deterministic heuristic (sandbox_passed + lower temperature)
+        if no valid scores can be parsed so that max() always has meaningful keys.
+        """
+        scores_applied = False
+        # Try parsing the whole response as JSON first (cleanest case)
+        # then fall back to extracting the first JSON object containing "scores"
+        for attempt in (response.strip(), None):
+            if attempt is None:
+                # Fallback: find first JSON object in the response
+                match = re.search(r'\{.*\}', response, re.DOTALL)
+                if not match:
+                    break
+                attempt = match.group()
+            try:
+                data = json.loads(attempt)
+                scores_data = data.get("scores", {}) if isinstance(data, dict) else {}
+                if scores_data:
+                    for c in candidates:
+                        variant_scores = scores_data.get(str(c.variant_id), {})
+                        for axis in SCORING_AXES:
+                            c.scores[axis] = float(variant_scores.get(axis, 0.5))
+                        c.total_score = sum(c.scores.values()) / len(SCORING_AXES)
+                    scores_applied = True
+                    break
+            except (json.JSONDecodeError, ValueError, TypeError):
+                continue
+        if not scores_applied:
+            # Deterministic fallback: sandbox_passed gives a binary quality signal
+            # and (1 - temperature) prefers conservative (lower-temperature) variants
+            # when sandbox outcomes are equal, producing a stable ranking without
+            # needing the critic.
             for c in candidates:
-                variant_scores = scores_data.get(str(c.variant_id), {})
-                for axis in SCORING_AXES:
-                    c.scores[axis] = float(variant_scores.get(axis, 0.5))
-                c.total_score = sum(c.scores.values()) / len(SCORING_AXES)
-        except (json.JSONDecodeError, ValueError, TypeError):
-            pass
+                c.total_score = (1.0 if c.sandbox_passed else 0.0) + (1.0 - c.temperature)
 
     def _parse_changes(self, response: str) -> list[dict]:
         """Parse code changes from model response."""

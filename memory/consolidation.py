@@ -181,6 +181,11 @@ class MemoryConsolidator:
 
     def _merge_duplicates(self, memories: list[MemoryEntry]
                           ) -> tuple[list[MemoryEntry], int]:
+        """Merge exact duplicates (same normalized fingerprint).
+
+        When ``similarity_threshold < 1.0`` and memories share enough word overlap
+        to exceed the threshold, near-duplicates are also merged.
+        """
         if len(memories) < 2:
             return memories, 0
 
@@ -196,6 +201,29 @@ class MemoryConsolidator:
                 existing.confidence = max(existing.confidence, m.confidence)
                 existing.tags = list(set(existing.tags + m.tags))
                 merged_count += 1
+            elif self.similarity_threshold < 1.0:
+                # Similarity-based near-duplicate merging using word-overlap Jaccard.
+                # Only checked when similarity_threshold < 1.0 (default is 0.85).
+                # Capped at 500 existing entries to keep this O(n) per new entry
+                # in practice; consider LSH for large-scale deployments.
+                merged = False
+                m_words = set(m.content.lower().split())
+                for fp, existing in list(seen.items())[:500]:
+                    e_words = set(existing.content.lower().split())
+                    union = m_words | e_words
+                    if not union:
+                        continue
+                    jaccard = len(m_words & e_words) / len(union)
+                    if jaccard >= self.similarity_threshold:
+                        existing.access_count += m.access_count
+                        existing.confidence = max(existing.confidence, m.confidence)
+                        existing.tags = list(set(existing.tags + m.tags))
+                        merged_count += 1
+                        merged = True
+                        break
+                if not merged:
+                    seen[fingerprint] = m
+                    result.append(m)
             else:
                 seen[fingerprint] = m
                 result.append(m)

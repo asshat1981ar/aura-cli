@@ -200,6 +200,8 @@ class LoopOrchestrator:
         self.context_graph = None       # ContextGraph
         self._consecutive_fails: int = 0
         self._ui_callbacks: list = []
+        # Real cycle counter for periodic consolidation (avoids UUID hex parsing)
+        self._cycle_counter: int = 0
 
     def _get_beads_skill(self):
         """Return the BEADS skill only when runtime BEADS integration is enabled."""
@@ -633,7 +635,10 @@ class LoopOrchestrator:
             candidates = engine.generate_candidates(self.model, act_prompt)
             sandbox_agent = self.agents.get("sandbox")
             if sandbox_agent:
-                candidates = engine.sandbox_all(sandbox_agent, candidates)
+                # Pass dry_run context so NBestEngine builds the SandboxAdapter input shape
+                candidates = engine.sandbox_all(
+                    sandbox_agent, candidates, context={"dry_run": dry_run}
+                )
             try:
                 winner = engine.critic_tournament(self.model, candidates, goal)
                 act = {"changes": winner.changes, "confidence": winner.total_score,
@@ -1105,9 +1110,10 @@ class LoopOrchestrator:
                 log_json("WARN", "propagation_engine_error", details={"error": str(exc)})
 
         # ── Memory Consolidation (periodic) ──
-        # Run every 10 cycles to prune, merge, and summarize old memories
-        cycle_num = int(cycle_id.split("_")[-1], 16) if "_" in cycle_id else 0
-        if self.brain and cycle_num % 10 == 0:
+        # Increment the real cycle counter and run every 10 cycles when enabled
+        self._cycle_counter += 1
+        consolidation_cfg = self._load_config_file().get("memory_consolidation", {})
+        if self.brain and consolidation_cfg.get("enabled", True) and self._cycle_counter % 10 == 0:
             try:
                 from memory.consolidation import MemoryConsolidator, MemoryEntry
                 consolidator = MemoryConsolidator()
@@ -1118,11 +1124,23 @@ class LoopOrchestrator:
                     for i, m in enumerate(raw_memories)
                 ]
                 if len(entries) > 50:
-                    retained, result = consolidator.consolidate(entries)
+                    retained, consolidation_result = consolidator.consolidate(entries)
+                    # Persist consolidated memories back into brain: replace all memory rows
+                    # with the retained set so pruning/merging actually takes effect.
+                    # Wrapped in a single transaction for atomicity.
+                    retained_contents = [e.content for e in retained]
+                    with self.brain.db:
+                        self.brain.db.execute("DELETE FROM memory")
+                        if retained_contents:
+                            self.brain.db.executemany(
+                                "INSERT INTO memory(content) VALUES (?)",
+                                [(c,) for c in retained_contents],
+                            )
+                    self.brain._recall_cache.clear()
                     log_json("INFO", "memory_consolidation_complete",
-                             details={"before": result.memories_before,
-                                      "after": result.memories_after,
-                                      "compression": f"{result.compression_ratio:.1%}"})
+                             details={"before": consolidation_result.memories_before,
+                                      "after": consolidation_result.memories_after,
+                                      "compression": f"{consolidation_result.compression_ratio:.1%}"})
             except Exception as exc:
                 log_json("WARN", "memory_consolidation_error",
                          details={"error": str(exc)})

@@ -91,6 +91,14 @@ class EventBus:
         key = event_type.value if isinstance(event_type, EventType) else event_type
         self._subscribers[key].append(callback)
 
+    def unsubscribe(self, event_type: str | EventType, callback: Callable):
+        """Unsubscribe a callback from a specific event type."""
+        key = event_type.value if isinstance(event_type, EventType) else event_type
+        try:
+            self._subscribers[key].remove(callback)
+        except ValueError:
+            pass
+
     def subscribe_all(self, callback: Callable):
         """Subscribe to all events."""
         self._subscribers["*"].append(callback)
@@ -174,7 +182,11 @@ class CallbackRegistry:
     def register_callback(self, correlation_id: str,
                           callback: Callable,
                           timeout_seconds: float = 300):
-        """Register a callback for when a tool signals completion."""
+        """Register a one-shot callback for when a tool signals completion.
+
+        The internal subscriber is automatically removed after the callback fires
+        to prevent the subscriber list from growing unboundedly.
+        """
         self._pending[correlation_id] = {
             "callback": callback,
             "timeout": time.time() + timeout_seconds,
@@ -183,6 +195,8 @@ class CallbackRegistry:
 
         async def _handler(event: MCPEvent):
             if event.correlation_id == correlation_id:
+                # Self-remove after firing so the subscriber list stays bounded
+                self.event_bus.unsubscribe(EventType.TOOL_COMPLETE, _handler)
                 entry = self._pending.pop(correlation_id, None)
                 if entry:
                     cb = entry["callback"]

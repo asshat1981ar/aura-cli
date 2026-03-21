@@ -41,7 +41,7 @@ ENV AURA_SKIP_CHDIR=1
 EXPOSE 8000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" || exit 1
+    CMD python -c "import urllib.request; import socket; socket.setdefaulttimeout(2); urllib.request.urlopen('http://localhost:8000/health')" || exit 1
 
 # Default: MCP server mode. Override with: docker run aura-cli aura goal run --dry-run
 CMD ["uvicorn", "tools.mcp_server:app", "--host", "0.0.0.0", "--port", "8000"]

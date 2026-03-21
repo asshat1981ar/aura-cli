@@ -76,15 +76,26 @@ class A2AServer:
             return True
         return False
 
-    def register_fastapi_routes(self, app):
-        """Register A2A routes on an existing FastAPI app."""
+    def get_fastapi_router(self, dependencies: list | None = None):
+        """Return an APIRouter with A2A routes and optional dependencies (e.g. auth).
+
+        Args:
+            dependencies: List of FastAPI ``Depends(...)`` objects applied to all
+                routes in the router (e.g. ``[Depends(require_auth)]``).
+
+        Returns:
+            APIRouter with A2A routes mounted.
+        """
+        from fastapi import APIRouter
         from fastapi.responses import JSONResponse
 
-        @app.get("/.well-known/agent.json")
+        router = APIRouter(dependencies=dependencies or [])
+
+        @router.get("/.well-known/agent.json")
         async def agent_card():
             return JSONResponse(self.get_agent_card())
 
-        @app.post("/a2a/tasks")
+        @router.post("/a2a/tasks")
         async def create_task(body: dict):
             task = await self.create_task(
                 capability=body.get("capability", ""),
@@ -93,17 +104,27 @@ class A2AServer:
             )
             return JSONResponse(task.to_dict())
 
-        @app.get("/a2a/tasks/{task_id}")
+        @router.get("/a2a/tasks/{task_id}")
         async def get_task(task_id: str):
             task = self.get_task(task_id)
             if not task:
                 return JSONResponse({"error": "not found"}, status_code=404)
             return JSONResponse(task.to_dict())
 
-        @app.post("/a2a/tasks/{task_id}/cancel")
+        @router.post("/a2a/tasks/{task_id}/cancel")
         async def cancel_task(task_id: str):
             if self.cancel_task(task_id):
                 return JSONResponse({"status": "canceled"})
             return JSONResponse({"error": "cannot cancel"}, status_code=400)
 
         log_json("INFO", "a2a_routes_registered")
+        return router
+
+    def register_fastapi_routes(self, app):
+        """Register A2A routes on an existing FastAPI app (no auth).
+
+        Prefer :meth:`get_fastapi_router` with ``dependencies=[Depends(require_auth)]``
+        to protect these endpoints behind bearer-token authentication.
+        """
+        router = self.get_fastapi_router()
+        app.include_router(router)

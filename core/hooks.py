@@ -146,14 +146,16 @@ class HookEngine:
         env_vars = {
             "AURA_PHASE": phase,
             "AURA_HOOK_TIMING": timing.value,
-            "AURA_CONTEXT": json.dumps(context, default=str)[:10000],
+            "AURA_CONTEXT": json.dumps(context, default=str)[:32000],
             **hook.env,
         }
         merged_env = {**os.environ, **env_vars}
         start = time.time()
 
         try:
-            proc = subprocess.run(  # nosec B602 — hooks are user-configured shell commands by design
+            # Dynamic data is passed via env vars (not string interpolation) so
+            # shell=True is safe for admin-configured hook commands.
+            proc = subprocess.run(  # nosec B602 — hooks are admin-configured commands; dynamic data via env only
                 hook.command,
                 shell=True,
                 capture_output=True,

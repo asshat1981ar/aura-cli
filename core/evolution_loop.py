@@ -19,7 +19,8 @@ class EvolutionLoop:
     driving continuous self-improvement of the AURA system.
     """
 
-    def __init__(self, planner, coder, critic, brain, vector_store, git_tools, mutator, improvement_service=None):
+    def __init__(self, planner, coder, critic, brain, vector_store, git_tools, mutator,
+                 improvement_service=None, memory_dir: Path | None = None):
         """
         Initializes the EvolutionLoop with instances of various agents and core tools.
 
@@ -32,6 +33,10 @@ class EvolutionLoop:
             git_tools: An instance of GitTools for repository operations.
             mutator: An instance of the MutatorAgent for applying changes.
             improvement_service: Optional service for evaluating meta-improvements.
+            memory_dir: Directory for experiment tracking persistence.  Defaults
+                to the runtime ``memory/`` folder next to the project root rather
+                than a path relative to this source file, to avoid writing into
+                installed package directories.
         """
         self.planner = planner
         self.coder = coder
@@ -45,7 +50,11 @@ class EvolutionLoop:
         self.TRIGGER_EVERY_N = 20
 
         # Experiment tracking (Karpathy-style measure→keep/discard)
-        memory_dir = Path(__file__).parent.parent / "memory"
+        # Prefer the explicitly-passed memory_dir; fall back to a path relative
+        # to the current working directory so we never write into site-packages.
+        if memory_dir is None:
+            memory_dir = Path.cwd() / "memory"
+        memory_dir.mkdir(parents=True, exist_ok=True)
         metrics_collector = MetricsCollector(memory_dir)
         self.experiment_tracker = ExperimentTracker(
             memory_dir / "experiments.jsonl", metrics_collector,
@@ -282,10 +291,11 @@ class EvolutionLoop:
             log_json("WARN", "evolution_experiment_discarded",
                      details={"id": experiment_id,
                               "reason": experiment_result.reason})
-            # Revert the commit if experiment regressed
+            # Revert the commit if experiment regressed using GitTools interface
             try:
-                self.git.run(["git", "revert", "--no-commit", "HEAD"])
-                self.git.commit_all(f"Revert evolution (experiment {experiment_id} regressed)")
+                self.git.rollback_last_commit(
+                    f"Revert evolution (experiment {experiment_id} regressed)"
+                )
                 log_json("INFO", "evolution_reverted", details={"id": experiment_id})
             except Exception as revert_err:
                 log_json("WARN", "evolution_revert_failed",

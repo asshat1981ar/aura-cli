@@ -3,6 +3,7 @@
 Enables AURA to discover other A2A-compatible agents via their Agent Cards
 and delegate tasks to them.
 """
+import asyncio
 import json
 import time
 import urllib.request
@@ -29,22 +30,25 @@ class A2AClient:
 
     async def discover(self, url: str) -> AgentCard | None:
         """Discover a peer agent by fetching its Agent Card."""
-        try:
+        def _fetch():
             agent_json_url = f"{url.rstrip('/')}/.well-known/agent.json"
             req = urllib.request.Request(
                 agent_json_url,
                 headers={"Accept": "application/json"},
             )
             with urllib.request.urlopen(req, timeout=10) as resp:  # nosec B310 — URL from trusted peer config
-                data = json.loads(resp.read())
-                card = AgentCard.from_dict(data)
-                self.peers[url] = PeerAgent(
-                    card=card, url=url, last_seen=time.time(),
-                )
-                log_json("INFO", "a2a_peer_discovered",
-                         details={"name": card.name, "url": url,
-                                  "capabilities": [c.name for c in card.capabilities]})
-                return card
+                return json.loads(resp.read())
+
+        try:
+            data = await asyncio.to_thread(_fetch)
+            card = AgentCard.from_dict(data)
+            self.peers[url] = PeerAgent(
+                card=card, url=url, last_seen=time.time(),
+            )
+            log_json("INFO", "a2a_peer_discovered",
+                     details={"name": card.name, "url": url,
+                               "capabilities": [c.name for c in card.capabilities]})
+            return card
         except Exception as exc:
             log_json("WARN", "a2a_discovery_failed",
                      details={"url": url, "error": str(exc)})
@@ -54,7 +58,7 @@ class A2AClient:
                        message: str,
                        metadata: dict | None = None) -> dict | None:
         """Delegate a task to a peer agent."""
-        try:
+        def _post():
             task_url = f"{peer_url.rstrip('/')}/a2a/tasks"
             payload = json.dumps({
                 "capability": capability,
@@ -67,11 +71,14 @@ class A2AClient:
                 headers={"Content-Type": "application/json"},
             )
             with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310
-                result = json.loads(resp.read())
-                log_json("INFO", "a2a_task_delegated",
-                         details={"peer": peer_url, "capability": capability,
-                                  "task_id": result.get("id")})
-                return result
+                return json.loads(resp.read())
+
+        try:
+            result = await asyncio.to_thread(_post)
+            log_json("INFO", "a2a_task_delegated",
+                     details={"peer": peer_url, "capability": capability,
+                               "task_id": result.get("id")})
+            return result
         except Exception as exc:
             log_json("WARN", "a2a_delegation_failed",
                      details={"peer": peer_url, "error": str(exc)})

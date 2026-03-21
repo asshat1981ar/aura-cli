@@ -57,23 +57,29 @@ def require_auth(authorization: str | None = Header(default=None)):
 app = FastAPI(title="AURA Agent API", version="0.2.0")
 
 # ── A2A Protocol: Agent-to-Agent discovery and task delegation ──
-from core.a2a.server import A2AServer
-from core.a2a.agent_card import AgentCard
+# Gated behind AURA_A2A_ENABLED=1 to prevent unauthenticated goal execution
+if os.getenv("AURA_A2A_ENABLED") == "1":
+    from core.a2a.server import A2AServer
+    from core.a2a.agent_card import AgentCard
 
-a2a_server = A2AServer(AgentCard.default(port=int(os.getenv("PORT", "8000"))))
+    # Use the same PORT default as the server's __main__ block (8080)
+    a2a_server = A2AServer(AgentCard.default(port=int(os.getenv("PORT", "8080"))))
 
-# Register AURA capabilities as A2A handlers
-def _a2a_goal_handler(task):
-    """Handle autonomous_goal capability via A2A."""
-    msg = task.messages[-1].content if task.messages else ""
-    result = orchestrator.run_loop(msg, max_cycles=3)
-    return {"summary": f"Completed with status: {result.get('stop_reason', 'unknown')}",
-            "artifacts": [{"name": "result", "content": result, "mime_type": "application/json"}]}
+    def _a2a_goal_handler(task):
+        """Handle autonomous_goal capability via A2A."""
+        msg = task.messages[-1].content if task.messages else ""
+        result = orchestrator.run_loop(msg, max_cycles=3)
+        return {
+            "summary": f"Completed with status: {result.get('stop_reason', 'unknown')}",
+            "artifacts": [{"name": "result", "content": result, "mime_type": "application/json"}],
+        }
 
-a2a_server.register_handler("autonomous_goal", _a2a_goal_handler)
-a2a_server.register_handler("code_generation", _a2a_goal_handler)
-a2a_server.register_handler("plan_generation", _a2a_goal_handler)
-a2a_server.register_fastapi_routes(app)
+    a2a_server.register_handler("autonomous_goal", _a2a_goal_handler)
+    a2a_server.register_handler("code_generation", _a2a_goal_handler)
+    a2a_server.register_handler("plan_generation", _a2a_goal_handler)
+    # Routes are registered with require_auth applied at the router level below
+    a2a_router = a2a_server.get_fastapi_router(dependencies=[Depends(require_auth)])
+    app.include_router(a2a_router)
 
 # ── MCP Events: SSE event streaming for bi-directional communication ──
 from core.mcp_events import EventBus, MCPEvent
@@ -81,9 +87,8 @@ from core.mcp_events import EventBus, MCPEvent
 event_bus = EventBus()
 
 @app.get("/events/stream")
-async def event_stream():
+async def event_stream(auth=Depends(require_auth)):
     """SSE endpoint for streaming MCP events to external consumers."""
-    import asyncio
     sid, queue = event_bus.create_sse_stream()
 
     async def _generate():
@@ -100,14 +105,14 @@ async def event_stream():
     return StreamingResponse(_generate(), media_type="text/event-stream")
 
 @app.post("/events/publish")
-async def publish_event(body: dict):
-    """Allow external tools to publish events to the bus."""
+async def publish_event(body: dict, auth=Depends(require_auth)):
+    """Allow authenticated external tools to publish events to the bus."""
     event = MCPEvent.from_dict(body)
     await event_bus.publish(event)
     return {"status": "published", "event_id": event.id}
 
 @app.get("/events/history")
-async def event_history(event_type: str = None, limit: int = 50):
+async def event_history(event_type: str = None, limit: int = 50, auth=Depends(require_auth)):
     """Get recent event history."""
     events = event_bus.get_history(event_type=event_type, limit=limit)
     return {"events": [e.to_dict() for e in events]}

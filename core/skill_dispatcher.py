@@ -52,6 +52,7 @@ SKILL_MAP: Dict[str, list[str]] = {
         "code_clone_detector",
         "tech_debt_quantifier",
         "refactoring_advisor",
+        "ast_analyzer",
     ],
     "security": [
         "security_scanner",
@@ -67,6 +68,7 @@ SKILL_MAP: Dict[str, list[str]] = {
     "default": [
         "symbol_indexer",
         "linter_enforcer",
+        "ast_analyzer",
     ],
 }
 

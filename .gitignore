@@ -81,3 +81,4 @@ changed.txt
 cli/__pycache__/
 .venv/
 .coverage
+.mcp.json

@@ -1154,6 +1154,13 @@ def main(project_root_override=None, argv=None):
             pass # Silent fail if history loading fails
 
     raw_argv = list(sys.argv[1:] if argv is None else argv)
+
+    # --stdio-rpc: launch JSON-RPC 2.0 over stdin/stdout transport (hidden flag).
+    if "--stdio-rpc" in raw_argv:
+        from core.transport import StdioTransport  # pylint: disable=import-outside-toplevel
+        StdioTransport(project_root=project_root).run()
+        return 0
+
     try:
         parsed = parse_cli_args(raw_argv)
     except CLIParseError as exc:

@@ -38,6 +38,8 @@ memory/brain_v2.db
 memory/local_cache.db
 memory/context_graph.db
 memory/thinking_sessions.db
+memory/goal_queue.json
+memory/goal_archive.json
 memory/goal_queue_v2.json
 memory/goal_archive_v2.json
 memory/task_hierarchy_v2.json

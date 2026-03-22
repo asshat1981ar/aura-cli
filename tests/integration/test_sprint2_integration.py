@@ -31,15 +31,16 @@ class TestTreeOfThoughtOrchestratorWiring(unittest.TestCase):
             call_idx += 1
             # Simulate plan generation for different strategies
             if "Score each plan" in prompt or "scoring" in prompt.lower():
-                # Scoring prompt — return scores for all candidates
+                # Scoring prompt — keys must be strategy names (not indices)
+                # because _parse_scores uses c.strategy to look up scores
                 return json.dumps({
                     "scores": {
-                        "0": {"feasibility": 0.9, "coverage": 0.8, "risk": 0.7,
-                              "testability": 0.8, "clarity": 0.9},
-                        "1": {"feasibility": 0.5, "coverage": 0.6, "risk": 0.4,
-                              "testability": 0.5, "clarity": 0.6},
-                        "2": {"feasibility": 0.7, "coverage": 0.7, "risk": 0.6,
-                              "testability": 0.7, "clarity": 0.7},
+                        "conservative": {"feasibility": 0.9, "coverage": 0.8, "risk": 0.7,
+                                         "testability": 0.8, "clarity": 0.9},
+                        "aggressive": {"feasibility": 0.5, "coverage": 0.6, "risk": 0.4,
+                                       "testability": 0.5, "clarity": 0.6},
+                        "incremental": {"feasibility": 0.7, "coverage": 0.7, "risk": 0.6,
+                                        "testability": 0.7, "clarity": 0.7},
                     }
                 })
             # Plan generation prompt
@@ -69,6 +70,10 @@ class TestTreeOfThoughtOrchestratorWiring(unittest.TestCase):
         winner = planner.score_plans(model, candidates, "Add user auth")
         self.assertIsNotNone(winner)
         self.assertGreater(winner.total_score, 0)
+        # Conservative got highest scores (0.82 avg), so it should win
+        self.assertEqual(winner.strategy, "conservative",
+                         "Conservative strategy should win with highest mock scores")
+        self.assertIn("feasibility", winner.scores)
 
     def test_tot_winner_feeds_confidence_router(self):
         """Verify ToT winner score feeds into ConfidenceRouter."""
@@ -122,18 +127,19 @@ class TestCodeRAGContextInjection(unittest.TestCase):
     def test_rag_retrieves_from_brain(self):
         from core.code_rag import CodeRAG, RAGContext
 
-        # Mock brain with search
+        # Mock brain with recall_with_budget (the actual method used when vector_store is None)
         mock_brain = MagicMock()
-        mock_brain.search.return_value = [
-            {"content": "def auth_handler(): ...", "similarity": 0.85},
-            {"content": "def validate_token(): ...", "similarity": 0.72},
+        mock_brain.recall_with_budget.return_value = [
+            "def implement_auth_handler(): pass  # previous implementation",
+            "class CodeValidator: pass  # code pattern",
         ]
 
         rag = CodeRAG(brain=mock_brain, max_examples=3)
         context = rag.retrieve_context("Add JWT authentication", {"steps": ["add token validator"]})
 
         self.assertIsInstance(context, RAGContext)
-        self.assertGreater(context.retrieval_time_ms, 0)
+        self.assertGreaterEqual(context.retrieval_time_ms, 0)
+        mock_brain.recall_with_budget.assert_called()
 
     def test_rag_augments_task_bundle(self):
         """Simulate how the orchestrator injects RAG context into the task bundle."""
@@ -157,14 +163,14 @@ class TestCodeRAGContextInjection(unittest.TestCase):
         from core.code_rag import CodeRAG
 
         mock_brain = MagicMock()
-        mock_brain.search.return_value = [
-            {"content": "previous auth code", "similarity": 0.8, "type": "implementation"},
+        mock_brain.recall_with_budget.return_value = [
+            "def implement_auth(): pass  # previous implementation code",
         ]
 
         rag = CodeRAG(brain=mock_brain)
         context = rag.retrieve_context("Fix auth bug")
 
-        # Context should be returned without errors even if brain returns no failures
+        # Context should be returned without errors
         self.assertIsNotNone(context)
         self.assertIsInstance(context.anti_patterns, list)
 
@@ -309,8 +315,10 @@ class TestQualityTrendsPostCycleWiring(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             analyzer = QualityTrendAnalyzer(store_path=Path(tmpdir) / "trends.json")
 
-            # Record a bad cycle to trigger alerts with suggested goals
-            analyzer.record_from_cycle({
+            # Record a bad cycle — 5 syntax errors + 3 import errors + fail status
+            # gives health_score = 0.5 - 0.3 (fail) - 0.25 (syntax) - 0.15 (import) = 0.0
+            # which breaches min_health_score=0.4, max_syntax_errors=3, max_import_errors=2
+            alerts = analyzer.record_from_cycle({
                 "cycle_id": "cycle_fail",
                 "goal": "Break things",
                 "completed_at": time.time(),
@@ -326,20 +334,23 @@ class TestQualityTrendsPostCycleWiring(unittest.TestCase):
                 },
             })
 
+            # This input deterministically breaches multiple thresholds
+            self.assertGreater(len(alerts), 0,
+                               "Cycle with 5 syntax errors, 3 import errors, and fail "
+                               "status must trigger alerts")
+
             remediation_goals = analyzer.get_remediation_goals()
-            # If there are alerts with suggested_goal, they should appear here
-            if analyzer.alerts:
-                goals_with_suggestions = [a for a in analyzer.alerts if a.suggested_goal]
-                if goals_with_suggestions:
-                    self.assertGreater(len(remediation_goals), 0,
-                                       "Alerts with suggested_goal should yield remediation goals")
+            goals_with_suggestions = [a for a in analyzer.alerts if a.suggested_goal]
+            self.assertGreater(len(goals_with_suggestions), 0,
+                               "Threshold breach alerts should include suggested goals")
+            self.assertGreater(len(remediation_goals), 0,
+                               "Alerts with suggested_goal should yield remediation goals")
 
             # Simulate goal queue addition (as orchestrator does)
             mock_goal_queue = MagicMock()
             for goal_text in remediation_goals:
                 mock_goal_queue.add(goal_text)
 
-            # Verify goals were enqueued
             self.assertEqual(mock_goal_queue.add.call_count, len(remediation_goals))
 
     def test_trend_summary(self):
@@ -393,7 +404,7 @@ class TestTeamCoordinatorEndToEnd(unittest.TestCase):
         self.assertTrue(all(sg.description for sg in sub_goals))
 
     def test_execute_team_parallel_tasks(self):
-        from core.team_coordinator import SubGoal, TeamCoordinator
+        from core.team_coordinator import SubGoal, TeamCoordinator, WorkerStatus
 
         coordinator = TeamCoordinator()
 
@@ -403,13 +414,19 @@ class TestTeamCoordinatorEndToEnd(unittest.TestCase):
             SubGoal(description="Task B", priority=1, dependencies=[]),
         ]
 
-        # execute_team uses internal _run_parallel which calls _run_single
-        # which requires orchestrator_factory — without it, tasks stay PENDING
-        # Test the structure and that it doesn't crash
+        # Without orchestrator_factory, _run_single skips execution.
+        # Verify the team execution framework runs without error and
+        # returns a valid TeamResult with the expected sub-goal count.
         result = coordinator.execute_team("Test goal", sub_goals, dry_run=True)
 
         self.assertIsNotNone(result)
-        self.assertGreater(result.total_duration, 0)
+        self.assertEqual(result.goal, "Test goal")
+        self.assertEqual(len(result.sub_goals), 2)
+        self.assertGreaterEqual(result.total_duration, 0)
+        # success + failure should account for all sub-goals
+        self.assertEqual(result.success_count + result.failure_count,
+                         sum(1 for sg in sub_goals
+                             if sg.status in (WorkerStatus.COMPLETED, WorkerStatus.FAILED)))
 
 
 # ── 6. Cross-module: ToT → ConfidenceRouter → QualityTrends ─────────────

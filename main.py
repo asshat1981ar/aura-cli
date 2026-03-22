@@ -15,6 +15,24 @@ from aura_cli.cli_options import cli_parse_error_payload, unknown_command_help_t
 if __name__ == "__main__":
     raw_argv = sys.argv[1:]
 
+    # --stdio-rpc: launch JSON-RPC 2.0 transport mode (reads from stdin, writes to stdout)
+    if "--stdio-rpc" in raw_argv:
+        from pathlib import Path
+        from core.transport import StdioTransport
+
+        # Allow --project-root <path> alongside --stdio-rpc
+        project_root = Path(".")
+        _argv = list(raw_argv)
+        _argv.remove("--stdio-rpc")
+        if "--project-root" in _argv:
+            idx = _argv.index("--project-root")
+            if idx + 1 < len(_argv):
+                project_root = Path(_argv[idx + 1])
+
+        transport = StdioTransport(project_root=project_root)
+        transport.run()
+        sys.exit(0)
+
     if "--json-help" in raw_argv:
         print(render_help(format="json"))
         sys.exit(0)

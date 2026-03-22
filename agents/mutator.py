@@ -24,7 +24,7 @@ class MutatorAgent:
         Args:
             project_root (Path): The root directory of the project, used for path validation.
         """
-        self.project_root = project_root
+        self.project_root = Path(project_root).resolve()
         log_json("INFO", "mutator_agent_initialized")
 
     def _validate_file_path(self, file_path: str) -> Path:

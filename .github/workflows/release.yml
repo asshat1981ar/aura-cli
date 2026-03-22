@@ -77,7 +77,7 @@ jobs:
         # Write to file for the release body
         echo "$CHANGELOG" > /tmp/changelog.md
     - name: Create GitHub Release
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2
       with:
         body_path: /tmp/changelog.md
         files: dist/*

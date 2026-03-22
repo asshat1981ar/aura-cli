@@ -830,8 +830,8 @@ class WorkflowEngine:
         if not hasattr(self, "_orchestrator"):
             project_root = Path(__file__).resolve().parent.parent
             try:
-                from aura_cli.cli_main import create_runtime
-                rt = create_runtime(project_root, overrides=None)
+                import aura_cli.cli_main as _aura_cli_main
+                rt = _aura_cli_main.create_runtime(project_root, overrides=None)
                 orchestrator = rt.get("orchestrator")
                 if orchestrator is None:
                     raise KeyError("Runtime factory returned no orchestrator")
@@ -839,11 +839,11 @@ class WorkflowEngine:
             except Exception as exc:
                 # Fallback: minimal orchestrator for testing
                 log_json("WARN", "workflow_engine_orchestrator_fallback", details={"error": str(exc)})
-                from core.orchestrator import LoopOrchestrator
-                from memory.store import MemoryStore
-                from agents.registry import default_agents
-                from memory.brain import Brain
-                from core.model_adapter import ModelAdapter
+                import core.orchestrator as _core_orchestrator
+                import memory.store as _memory_store_mod
+                import agents.registry as _agents_registry
+                import memory.brain as _memory_brain
+                import core.model_adapter as _core_model_adapter
                 project_config = ConfigManager(config_file=project_root / "aura.config.json")
                 brain_db_path = resolve_project_path(
                     project_root,
@@ -855,12 +855,12 @@ class WorkflowEngine:
                     project_config.get("memory_store_path", DEFAULT_CONFIG["memory_store_path"]),
                     DEFAULT_CONFIG["memory_store_path"],
                 )
-                brain = Brain(db_path=str(brain_db_path))
-                model = ModelAdapter()
-                agents = default_agents(brain, model)
-                self._orchestrator = LoopOrchestrator(
+                brain = _memory_brain.Brain(db_path=str(brain_db_path))
+                model = _core_model_adapter.ModelAdapter()
+                agents = _agents_registry.default_agents(brain, model)
+                self._orchestrator = _core_orchestrator.LoopOrchestrator(
                     agents=agents,
-                    memory_store=MemoryStore(memory_store_root),
+                    memory_store=_memory_store_mod.MemoryStore(memory_store_root),
                     project_root=project_root,
                 )
         return self._orchestrator

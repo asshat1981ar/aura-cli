@@ -103,7 +103,7 @@ class MutatorAgent:
                     continue
 
                 validated = self._validate_file_path(file_path)
-                rel_path = str(validated.relative_to(self.project_root))
+                rel_path = str(validated.relative_to(self.project_root.resolve()))
 
                 if m_type == "file_change" or m_type == "add_file":
                     apply_change_with_explicit_overwrite_policy(
@@ -126,13 +126,13 @@ class MutatorAgent:
             validated_file_path = self._validate_file_path(file_path)
             apply_change_with_explicit_overwrite_policy(
                 self.project_root,
-                str(validated_file_path.relative_to(self.project_root)),
+                str(validated_file_path.relative_to(self.project_root.resolve())),
                 "",
                 content,
                 overwrite_file=True,
             )
             log_json("INFO", "mutator_add_file_success", details={
-                "file_path": str(validated_file_path.relative_to(self.project_root)),
+                "file_path": str(validated_file_path.relative_to(self.project_root.resolve())),
                 "content_length": len(content),
             })
         except Exception as e:
@@ -176,12 +176,12 @@ class MutatorAgent:
             validated_file_path = self._validate_file_path(file_path)
             apply_change_with_explicit_overwrite_policy(
                 self.project_root,
-                str(validated_file_path.relative_to(self.project_root)),
+                str(validated_file_path.relative_to(self.project_root.resolve())),
                 old_string,
                 new_string,
             )
             log_json("INFO", "mutator_replace_in_file_success", details={
-                "file_path": str(validated_file_path.relative_to(self.project_root)),
+                "file_path": str(validated_file_path.relative_to(self.project_root.resolve())),
             })
         except MismatchOverwriteBlockedError as e:
             log_json("ERROR", MISMATCH_OVERWRITE_BLOCK_EVENT, details=mismatch_overwrite_block_log_details(e, file_path))

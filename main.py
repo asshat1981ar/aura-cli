@@ -47,4 +47,16 @@ if __name__ == "__main__":
             sys.exit(2)
 
     from aura_cli.cli_main import main
-    sys.exit(main(argv=raw_argv))
+    try:
+        sys.exit(main(argv=raw_argv))
+    except Exception as exc:
+        # Ensure JSON callers receive a structured error payload instead of a traceback.
+        if getattr(parsed.namespace, "json", False) or "--json" in raw_argv:
+            payload = {
+                "error": "unexpected_runtime_error",
+                "message": str(exc),
+            }
+            print(json.dumps(attach_cli_warnings(payload)))
+            sys.exit(1)
+        # For non-JSON paths, re-raise so the default traceback behavior is preserved.
+        raise

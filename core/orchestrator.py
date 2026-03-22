@@ -192,7 +192,9 @@ class LoopOrchestrator:
         # Confidence router: data-driven phase routing based on confidence scores
         self.confidence_router = ConfidenceRouter()
         # Quality trend analyzer: cross-cycle regression detection
-        self.quality_trends = QualityTrendAnalyzer()
+        self.quality_trends = QualityTrendAnalyzer(
+            store_path=self.project_root / "memory" / "quality_trends.json"
+        )
         # Skill correlation matrix: self-organizing skill system
         try:
             from core.skill_correlation import SkillCorrelationMatrix

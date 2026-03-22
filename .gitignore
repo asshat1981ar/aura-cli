@@ -81,3 +81,6 @@ changed.txt
 cli/__pycache__/
 .venv/
 .coverage
+
+# ── Outdated / legacy files ───────────────────────────────────────────────
+core/test_goal_queue.py

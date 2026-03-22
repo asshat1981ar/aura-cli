@@ -43,6 +43,7 @@ def test_full_backfill_flow_integration(mock_runtime, tmp_path):
         project_root=tmp_path,
         goal_queue=goal_queue
     )
+    assert tmp_path in orchestrator.quality_trends.store_path.parents
     orchestrator.auto_backfill_coverage = True
     
     # 2. Mock StructuralAnalyzer to report a gap

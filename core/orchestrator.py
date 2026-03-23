@@ -171,6 +171,7 @@ class LoopOrchestrator:
         self.beads_required = beads_required
         self.beads_scope = beads_scope
         self.self_correction_agent = agents.get("self_correction")
+        self.root_cause_analysis_agent = agents.get("root_cause_analysis")
         self.last_capability_plan: dict = {}
         self.last_capability_goal_queue: dict = {}
         self.last_capability_provisioning: dict = {}
@@ -240,6 +241,39 @@ class LoopOrchestrator:
         except Exception as exc:
             log_json("WARN", "self_correction_analysis_failed", details={"error": str(exc)})
             return None
+
+    def _run_root_cause_analysis(
+        self,
+        failures: List[str],
+        logs: str,
+        context: Optional[dict] = None,
+        *,
+        history: Optional[List[dict]] = None,
+    ) -> Optional[dict]:
+        """Optionally produce a structured RCA report for a failed phase."""
+        if not self.root_cause_analysis_agent:
+            return None
+        try:
+            return self.root_cause_analysis_agent.run(
+                {
+                    "failures": failures,
+                    "logs": logs,
+                    "context": context or {},
+                    "history": history or [],
+                }
+            )
+        except Exception as exc:
+            log_json("WARN", "root_cause_analysis_failed", details={"error": str(exc)})
+            return None
+
+    def _failure_history(self, limit: int = 5) -> List[dict]:
+        """Return recent cycle summaries to help classify repeated failures."""
+        if not self.memory_controller or not self.memory_controller.persistent_store:
+            return []
+        try:
+            return list(self.memory_controller.read_log()[-limit:])
+        except Exception:
+            return []
 
     def attach_improvement_loops(self, *loops) -> None:
         """Register one or more self-improvement loops to be called after each cycle.
@@ -601,15 +635,26 @@ class LoopOrchestrator:
                 (sandbox_result.get("details") or {}).get("stderr", "")
                 or sandbox_result.get("summary", "sandbox_failed")
             )
-            analysis_suggestion = self._analyze_error(stderr_hint, {"goal": goal, "phase": "sandbox"})
+            failure_context = {"goal": goal, "phase": "sandbox"}
+            analysis_suggestion = self._analyze_error(stderr_hint, failure_context)
+            root_cause_analysis = self._run_root_cause_analysis(
+                [stderr_hint],
+                stderr_hint,
+                failure_context,
+                history=self._failure_history(),
+            )
             fix_hints = [stderr_hint]
             if analysis_suggestion:
                 fix_hints.append(analysis_suggestion)
+            if root_cause_analysis:
+                fix_hints.extend(root_cause_analysis.get("recommended_actions", [])[:2])
+                sandbox_result["root_cause_analysis"] = root_cause_analysis
 
             log_json("WARN", "sandbox_pre_apply_failed",
                      details={"try": _sandbox_try + 1,
                               "summary": sandbox_result.get("summary", ""),
-                              "suggestion": analysis_suggestion})
+                              "suggestion": analysis_suggestion,
+                              "root_cause_patterns": (root_cause_analysis or {}).get("patterns", [])})
 
             if _sandbox_try < MAX_SANDBOX_RETRIES - 1:
                 phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
@@ -758,13 +803,22 @@ class LoopOrchestrator:
                 self._restore_applied_changes(apply_result.get("snapshots", []))
 
             route = self._route_failure(verification)
-            analysis_suggestion = self._analyze_error(
-                "\n".join(verification.get("failures", [])),
-                {"goal": goal, "phase": "verify", "route": route}
+            failure_context = {"goal": goal, "phase": "verify", "route": route}
+            failure_logs = verification.get("logs", "")
+            failure_text = "\n".join(verification.get("failures", []))
+            analysis_suggestion = self._analyze_error(failure_text, failure_context)
+            root_cause_analysis = self._run_root_cause_analysis(
+                verification.get("failures", []),
+                failure_logs,
+                failure_context,
+                history=self._failure_history(),
             )
             fix_hints = verification.get("failures", [])
             if analysis_suggestion:
                 fix_hints.append(analysis_suggestion)
+            if root_cause_analysis:
+                fix_hints.extend(root_cause_analysis.get("recommended_actions", [])[:2])
+                verification["root_cause_analysis"] = root_cause_analysis
 
             if route == "plan" and plan_attempt < max_plan_retries:
                 phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
@@ -772,7 +826,8 @@ class LoopOrchestrator:
                     "failures": verification.get("failures", []),
                     "logs": verification.get("logs", ""),
                     "route": "plan",
-                    "suggestion": analysis_suggestion
+                    "suggestion": analysis_suggestion,
+                    "root_cause_analysis": root_cause_analysis,
                 }
                 replan_needed = True
                 break

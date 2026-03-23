@@ -7,6 +7,7 @@ from agents.typescript_agent import TypeScriptAgentAdapter
 from agents.external_llm_agent import ExternalLLMAgentAdapter
 from agents.monitoring_agent import MonitoringAgentAdapter
 from agents.notification_agent import NotificationAgentAdapter
+from agents.root_cause_analysis import RootCauseAnalysisAgent
 
 
 class TestPythonAgentAdapter(unittest.TestCase):
@@ -193,6 +194,24 @@ class TestNotificationAgentAdapter(unittest.TestCase):
         self.assertEqual(result["status"], "failed")
 
 
+class TestRootCauseAnalysisAgent(unittest.TestCase):
+    """Tests for RootCauseAnalysisAgent."""
+
+    def test_run_returns_structured_report(self):
+        agent = RootCauseAnalysisAgent()
+        result = agent.run(
+            {
+                "failures": ["SyntaxError: invalid syntax"],
+                "logs": "Traceback ... SyntaxError: invalid syntax",
+                "context": {"phase": "verify"},
+            }
+        )
+        self.assertEqual(result["status"], "analyzed")
+        self.assertIn("patterns", result)
+        self.assertIn("recommended_actions", result)
+        self.assertIn("syntax_error", result["patterns"])
+
+
 class TestAgentRegistryIntegration(unittest.TestCase):
     """Test that new agents integrate with the registry."""
 
@@ -206,13 +225,13 @@ class TestAgentRegistryIntegration(unittest.TestCase):
         from agents.registry import default_agents
         agents = default_agents(brain, "test-model")
 
-        # Verify all 14 agents exist (8 core + 5 new + telemetry + self_correction + code_search)
+        # Verify all specialized agents exist, including RCA support.
         expected = {
             "ingest", "plan", "critique", "synthesize", "act",
             "sandbox", "verify", "reflect",
             "python_agent", "typescript_agent", "external_llm",
             "monitoring", "notification", "telemetry", "self_correction",
-            "code_search",
+            "code_search", "root_cause_analysis",
         }
         self.assertEqual(set(agents.keys()), expected)
 

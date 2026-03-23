@@ -32,6 +32,8 @@ from core.cycle_outcome import CycleOutcome
 from core.hooks import HookEngine
 from core.phase_result import PhaseResult, ConfidenceRouter
 from core.quality_trends import QualityTrendAnalyzer
+from core.investigate_verification_failures import investigate_verification_failure
+from core.remediation_plan import build_remediation_plan
 from core.capability_manager import (
     analyze_capability_needs,
     provision_capability_actions,
@@ -643,18 +645,32 @@ class LoopOrchestrator:
                 failure_context,
                 history=self._failure_history(),
             )
-            fix_hints = [stderr_hint]
-            if analysis_suggestion:
-                fix_hints.append(analysis_suggestion)
+            failure_investigation = investigate_verification_failure(
+                {"failures": [stderr_hint], "logs": stderr_hint},
+                root_cause_analysis=root_cause_analysis,
+                history=self._failure_history(),
+                context=failure_context,
+            )
+            remediation_plan = build_remediation_plan(
+                {"failures": [stderr_hint], "logs": stderr_hint},
+                route="act",
+                analysis_suggestion=analysis_suggestion,
+                root_cause_analysis=root_cause_analysis,
+                investigation=failure_investigation,
+                context=failure_context,
+            )
+            fix_hints = remediation_plan.get("fix_hints", []) or [stderr_hint]
             if root_cause_analysis:
-                fix_hints.extend(root_cause_analysis.get("recommended_actions", [])[:2])
                 sandbox_result["root_cause_analysis"] = root_cause_analysis
+            sandbox_result["failure_investigation"] = failure_investigation
+            sandbox_result["remediation_plan"] = remediation_plan
 
             log_json("WARN", "sandbox_pre_apply_failed",
                      details={"try": _sandbox_try + 1,
                               "summary": sandbox_result.get("summary", ""),
                               "suggestion": analysis_suggestion,
-                              "root_cause_patterns": (root_cause_analysis or {}).get("patterns", [])})
+                              "root_cause_patterns": (root_cause_analysis or {}).get("patterns", []),
+                              "investigation_signals": failure_investigation.get("signals", [])})
 
             if _sandbox_try < MAX_SANDBOX_RETRIES - 1:
                 phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
@@ -813,11 +829,24 @@ class LoopOrchestrator:
                 failure_context,
                 history=self._failure_history(),
             )
-            fix_hints = verification.get("failures", [])
-            if analysis_suggestion:
-                fix_hints.append(analysis_suggestion)
+            failure_investigation = investigate_verification_failure(
+                verification,
+                root_cause_analysis=root_cause_analysis,
+                history=self._failure_history(),
+                context=failure_context,
+            )
+            remediation_plan = build_remediation_plan(
+                verification,
+                route=route,
+                analysis_suggestion=analysis_suggestion,
+                root_cause_analysis=root_cause_analysis,
+                investigation=failure_investigation,
+                context=failure_context,
+            )
+            fix_hints = remediation_plan.get("fix_hints", []) or verification.get("failures", [])
+            verification["failure_investigation"] = failure_investigation
+            verification["remediation_plan"] = remediation_plan
             if root_cause_analysis:
-                fix_hints.extend(root_cause_analysis.get("recommended_actions", [])[:2])
                 verification["root_cause_analysis"] = root_cause_analysis
 
             if route == "plan" and plan_attempt < max_plan_retries:
@@ -827,7 +856,9 @@ class LoopOrchestrator:
                     "logs": verification.get("logs", ""),
                     "route": "plan",
                     "suggestion": analysis_suggestion,
+                    "failure_investigation": failure_investigation,
                     "root_cause_analysis": root_cause_analysis,
+                    "remediation_plan": remediation_plan,
                 }
                 replan_needed = True
                 break

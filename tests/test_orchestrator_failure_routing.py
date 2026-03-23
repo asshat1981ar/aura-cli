@@ -206,3 +206,11 @@ class TestActLoopRetryBackoff(unittest.TestCase):
             phase_outputs["_failure_context"]["root_cause_analysis"]["patterns"],
             ["syntax_error"],
         )
+        self.assertEqual(
+            phase_outputs["_failure_context"]["failure_investigation"]["signals"],
+            ["syntax_error"],
+        )
+        self.assertEqual(
+            phase_outputs["_failure_context"]["remediation_plan"]["route"],
+            "replan",
+        )

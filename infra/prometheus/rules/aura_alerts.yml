@@ -1,0 +1,51 @@
+groups:
+  - name: aura_server_alerts
+    rules:
+      - alert: MCPServerDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MCP server {{ $labels.instance }} is down"
+          description: "{{ $labels.job }} target {{ $labels.instance }} has been unreachable for more than 2 minutes."
+
+      - alert: HighErrorRate
+        expr: rate(aura_tool_errors_total[5m]) / rate(aura_tool_calls_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on {{ $labels.instance }}"
+          description: "Error rate exceeds 5% on {{ $labels.instance }} for the last 5 minutes."
+
+      - alert: HighLatency
+        expr: histogram_quantile(0.99, rate(aura_tool_duration_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High p99 latency on {{ $labels.instance }}"
+          description: "P99 latency exceeds 10s on {{ $labels.instance }}."
+
+  - name: aura_goal_alerts
+    rules:
+      - alert: HighGoalFailureRate
+        expr: rate(aura_goal_failures_total[1h]) / rate(aura_goal_attempts_total[1h]) > 0.5
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High goal failure rate"
+          description: "More than 50% of goals are failing over the last hour."
+
+  - name: aura_resource_alerts
+    rules:
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes / 1024 / 1024 > 512
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on {{ $labels.instance }}"
+          description: "Process memory exceeds 512MB on {{ $labels.instance }}."

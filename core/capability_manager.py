@@ -84,6 +84,52 @@ _CAPABILITY_RULES: tuple[CapabilityRule, ...] = (
         provisioning_action="start_github_mcp_bridge",
         reason="Goal references the dedicated GitHub MCP bridge flow rather than the general MCP server setup.",
     ),
+    CapabilityRule(
+        capability_id="orchestrator_hub",
+        keywords=("multi-agent", "multi-environment", "orchestrator hub", "task dispatch", "orchestrat", "load balance"),
+        recommended_skills=("architecture_validator",),
+        mcp_tools=("hub",),
+        provisioning_action="start_orchestrator_hub",
+        reason="Goal references multi-agent coordination or environment orchestration.",
+    ),
+    CapabilityRule(
+        capability_id="neo4j_knowledge",
+        keywords=("neo4j", "knowledge graph", "graph database", "cypher", "graph query"),
+        recommended_skills=("structural_analyzer",),
+        mcp_tools=("neo4j",),
+        reason="Goal references graph-based knowledge queries or Neo4j operations.",
+    ),
+    CapabilityRule(
+        capability_id="notification",
+        keywords=("notify", "alert", "slack", "discord", "pagerduty", "email notification", "webhook"),
+        mcp_tools=("notification",),
+        reason="Goal references sending notifications or alerts to external channels.",
+    ),
+    CapabilityRule(
+        capability_id="monitoring",
+        keywords=("health check", "monitor", "metrics", "prometheus", "grafana", "telemetry"),
+        recommended_skills=("observability_checker", "performance_profiler"),
+        mcp_tools=("monitoring",),
+        reason="Goal references system monitoring, health checking, or metrics collection.",
+    ),
+    CapabilityRule(
+        capability_id="kubernetes",
+        keywords=("kubernetes", "k8s", "pod", "deployment", "namespace", "kubectl"),
+        mcp_tools=("kubernetes",),
+        reason="Goal references Kubernetes cluster management or deployment operations.",
+    ),
+    CapabilityRule(
+        capability_id="redis_cache",
+        keywords=("redis", "cache", "pub/sub", "pubsub", "message queue"),
+        mcp_tools=("redis",),
+        reason="Goal references Redis caching, pub/sub messaging, or queue operations.",
+    ),
+    CapabilityRule(
+        capability_id="vector_search",
+        keywords=("vector", "weaviate", "embedding search", "semantic search", "similarity"),
+        mcp_tools=("weaviate",),
+        reason="Goal references vector similarity search or embedding-based retrieval.",
+    ),
 )
 
 CAPABILITY_GOAL_PREFIX = "Add AURA skill '"

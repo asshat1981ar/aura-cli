@@ -29,6 +29,8 @@ from agents.planner import PlannerAgent
 from agents.critic import CriticAgent
 from agents.coder import CoderAgent
 from agents.sandbox import SandboxAgent
+from agents.telemetry_agent import TelemetryAgent
+from agents.self_correction_agent import SelfCorrectionAgent
 
 
 class PlannerAdapter:
@@ -414,7 +416,7 @@ class SandboxAdapter:
         }
 
 
-def default_agents(brain, model, context_manager=None):
+def default_agents(brain, model, context_manager=None, skills=None, health_monitor=None):
     """Build and return the full agent dict used by :class:`~core.orchestrator.LoopOrchestrator`.
 
     Instantiates every pipeline phase adapter with the provided *brain* and
@@ -428,18 +430,25 @@ def default_agents(brain, model, context_manager=None):
         model: Model identifier string passed to agents that call the LLM
             (e.g. ``"gpt-4o"``).
         context_manager: Optional ContextManager instance for semantic ingestion.
+        skills: Optional dict of skill instances for specialized agents.
+        health_monitor: Optional HealthMonitor instance for monitoring agent.
 
     Returns:
         Dict mapping phase-name strings to their adapter/agent instances:
 
-        * ``"ingest"``    → :class:`~agents.ingest.IngestAgent`
-        * ``"plan"``      → :class:`PlannerAdapter`
-        * ``"critique"``  → :class:`CriticAdapter`
-        * ``"synthesize"``→ :class:`~agents.synthesizer.SynthesizerAgent`
-        * ``"act"``       → :class:`ActAdapter`
-        * ``"sandbox"``   → :class:`SandboxAdapter`
-        * ``"verify"``    → :class:`~agents.verifier.VerifierAgent`
-        * ``"reflect"``   → :class:`~agents.reflector.ReflectorAgent`
+        * ``"ingest"``        → :class:`~agents.ingest.IngestAgent`
+        * ``"plan"``          → :class:`PlannerAdapter`
+        * ``"critique"``      → :class:`CriticAdapter`
+        * ``"synthesize"``    → :class:`~agents.synthesizer.SynthesizerAgent`
+        * ``"act"``           → :class:`ActAdapter`
+        * ``"sandbox"``       → :class:`SandboxAdapter`
+        * ``"verify"``        → :class:`~agents.verifier.VerifierAgent`
+        * ``"reflect"``       → :class:`~agents.reflector.ReflectorAgent`
+        * ``"python_agent"``  → :class:`~agents.python_agent.PythonAgentAdapter`
+        * ``"typescript_agent"`` → :class:`~agents.typescript_agent.TypeScriptAgentAdapter`
+        * ``"external_llm"``  → :class:`~agents.external_llm_agent.ExternalLLMAgentAdapter`
+        * ``"monitoring"``    → :class:`~agents.monitoring_agent.MonitoringAgentAdapter`
+        * ``"notification"``  → :class:`~agents.notification_agent.NotificationAgentAdapter`
 
     Example::
 
@@ -447,12 +456,19 @@ def default_agents(brain, model, context_manager=None):
         agents = default_agents(Brain(api_key="..."), model="gpt-4o")
         orchestrator = LoopOrchestrator(agents=agents, memory_store=store)
     """
+    from agents.python_agent import PythonAgentAdapter
+    from agents.typescript_agent import TypeScriptAgentAdapter
+    from agents.external_llm_agent import ExternalLLMAgentAdapter
+    from agents.monitoring_agent import MonitoringAgentAdapter
+    from agents.notification_agent import NotificationAgentAdapter
+
     sandbox_agent = SandboxAgent(brain, timeout=30)
     planner = PlannerAdapter(PlannerAgent(brain, model))
     critic = CriticAdapter(CriticAgent(brain, model))
     act = ActAdapter(CoderAgent(brain, model))
     sandbox = SandboxAdapter(sandbox_agent)
     return {
+        # Core pipeline agents
         "ingest": IngestAgent(brain, context_manager=context_manager),
         "plan": planner,
         "critique": critic,
@@ -461,4 +477,12 @@ def default_agents(brain, model, context_manager=None):
         "sandbox": sandbox,
         "verify": VerifierAgent(),
         "reflect": ReflectorAgent(),
+        # Specialized agents
+        "python_agent": PythonAgentAdapter(model_adapter=None, skills=skills or {}),
+        "typescript_agent": TypeScriptAgentAdapter(model_adapter=None, skills=skills or {}),
+        "external_llm": ExternalLLMAgentAdapter(model_adapter=None),
+        "monitoring": MonitoringAgentAdapter(health_monitor=health_monitor),
+        "notification": NotificationAgentAdapter(),
+        "telemetry": TelemetryAgent(),
+        "self_correction": SelfCorrectionAgent(brain=brain),
     }

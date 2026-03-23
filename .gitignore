@@ -66,6 +66,9 @@ pylint-out.txt
 skills-out.txt
 changed.txt
 
+# ── Environment workspaces (runtime, per-CLI isolated) ────────────────────
+environments/workspaces/
+
 # ── Gemini CLI ────────────────────────────────────────────────────────────
 .gemini/
 

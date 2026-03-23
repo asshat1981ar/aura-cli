@@ -49,7 +49,7 @@ jobs:
       - name: Run Claude Code Review
         if: steps.claude-auth.outputs.available == 'true'
         id: claude-review
-        uses: anthropics/claude-code-action@4c558f148f3d64afc1df27bfdae39dcc0353c906 # v1
+        uses: anthropics/claude-code-action@6062f3709600659be5e47fcddf2cf76993c235c2 # v1.0.76
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ secrets.GITHUB_TOKEN }}

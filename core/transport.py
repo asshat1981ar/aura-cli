@@ -106,6 +106,40 @@ METHOD_MAP: dict[str, str] = {
 }
 
 
+DEFAULT_ARGS: dict[str, Any] = {
+    "json": True,
+    "dry_run": False,
+    "decompose": False,
+    "model": None,
+    "beads": False,
+    "no_beads": False,
+    "beads_required": False,
+    "beads_optional": False,
+    "explain": False,
+    "max_cycles": None,
+    "add_goal": None,
+    "run_goals": False,
+    "status": False,
+    "goal": None,
+    "mcp_tools": False,
+    "mcp_call": None,
+    "mcp_args": None,
+    "diag": False,
+    "query": None,
+    "limit": 5,
+    "memory_reindex": False,
+}
+
+
+METHOD_ARG_DEFAULTS: dict[str, dict[str, Any]] = {
+    "goal.run": {"run_goals": True},
+    "goal.status": {"status": True},
+    "mcp.tools": {"mcp_tools": True},
+    "memory.reindex": {"memory_reindex": True},
+    "system.diag": {"diag": True},
+}
+
+
 class JSONRPCError(Exception):
     """Raised to signal a JSON-RPC protocol-level error."""
 
@@ -165,6 +199,14 @@ class StdioTransport:
             raise JSONRPCError(INVALID_REQUEST, "jsonrpc field must be '2.0'")
         if "method" not in req or not isinstance(req["method"], str):
             raise JSONRPCError(INVALID_REQUEST, "method field is required and must be a string")
+        if "id" in req and req["id"] is not None and not isinstance(req["id"], (str, int, float)):
+            raise JSONRPCError(INVALID_REQUEST, "id must be a string, number, or null")
+
+    def _build_args(self, method: str, params: dict[str, Any]) -> SimpleNamespace:
+        values = dict(DEFAULT_ARGS)
+        values.update(METHOD_ARG_DEFAULTS.get(method, {}))
+        values.update(params)
+        return SimpleNamespace(**values)
 
     def _dispatch(self, method: str, params: dict[str, Any]) -> tuple[int, str]:
         """Dispatch *method* with *params* and return (exit_code, captured_output).
@@ -186,8 +228,9 @@ class StdioTransport:
         if rule is None:
             raise JSONRPCError(METHOD_NOT_FOUND, f"No handler registered for action: {action}")
 
-        # Build a minimal namespace from params so handlers can use getattr() safely.
-        args = SimpleNamespace(json=True, dry_run=False, **params)
+        # Build a namespace with CLI-compatible defaults so handlers can rely
+        # on the same optional attributes they receive from argparse.
+        args = self._build_args(method, params)
 
         # Build a synthetic parsed object that _resolve_dispatch_action understands.
         parsed = SimpleNamespace(action=action, namespace=args, warnings=[], warning_records=[])
@@ -211,12 +254,14 @@ class StdioTransport:
 
         return exit_code, buf.getvalue()
 
-    def handle_raw_line(self, line: str) -> dict[str, Any]:
+    def handle_raw_line(self, line: str) -> dict[str, Any] | None:
         """Parse and handle a single JSON-RPC request line.
 
-        Always returns a well-formed JSON-RPC response dict (never raises).
+        Returns a well-formed JSON-RPC response dict, or ``None`` for a
+        notification that should not receive any response.
         """
         req_id: Any = None
+        is_notification = False
         try:
             try:
                 req = json.loads(line)
@@ -225,7 +270,14 @@ class StdioTransport:
 
             # We can now extract the id (may be None / absent for notifications).
             if isinstance(req, dict):
-                req_id = req.get("id")
+                if "id" in req:
+                    candidate_id = req.get("id")
+                    if candidate_id is None or isinstance(candidate_id, (str, int, float)):
+                        req_id = candidate_id
+                    else:
+                        req_id = None
+                else:
+                    is_notification = True
 
             self._validate_request(req)
 
@@ -235,6 +287,8 @@ class StdioTransport:
                 raise JSONRPCError(INVALID_PARAMS, "params must be a JSON object")
 
             exit_code, cli_output = self._dispatch(method, params)
+            if is_notification:
+                return None
             return self._success_response(req_id, {"code": exit_code, "cli_output": cli_output})
 
         except JSONRPCError as exc:
@@ -267,7 +321,8 @@ class StdioTransport:
             if not line:
                 continue
             response = self.handle_raw_line(line)
-            self._send(response)
+            if response is not None:
+                self._send(response)
 
     def run(self) -> None:
         """Synchronous entry point (wraps the async loop)."""

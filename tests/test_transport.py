@@ -5,7 +5,6 @@ from __future__ import annotations
 import io
 import json
 import sys
-import types
 import unittest
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
@@ -74,6 +73,12 @@ class TestHandleRawLine(unittest.TestCase):
     def test_invalid_request_missing_method(self) -> None:
         resp = self.transport.handle_raw_line(json.dumps({"jsonrpc": "2.0", "id": 1}))
         self.assertEqual(resp["error"]["code"], INVALID_REQUEST)
+
+    def test_invalid_request_rejects_object_id(self) -> None:
+        req = json.dumps({"jsonrpc": "2.0", "method": "goal.add", "id": {"bad": "id"}})
+        resp = self.transport.handle_raw_line(req)
+        self.assertEqual(resp["error"]["code"], INVALID_REQUEST)
+        self.assertIsNone(resp["id"])
 
     def test_method_not_found(self) -> None:
         resp = self.transport.handle_raw_line(_make_request("unknown.method"))
@@ -160,6 +165,12 @@ class TestHandleRawLine(unittest.TestCase):
             self.transport.handle_raw_line(req)
         mock_dispatch.assert_called_once_with("goal.status", {})
 
+    def test_notification_returns_no_response(self) -> None:
+        req = json.dumps({"jsonrpc": "2.0", "method": "goal.status", "params": {}})
+        with patch("core.transport.StdioTransport._dispatch", return_value=(0, "")):
+            resp = self.transport.handle_raw_line(req)
+        self.assertIsNone(resp)
+
 
 # ---------------------------------------------------------------------------
 # Tests for _dispatch (verifies stdout capture and namespace building)
@@ -208,6 +219,21 @@ class TestDispatchCapture(unittest.TestCase):
             self.transport._dispatch("no.such.method", {})
         self.assertEqual(cm.exception.rpc_code, METHOD_NOT_FOUND)
 
+    def test_dispatch_populates_handler_defaults(self) -> None:
+        def _fake_handler(ctx):
+            self.assertEqual(ctx.args.mcp_args, None)
+            self.assertEqual(ctx.args.json, True)
+            self.assertEqual(ctx.args.dry_run, False)
+            return 0
+
+        rule = SimpleNamespace(action="mcp_call", requires_runtime=False, handler=_fake_handler)
+
+        with patch("aura_cli.cli_main.COMMAND_DISPATCH_REGISTRY", {"mcp_call": rule}), \
+             patch("aura_cli.cli_main._prepare_runtime_context"):
+            code, _output = self.transport._dispatch("mcp.call", {"mcp_call": "demo.tool"})
+
+        self.assertEqual(code, 0)
+
 
 # ---------------------------------------------------------------------------
 # Tests for _send
@@ -224,6 +250,15 @@ class TestSend(unittest.TestCase):
         self.assertTrue(line.endswith("\n"))
         parsed = json.loads(line)
         self.assertEqual(parsed["id"], "x")
+
+    def test_notification_is_not_sent(self) -> None:
+        buf = io.StringIO()
+        transport = StdioTransport(project_root=Path("."))
+        transport._real_stdout = buf
+        response = transport.handle_raw_line(json.dumps({"jsonrpc": "2.0", "method": "goal.status"}))
+        if response is not None:
+            transport._send(response)
+        self.assertEqual(buf.getvalue(), "")
 
 
 # ---------------------------------------------------------------------------

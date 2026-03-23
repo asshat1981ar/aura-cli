@@ -359,52 +359,59 @@ class RAGImprovementLoop:
         actions: List[str] = []
 
         # ── Similarity threshold ─────────────────────────────────────────────
+        if metrics.window_size <= 0:
+            return actions
+
         if metrics.hit_rate < _HIT_RATE_LOW_THRESHOLD:
             # Too few hits — loosen the similarity threshold
+            old_threshold = self._similarity_threshold
             new_threshold = max(
                 _SIMILARITY_MIN,
-                round(self._similarity_threshold - _SIMILARITY_STEP_DOWN, 3),
+                round(old_threshold - _SIMILARITY_STEP_DOWN, 3),
             )
-            if new_threshold != self._similarity_threshold:
+            if new_threshold != old_threshold:
                 self._apply_similarity_threshold(
                     new_threshold,
                     reason=f"hit_rate={metrics.hit_rate:.2f} < {_HIT_RATE_LOW_THRESHOLD}",
                 )
-                actions.append(f"similarity_threshold: {self._similarity_threshold} (loosened)")
+                actions.append(f"similarity_threshold: {old_threshold} -> {new_threshold} (loosened)")
 
         elif metrics.hit_rate > _HIT_RATE_HIGH_THRESHOLD and metrics.rag_success_rate < _SUCCESS_RATE_LOW_THRESHOLD:
             # Plenty of hits but they aren't helping — tighten threshold
+            old_threshold = self._similarity_threshold
             new_threshold = min(
                 _SIMILARITY_MAX,
-                round(self._similarity_threshold + _SIMILARITY_STEP_UP, 3),
+                round(old_threshold + _SIMILARITY_STEP_UP, 3),
             )
-            if new_threshold != self._similarity_threshold:
+            if new_threshold != old_threshold:
                 self._apply_similarity_threshold(
                     new_threshold,
                     reason=f"hit_rate={metrics.hit_rate:.2f} high but success_rate={metrics.rag_success_rate:.2f} low",
                 )
-                actions.append(f"similarity_threshold: {self._similarity_threshold} (tightened)")
+                actions.append(f"similarity_threshold: {old_threshold} -> {new_threshold} (tightened)")
 
         # ── max_examples ─────────────────────────────────────────────────────
         if metrics.rag_lift < -0.10:
             # RAG is hurting — reduce examples to reduce noise
-            new_max = max(_EXAMPLES_MIN, self._max_examples - _EXAMPLES_STEP_DOWN)
-            if new_max != self._max_examples:
+            old_max = self._max_examples
+            new_max = max(_EXAMPLES_MIN, old_max - _EXAMPLES_STEP_DOWN)
+            if new_max != old_max:
                 self._apply_max_examples(
                     new_max,
                     reason=f"rag_lift={metrics.rag_lift:.2f} negative",
                 )
-                actions.append(f"max_examples: {self._max_examples} (reduced)")
+                actions.append(f"max_examples: {old_max} -> {new_max} (reduced)")
 
         elif metrics.rag_lift > 0.15 and metrics.avg_retrieved_count < self._max_examples * 0.5:
             # RAG is helping but we're retrieving fewer examples than allowed
-            new_max = min(_EXAMPLES_MAX, self._max_examples + _EXAMPLES_STEP_UP)
-            if new_max != self._max_examples:
+            old_max = self._max_examples
+            new_max = min(_EXAMPLES_MAX, old_max + _EXAMPLES_STEP_UP)
+            if new_max != old_max:
                 self._apply_max_examples(
                     new_max,
                     reason=f"rag_lift={metrics.rag_lift:.2f} positive, utilisation low",
                 )
-                actions.append(f"max_examples: {self._max_examples} (increased)")
+                actions.append(f"max_examples: {old_max} -> {new_max} (increased)")
 
         return actions
 

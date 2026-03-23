@@ -96,11 +96,11 @@ class CodeRAG:
             for ap in rag_context.anti_patterns[:3]:
                 sections.append(f"- {ap[:200]}")
 
-        if not sections:
-            return base_prompt
-
-        rag_section = "\n".join(sections)
-        base_with_rag = f"{base_prompt}\n\n{rag_section}"
+        if sections:
+            rag_section = "\n".join(sections)
+            base_with_rag = f"{base_prompt}\n\n{rag_section}"
+        else:
+            base_with_rag = base_prompt
 
         # Append active prompt-variant suffix from improvement loop if present
         if self.improvement_loop is not None:

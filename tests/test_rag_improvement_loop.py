@@ -271,6 +271,14 @@ class TestDynamicConfigTuning(unittest.TestCase):
         loop.analyse()
         self.assertAlmostEqual(loop._similarity_threshold, old_threshold)
 
+    def test_no_similarity_tuning_without_retrieval_samples(self):
+        loop = _make_loop()
+        _fill_outcomes(loop, _MIN_OUTCOMES_FOR_TUNING + 2, success=True)
+        old_threshold = loop._similarity_threshold
+        report = loop.analyse()
+        self.assertEqual(loop._similarity_threshold, old_threshold)
+        self.assertEqual(report["actions_taken"], [])
+
     def test_reduces_max_examples_when_rag_hurts(self):
         loop = _make_loop()
         _fill_retrievals(loop, 15, hit=True)
@@ -472,6 +480,13 @@ class TestAnalyse(unittest.TestCase):
         # Should have at least one action since hit rate is very low
         self.assertGreater(len(report["actions_taken"]), 0)
 
+    def test_actions_taken_show_old_and_new_values(self):
+        loop = _make_loop()
+        _fill_retrievals(loop, 35, hit=False)
+        _fill_outcomes(loop, _MIN_OUTCOMES_FOR_TUNING + 2, success=True)
+        report = loop.analyse()
+        self.assertTrue(any("->" in action for action in report["actions_taken"]))
+
 
 # ---------------------------------------------------------------------------
 # Integration with CodeRAG
@@ -514,6 +529,15 @@ class TestCodeRAGIntegration(unittest.TestCase):
         result = rag.augment_prompt("Base prompt", ctx)
         self.assertIn("Think step by step.", result)
         self.assertIn("Base prompt", result)
+
+    def test_augment_prompt_appends_suffix_without_rag_sections(self):
+        loop = MagicMock(spec=RAGImprovementLoop)
+        loop.current_prompt_suffix.return_value = "\nThink step by step."
+
+        rag = CodeRAG(improvement_loop=loop)
+        ctx = RAGContext()
+        result = rag.augment_prompt("Base prompt", ctx)
+        self.assertEqual(result, "Base prompt\nThink step by step.")
 
     def test_augment_prompt_empty_suffix_no_change(self):
         loop = MagicMock(spec=RAGImprovementLoop)

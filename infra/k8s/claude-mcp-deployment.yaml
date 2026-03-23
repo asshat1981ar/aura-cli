@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aura-claude-mcp
+  labels:
+    app: aura-claude-mcp
+    environment: claude-code
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: aura-claude-mcp
+  template:
+    metadata:
+      labels:
+        app: aura-claude-mcp
+    spec:
+      containers:
+      - name: aura-server
+        image: your-registry/aura-mcp-server:latest
+        imagePullPolicy: Always
+        envFrom:
+        - secretRef:
+            name: aura-mcp-secrets
+        - configMapRef:
+            name: aura-claude-config
+        ports:
+        - containerPort: 8010
+          name: hub
+        - containerPort: 8001
+          name: dev-tools
+        - containerPort: 8002
+          name: skills
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: hub
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: hub
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: workspace-volume
+          mountPath: /workspace
+      volumes:
+      - name: workspace-volume
+        emptyDir: {}

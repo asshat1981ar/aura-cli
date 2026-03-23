@@ -1,5 +1,5 @@
 # Shim — canonical entry point lives in aura_cli/cli_main.py.
-# aura_cli.cli_main is imported lazily (line 48) to prevent module-level
+# aura_cli.cli_main is imported lazily to prevent module-level
 # ConfigManager instantiation from emitting logs on lightweight paths.
 import json
 import sys
@@ -50,13 +50,12 @@ if __name__ == "__main__":
     try:
         sys.exit(main(argv=raw_argv))
     except Exception as exc:
-        # Ensure JSON callers receive a structured error payload instead of a traceback.
         if getattr(parsed.namespace, "json", False) or "--json" in raw_argv:
             payload = {
-                "error": "unexpected_runtime_error",
+                "status": "error",
+                "code": "unexpected_runtime_error",
                 "message": str(exc),
             }
-            print(json.dumps(attach_cli_warnings(payload)))
+            print(json.dumps(attach_cli_warnings(payload, parsed)))
             sys.exit(1)
-        # For non-JSON paths, re-raise so the default traceback behavior is preserved.
         raise

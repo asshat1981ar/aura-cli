@@ -12,7 +12,7 @@ on:
 
 jobs:
   claude-review:
-    if: ${{ !github.event.pull_request.head.repo.fork && secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+    if: ${{ !github.event.pull_request.head.repo.fork }}
     # Optional: Filter by PR author
     # if: |
     #   github.event.pull_request.user.login == 'external-contributor' ||
@@ -28,12 +28,26 @@ jobs:
       id-token: write
 
     steps:
+      - name: Check Claude auth availability
+        id: claude-auth
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: |
+          if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Claude review skipped: CLAUDE_CODE_OAUTH_TOKEN is not configured." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Checkout repository
+        if: steps.claude-auth.outputs.available == 'true'
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           fetch-depth: 1
 
       - name: Run Claude Code Review
+        if: steps.claude-auth.outputs.available == 'true'
         id: claude-review
         uses: anthropics/claude-code-action@4c558f148f3d64afc1df27bfdae39dcc0353c906 # v1
         with:

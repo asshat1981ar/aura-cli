@@ -447,8 +447,13 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         scope=str(beads_config.get("scope", "goal_run")),
     )
 
+    agents = default_agents(brain_instance, model_adapter, context_manager=context_manager)
+    telemetry_agent = agents.get("telemetry")
+    if telemetry_agent:
+        model_adapter.set_telemetry_agent(telemetry_agent)
+
     orchestrator = LoopOrchestrator(
-        agents=default_agents(brain_instance, model_adapter, context_manager=context_manager),
+        agents=agents,
         memory_store=memory_store,
         policy=Policy.from_config(copy.deepcopy(runtime_config)),
         project_root=project_root,
@@ -533,6 +538,8 @@ def _prepare_runtime_context(ctx: DispatchContext) -> int | None:
         overrides["decompose"] = True
     if getattr(args, "model", None):
         overrides["model_name"] = args.model
+    if getattr(args, "anthropic_api_key", None):
+        overrides["anthropic_api_key"] = args.anthropic_api_key
 
     beads_config = dict(config.get("beads", DEFAULT_CONFIG["beads"]) or {})
     beads_override_requested = False
@@ -710,8 +717,7 @@ def _handle_queue_list_dispatch(ctx: DispatchContext) -> int:
 def _handle_queue_clear_dispatch(ctx: DispatchContext) -> int:
     goal_queue = ctx.runtime["goal_queue"]
     count = len(goal_queue.queue)
-    goal_queue.queue = []
-    goal_queue._save()
+    goal_queue.clear()
     if getattr(ctx.args, "json", False):
         _print_json_payload({"cleared_count": count}, parsed=ctx.parsed, indent=2)
     else:

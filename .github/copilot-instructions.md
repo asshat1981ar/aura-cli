@@ -1,6 +1,26 @@
 # AURA CLI — Copilot Onboarding Guide
 
-AURA is an autonomous AI development loop. Goals enter a queue and are processed through a fixed multi-agent pipeline each cycle. This file is the single source of truth for GitHub Copilot in this codebase.
+AURA is an autonomous AI development loop. Goals enter a queue and are processed through a fixed multi-agent pipeline each cycle. This file is the top-level Copilot guide for the repository.
+
+## Quick Copilot setup
+
+Prefer the repo-local setup assets instead of copying ad hoc JSON by hand:
+
+- MCP example: `.vscode/mcp.json.example`
+- MCP config helper: `bash scripts/configure_copilot_mcp.sh`
+- Repo LSP config: `.github/lsp.json`
+- Focused instruction shards: `.github/instructions/copilot/`
+
+Recommended local startup:
+
+```bash
+uvicorn aura_cli.server:app --port 8001
+uvicorn tools.aura_mcp_skills_server:app --port 8002
+uvicorn tools.github_copilot_mcp:app --port 8007
+bash scripts/configure_copilot_mcp.sh
+```
+
+Then launch `copilot` and verify `/mcp`, `/lsp`, and `/instructions`.
 
 ## Commands
 
@@ -32,10 +52,13 @@ python3 main.py --bootstrap
 # Start the HTTP API server (FastAPI on port 8001)
 uvicorn aura_cli.server:app --port 8001
 
-# Start the MCP Skills Server (all 23 skills as HTTP tools, port 8002)
+# Start the MCP Skills Server (all registered skills as HTTP tools, port 8002)
 uvicorn tools.aura_mcp_skills_server:app --port 8002
 # Or directly:
 python3 tools/aura_mcp_skills_server.py
+
+# Start the GitHub Copilot MCP server (port 8007 by config default)
+uvicorn tools.github_copilot_mcp:app --port 8007
 ```
 
 ## Architecture
@@ -95,7 +118,7 @@ SSE streaming is supported on `/run`. Protect all endpoints with `AGENT_API_TOKE
 
 **File:** `tools/aura_mcp_skills_server.py` — FastAPI on port **8002**
 
-Exposes all 23 skills as MCP-compatible HTTP tools.
+Exposes all registered skills as MCP-compatible HTTP tools.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -106,7 +129,9 @@ Exposes all 23 skills as MCP-compatible HTTP tools.
 
 Auth: set `MCP_API_TOKEN` env var.
 
-**Add to Copilot MCP config** (`.vscode/mcp.json` or `~/.config/github-copilot/mcp.json`):
+**Add to Copilot MCP config** using `.vscode/mcp.json.example` or generate a local config with `bash scripts/configure_copilot_mcp.sh`.
+
+Minimal example:
 
 ```json
 {
@@ -178,7 +203,7 @@ All AURA variables are prefixed `AURA_`:
 
 ## Skills System
 
-23 pluggable skill modules live in `agents/skills/`. Each has `run(input_data: dict) -> dict` and **never raises** — errors are returned as `{"error": "..."}`.
+Registered skill modules live in `agents/skills/`. Each has `run(input_data: dict) -> dict` and **never raises** — errors are returned as `{"error": "..."}`.
 
 **Invoke any skill:**
 
@@ -188,7 +213,7 @@ skills = all_skills()
 result = skills["security_scanner"].run({"project_root": "."})
 ```
 
-**Available skills:**
+**Common skills:**
 
 | # | Name | Input keys | Primary output keys |
 |---|------|-----------|-------------------|

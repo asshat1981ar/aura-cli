@@ -13,19 +13,47 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from aura_cli.cli_main import create_runtime
+from core.ai_environment_registry import list_ai_environments
+from core.mcp_architecture import build_architecture_snapshot
 from core.sanitizer import sanitize_command
 from core.logging_utils import log_json
+from core.mcp_contracts import build_discovery_payload, build_health_payload, build_tool_descriptor
+from core.mcp_registry import get_registered_service, list_registered_services
 from core.operator_runtime import build_beads_runtime_metadata, build_cycle_summary
-from core.runtime_auth import resolve_openai_api_key, resolve_openrouter_api_key, resolve_gemini_cli_path
+from core.runtime_auth import runtime_provider_status
 from core.skill_dispatcher import SKILL_METRICS
 from memory.store import MemoryStore
 
-# Initialise runtime without changing cwd
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-runtime = create_runtime(PROJECT_ROOT, overrides=None)
-model_adapter = runtime["model_adapter"]
-orchestrator = runtime["orchestrator"]
-memory_store: MemoryStore = runtime.get("memory_store")
+runtime: dict | None = None
+model_adapter = None
+orchestrator = None
+memory_store: MemoryStore | None = None
+
+
+def _get_runtime() -> dict:
+    global runtime, model_adapter, orchestrator, memory_store
+    if runtime is None:
+        runtime = create_runtime(PROJECT_ROOT, overrides=None)
+        model_adapter = runtime.get("model_adapter")
+        orchestrator = runtime.get("orchestrator")
+        memory_store = runtime.get("memory_store")
+    return runtime
+
+
+def _get_model_adapter():
+    rt = _get_runtime()
+    return model_adapter or rt["model_adapter"]
+
+
+def _get_orchestrator():
+    rt = _get_runtime()
+    return orchestrator or rt["orchestrator"]
+
+
+def _get_memory_store() -> MemoryStore | None:
+    _get_runtime()
+    return memory_store
 
 
 def _agent_run_enabled() -> bool:
@@ -33,16 +61,16 @@ def _agent_run_enabled() -> bool:
 
 
 def _provider_snapshot() -> dict[str, bool]:
-    config_api_key = runtime.get("config_api_key")
+    status = runtime_provider_status()
     return {
-        "openai": bool(resolve_openai_api_key()),
-        "openrouter": bool(resolve_openrouter_api_key(config_api_key=config_api_key)),
-        "gemini": bool(resolve_gemini_cli_path() or os.getenv("GEMINI_API_KEY")),
+        "openai": status["openai"],
+        "openrouter": status["openrouter"],
+        "gemini": status["gemini_cli"] or bool(os.getenv("GEMINI_API_KEY")),
     }
 
 
 def _beads_runtime_snapshot() -> dict | None:
-    return build_beads_runtime_metadata(orchestrator)
+    return build_beads_runtime_metadata(_get_orchestrator())
 
 def require_auth(authorization: str | None = Header(default=None)):
     """Simple bearer-token auth; disabled if AGENT_API_TOKEN is unset."""
@@ -66,7 +94,7 @@ a2a_server = A2AServer(AgentCard.default(port=int(os.getenv("PORT", "8000"))))
 def _a2a_goal_handler(task):
     """Handle autonomous_goal capability via A2A."""
     msg = task.messages[-1].content if task.messages else ""
-    result = orchestrator.run_loop(msg, max_cycles=3)
+    result = _get_orchestrator().run_loop(msg, max_cycles=3)
     return {"summary": f"Completed with status: {result.get('stop_reason', 'unknown')}",
             "artifacts": [{"name": "result", "content": result, "mime_type": "application/json"}]}
 
@@ -119,20 +147,38 @@ class ExecuteRequest(BaseModel):
 
 
 TOOLS = [
-    {"name": "ask", "description": "Ask a question via LLM"},
-    {"name": "run", "description": "Run a shell command (allowlist, streaming, disabled unless AGENT_API_ENABLE_RUN=1)"},
-    {"name": "env", "description": "Return environment snapshot"},
-    {"name": "goal", "description": "Run a single goal via orchestrator (streaming)"},
+    build_tool_descriptor(
+        "ask",
+        "Ask a question via the configured language model.",
+        {"args": {"type": "array", "description": "Single-item array containing the prompt string", "required": True}},
+    ),
+    build_tool_descriptor(
+        "run",
+        "Run a shell command (allowlist, streaming, disabled unless AGENT_API_ENABLE_RUN=1).",
+        {"args": {"type": "array", "description": "Single-item array containing the command string", "required": True}},
+    ),
+    build_tool_descriptor(
+        "env",
+        "Return a filtered environment snapshot for the current runtime.",
+        {"args": {"type": "array", "description": "Unused; present for call-shape compatibility"}},
+    ),
+    build_tool_descriptor(
+        "goal",
+        "Run a single goal via the orchestrator and stream cycle events.",
+        {"args": {"type": "array", "description": "Single-item array containing the goal string", "required": True}},
+    ),
 ]
 
 
 @app.get("/health")
 async def health(auth=Depends(require_auth)):
-    return {
-        "status": "ok",
-        "providers": _provider_snapshot(),
-        "run_enabled": _agent_run_enabled(),
-    }
+    return build_health_payload(
+        server=get_registered_service("dev_tools")["name"],
+        version="0.2.0",
+        tool_count=len(TOOLS),
+        providers=_provider_snapshot(),
+        run_enabled=_agent_run_enabled(),
+    )
 
 
 @app.get("/metrics")
@@ -147,6 +193,32 @@ async def metrics(auth=Depends(require_auth)):
 @app.get("/tools")
 async def tools(auth=Depends(require_auth)):
     return {"status": "success", "tools": TOOLS}
+
+
+@app.get("/discovery")
+async def discovery(auth=Depends(require_auth)):
+    return build_discovery_payload(
+        current_server=get_registered_service("dev_tools"),
+        servers=list_registered_services(),
+        run_enabled=_agent_run_enabled(),
+        supported_environments=list_ai_environments(PROJECT_ROOT),
+    )
+
+
+@app.get("/environments")
+async def environments(auth=Depends(require_auth)):
+    return {
+        "status": "success",
+        "environments": list_ai_environments(PROJECT_ROOT),
+    }
+
+
+@app.get("/architecture")
+async def architecture(auth=Depends(require_auth)):
+    snapshot = build_architecture_snapshot()
+    snapshot["current_server"] = get_registered_service("dev_tools")
+    snapshot["supported_environments"] = list_ai_environments(PROJECT_ROOT)
+    return snapshot
 
 
 async def _run_shell_async(command_str: str) -> dict:
@@ -167,7 +239,7 @@ async def _run_shell_async(command_str: str) -> dict:
 
 async def _run_goal(goal: str, max_cycles: int = 5, dry_run: bool = False) -> dict:
     result = await asyncio.to_thread(
-        orchestrator.run_loop,
+        _get_orchestrator().run_loop,
         goal,
         max_cycles=max_cycles,
         dry_run=dry_run,
@@ -184,7 +256,7 @@ async def execute(req: ExecuteRequest, auth=Depends(require_auth)):
         if tool == "ask":
             if not args:
                 raise HTTPException(status_code=400, detail="ask requires a question argument")
-            answer = await asyncio.to_thread(model_adapter.respond, args[0])
+            answer = await asyncio.to_thread(_get_model_adapter().respond, args[0])
             return {"status": "success", "data": answer}
 
         if tool == "run":
@@ -248,21 +320,23 @@ async def execute(req: ExecuteRequest, auth=Depends(require_auth)):
                 history = []
                 stop_reason = ""
                 started_at = time.time()
+                orch = _get_orchestrator()
 
                 for _ in range(max_cycles):
-                    entry = await asyncio.to_thread(orchestrator.run_cycle, goal, False)
+                    entry = await asyncio.to_thread(orch.run_cycle, goal, False)
                     summary = dict(entry.get("cycle_summary") or build_cycle_summary(entry))
                     verification = entry.get("phase_outputs", {}).get("verification", {})
                     history.append(summary)
-                    stop_reason = summary.get("stop_reason") or orchestrator.policy.evaluate(history, verification, started_at=started_at)
+                    stop_reason = summary.get("stop_reason") or orch.policy.evaluate(history, verification, started_at=started_at)
                     if stop_reason:
                         summary["stop_reason"] = stop_reason
                         history[-1] = summary
 
                     # Persist compact summary if memory_store available
-                    if memory_store:
+                    store = _get_memory_store()
+                    if store:
                         try:
-                            memory_store.put(
+                            store.put(
                                 "cycle_summaries",
                                 {**summary, "goal": goal, "timestamp": time.time()},
                             )

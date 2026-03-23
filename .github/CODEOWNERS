@@ -1,0 +1,29 @@
+# CODEOWNERS - Automatically assign reviewers to pull requests
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything in the repo
+*                           @asshat1981ar
+
+# Agent definitions
+.github/agents/             @asshat1981ar
+
+# CI/CD workflows
+.github/workflows/          @asshat1981ar
+
+# Core application code
+aura_cli/                   @asshat1981ar
+core/                       @asshat1981ar
+conductor/                  @asshat1981ar
+
+# Tests
+tests/                      @asshat1981ar
+
+# Documentation
+docs/                       @asshat1981ar
+*.md                        @asshat1981ar
+
+# Configuration
+pyproject.toml              @asshat1981ar
+requirements.txt            @asshat1981ar
+Dockerfile                  @asshat1981ar
+.pre-commit-config.yaml     @asshat1981ar

@@ -170,6 +170,7 @@ class LoopOrchestrator:
         self.beads_enabled = beads_enabled
         self.beads_required = beads_required
         self.beads_scope = beads_scope
+        self.self_correction_agent = agents.get("self_correction")
         self.last_capability_plan: dict = {}
         self.last_capability_goal_queue: dict = {}
         self.last_capability_provisioning: dict = {}
@@ -229,6 +230,16 @@ class LoopOrchestrator:
                     method(*args, **kwargs)
                 except Exception:
                     pass
+
+    def _analyze_error(self, error: str, context: Optional[dict] = None) -> Optional[str]:
+        """Optionally use SelfCorrectionAgent to analyze and suggest fixes."""
+        if not self.self_correction_agent:
+            return None
+        try:
+            return self.self_correction_agent.analyze_error(error, context or {})
+        except Exception as exc:
+            log_json("WARN", "self_correction_analysis_failed", details={"error": str(exc)})
+            return None
 
     def attach_improvement_loops(self, *loops) -> None:
         """Register one or more self-improvement loops to be called after each cycle.
@@ -590,19 +601,25 @@ class LoopOrchestrator:
                 (sandbox_result.get("details") or {}).get("stderr", "")
                 or sandbox_result.get("summary", "sandbox_failed")
             )
+            analysis_suggestion = self._analyze_error(stderr_hint, {"goal": goal, "phase": "sandbox"})
+            fix_hints = [stderr_hint]
+            if analysis_suggestion:
+                fix_hints.append(analysis_suggestion)
+
             log_json("WARN", "sandbox_pre_apply_failed",
                      details={"try": _sandbox_try + 1,
-                              "summary": sandbox_result.get("summary", "")})
+                              "summary": sandbox_result.get("summary", ""),
+                              "suggestion": analysis_suggestion})
 
             if _sandbox_try < MAX_SANDBOX_RETRIES - 1:
                 phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
-                task_bundle["fix_hints"] = [stderr_hint]
+                task_bundle["fix_hints"] = fix_hints
                 act = self._run_phase("act", {
                     "task": goal,
                     "task_bundle": task_bundle,
                     "dry_run": dry_run,
                     "project_root": str(self.project_root),
-                    "fix_hints": [stderr_hint],
+                    "fix_hints": fix_hints,
                 })
                 act_attempts_used += 1
                 phase_outputs["change_set"] = act
@@ -741,14 +758,27 @@ class LoopOrchestrator:
                 self._restore_applied_changes(apply_result.get("snapshots", []))
 
             route = self._route_failure(verification)
+            analysis_suggestion = self._analyze_error(
+                "\n".join(verification.get("failures", [])),
+                {"goal": goal, "phase": "verify", "route": route}
+            )
+            fix_hints = verification.get("failures", [])
+            if analysis_suggestion:
+                fix_hints.append(analysis_suggestion)
+
             if route == "plan" and plan_attempt < max_plan_retries:
                 phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
-                phase_outputs["_failure_context"] = {"failures": verification.get("failures", []), "logs": verification.get("logs", ""), "route": "plan"}
+                phase_outputs["_failure_context"] = {
+                    "failures": verification.get("failures", []),
+                    "logs": verification.get("logs", ""),
+                    "route": "plan",
+                    "suggestion": analysis_suggestion
+                }
                 replan_needed = True
                 break
             elif route == "skip":
                 break
-            task_bundle["fix_hints"] = verification.get("failures", [])
+            task_bundle["fix_hints"] = fix_hints
 
         return verification, replan_needed, None
 

@@ -1434,6 +1434,22 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(err, "")
         self._assert_json_snapshot(out, "cli_canonical_queue_clear_dispatch.json")
+        goal_queue.clear.assert_called_once_with()
+
+    def test_queue_clear_uses_public_clear_api(self):
+        goal_queue = MagicMock()
+        goal_queue.queue = ["Goal 1", "Goal 2"]
+        fake_runtime = {"goal_queue": goal_queue}
+        runtime_factory = MagicMock(return_value=fake_runtime)
+
+        with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"):
+            code, out, err, _ = self._dispatch(["queue", "clear"], runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self.assertIn("Cleared 2 goals from the queue.", out)
+        goal_queue.clear.assert_called_once_with()
 
     def test_canonical_memory_search_json_output_matches_snapshot(self):
         vector_store = MagicMock()
@@ -1452,6 +1468,61 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(err, "")
         self._assert_json_snapshot(out, "cli_canonical_memory_search_dispatch.json")
+
+    def test_main_does_not_leak_cli_flags_between_invocations(self):
+        original_overrides = dict(cli_main.config.runtime_overrides)
+        try:
+            with patch("aura_cli.cli_main.dispatch_command", return_value=0) as mock_dispatch:
+                with tempfile.TemporaryDirectory() as d:
+                    first = cli_main.main(
+                        project_root_override=Path(d),
+                        argv=["goal", "once", "Test goal", "--model", "test-model", "--dry-run", "--anthropic-api-key", "sk-test"],
+                    )
+                    second = cli_main.main(project_root_override=Path(d), argv=["doctor"])
+        finally:
+            cli_main.config.runtime_overrides = original_overrides
+            cli_main.config.refresh()
+
+        self.assertEqual(first, 0)
+        self.assertEqual(second, 0)
+        self.assertEqual(mock_dispatch.call_count, 2)
+        self.assertEqual(cli_main.config.runtime_overrides, original_overrides)
+
+    def test_dispatch_goal_once_passes_cli_runtime_overrides(self):
+        parsed = parse_cli_args(["goal", "once", "Test goal", "--model", "test-model", "--dry-run", "--anthropic-api-key", "sk-test"])
+        goal_runtime = {
+            "goal_queue": MagicMock(),
+            "goal_archive": MagicMock(),
+            "orchestrator": MagicMock(),
+            "debugger": MagicMock(),
+            "planner": MagicMock(),
+            "loop": MagicMock(),
+            "model_adapter": MagicMock(),
+            "brain": MagicMock(),
+        }
+        runtime_factory = MagicMock(return_value=goal_runtime)
+
+        goal_runtime["orchestrator"].run_loop.return_value = {
+            "stop_reason": "done",
+            "history": [],
+        }
+
+        with patch("aura_cli.cli_main._check_project_writability", return_value=True), \
+             patch("aura_cli.cli_main.log_json"):
+            code = cli_main.dispatch_command(parsed, project_root=Path("."), runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 0)
+        runtime_factory.assert_called_once()
+        self.assertEqual(
+            runtime_factory.call_args.kwargs["overrides"],
+            {
+                "model_name": "test-model",
+                "dry_run": True,
+                "anthropic_api_key": "sk-test",
+                "runtime_mode": "lean",
+            },
+        )
+        goal_runtime["orchestrator"].run_loop.assert_called_once_with("Test goal", max_cycles=5, dry_run=True)
 
     def test_memory_reindex_json_reports_rebuild_and_forced_sync(self):
         vector_store = MagicMock()

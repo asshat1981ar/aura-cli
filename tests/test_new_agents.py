@@ -1,6 +1,6 @@
 """Tests for the 5 new agent types."""
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from agents.python_agent import PythonAgentAdapter
 from agents.typescript_agent import TypeScriptAgentAdapter
@@ -50,7 +50,9 @@ class TestTypeScriptAgentAdapter(unittest.TestCase):
 
     def test_run_analyze_action(self):
         agent = TypeScriptAgentAdapter()
-        result = agent.run({"task": "Analyze TS code", "action": "analyze"})
+        with patch.object(agent, "_run_eslint", return_value={"status": "ok"}), \
+             patch.object(agent, "_run_tsc", return_value={"status": "ok"}):
+            result = agent.run({"task": "Analyze TS code", "action": "analyze"})
         self.assertEqual(result["action"], "analyze")
         self.assertIn("lint_results", result)
         self.assertIn("type_check_results", result)
@@ -62,7 +64,9 @@ class TestTypeScriptAgentAdapter(unittest.TestCase):
 
     def test_run_skill_not_available(self):
         agent = TypeScriptAgentAdapter()
-        result = agent.run({"task": "Check API", "action": "analyze"})
+        with patch.object(agent, "_run_eslint", return_value={"status": "ok"}), \
+             patch.object(agent, "_run_tsc", return_value={"status": "ok"}):
+            result = agent.run({"task": "Check API", "action": "analyze"})
         self.assertEqual(result["api_contract"]["status"], "skill_not_available")
 
 
@@ -107,14 +111,16 @@ class TestMonitoringAgentAdapter(unittest.TestCase):
 
     def test_status_action(self):
         agent = MonitoringAgentAdapter()
-        result = agent.run({"action": "status"})
+        with patch.object(agent, "_check_port", return_value=False):
+            result = agent.run({"action": "status"})
         self.assertEqual(result["action"], "status")
         self.assertIn("overall", result)
         self.assertIn("servers", result)
 
     def test_scan_action(self):
         agent = MonitoringAgentAdapter()
-        result = agent.run({"action": "scan", "servers": {"fake": 59999}})
+        with patch.object(agent, "_check_port", return_value=False):
+            result = agent.run({"action": "scan", "servers": {"fake": 59999}})
         self.assertEqual(result["action"], "scan")
         self.assertEqual(result["total"], 1)
         self.assertEqual(result["unhealthy"], 1)
@@ -138,12 +144,16 @@ class TestMonitoringAgentAdapter(unittest.TestCase):
 
     def test_default_action_is_status(self):
         agent = MonitoringAgentAdapter()
-        result = agent.run({})
+        with patch.object(agent, "_check_port", return_value=False):
+            result = agent.run({})
         self.assertEqual(result["action"], "status")
 
 
 class TestNotificationAgentAdapter(unittest.TestCase):
     """Tests for NotificationAgentAdapter."""
+
+    def _failing_notification_post(self):
+        return patch("requests.post", side_effect=RuntimeError("connection refused"))
 
     def test_missing_channel(self):
         agent = NotificationAgentAdapter()
@@ -157,11 +167,12 @@ class TestNotificationAgentAdapter(unittest.TestCase):
 
     def test_send_records_history(self):
         agent = NotificationAgentAdapter(notification_mcp_url="http://localhost:1")
-        result = agent.run({
-            "channel": "webhook",
-            "message": "test",
-            "metadata": {"url": "http://example.com"},
-        })
+        with self._failing_notification_post():
+            result = agent.run({
+                "channel": "webhook",
+                "message": "test",
+                "metadata": {"url": "http://example.com"},
+            })
         # Will fail to connect but should still record in history
         history = agent.get_history()
         self.assertEqual(len(history), 1)
@@ -169,14 +180,16 @@ class TestNotificationAgentAdapter(unittest.TestCase):
 
     def test_get_history_limit(self):
         agent = NotificationAgentAdapter(notification_mcp_url="http://localhost:1")
-        for i in range(5):
-            agent.run({"channel": "webhook", "message": f"msg{i}", "metadata": {"url": "http://x"}})
+        with self._failing_notification_post():
+            for i in range(5):
+                agent.run({"channel": "webhook", "message": f"msg{i}", "metadata": {"url": "http://x"}})
         history = agent.get_history(limit=3)
         self.assertEqual(len(history), 3)
 
     def test_unknown_channel(self):
         agent = NotificationAgentAdapter(notification_mcp_url="http://localhost:1")
-        result = agent.run({"channel": "unknown", "message": "test"})
+        with self._failing_notification_post():
+            result = agent.run({"channel": "unknown", "message": "test"})
         self.assertEqual(result["status"], "failed")
 
 
@@ -193,12 +206,13 @@ class TestAgentRegistryIntegration(unittest.TestCase):
         from agents.registry import default_agents
         agents = default_agents(brain, "test-model")
 
-        # Verify all 14 agents exist (8 core + 5 new + telemetry)
+        # Verify all 14 agents exist (8 core + 5 new + telemetry + self_correction + code_search)
         expected = {
             "ingest", "plan", "critique", "synthesize", "act",
             "sandbox", "verify", "reflect",
             "python_agent", "typescript_agent", "external_llm",
-            "monitoring", "notification", "telemetry",
+            "monitoring", "notification", "telemetry", "self_correction",
+            "code_search",
         }
         self.assertEqual(set(agents.keys()), expected)
 

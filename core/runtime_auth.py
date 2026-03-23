@@ -50,6 +50,10 @@ def resolve_openai_api_key() -> str | None:
     return _clean_secret(config.get("openai_api_key"))
 
 
+def resolve_anthropic_api_key() -> str | None:
+    return _clean_secret(config.get("anthropic_api_key"))
+
+
 def resolve_local_model_command() -> str | None:
     return _clean_secret(config.get("local_model_command"))
 
@@ -106,15 +110,17 @@ def runtime_provider_status(
     openrouter_api_key_arg: object | None = None,
 ) -> dict[str, bool]:
     openai_ready = bool(resolve_openai_api_key())
+    anthropic_ready = bool(resolve_anthropic_api_key())
     openrouter_ready = bool(
         resolve_openrouter_api_key(config_api_key=config_api_key, cli_arg=openrouter_api_key_arg)
     )
     local_ready = bool(resolve_local_model_command() or resolve_local_model_profiles())
     local_embedding_ready = bool(resolve_local_embedding_profile_name() or resolve_local_embedding_mode() == "local-tfidf-svd-50d")
     gemini_ready = bool(resolve_gemini_cli_path())
-    chat_ready = openai_ready or openrouter_ready or local_ready or gemini_ready
+    chat_ready = openai_ready or anthropic_ready or openrouter_ready or local_ready or gemini_ready
     return {
         "openai": openai_ready,
+        "anthropic": anthropic_ready,
         "openrouter": openrouter_ready,
         "local_model": local_ready,
         "gemini_cli": gemini_ready,
@@ -127,6 +133,8 @@ def runtime_provider_summary(status: dict[str, bool]) -> str:
     chat_sources: list[str] = []
     if status.get("openai"):
         chat_sources.append("OPENAI_API_KEY")
+    if status.get("anthropic"):
+        chat_sources.append("ANTHROPIC_API_KEY")
     if status.get("openrouter"):
         chat_sources.append("OPENROUTER_API_KEY/AURA_API_KEY/api_key")
     if status.get("gemini_cli"):
@@ -156,6 +164,7 @@ __all__ = [
     "resolve_local_embedding_profile_name",
     "resolve_local_embedding_mode",
     "resolve_openai_api_key",
+    "resolve_anthropic_api_key",
     "resolve_openrouter_api_key",
     "runtime_provider_status",
     "runtime_provider_summary",

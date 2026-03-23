@@ -97,11 +97,17 @@ jobs:
 
             let approvals = 0;
             let changesRequested = 0;
+            const approvedReviewers = [];
             for (const state of latestByUser.values()) {
               if (state === "APPROVED") {
                 approvals += 1;
               } else if (state === "CHANGES_REQUESTED") {
                 changesRequested += 1;
+              }
+            }
+            for (const [login, state] of latestByUser.entries()) {
+              if (state === "APPROVED") {
+                approvedReviewers.push(login);
               }
             }
 
@@ -126,6 +132,7 @@ jobs:
                 approvals,
                 changes_requested: changesRequested,
                 review_decision: changesRequested > 0 ? "CHANGES_REQUESTED" : (approvals > 0 ? "APPROVED" : "REVIEW_REQUIRED"),
+                approved_reviewers: approvedReviewers,
                 requested_reviewers: (pr.data.requested_reviewers || []).map((reviewer) => reviewer.login).filter(Boolean),
                 requested_teams: (pr.data.requested_teams || []).map((team) => team.slug).filter(Boolean),
               },

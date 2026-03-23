@@ -16,7 +16,6 @@ from core.github_automation import (  # noqa: E402
     PRContext,
     ReviewGateStatus,
     ReviewSynthesisSnapshot,
-    codeowners_required,
     load_codeowners,
 )
 
@@ -40,6 +39,7 @@ def _load_payload() -> dict[str, object]:
             "approvals": int(os.environ.get("PR_APPROVALS", "0")),
             "changes_requested": int(os.environ.get("PR_CHANGES_REQUESTED", "0")),
             "review_decision": os.environ.get("PR_REVIEW_DECISION", ""),
+            "approved_reviewers": [value for value in os.environ.get("PR_APPROVED_REVIEWERS", "").split(",") if value],
             "requested_reviewers": [value for value in os.environ.get("PR_REQUESTED_REVIEWERS", "").split(",") if value],
             "requested_teams": [value for value in os.environ.get("PR_REQUESTED_TEAMS", "").split(",") if value],
         },
@@ -70,18 +70,48 @@ def _build_context(payload: dict[str, object]) -> PRContext:
 def _build_reviews(payload: dict[str, object], changed_files: list[str]) -> ReviewGateStatus:
     reviews = payload.get("reviews", {})
     rules = load_codeowners(ROOT / ".github" / "CODEOWNERS")
+    approved_reviewers = [str(value) for value in reviews.get("approved_reviewers", []) if value]
     requested_reviewers = [str(value) for value in reviews.get("requested_reviewers", []) if value]
     requested_teams = [str(value) for value in reviews.get("requested_teams", []) if value]
-    required = codeowners_required(changed_files, rules)
+    required_owners = _required_codeowners(changed_files, rules)
     return ReviewGateStatus(
         approvals=int(reviews.get("approvals", 0)),
         changes_requested=int(reviews.get("changes_requested", 0)),
         review_decision=str(reviews.get("review_decision", "")),
         requested_reviewers=requested_reviewers,
         requested_teams=requested_teams,
-        codeowners_required=required,
-        codeowners_pending=required and bool(requested_reviewers or requested_teams),
+        codeowners_required=bool(required_owners),
+        codeowners_pending=_codeowners_pending(required_owners, approved_reviewers),
     )
+
+
+def _required_codeowners(changed_files: list[str], rules) -> set[str]:
+    owners: set[str] = set()
+    for path in changed_files:
+        matched_rule = None
+        for rule in rules:
+            if rule.matches(path):
+                matched_rule = rule
+        if matched_rule is not None:
+            owners.update(owner for owner in matched_rule.owners if owner)
+    return owners
+
+
+def _normalize_owner(owner: str) -> str:
+    return owner.strip().lstrip("@").lower()
+
+
+def _codeowners_pending(required_owners: set[str], approved_reviewers: list[str]) -> bool:
+    if not required_owners:
+        return False
+    approved_identities = {_normalize_owner(value) for value in approved_reviewers if value}
+    for owner in required_owners:
+        normalized_owner = _normalize_owner(owner)
+        if "/" in normalized_owner:
+            return True
+        if normalized_owner in approved_identities:
+            return False
+    return True
 
 
 def _build_checks(payload: dict[str, object]) -> list[CheckRunStatus]:

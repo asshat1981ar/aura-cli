@@ -34,6 +34,14 @@ def _load_context() -> IssueContext:
     )
 
 
+def _write_multiline_output(handle, key: str, value: str) -> None:
+    handle.write(f"{key}<<__AURA_EOF__\n")
+    handle.write(value)
+    if value and not value.endswith("\n"):
+        handle.write("\n")
+    handle.write("__AURA_EOF__\n")
+
+
 def _write_outputs(*, labels: list[str], recommended_provider: str, queue_goal: str, should_queue: bool) -> None:
     github_output = os.environ.get("GITHUB_OUTPUT")
     if not github_output:
@@ -41,7 +49,7 @@ def _write_outputs(*, labels: list[str], recommended_provider: str, queue_goal: 
     with open(github_output, "a", encoding="utf-8") as handle:
         handle.write(f"labels_json={json.dumps(labels)}\n")
         handle.write(f"recommended_provider={recommended_provider}\n")
-        handle.write(f"queue_goal={queue_goal}\n")
+        _write_multiline_output(handle, "queue_goal", queue_goal)
         handle.write(f"should_queue={'true' if should_queue else 'false'}\n")
 
 

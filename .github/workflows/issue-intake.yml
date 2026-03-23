@@ -109,8 +109,9 @@ jobs:
         env:
           AURA_SKIP_CHDIR: "1"
           AURA_DRY_RUN: ${{ vars.AURA_ISSUE_QUEUE_DRY_RUN || '1' }}
+          ISSUE_QUEUE_GOAL: ${{ steps.intake.outputs.queue_goal }}
         run: |
-          python3 main.py --add-goal "${{ steps.intake.outputs.queue_goal }}"
+          python3 main.py --add-goal "$ISSUE_QUEUE_GOAL"
 
       - name: Upload issue intake artifacts
         uses: actions/upload-artifact@v4

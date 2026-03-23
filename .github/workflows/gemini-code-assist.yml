@@ -56,7 +56,7 @@ jobs:
           tail -40 pylint-out.txt >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - name: Run AURA skills: complexity + security scan
+      - name: "Run AURA skills: complexity + security scan"
         id: skills
         env:
           AURA_SKIP_CHDIR: "1"

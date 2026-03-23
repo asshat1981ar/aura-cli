@@ -34,7 +34,7 @@ class TestSelfCorrectionAgent(unittest.TestCase):
         suggestion = self.agent.analyze_error("Timeout reached", {})
         self.assertIn("timed out", suggestion)
         
-        suggestion = self.agent.analyze_error("Syntax error in JSON", {})
+        suggestion = self.agent.analyze_error("SyntaxError: invalid JSON", {})
         self.assertIn("syntax error", suggestion)
 
 if __name__ == '__main__':

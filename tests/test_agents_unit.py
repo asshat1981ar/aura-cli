@@ -8,7 +8,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -326,6 +326,21 @@ class TestMutatorAgent:
     def test_mutator_validate_path_accepts_relative(self):
         result = self.agent._validate_file_path("core/foo.py")
         assert result is not None
+
+    def test_mutator_resolves_project_root_for_relative_paths(self):
+        from agents.mutator import MutatorAgent
+        import tempfile
+
+        tmpdir = Path(tempfile.mkdtemp())
+        agent = MutatorAgent(project_root=tmpdir)
+        resolved_root = agent.project_root_resolved
+        validated = resolved_root / "nested.py"
+
+        with patch.object(agent, "_validate_file_path", return_value=validated), \
+             patch("agents.mutator.apply_change_with_explicit_overwrite_policy") as mock_apply:
+            agent._handle_add_file("ADD_FILE nested.py", ["print('ok')"])
+
+        assert mock_apply.call_args[0][1] == "nested.py"
 
 
 # ===========================================================================

@@ -310,6 +310,21 @@ class TestAgenticLoop:
         assert orchestrator is sentinel_orchestrator
         mock_create.assert_called_once_with(expected_root, overrides=None)
 
+    def test_get_orchestrator_looks_up_runtime_factory_via_module(self, fresh_engine):
+        import core.workflow_engine as wfe
+
+        expected_root = Path(wfe.__file__).resolve().parent.parent
+        sentinel_orchestrator = object()
+        fake_cli_main = MagicMock()
+        fake_cli_main.create_runtime.return_value = {"orchestrator": sentinel_orchestrator}
+
+        with patch("importlib.import_module", return_value=fake_cli_main) as mock_import:
+            orchestrator = fresh_engine._get_orchestrator()
+
+        assert orchestrator is sentinel_orchestrator
+        mock_import.assert_called_once_with("aura_cli.cli_main")
+        fake_cli_main.create_runtime.assert_called_once_with(expected_root, overrides=None)
+
     def test_get_orchestrator_fallback_builds_valid_memory_store(self, fresh_engine):
         import core.workflow_engine as wfe
 

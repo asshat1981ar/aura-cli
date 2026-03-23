@@ -317,7 +317,7 @@ class TestQualityTrendsPostCycleWiring(unittest.TestCase):
 
             # Record a bad cycle — 5 syntax errors + 3 import errors + fail status
             # gives health_score = 0.5 - 0.3 (fail) - 0.25 (syntax) - 0.15 (import) = 0.0
-            # which breaches min_health_score=0.4, max_syntax_errors=3, max_import_errors=2
+            # which breaches min_health_score=0.4 and max_syntax_errors=3
             alerts = analyzer.record_from_cycle({
                 "cycle_id": "cycle_fail",
                 "goal": "Break things",

@@ -414,19 +414,21 @@ class TestTeamCoordinatorEndToEnd(unittest.TestCase):
             SubGoal(description="Task B", priority=1, dependencies=[]),
         ]
 
-        # Without orchestrator_factory, _run_single skips execution.
-        # Verify the team execution framework runs without error and
-        # returns a valid TeamResult with the expected sub-goal count.
+        # Without orchestrator_factory, _execute_sub_goal returns
+        # {"status": "pending_manual", ...}, but execute_team currently marks
+        # those sub-goals as COMPLETED. This test documents that behavior so
+        # regressions are visible if the coordinator semantics change later.
         result = coordinator.execute_team("Test goal", sub_goals, dry_run=True)
 
         self.assertIsNotNone(result)
         self.assertEqual(result.goal, "Test goal")
         self.assertEqual(len(result.sub_goals), 2)
         self.assertGreaterEqual(result.total_duration, 0)
-        # success + failure should account for all sub-goals
-        self.assertEqual(result.success_count + result.failure_count,
-                         sum(1 for sg in sub_goals
-                             if sg.status in (WorkerStatus.COMPLETED, WorkerStatus.FAILED)))
+        self.assertEqual(result.success_count, 2)
+        self.assertEqual(result.failure_count, 0)
+        for sg in result.sub_goals:
+            self.assertEqual(sg.status, WorkerStatus.COMPLETED)
+            self.assertEqual(sg.result.get("status"), "pending_manual")
 
 
 # ── 6. Cross-module: ToT → ConfidenceRouter → QualityTrends ─────────────

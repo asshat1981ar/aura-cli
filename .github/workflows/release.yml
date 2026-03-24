@@ -67,15 +67,24 @@ jobs:
     - name: Generate changelog
       id: changelog
       run: |
-        # Get previous tag
-        PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-        if [ -z "$PREV_TAG" ]; then
-          CHANGELOG=$(git log --pretty=format:"- %s (%h)" HEAD)
-        else
-          CHANGELOG=$(git log --pretty=format:"- %s (%h)" "${PREV_TAG}..HEAD")
+        TAG="${GITHUB_REF_NAME}"
+        # Extract the section for this tag from CHANGELOG.md if present
+        if [ -f CHANGELOG.md ]; then
+          # Strip leading 'v' so that v0.1.0 matches [0.1.0]
+          VERSION="${TAG#v}"
+          SECTION=$(awk "/^## \[${VERSION}\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
         fi
-        # Write to file for the release body
-        echo "$CHANGELOG" > /tmp/changelog.md
+        if [ -n "$SECTION" ]; then
+          echo "$SECTION" > /tmp/changelog.md
+        else
+          # Fall back to git log since last tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            git log --pretty=format:"- %s (%h)" HEAD > /tmp/changelog.md
+          else
+            git log --pretty=format:"- %s (%h)" "${PREV_TAG}..HEAD" > /tmp/changelog.md
+          fi
+        fi
     - name: Create GitHub Release
       uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631 # v2
       with:

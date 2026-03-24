@@ -66,7 +66,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install openai pydantic
+          cache: pip
+      - run: pip install openai==1.58.1 pydantic==2.10.6
       - name: Extract task
         id: extract-task
         run: |

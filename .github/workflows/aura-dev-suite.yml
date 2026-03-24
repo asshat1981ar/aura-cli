@@ -58,17 +58,21 @@ jobs:
           pip install openai==1.59.3 pydantic==2.10.6
       - name: Extract task
         id: extract-task
+        env:
+          INPUT_TASK: ${{ github.event.inputs.task }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TASK="${{ github.event.inputs.task }}"
-          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
-            TASK=$(echo "${{ github.event.comment.body }}" | sed 's|^[[:space:]]*/aura[[:space:]]*||')
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            TASK="$INPUT_TASK"
+          elif [ "$GITHUB_EVENT_NAME" = "issue_comment" ]; then
+            TASK=$(printf '%s' "$COMMENT_BODY" | sed 's|/aura ||')
           else
-            TASK="${{ github.event.issue.title }}"
+            TASK="$ISSUE_TITLE"
           fi
-          echo "task<<EOF" >> $GITHUB_OUTPUT
-          echo "$TASK" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "task<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$TASK" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
       - name: Architect - Analyze
         id: architect
         env:

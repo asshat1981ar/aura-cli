@@ -95,11 +95,8 @@ jobs:
         run: |
           python3 << 'PYEOF'
           import os
-          import secrets as _s
+          import uuid
           from openai import OpenAI
-          delim_task = f"EOF_{secrets.token_hex(8)}"
-          delim_plan = f"EOF_{secrets.token_hex(8)}"
-          with open(os.environ["GITHUB_OUTPUT"],"a") as f:
           task = os.environ["TASK"]
           client = OpenAI()
           r = client.chat.completions.create(
@@ -116,7 +113,6 @@ jobs:
               ],
           )
           plan = r.choices[0].message.content
-          import uuid
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
               d1 = f"AURA_{uuid.uuid4().hex}"
               d2 = f"AURA_{uuid.uuid4().hex}"

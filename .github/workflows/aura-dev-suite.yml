@@ -80,7 +80,8 @@ jobs:
           TASK: ${{ steps.extract-task.outputs.task }}
         run: |
           python3 << 'PYEOF'
-          import os, secrets
+          import os
+          import secrets
           from openai import OpenAI
           client = OpenAI()
           task = os.environ["TASK"]

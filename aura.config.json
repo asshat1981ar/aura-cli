@@ -99,9 +99,9 @@
   "code_rag_enabled": true,
   "skill_correlation_enabled": true,
   "hooks": {
-    "on_response_completed": "tools/openai_connector.py:handle_response",
-    "on_eval_succeeded": "tools/openai_connector.py:handle_eval",
-    "on_pr_merged": "tools/openai_connector.py:sync_to_openai"
+    "post_act": "tools/openai_connector.py:handle_response",
+    "post_verify": "tools/openai_connector.py:handle_eval",
+    "post_reflect": "tools/openai_connector.py:sync_to_openai"
   },
   "a2a": {
     "enabled": false,

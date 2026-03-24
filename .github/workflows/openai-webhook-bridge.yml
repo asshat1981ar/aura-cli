@@ -1,0 +1,112 @@
+name: OpenAI Webhook Bridge
+
+on:
+  repository_dispatch:
+    types:
+      - openai_response_completed
+      - openai_eval_succeeded
+      - openai_batch_completed
+
+  workflow_dispatch:
+    inputs:
+      event_type:
+        description: 'OpenAI event type to process'
+        required: true
+        type: choice
+        options:
+          - response.completed
+          - eval.run.succeeded
+          - batch.completed
+      event_data:
+        description: 'JSON event payload'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  process-webhook:
+    name: Process OpenAI Webhook Event
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r tools/requirements.txt
+
+      - name: Process webhook event (dispatch)
+        if: github.event_name == 'repository_dispatch'
+        env:
+          EVENT_TYPE: ${{ github.event.action }}
+          EVENT_DATA: ${{ toJson(github.event.client_payload) }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python -c "
+          import asyncio
+          import json
+          import os
+          from tools.openai_connector import OpenAIConnector, WebhookEvent
+
+          async def main():
+              connector = OpenAIConnector()
+              event = WebhookEvent(
+                  event_type=os.environ['EVENT_TYPE'].replace('openai_', '').replace('_', '.'),
+                  event_id='gh-dispatch',
+                  data=json.loads(os.environ.get('EVENT_DATA', '{}')),
+              )
+              result = await connector.dispatch_event(event)
+              print(json.dumps(result, indent=2))
+
+          asyncio.run(main())
+          "
+
+      - name: Process webhook event (manual)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EVENT_TYPE: ${{ inputs.event_type }}
+          EVENT_DATA: ${{ inputs.event_data || '{}' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python -c "
+          import asyncio
+          import json
+          import os
+          from tools.openai_connector import OpenAIConnector, WebhookEvent
+
+          async def main():
+              connector = OpenAIConnector()
+              event = WebhookEvent(
+                  event_type=os.environ['EVENT_TYPE'],
+                  event_id='manual-dispatch',
+                  data=json.loads(os.environ.get('EVENT_DATA', '{}')),
+              )
+              result = await connector.dispatch_event(event)
+              print(json.dumps(result, indent=2))
+
+          asyncio.run(main())
+          "
+
+  sync-status:
+    name: Sync OpenAI Workflow Status
+    runs-on: ubuntu-latest
+    needs: process-webhook
+    if: always()
+    steps:
+      - name: Report status
+        run: |
+          echo "OpenAI webhook bridge completed"
+          echo "Event: ${{ github.event_name }}"
+          echo "Status: ${{ needs.process-webhook.result }}"

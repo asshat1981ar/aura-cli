@@ -670,7 +670,14 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
     # debug_trace
     # ------------------------------------------------------------------ #
     if name == "debug_trace":
-        raise HTTPException(status_code=403, detail="debug_trace disabled pending real sandboxing")
+        # Lightweight, non-executing stub to avoid advertising a tool that always 403s.
+        # This implementation is intentionally limited to echoing back request metadata.
+        return {
+            "data": {
+                "message": "debug_trace is a diagnostic stub and does not execute code.",
+                "received_args": args,
+            }
+        }
 
     raise HTTPException(status_code=404, detail=f"Unknown tool: {name}")
 

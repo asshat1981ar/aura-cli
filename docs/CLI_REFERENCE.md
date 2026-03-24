@@ -60,6 +60,7 @@ Known record codes:
 
 - [`help`](#help)
 - [`doctor`](#doctor)
+- [`readiness`](#readiness)
 - [`bootstrap`](#bootstrap)
 - [`config`](#config)
 - [`contract-report`](#contract-report)
@@ -113,6 +114,19 @@ Run the AURA doctor checks for local environment health.
 
 Examples:
 - `python3 main.py doctor`
+
+## `readiness`
+
+### `aura readiness`
+
+Check V2 runtime readiness
+
+Validate async runtime and MCP registry health.
+
+`action`: `readiness` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py readiness`
 
 ## `bootstrap`
 

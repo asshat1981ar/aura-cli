@@ -40,6 +40,12 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 
 from core.config_manager import ConfigManager, DEFAULT_CONFIG
 from core.logging_utils import log_json
+from core.mcp_contracts import (
+    build_discovery_payload,
+    build_health_payload,
+    build_tool_descriptors_from_schemas,
+)
+from core.mcp_registry import get_registered_service, list_registered_services
 from core.goal_queue import GoalQueue
 from core.goal_archive import GoalArchive
 from core.runtime_paths import resolve_project_path
@@ -212,16 +218,7 @@ _TOOL_SCHEMAS: Dict[str, Dict] = {
 
 
 def _build_descriptor(name: str) -> Dict:
-    schema = _TOOL_SCHEMAS[name]
-    return {
-        "name": name,
-        "description": schema["description"],
-        "inputSchema": {
-            "type": "object",
-            "properties": schema.get("input", {}),
-            "required": [k for k, v in schema.get("input", {}).items() if v.get("required")],
-        },
-    }
+    return build_tool_descriptors_from_schemas(_TOOL_SCHEMAS, names=[name])[0]
 
 
 # ---------------------------------------------------------------------------
@@ -397,17 +394,25 @@ _TOOL_HANDLERS = {
 
 @app.get("/health")
 async def health(_: None = Depends(_check_auth)):
-    return {
-        "status": "ok",
-        "tool_count": len(_TOOL_HANDLERS),
-        "server": "aura_control_mcp",
-        "version": "1.0.0",
-    }
+    return build_health_payload(
+        server=get_registered_service("control")["name"],
+        version="1.0.0",
+        tool_count=len(_TOOL_HANDLERS),
+    )
+
+
+@app.get("/discovery")
+async def discovery(_: None = Depends(_check_auth)) -> Dict:
+    return build_discovery_payload(
+        current_server=get_registered_service("control"),
+        servers=list_registered_services(),
+        tool_count=len(_TOOL_HANDLERS),
+    )
 
 
 @app.get("/tools")
 async def list_tools(_: None = Depends(_check_auth)) -> List[Dict]:
-    return [_build_descriptor(name) for name in _TOOL_SCHEMAS]
+    return build_tool_descriptors_from_schemas(_TOOL_SCHEMAS)
 
 
 @app.get("/tool/{name}")

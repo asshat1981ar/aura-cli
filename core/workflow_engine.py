@@ -27,6 +27,7 @@ import threading
 import time
 import traceback
 import uuid
+import importlib
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -830,8 +831,8 @@ class WorkflowEngine:
         if not hasattr(self, "_orchestrator"):
             project_root = Path(__file__).resolve().parent.parent
             try:
-                from aura_cli.cli_main import create_runtime
-                rt = create_runtime(project_root, overrides=None)
+                cli_main_mod = importlib.import_module("aura_cli.cli_main")
+                rt = cli_main_mod.create_runtime(project_root, overrides=None)
                 orchestrator = rt.get("orchestrator")
                 if orchestrator is None:
                     raise KeyError("Runtime factory returned no orchestrator")

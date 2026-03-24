@@ -18,14 +18,9 @@ from agents.debugger import DebuggerAgent
 
 class HybridClosedLoop:
     """
-    Implements the Hybrid Closed Loop for autonomous development, orchestrating
-    LLM interactions, code generation, critique, and Git operations. It features
-    a robust scoring mechanism, regression detection, and stable convergence logic.
+    [DEPRECATED] Implements the legacy Hybrid Closed Loop. 
+    Use core.orchestrator.LoopOrchestrator for modern async development.
     """
-
-    _ABSOLUTE_PASS_THRESHOLD = 8.5
-    _REGRESSION_THRESHOLD = 3
-    _STABLE_CONVERGENCE_THRESHOLD = 3
 
     _bootstrap_prompt_template = """You are AURA, a closed-loop autonomous development workflow.
 
@@ -89,13 +84,13 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
     def __init__(self, model, brain, git_tools, prompt_template=None):
         """
         Initializes the HybridClosedLoop with model, brain, and Git tools.
-
-        Args:
-            model: An instance of the ModelAdapter for LLM interactions.
-            brain: An instance of the system's memory (Brain).
-            git_tools: An instance of GitTools for repository operations.
-            prompt_template (str, optional): A custom prompt template for the loop.
         """
+        warnings.warn(
+            "HybridClosedLoop is deprecated and will be removed in V3. "
+            "Migrate to LoopOrchestrator.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.model = model
         self.brain = brain
         self.git = git_tools

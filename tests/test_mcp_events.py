@@ -43,7 +43,7 @@ class TestMCPEvent(unittest.TestCase):
 
 class TestEventBus(unittest.TestCase):
     def _run(self, coro):
-        return asyncio.get_event_loop().run_until_complete(coro)
+        return asyncio.run(coro)
 
     def test_subscribe_and_publish(self):
         bus = EventBus()
@@ -132,7 +132,7 @@ class TestEventBus(unittest.TestCase):
 
 class TestCallbackRegistry(unittest.TestCase):
     def _run(self, coro):
-        return asyncio.get_event_loop().run_until_complete(coro)
+        return asyncio.run(coro)
 
     def test_cleanup_expired(self):
         bus = EventBus()

@@ -3,6 +3,7 @@ AURA CLI
 Commands:
   help         Show CLI help
   doctor       Run system diagnostics
+  readiness    Check V2 runtime readiness
   bootstrap    Create default config
   config       Show effective config
   contract-report Print CLI contract report

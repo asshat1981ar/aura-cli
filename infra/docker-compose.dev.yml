@@ -1,0 +1,30 @@
+version: "3.9"
+
+# Development overrides — mounts source code for live reload
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+
+services:
+  aura-hub:
+    command: uvicorn orchestrator_hub.hub:app --host 0.0.0.0 --port 8010 --reload
+    volumes:
+      - ..:/app
+    environment:
+      - PYTHONDONTWRITEBYTECODE=1
+
+  aura-mcp-dev:
+    command: uvicorn tools.mcp_server:app --host 0.0.0.0 --port 8001 --reload
+    volumes:
+      - ..:/app
+    environment:
+      - MCP_ENABLE_WRITE=1
+      - MCP_ENABLE_RUN=1
+
+  aura-mcp-control:
+    command: uvicorn tools.aura_control_mcp:app --host 0.0.0.0 --port 8003 --reload
+    volumes:
+      - ..:/app
+
+  aura-mcp-monitoring:
+    command: uvicorn tools.monitoring_mcp:app --host 0.0.0.0 --port 8016 --reload
+    volumes:
+      - ..:/app

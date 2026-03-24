@@ -280,6 +280,7 @@ class SandboxAgent:
                 stderr=subprocess.PIPE,
                 cwd=tmpdir,
                 text=True,
+                env={**os.environ, "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1", "PYTHONDONTWRITEBYTECODE": "1"},
             )
             try:
                 stdout, stderr = proc.communicate(timeout=self.timeout)

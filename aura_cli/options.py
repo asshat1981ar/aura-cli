@@ -40,6 +40,12 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         examples=("python3 main.py doctor",),
     ),
     CommandSpec(
+        path=("readiness",),
+        summary="Check V2 runtime readiness",
+        description="Validate async runtime and MCP registry health.",
+        examples=("python3 main.py readiness",),
+    ),
+    CommandSpec(
         path=("bootstrap",),
         summary="Create default config",
         description="Bootstrap local configuration files for AURA.",
@@ -269,6 +275,7 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("json_help", False, None),
     CLIActionSpec("help", False, ("help",)),
     CLIActionSpec("doctor", False, ("doctor",)),
+    CLIActionSpec("readiness", True, ("readiness",)),
     CLIActionSpec("bootstrap", False, ("bootstrap",), legacy_primary_flags=("bootstrap",)),
     CLIActionSpec("show_config", False, ("config",)),
     CLIActionSpec("contract_report", False, ("contract-report",)),
@@ -369,6 +376,7 @@ CLI_ERRORS_RECORD_CODES: tuple[dict[str, str], ...] = (
 _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("help",): "help",
     ("doctor",): "doctor",
+    ("readiness",): "readiness",
     ("bootstrap",): "bootstrap",
     ("config",): "show_config",
     ("contract-report",): "contract_report",

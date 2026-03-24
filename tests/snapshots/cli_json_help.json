@@ -40,6 +40,25 @@
       "summary": "Run system diagnostics"
     },
     {
+      "action": "readiness",
+      "description": "Validate async runtime and MCP registry health.",
+      "examples": [
+        "python3 main.py readiness"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "readiness"
+      ],
+      "requires_runtime": true,
+      "summary": "Check V2 runtime readiness"
+    },
+    {
       "action": "bootstrap",
       "description": "Bootstrap local configuration files for AURA.",
       "examples": [

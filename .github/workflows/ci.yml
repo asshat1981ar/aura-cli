@@ -20,9 +20,9 @@ jobs:
             python-version: "3.11"
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
@@ -34,7 +34,7 @@ jobs:
         pytest -q --maxfail=3 --cov=aura_cli --cov=core --cov=agents --cov=memory --cov-report=xml --cov-report=term-missing
     - name: Upload coverage
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: coverage-report
         path: coverage.xml
@@ -42,9 +42,9 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
     - name: Set up Python 3.11
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
       with:
         python-version: "3.11"
     - name: Install dependencies
@@ -60,9 +60,9 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
     - name: Set up Python 3.11
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
       with:
         python-version: "3.11"
     - name: Install dependencies
@@ -80,9 +80,9 @@ jobs:
   cli_docs_and_help_contracts:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
     - name: Set up Python 3.11
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
       with:
         python-version: "3.11"
     - name: Install minimal test dependencies
@@ -92,9 +92,19 @@ jobs:
     - name: Verify CLI docs are up to date
       run: |
         python scripts/generate_cli_reference.py --check
+    - name: Verify active sweep artifacts are up to date
+      run: |
+        python scripts/generate_active_sweep_artifacts.py --check
+      env:
+        GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+        GITHUB_CHECKS: Python CI,Claude Code Review
+        AURA_REVIEWER_COMPLETE: true
     - name: Verify CLI docs generator tests
       run: |
         pytest -q tests/test_cli_docs_generator.py
+    - name: Verify sweep artifact generator tests
+      run: |
+        pytest -q tests/test_generate_active_sweep_artifacts.py
     - name: Verify CLI parser/dispatch contracts
       run: |
         pytest -q tests/test_cli_contract.py tests/test_cli_options.py
@@ -111,9 +121,9 @@ jobs:
   package:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
     - name: Set up Python 3.11
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
       with:
         python-version: "3.11"
     - name: Install build tools
@@ -126,7 +136,7 @@ jobs:
         pip install dist/*.whl
         aura --version
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: dist
         path: dist/

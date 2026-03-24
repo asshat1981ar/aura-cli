@@ -3,11 +3,15 @@ from __future__ import annotations
 
 import sys
 import os
+import asyncio
 from pathlib import Path
 from collections import deque
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from core.mcp_registry import get_registered_service
+from tools.mcp_types import ToolCallRequest
 
 # Ensure project root is on path
 _ROOT = Path(__file__).resolve().parent.parent
@@ -16,12 +20,65 @@ if str(_ROOT) not in sys.path:
 
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 
-from fastapi.testclient import TestClient
-
-
 # ---------------------------------------------------------------------------
 # Fixtures — patch heavy singletons before importing the app
 # ---------------------------------------------------------------------------
+
+
+class _Response:
+    def __init__(self, status_code, payload):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+def _serialize_payload(payload):
+    if hasattr(payload, "model_dump"):
+        return payload.model_dump()
+    return payload
+
+
+class _DirectClient:
+    def __init__(self, module):
+        self._module = module
+
+    def get(self, path):
+        if path == "/health":
+            return _Response(200, asyncio.run(self._module.health(None)))
+        if path == "/metrics":
+            return _Response(200, asyncio.run(self._module.get_metrics(None)))
+        if path == "/discovery":
+            return _Response(200, asyncio.run(self._module.discovery(None)))
+        if path == "/tools":
+            return _Response(200, asyncio.run(self._module.list_tools(None)))
+        if path.startswith("/tool/"):
+            name = path.split("/tool/", 1)[1]
+            try:
+                payload = asyncio.run(self._module.get_tool(name, None))
+                return _Response(200, _serialize_payload(payload))
+            except Exception as exc:
+                status = getattr(exc, "status_code", 500)
+                detail = getattr(exc, "detail", str(exc))
+                return _Response(status, {"detail": detail})
+        raise AssertionError(f"Unhandled GET path in test harness: {path}")
+
+    def post(self, path, json):
+        if path != "/call":
+            raise AssertionError(f"Unhandled POST path in test harness: {path}")
+        try:
+            payload = asyncio.run(
+                self._module.call_tool(
+                    ToolCallRequest(tool_name=json["tool_name"], args=json.get("args", {})),
+                    None,
+                )
+            )
+            return _Response(200, _serialize_payload(payload))
+        except Exception as exc:
+            status = getattr(exc, "status_code", 500)
+            detail = getattr(exc, "detail", str(exc))
+            return _Response(status, {"detail": detail})
 
 @pytest.fixture(autouse=True)
 def reset_singletons():
@@ -74,8 +131,7 @@ def client(mock_queue, mock_archive, mock_brain):
     mod._goal_queue = mock_queue
     mod._goal_archive = mock_archive
     mod._brain = mock_brain
-    from tools.aura_control_mcp import app
-    return TestClient(app)
+    return _DirectClient(mod)
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +145,21 @@ class TestHealth:
         data = resp.json()
         assert data["status"] == "ok"
         assert data["tool_count"] == 11
+        assert data["server"] == "aura-control"
+
+    def test_discovery(self, client):
+        resp = client.get("/discovery")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["current_server"]["name"] == "aura-control"
+        assert "/discovery" in data["current_server"]["endpoints"]
+        assert any(server["name"] == "aura-agentic-loop" for server in data["servers"])
+
+    def test_registry_advertises_discovery_routes(self):
+        control = get_registered_service("control")
+        dev_tools = get_registered_service("dev_tools")
+        assert "/discovery" in control["endpoints"]
+        assert {"/discovery", "/environments", "/architecture"} <= set(dev_tools["endpoints"])
 
 
 # ---------------------------------------------------------------------------

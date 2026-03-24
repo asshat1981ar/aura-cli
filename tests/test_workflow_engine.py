@@ -1,6 +1,7 @@
 """Tests for WorkflowEngine (core/workflow_engine.py) and AgenticLoopMCP (tools/agentic_loop_mcp.py)."""
 from __future__ import annotations
 
+import importlib
 import os
 import sys
 import time
@@ -303,12 +304,42 @@ class TestAgenticLoop:
 
         expected_root = Path(wfe.__file__).resolve().parent.parent
         sentinel_orchestrator = object()
+        fake_cli_main = MagicMock()
+        fake_cli_main.create_runtime.return_value = {"orchestrator": sentinel_orchestrator}
+        real_import_module = importlib.import_module
 
-        with patch("aura_cli.cli_main.create_runtime", return_value={"orchestrator": sentinel_orchestrator}) as mock_create:
+        with patch(
+            "core.workflow_engine.importlib.import_module",
+            side_effect=lambda module_name: fake_cli_main
+            if module_name == "aura_cli.cli_main"
+            else real_import_module(module_name),
+        ) as mock_import:
             orchestrator = fresh_engine._get_orchestrator()
 
         assert orchestrator is sentinel_orchestrator
-        mock_create.assert_called_once_with(expected_root, overrides=None)
+        mock_import.assert_called_once_with("aura_cli.cli_main")
+        fake_cli_main.create_runtime.assert_called_once_with(expected_root, overrides=None)
+
+    def test_get_orchestrator_looks_up_runtime_factory_via_module(self, fresh_engine):
+        import core.workflow_engine as wfe
+
+        expected_root = Path(wfe.__file__).resolve().parent.parent
+        sentinel_orchestrator = object()
+        fake_cli_main = MagicMock()
+        fake_cli_main.create_runtime.return_value = {"orchestrator": sentinel_orchestrator}
+        real_import_module = importlib.import_module
+
+        with patch(
+            "core.workflow_engine.importlib.import_module",
+            side_effect=lambda module_name: fake_cli_main
+            if module_name == "aura_cli.cli_main"
+            else real_import_module(module_name),
+        ) as mock_import:
+            orchestrator = fresh_engine._get_orchestrator()
+
+        assert orchestrator is sentinel_orchestrator
+        mock_import.assert_called_once_with("aura_cli.cli_main")
+        fake_cli_main.create_runtime.assert_called_once_with(expected_root, overrides=None)
 
     def test_get_orchestrator_fallback_builds_valid_memory_store(self, fresh_engine):
         import core.workflow_engine as wfe
@@ -321,8 +352,16 @@ class TestAgenticLoop:
         fake_brain = MagicMock()
         fake_model = MagicMock()
         fake_agents = {"ingest": MagicMock()}
+        fake_cli_main = MagicMock()
+        fake_cli_main.create_runtime.side_effect = TypeError("missing project_root")
+        real_import_module = importlib.import_module
 
-        with patch("aura_cli.cli_main.create_runtime", side_effect=TypeError("missing project_root")), \
+        with patch(
+            "core.workflow_engine.importlib.import_module",
+            side_effect=lambda module_name: fake_cli_main
+            if module_name == "aura_cli.cli_main"
+            else real_import_module(module_name),
+        ) as mock_import, \
              patch("memory.store.MemoryStore", return_value=fake_memory_store) as mock_store, \
              patch("memory.brain.Brain", return_value=fake_brain) as mock_brain_cls, \
              patch("core.model_adapter.ModelAdapter", return_value=fake_model), \
@@ -331,6 +370,7 @@ class TestAgenticLoop:
             orchestrator = fresh_engine._get_orchestrator()
 
         assert orchestrator is fake_orchestrator
+        assert any(call.args == ("aura_cli.cli_main",) for call in mock_import.call_args_list)
         mock_brain_cls.assert_called_once_with(db_path=str(expected_brain_db))
         mock_store.assert_called_once_with(expected_memory_root)
         mock_orch.assert_called_once_with(
@@ -349,12 +389,20 @@ class TestAgenticLoop:
         fake_model = MagicMock()
         fake_agents = {"ingest": MagicMock()}
         fake_config = MagicMock()
+        fake_cli_main = MagicMock()
+        fake_cli_main.create_runtime.side_effect = TypeError("missing project_root")
+        real_import_module = importlib.import_module
         fake_config.get.side_effect = lambda key, default=None: {
             "brain_db_path": "state/workflow_brain.db",
             "memory_store_path": "state/workflow_store",
         }.get(key, default)
 
-        with patch("aura_cli.cli_main.create_runtime", side_effect=TypeError("missing project_root")), \
+        with patch(
+            "core.workflow_engine.importlib.import_module",
+            side_effect=lambda module_name: fake_cli_main
+            if module_name == "aura_cli.cli_main"
+            else real_import_module(module_name),
+        ) as mock_import, \
              patch("core.workflow_engine.ConfigManager", return_value=fake_config), \
              patch("memory.store.MemoryStore", return_value=fake_memory_store) as mock_store, \
              patch("memory.brain.Brain", return_value=fake_brain) as mock_brain_cls, \
@@ -363,6 +411,7 @@ class TestAgenticLoop:
              patch("core.orchestrator.LoopOrchestrator", return_value=fake_orchestrator):
             fresh_engine._get_orchestrator()
 
+        assert any(call.args == ("aura_cli.cli_main",) for call in mock_import.call_args_list)
         mock_brain_cls.assert_called_once_with(
             db_path=str(expected_root / "state" / "workflow_brain.db")
         )

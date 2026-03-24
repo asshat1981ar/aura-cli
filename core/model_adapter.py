@@ -37,7 +37,12 @@ except ImportError:  # pragma: no cover - exercised via optional-deps tests
 from core.logging_utils import log_json # Import log_json
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
 from core.config_manager import config
-from core.runtime_auth import resolve_local_model_profiles, resolve_openai_api_key, resolve_openrouter_api_key
+from core.runtime_auth import (
+    resolve_anthropic_api_key,
+    resolve_local_model_profiles,
+    resolve_openai_api_key,
+    resolve_openrouter_api_key,
+)
 from memory.embedding_provider import LocalEmbeddingProvider
 
 # Removed dangerous global IPv4-only monkeypatch for socket.getaddrinfo.
@@ -66,6 +71,7 @@ class ModelAdapter:
         self.mcp_server_url = config.get("mcp_server_url") # Configurable MCP server URL
         self.router = None
         self.cache_db = None
+        self.telemetry_agent = None
         self.cache_ttl = config.get("llm_timeout", 3600) # Use llm_timeout for cache as well if appropriate, or keep separate
         self._embedding_disabled = False
         self._embedding_disabled_reason = None
@@ -612,6 +618,22 @@ class ModelAdapter:
         self.router = router
         log_json("INFO", "model_router_attached")
 
+    def set_telemetry_agent(self, telemetry_agent):
+        """Attaches a telemetry agent to the adapter."""
+        self.telemetry_agent = telemetry_agent
+        log_json("INFO", "telemetry_agent_attached")
+
+    def _log_telemetry(self, model_name, latency, response_text):
+        """Logs latency and estimated token count to the telemetry agent."""
+        if not self.telemetry_agent:
+            return
+        # Simple token estimation: 4 chars per token
+        token_count = len(response_text) // 4
+        try:
+            self.telemetry_agent.log(model_name, latency, token_count)
+        except Exception as e:
+            log_json("WARN", "telemetry_logging_failed", details={"error": str(e)})
+
     def _get_cached_response(self, prompt: str) -> str | None:
         prompt_hash = hashlib.sha256(prompt.encode()).hexdigest()
 
@@ -838,9 +860,36 @@ class ModelAdapter:
             "model": "gpt-4o-mini", 
             "messages": [{"role": "user", "content": prompt}]
         }
+        start = time.time()
         response = self._make_request_with_retries("POST", url, headers, payload)
+        latency = time.time() - start
         data = response.json()
-        return data["choices"][0]["message"]["content"]
+        content = data["choices"][0]["message"]["content"]
+        self._log_telemetry("openai", latency, content)
+        return content
+
+    def call_anthropic(self, prompt: str) -> str:
+        anthropic_api_key = resolve_anthropic_api_key() or os.environ.get("ANTHROPIC_API_KEY")
+        if not anthropic_api_key:
+            raise ValueError("ANTHROPIC_API_KEY not set for Anthropic call.")
+        url = "https://api.anthropic.com/v1/messages"
+        headers = {
+            "x-api-key": anthropic_api_key,
+            "anthropic-version": "2023-06-01",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "claude-3-5-sonnet-latest",
+            "max_tokens": 4096,
+            "messages": [{"role": "user", "content": prompt}]
+        }
+        start = time.time()
+        response = self._make_request_with_retries("POST", url, headers, payload)
+        latency = time.time() - start
+        data = response.json()
+        content = data["content"][0]["text"]
+        self._log_telemetry("anthropic", latency, content)
+        return content
 
     def call_local(self, prompt: str) -> str:
         default_profile = self._resolve_local_profile_name("fast")
@@ -924,12 +973,16 @@ class ModelAdapter:
             try:
                 model_response = self._call_with_timeout(self.call_openai, prompt)
             except Exception as e:
-                log_json("WARN", "openai_call_failed", details={"error": str(e), "fallback": "OpenRouter"})
+                log_json("WARN", "openai_call_failed", details={"error": str(e), "fallback": "Anthropic"})
                 try:
-                    model_response = self._call_with_timeout(self.call_openrouter, prompt)
+                    model_response = self._call_with_timeout(self.call_anthropic, prompt)
                 except Exception as e:
-                    log_json("WARN", "openrouter_call_failed", details={"error": str(e), "fallback": "Local Model"})
-                    model_response = self._call_with_timeout(self.call_local, prompt)
+                    log_json("WARN", "anthropic_call_failed", details={"error": str(e), "fallback": "OpenRouter"})
+                    try:
+                        model_response = self._call_with_timeout(self.call_openrouter, prompt)
+                    except Exception as e:
+                        log_json("WARN", "openrouter_call_failed", details={"error": str(e), "fallback": "Local Model"})
+                        model_response = self._call_with_timeout(self.call_local, prompt)
         if model_response is None:
             return "Error: No model successfully responded."
         self._save_to_cache(prompt, model_response)

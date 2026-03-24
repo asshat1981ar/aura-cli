@@ -360,6 +360,13 @@ class TestExperimentTrackerLifecycle(unittest.TestCase):
 class TestA2AServerTaskLifecycle(unittest.TestCase):
     """Create server, register handler, create task, verify completion."""
 
+    def setUp(self):
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+
+    def tearDown(self):
+        self.loop.close()
+
     def test_task_completes_with_handler(self):
         from core.a2a.server import A2AServer
         from core.a2a.task import TaskState
@@ -373,7 +380,7 @@ class TestA2AServerTaskLifecycle(unittest.TestCase):
 
         server.register_handler("code_generation", my_handler)
 
-        task = asyncio.get_event_loop().run_until_complete(
+        task = asyncio.run(
             server.create_task("code_generation", "Generate hello world")
         )
 
@@ -393,7 +400,7 @@ class TestA2AServerTaskLifecycle(unittest.TestCase):
 
         server = A2AServer()
 
-        task = asyncio.get_event_loop().run_until_complete(
+        task = asyncio.run(
             server.create_task("nonexistent_capability", "Do something")
         )
 
@@ -474,6 +481,13 @@ class TestA2AServerFastAPIRoutes(unittest.TestCase):
 class TestEventBusPubSubSSE(unittest.TestCase):
     """EventBus subscribe, publish, verify callback fires. SSE stream test."""
 
+    def setUp(self):
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+
+    def tearDown(self):
+        self.loop.close()
+
     def test_sync_publish_fires_callback(self):
         from core.mcp_events import EventBus, EventType, MCPEvent
 
@@ -526,7 +540,7 @@ class TestEventBusPubSubSSE(unittest.TestCase):
             data={"phase": "plan"},
         )
 
-        asyncio.get_event_loop().run_until_complete(bus.publish(event))
+        asyncio.run(bus.publish(event))
         self.assertEqual(len(received), 1)
 
     def test_sse_stream_receives_events(self):
@@ -547,7 +561,7 @@ class TestEventBusPubSubSSE(unittest.TestCase):
             received = await asyncio.wait_for(queue.get(), timeout=2.0)
             return received
 
-        received = asyncio.get_event_loop().run_until_complete(_run())
+        received = asyncio.run(_run())
         self.assertEqual(received.source, "ci")
         self.assertEqual(received.data["status"], "green")
 

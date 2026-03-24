@@ -95,7 +95,16 @@ def test_build_cycle_summary_derives_operator_fields():
             "change_set": {"changes": []},
             "sandbox": {"passed": True},
             "apply_result": {"applied": ["tests/test_example.py"], "failed": []},
-            "verification": {"status": "fail", "failures": ["assertion error"], "logs": ""},
+            "verification": {
+                "status": "fail",
+                "failures": ["assertion error"],
+                "logs": "",
+                "remediation_plan": {
+                    "route": "replan",
+                    "repeated_failure_detected": True,
+                    "next_checks": ["Inspect the failing assertion."],
+                },
+            },
             "reflection": {"summary": "retry later"},
             "capability_goal_queue": {"queued": ["Follow-up goal"]},
         },
@@ -111,6 +120,9 @@ def test_build_cycle_summary_derives_operator_fields():
     assert summary["verification_status"] == "fail"
     assert summary["stop_reason"] == "MAX_CYCLES"
     assert summary["failures"] == ["assertion error"]
+    assert summary["remediation_route"] == "replan"
+    assert summary["repeated_failure_detected"] is True
+    assert summary["remediation_next_checks"] == ["Inspect the failing assertion."]
     assert summary["retry_count"] == 2
     assert summary["applied_files"] == ["tests/test_example.py"]
     assert summary["failed_files"] == []
@@ -139,6 +151,9 @@ def test_build_operator_runtime_snapshot_composes_queue_and_cycle_summaries():
         "verification_status": None,
         "stop_reason": None,
         "failures": [],
+        "remediation_route": None,
+        "repeated_failure_detected": False,
+        "remediation_next_checks": [],
         "retry_count": 0,
         "applied_files": [],
         "failed_files": [],

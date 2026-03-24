@@ -1,5 +1,5 @@
 """
-AURA MCP Skills Server — exposes all 20 AURA skill modules as MCP-compatible HTTP tools.
+AURA MCP Skills Server — exposes all registered AURA skill modules as MCP-compatible HTTP tools.
 
 Endpoints:
   GET  /tools          → list all skills as MCP tool descriptors
@@ -20,6 +20,7 @@ from __future__ import annotations
 import os
 import sys
 import time
+import inspect
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -34,11 +35,21 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel
 
 from core.logging_utils import log_json
+from core.mcp_contracts import build_discovery_payload, build_health_payload, build_tool_descriptor
+from core.mcp_registry import get_registered_service, list_registered_services
 
 # ---------------------------------------------------------------------------
 # Input/output schemas for each skill (used to build MCP tool descriptors)
 # ---------------------------------------------------------------------------
-_SKILL_SCHEMAS: Dict[str, Dict] = {
+_SKILL_METADATA_OVERRIDES: Dict[str, Dict[str, Any]] = {
+    "beads_skill": {
+        "description": "Wrap the bd CLI for autonomous task management: list ready work, inspect tasks, update status, close tasks, fetch AI context, and sync changes.",
+        "input": {
+            "cmd": {"type": "string", "description": "bd subcommand to run: ready, show, update, close, prime, or sync", "required": True},
+            "id": {"type": "string", "description": "Optional Beads task ID for commands that operate on a single task"},
+            "args": {"type": "array", "description": "Optional extra CLI arguments to pass through to bd"},
+        },
+    },
     "dependency_analyzer": {
         "description": "Parse requirements files in a project; detect version conflicts and known CVEs.",
         "input": {"project_root": {"type": "string", "description": "Path to project root", "default": "."}},
@@ -236,6 +247,48 @@ _SKILL_SCHEMAS: Dict[str, Dict] = {
             "project_root": {"type": "string", "description": "Scan all .py files under this directory"},
         },
     },
+    "skill_failure_analyzer": {
+        "description": "Analyze stored cycle summaries to identify the most frequently failing skills and recommend remediation steps.",
+        "input": {
+            "summaries_path": {"type": "string", "description": "Optional path to the cycle summaries JSON file to analyze"},
+        },
+    },
+    "security_hardener": {
+        "description": "Scan Python files for hardcoded secrets and propose environment-variable based remediations.",
+        "input": {
+            "content": {"type": "string", "description": "Python source code to scan (alternative to project_root)"},
+            "file_path": {"type": "string", "description": "Label for the file when content is provided"},
+            "project_root": {"type": "string", "description": "Scan all Python files under this directory"},
+        },
+    },
+    "structural_analyzer": {
+        "description": "Combine import-graph and complexity data to detect circular dependencies, bottlenecks, hotspots, and optional coverage gaps.",
+        "input": {
+            "project_root": {"type": "string", "description": "Path to project root to analyze", "required": True},
+            "report_coverage": {"type": "boolean", "description": "Include optional coverage-gap analysis for high-risk files"},
+        },
+    },
+    "evolution_skill": {
+        "description": "Run one self-improvement cycle using AURA's EvolutionLoop for a given goal.",
+        "input": {
+            "goal": {"type": "string", "description": "Evolutionary goal to pursue"},
+            "project_root": {"type": "string", "description": "Root path for mutation and runtime creation", "default": "."},
+        },
+    },
+    "skill_generator": {
+        "description": "Generate, write, and register a new AURA skill from a requested capability description.",
+        "input": {
+            "capability": {"type": "string", "description": "Capability or skill idea to implement", "required": True},
+            "description": {"type": "string", "description": "Optional extra description for the generated skill"},
+            "project_root": {"type": "string", "description": "Project root where the skill should be created", "default": "."},
+        },
+    },
+    "ast_analyzer": {
+        "description": "Perform deep AST-based analysis of Python files to surface structure, complexity, import graphs, code smells, and dead code.",
+        "input": {
+            "project_root": {"type": "string", "description": "Path to project root to analyze", "default": "."},
+        },
+    },
 }
 
 
@@ -267,6 +320,33 @@ def _load_skills() -> None:
 _load_skills()
 
 
+def _infer_skill_description(name: str, skill: Any) -> str:
+    for doc_source in (
+        inspect.getdoc(type(skill)),
+        inspect.getdoc(skill),
+        inspect.getdoc(inspect.getmodule(type(skill))),
+    ):
+        if not doc_source:
+            continue
+        first_line = next((line.strip() for line in doc_source.splitlines() if line.strip()), "")
+        if first_line:
+            return first_line
+    return f"AURA skill: {name.replace('_', ' ')}"
+
+
+def _build_skill_descriptor(name: str, skill: Any) -> Dict[str, Any]:
+    metadata = _SKILL_METADATA_OVERRIDES.get(name, {})
+    return build_tool_descriptor(
+        name=name,
+        description=metadata.get("description") or _infer_skill_description(name, skill),
+        input_properties=metadata.get("input", {}),
+    )
+
+
+def _list_skill_descriptors() -> List[Dict[str, Any]]:
+    return [_build_skill_descriptor(name, skill) for name, skill in sorted(_skills.items())]
+
+
 def require_auth(authorization: Optional[str] = Header(default=None)) -> None:
     if not _MCP_TOKEN:
         return
@@ -287,33 +367,29 @@ class CallRequest(BaseModel):
 # ---------------------------------------------------------------------------
 @app.get("/health")
 async def health(_: None = Depends(require_auth)) -> Dict:
-    return {
-        "status": "ok" if not _load_error else "degraded",
-        "skills_loaded": len(_skills),
-        "load_error": _load_error,
-        "server": "aura_mcp_skills_server",
-        "version": "1.0.0",
-    }
+    return build_health_payload(
+        status="ok" if not _load_error else "degraded",
+        server=get_registered_service("skills")["name"],
+        version="1.0.0",
+        tool_count=len(_skills),
+        skills_loaded=len(_skills),
+        load_error=_load_error,
+    )
+
+
+@app.get("/discovery")
+async def discovery(_: None = Depends(require_auth)) -> Dict:
+    return build_discovery_payload(
+        current_server=get_registered_service("skills"),
+        servers=list_registered_services(),
+        tool_count=len(_skills),
+    )
 
 
 @app.get("/tools")
 async def list_tools(_: None = Depends(require_auth)) -> Dict:
     """Return MCP-compatible tool list for all loaded skills."""
-    tools: List[Dict] = []
-    for name, skill in _skills.items():
-        schema = _SKILL_SCHEMAS.get(name, {})
-        tools.append({
-            "name": name,
-            "description": schema.get("description", f"AURA skill: {name}"),
-            "inputSchema": {
-                "type": "object",
-                "properties": schema.get("input", {}),
-            },
-        })
-    # Add any skills loaded but not in schema dict
-    for name in _skills:
-        if not any(t["name"] == name for t in tools):
-            tools.append({"name": name, "description": f"AURA skill: {name}", "inputSchema": {"type": "object", "properties": {}}})
+    tools = _list_skill_descriptors()
     return {"tools": tools, "count": len(tools)}
 
 
@@ -322,13 +398,9 @@ async def get_skill(name: str, _: None = Depends(require_auth)) -> Dict:
     """Return descriptor for a single skill."""
     if name not in _skills:
         raise HTTPException(status_code=404, detail=f"Skill '{name}' not found. Available: {sorted(_skills.keys())}")
-    schema = _SKILL_SCHEMAS.get(name, {})
-    return {
-        "name": name,
-        "description": schema.get("description", f"AURA skill: {name}"),
-        "inputSchema": {"type": "object", "properties": schema.get("input", {})},
-        "skill_class": type(_skills[name]).__name__,
-    }
+    descriptor = _build_skill_descriptor(name, _skills[name])
+    descriptor["skill_class"] = type(_skills[name]).__name__
+    return descriptor
 
 
 @app.post("/call")

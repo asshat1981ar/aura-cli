@@ -3,10 +3,14 @@ from __future__ import annotations
 
 import sys
 import os
+import asyncio
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+from core.mcp_registry import get_registered_service
+from tools.mcp_types import ToolCallRequest
 
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
@@ -14,12 +18,64 @@ if str(_ROOT) not in sys.path:
 
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 
-from fastapi.testclient import TestClient
-
 
 # ---------------------------------------------------------------------------
 # Shared fixtures
 # ---------------------------------------------------------------------------
+
+
+class _Response:
+    def __init__(self, status_code, payload):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+def _serialize_payload(payload):
+    if hasattr(payload, "model_dump"):
+        return payload.model_dump()
+    return payload
+
+
+class _DirectClient:
+    def __init__(self, module):
+        self._module = module
+
+    def get(self, path):
+        if path == "/health":
+            return _Response(200, asyncio.run(self._module.health(None)))
+        if path == "/discovery":
+            return _Response(200, asyncio.run(self._module.discovery(None)))
+        if path == "/tools":
+            return _Response(200, asyncio.run(self._module.list_tools(None)))
+        if path.startswith("/tool/"):
+            name = path.split("/tool/", 1)[1]
+            try:
+                payload = asyncio.run(self._module.get_tool(name, None))
+                return _Response(200, _serialize_payload(payload))
+            except Exception as exc:
+                status = getattr(exc, "status_code", 500)
+                detail = getattr(exc, "detail", str(exc))
+                return _Response(status, {"detail": detail})
+        raise AssertionError(f"Unhandled GET path in test harness: {path}")
+
+    def post(self, path, json):
+        if path != "/call":
+            raise AssertionError(f"Unhandled POST path in test harness: {path}")
+        try:
+            payload = asyncio.run(
+                self._module.call_tool(
+                    ToolCallRequest(tool_name=json["tool_name"], args=json.get("args", {})),
+                    None,
+                )
+            )
+            return _Response(200, _serialize_payload(payload))
+        except Exception as exc:
+            status = getattr(exc, "status_code", 500)
+            detail = getattr(exc, "detail", str(exc))
+            return _Response(status, {"detail": detail})
 
 @pytest.fixture(autouse=True)
 def reset_singletons():
@@ -73,8 +129,7 @@ def client():
     import tools.github_copilot_mcp as mod
     mod._github = _make_github_mock()
     mod._model = _make_model_mock()
-    from tools.github_copilot_mcp import app
-    return TestClient(app)
+    return _DirectClient(mod)
 
 
 # ---------------------------------------------------------------------------
@@ -88,7 +143,35 @@ class TestHealth:
         data = resp.json()
         assert "status" in data
         assert data["tool_count"] == 10
-        assert data["server"] == "github_copilot_mcp"
+        assert data["server"] == "aura-copilot"
+
+    def test_discovery_exposes_registry(self, client):
+        resp = client.get("/discovery")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["current_server"]["name"] == "aura-copilot"
+        assert "/discovery" in data["current_server"]["endpoints"]
+        assert data["tool_count"] == 10
+        assert any(server["name"] == "aura-skills" for server in data["servers"])
+
+    def test_registry_advertises_discovery(self):
+        copilot = get_registered_service("copilot")
+        assert "/discovery" in copilot["endpoints"]
+
+
+class TestPortResolution:
+    def test_get_copilot_port_prefers_env(self, monkeypatch):
+        import tools.github_copilot_mcp as mod
+
+        monkeypatch.setenv("COPILOT_MCP_PORT", "9123")
+        assert mod._get_copilot_port() == 9123
+
+    def test_get_copilot_port_uses_config_when_env_missing(self, monkeypatch):
+        import tools.github_copilot_mcp as mod
+
+        monkeypatch.delenv("COPILOT_MCP_PORT", raising=False)
+        with patch("core.config_manager.config.get_mcp_server_port", return_value=8123):
+            assert mod._get_copilot_port() == 8123
 
 
 # ---------------------------------------------------------------------------

@@ -162,6 +162,7 @@ def _add_common_flags(parser: argparse.ArgumentParser, *, include_max_cycles: bo
     parser.add_argument("--dry-run", dest="dry_run", action="store_true", help="Do not apply filesystem changes.")
     parser.add_argument("--decompose", action="store_true", help="Enable task decomposition mode.")
     parser.add_argument("--model", help="Override model name for this run.")
+    parser.add_argument("--anthropic-api-key", dest="anthropic_api_key", help="Override Anthropic API key for this run.")
     parser.add_argument("--beads", action="store_true", help="Enable BEADS gating for this invocation.")
     parser.add_argument("--no-beads", dest="no_beads", action="store_true", help="Disable BEADS gating for this invocation.")
     parser.add_argument("--beads-required", dest="beads_required", action="store_true", help="Require BEADS to allow execution for this invocation.")

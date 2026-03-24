@@ -60,6 +60,12 @@ os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 from fastapi import Depends, FastAPI, Header, HTTPException
 
 from core.logging_utils import log_json
+from core.mcp_contracts import (
+    build_discovery_payload,
+    build_health_payload,
+    build_tool_descriptors_from_schemas,
+)
+from core.mcp_registry import get_registered_service, list_registered_services
 from core.workflow_engine import (
     WorkflowDefinition,
     WorkflowStep,
@@ -280,9 +286,7 @@ _TOOL_SCHEMAS: Dict[str, Dict] = {
 
 
 def _build_descriptor(name: str) -> Dict:
-    schema = _TOOL_SCHEMAS[name]
-    return {"name": name, "description": schema["description"],
-            "inputSchema": schema["inputSchema"]}
+    return build_tool_descriptors_from_schemas(_TOOL_SCHEMAS, names=[name])[0]
 
 
 # ---------------------------------------------------------------------------
@@ -502,20 +506,31 @@ async def health(_: None = Depends(_check_auth)) -> Dict:
     engine = get_engine()
     execs = engine.list_executions()
     loops = engine.list_loops()
-    return {
-        "status": "ok",
-        "uptime_s": round(time.time() - _SERVER_START, 1),
-        "workflows_defined": len(engine.list_definitions()),
-        "executions_active": sum(1 for e in execs if e["status"] == "running"),
-        "executions_total": len(execs),
-        "loops_running": sum(1 for l in loops if l["status"] == "running"),
-        "loops_total": len(loops),
-    }
+    return build_health_payload(
+        server=get_registered_service("agentic_loop")["name"],
+        version="1.0.0",
+        tool_count=len(_TOOL_HANDLERS),
+        uptime_s=round(time.time() - _SERVER_START, 1),
+        workflows_defined=len(engine.list_definitions()),
+        executions_active=sum(1 for e in execs if e["status"] == "running"),
+        executions_total=len(execs),
+        loops_running=sum(1 for l in loops if l["status"] == "running"),
+        loops_total=len(loops),
+    )
+
+
+@app.get("/discovery")
+async def discovery(_: None = Depends(_check_auth)) -> Dict:
+    return build_discovery_payload(
+        current_server=get_registered_service("agentic_loop"),
+        servers=list_registered_services(),
+        tool_count=len(_TOOL_HANDLERS),
+    )
 
 
 @app.get("/tools")
 async def list_tools(_: None = Depends(_check_auth)) -> Dict:
-    return {"tools": [_build_descriptor(name) for name in _TOOL_SCHEMAS]}
+    return {"tools": build_tool_descriptors_from_schemas(_TOOL_SCHEMAS)}
 
 
 @app.get("/tool/{name}")

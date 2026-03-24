@@ -32,8 +32,7 @@ permissions:
   pull-requests: write
 
 env:
-  AURA_API_KEY: ${{ secrets.AURA_API_KEY }}
-  OPENAI_API_KEY: ${{ secrets.AURA_API_KEY }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
   AURA_MODEL: gpt-5.4
 
 jobs:
@@ -43,11 +42,7 @@ jobs:
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'aura-dev')) ||
-      (github.event_name == 'issue_comment' &&
-        contains(github.event.comment.body, '/aura') &&
-        (github.event.comment.author_association == 'OWNER' ||
-         github.event.comment.author_association == 'MEMBER' ||
-         github.event.comment.author_association == 'COLLABORATOR'))
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/aura'))
     outputs:
       task_description: ${{ steps.architect.outputs.task_description }}
       task_category: ${{ steps.router.outputs.category }}
@@ -60,23 +55,17 @@ jobs:
       - run: pip install openai pydantic
       - name: Extract task
         id: extract-task
-        env:
-          WF_EVENT_NAME: ${{ github.event_name }}
-          WF_INPUT_TASK: ${{ github.event.inputs.task }}
-          WF_COMMENT_BODY: ${{ github.event.comment.body }}
-          WF_ISSUE_TITLE: ${{ github.event.issue.title }}
         run: |
-          if [ "$WF_EVENT_NAME" = "workflow_dispatch" ]; then
-            TASK="$WF_INPUT_TASK"
-          elif [ "$WF_EVENT_NAME" = "issue_comment" ]; then
-            TASK=$(echo "$WF_COMMENT_BODY" | sed 's|^/aura[[:space:]]*||')
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TASK="${{ github.event.inputs.task }}"
+          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
+            TASK=$(echo "${{ github.event.comment.body }}" | sed 's|/aura ||')
           else
-            TASK="$WF_ISSUE_TITLE"
+            TASK="${{ github.event.issue.title }}"
           fi
-          DELIM="$(openssl rand -hex 16)"
-          echo "task<<${DELIM}" >> $GITHUB_OUTPUT
+          echo "task<<EOF" >> $GITHUB_OUTPUT
           echo "$TASK" >> $GITHUB_OUTPUT
-          echo "${DELIM}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
       - name: Architect - Analyze
         id: architect
         env:

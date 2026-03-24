@@ -341,6 +341,7 @@ jobs:
             const MAX_BODY_LENGTH = 60000;      // conservative limit below GitHub's comment size cap
             const MAX_SECTION_LENGTH = 15000;   // per-result cap to avoid any single huge section
 
+            const fs = require('fs');
             let body = '## Aura Dev Suite Results\n\n';
             const cat = process.env.TASK_CATEGORY || 'unknown';
             body += '**Category:** ' + cat + '\n\n';

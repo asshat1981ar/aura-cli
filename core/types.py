@@ -68,3 +68,45 @@ class DecisionLogEntry:
     cycle_id: str
     phase_outputs: Dict[str, Any]
     stop_reason: Optional[str] = None
+
+
+@dataclass
+class MCPServerConfig:
+    name: str
+    command: str
+    args: List[str] = field(default_factory=list)
+    port: Optional[int] = None
+    env: Dict[str, str] = field(default_factory=dict)
+    enabled: bool = True
+
+
+@dataclass
+class AgentSpec:
+    name: str
+    description: str
+    capabilities: List[str] = field(default_factory=list)
+    source: str = "local"  # "local" | "mcp"
+    mcp_server: Optional[str] = None  # name of MCPServerConfig if source="mcp"
+
+
+@dataclass
+class ExecutionContext:
+    project_root: str
+    env: Dict[str, str] = field(default_factory=dict)
+    workspace_id: Optional[str] = None
+
+
+@dataclass
+class TaskRequest:
+    task_id: str
+    agent_name: str
+    input_data: Dict[str, Any]
+    context: Optional[ExecutionContext] = None
+
+
+@dataclass
+class TaskResult:
+    task_id: str
+    status: str  # "success" | "failure" | "error"
+    output: Dict[str, Any]
+    error: Optional[str] = None

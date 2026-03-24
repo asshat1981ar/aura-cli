@@ -34,6 +34,8 @@ from agents.self_correction_agent import SelfCorrectionAgent
 from agents.code_search_agent import CodeSearchAgent
 from agents.investigation_agent import InvestigationAgent
 from agents.root_cause_analysis import RootCauseAnalysisAgent
+from agents.mcp_discovery_agent import MCPDiscoveryAgent
+from agents.mcp_health_agent import MCPHealthAgent
 
 
 class PlannerAdapter:
@@ -470,7 +472,8 @@ def default_agents(brain, model, context_manager=None, skills=None, health_monit
     critic = CriticAdapter(CriticAgent(brain, model))
     act = ActAdapter(CoderAgent(brain, model))
     sandbox = SandboxAdapter(sandbox_agent)
-    return {
+    
+    agent_dict = {
         # Core pipeline agents
         "ingest": IngestAgent(brain, context_manager=context_manager),
         "plan": planner,
@@ -491,4 +494,20 @@ def default_agents(brain, model, context_manager=None, skills=None, health_monit
         "code_search": CodeSearchAgent(vector_store=getattr(brain, 'vector_store', None) if brain else None),
         "investigation": InvestigationAgent(),
         "root_cause_analysis": RootCauseAnalysisAgent(),
+        "mcp_discovery": MCPDiscoveryAgent(),
+        "mcp_health": MCPHealthAgent(),
     }
+
+    # Register in typed registry
+    from core.mcp_agent_registry import agent_registry
+    from core.types import AgentSpec
+    for name, agent in agent_dict.items():
+        spec = AgentSpec(
+            name=name,
+            description=getattr(agent, "description", f"Local {name} agent"),
+            capabilities=[name],
+            source="local"
+        )
+        agent_registry.register(spec, overwrite=True)
+
+    return agent_dict

@@ -32,6 +32,7 @@ from core.cycle_outcome import CycleOutcome
 from core.hooks import HookEngine
 from core.phase_result import PhaseResult, ConfidenceRouter
 from core.quality_trends import QualityTrendAnalyzer
+from core.config_manager import config
 from core.capability_manager import (
     analyze_capability_needs,
     provision_capability_actions,
@@ -49,6 +50,9 @@ from core.file_tools import (
 from core.schema import validate_phase_output
 from core.skill_dispatcher import classify_goal, dispatch_skills
 from core.human_gate import HumanGate
+from core.types import TaskRequest, TaskResult, ExecutionContext
+from core.mcp_agent_registry import agent_registry
+from core.mcp_client import MCPAsyncClient
 from memory.controller import memory_controller, MemoryTier
 
 MAX_SANDBOX_RETRIES = 3
@@ -155,6 +159,7 @@ class LoopOrchestrator:
         self.policy = policy or Policy.from_config({})
         self.project_root = Path(project_root or ".")
         self.strict_schema = strict_schema
+        self.config = config
         self.debugger = debugger  # Optional DebuggerAgent for auto-recovery
         self.human_gate = HumanGate()
         self.auto_add_capabilities = auto_add_capabilities
@@ -435,11 +440,45 @@ class LoopOrchestrator:
             The dict returned by ``agent.run()``, or an empty dict ``{}`` when
             no agent is registered for *name*.
         """
+        # Emergency bypass (M5 rollback)
+        if self.config.get("force_legacy_orchestrator"):
+            agent = self.agents.get(name)
+            return agent.run(input_data) if agent else {}
+
         # Pre-phase hooks (guaranteed execution — cannot be bypassed by model)
         should_proceed, input_data = self.hook_engine.run_pre_hooks(name, input_data)
         if not should_proceed:
             log_json("WARN", "phase_blocked_by_hook", details={"phase": name})
             return {"_blocked_by_hook": True, "phase": name}
+
+        # M5-002, M5-003: Canary Waves - Route low-risk and core tooling to async path
+        canary_phases = ["mcp_discovery", "mcp_health", "code_search", "investigation"]
+        if name in canary_phases and self.config.get("enable_new_orchestrator"):
+             log_json("INFO", "orchestrator_canary_routing", details={"phase": name})
+             try:
+                 import anyio
+                 import asyncio
+                 req = TaskRequest(
+                     task_id=f"canary_{uuid.uuid4().hex[:8]}",
+                     agent_name=name,
+                     input_data=input_data,
+                     context=ExecutionContext(project_root=str(self.project_root))
+                 )
+                 
+                 async def call_dispatch():
+                     return await self._dispatch_task(req)
+
+                 try:
+                     asyncio.get_running_loop()
+                     task_res = anyio.from_thread.run(call_dispatch)
+                 except RuntimeError:
+                     task_res = anyio.run(call_dispatch)
+
+                 if task_res.status == "success":
+                     return task_res.output
+                 log_json("ERROR", "orchestrator_canary_failed", details={"phase": name, "error": task_res.error})
+             except Exception as e:
+                 log_json("ERROR", "orchestrator_canary_exception", details={"phase": name, "error": str(e)})
 
         agent = self.agents.get(name)
         if not agent:
@@ -447,10 +486,92 @@ class LoopOrchestrator:
 
         result = agent.run(input_data)
 
+        # Shadow mode comparison (M4-005, M5-005)
+        if self.config.get("new_orchestrator_shadow_mode"):
+            self._run_shadow_check(name, input_data, result)
+
         # Post-phase hooks (observational)
         self.hook_engine.run_post_hooks(name, result if isinstance(result, dict) else {})
 
         return result
+
+    def _run_shadow_check(self, name: str, input_data: Dict, sync_result: Dict):
+        """Execute the async pipeline in the background and compare results (M4-005)."""
+        import anyio
+        import asyncio
+        
+        async def perform_check():
+            req = TaskRequest(
+                task_id=f"shadow_{uuid.uuid4().hex[:8]}",
+                agent_name=name,
+                input_data=input_data,
+                context=ExecutionContext(project_root=str(self.project_root))
+            )
+            shadow_res = await self._dispatch_task(req)
+            
+            # Compare basic metadata
+            mismatch = False
+            if shadow_res.status != "success":
+                mismatch = True
+            elif set(sync_result.keys()) != set(shadow_res.output.keys()):
+                mismatch = True
+                
+            log_json("INFO", "orchestrator_shadow_comparison", details={
+                "phase": name,
+                "status": shadow_res.status,
+                "mismatch": mismatch,
+                "sync_keys": list(sync_result.keys()),
+                "shadow_keys": list(shadow_res.output.keys()) if shadow_res.status == "success" else []
+            })
+
+        try:
+            # Try to run in current loop or create one
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # We are in a sync method but maybe on an async thread? 
+                    # For shadow mode, we can block briefly or use a thread.
+                    anyio.from_thread.run(perform_check)
+                else:
+                    anyio.run(perform_check)
+            except RuntimeError:
+                anyio.run(perform_check)
+        except Exception as e:
+            log_json("WARN", "orchestrator_shadow_check_failed", details={"error": str(e)})
+
+    async def _dispatch_task(self, request: TaskRequest) -> TaskResult:
+        """Async resolution and invocation pipeline (M4-002)."""
+        import anyio
+        agent_spec = agent_registry.get_agent(request.agent_name)
+        
+        # Fallback to local agents if not in typed registry
+        if not agent_spec:
+            legacy_agent = self.agents.get(request.agent_name)
+            if not legacy_agent:
+                return TaskResult(task_id=request.task_id, status="error", output={}, error=f"Agent {request.agent_name} not found")
+            
+            try:
+                result = await anyio.to_thread.run_sync(legacy_agent.run, request.input_data)
+                return TaskResult(task_id=request.task_id, status="success", output=result)
+            except Exception as e:
+                return TaskResult(task_id=request.task_id, status="error", output={}, error=str(e))
+
+        if agent_spec.source == "mcp":
+            from core.mcp_registry import get_registered_service
+            try:
+                service = get_registered_service(agent_spec.mcp_server)
+                client = MCPAsyncClient(service["url"])
+                result = await client.call_tool(agent_spec.name, request.input_data)
+                return TaskResult(task_id=request.task_id, status="success", output=result)
+            except Exception as e:
+                return TaskResult(task_id=request.task_id, status="error", output={}, error=str(e))
+        else:
+            legacy_agent = self.agents.get(request.agent_name)
+            try:
+                result = await anyio.to_thread.run_sync(legacy_agent.run, request.input_data)
+                return TaskResult(task_id=request.task_id, status="success", output=result)
+            except Exception as e:
+                return TaskResult(task_id=request.task_id, status="error", output={}, error=str(e))
 
     def _snapshot_file_state(self, file_path: str) -> Dict:
         """Capture a restorable snapshot of a target file before mutation."""
@@ -1100,12 +1221,21 @@ class LoopOrchestrator:
         self._notify_ui("on_phase_complete", "ingest", (time.time() - t0) * 1000)
         if "bundle" in context:
             self._notify_ui("on_context_assembled", context["bundle"])
-        
+
         errors = validate_phase_output("context", context)
         if errors:
             log_json("ERROR", "phase_schema_invalid", details={"phase": "context", "errors": errors})
         phase_outputs["context"] = context
         return context
+
+    def _run_mcp_discovery_phase(self, phase_outputs: Dict) -> Dict:
+        """Section 1.5: MCP DISCOVERY."""
+        self._notify_ui("on_phase_start", "mcp_discovery")
+        t0 = time.time()
+        mcp_discovery_output = self._run_phase("mcp_discovery", {"project_root": str(self.project_root)})
+        self._notify_ui("on_phase_complete", "mcp_discovery", (time.time() - t0) * 1000)
+        phase_outputs["mcp_discovery"] = mcp_discovery_output
+        return mcp_discovery_output
 
     def _dispatch_skills(self, goal_type: str, pipeline_cfg: Any, phase_outputs: Dict) -> Dict:
         """Section 2: SKILL DISPATCH."""
@@ -1457,6 +1587,11 @@ class LoopOrchestrator:
                  stop_reason="INVALID_OUTPUT",
              )
 
+        # Autonomous MCP capability injection
+        mcp_discovery = self._run_mcp_discovery_phase(phase_outputs)
+        if mcp_discovery.get("status") == "success" and mcp_discovery.get("discovered"):
+            log_json("INFO", "mcp_servers_discovered", details={"count": len(mcp_discovery["discovered"])})
+
         skill_context = self._dispatch_skills(goal_type, pipeline_cfg, phase_outputs)
 
         if self._beads_gate_applies():
@@ -1642,29 +1777,42 @@ class LoopOrchestrator:
         history = []
         stop_reason = ""
         started_at = time.time()
-        for _ in range(max_cycles):
-            entry = self.run_cycle(goal, dry_run=dry_run)
-            history.append(entry)
-            if entry.get("stop_reason"):
-                stop_reason = entry["stop_reason"]
-                break
-            stop_reason = self.policy.evaluate(history, entry.get("phase_outputs", {}).get("verification", {}), started_at=started_at)
-            if stop_reason:
-                entry["stop_reason"] = stop_reason
-                self._refresh_cycle_summary(entry)
-                break
-        if not stop_reason and history:
-            history[-1]["stop_reason"] = "MAX_CYCLES"
-            self._refresh_cycle_summary(history[-1])
+        try:
+            for _ in range(max_cycles):
+                entry = self.run_cycle(goal, dry_run=dry_run)
+                history.append(entry)
+                if entry.get("stop_reason"):
+                    stop_reason = entry["stop_reason"]
+                    break
+                stop_reason = self.policy.evaluate(history, entry.get("phase_outputs", {}).get("verification", {}), started_at=started_at)
+                if stop_reason:
+                    entry["stop_reason"] = stop_reason
+                    self._refresh_cycle_summary(entry)
+                    break
+            if not stop_reason and history:
+                history[-1]["stop_reason"] = "MAX_CYCLES"
+                self._refresh_cycle_summary(history[-1])
 
-        # If goal was a bead and we passed, close it
-        if stop_reason == "PASS" and not dry_run:
-            bead_id = self._parse_bead_id(goal)
-            if bead_id:
-                self._close_bead(bead_id, reason="AURA successfully completed the goal.")
+            # If goal was a bead and we passed, close it
+            if stop_reason == "PASS" and not dry_run:
+                bead_id = self._parse_bead_id(goal)
+                if bead_id:
+                    self._close_bead(bead_id, reason="AURA successfully completed the goal.")
 
-        return {
-            "goal": goal,
-            "stop_reason": stop_reason or "MAX_CYCLES",
-            "history": history,
-        }
+            return {
+                "goal": goal,
+                "stop_reason": stop_reason or "MAX_CYCLES",
+                "history": history,
+            }
+        finally:
+            # M7-003: Cleanup async resources
+            import anyio
+            try:
+                anyio.run(self.shutdown)
+            except Exception:
+                pass
+
+    async def shutdown(self):
+        """Shut down the orchestrator and clean up resources (M7-003)."""
+        await MCPAsyncClient.close_all()
+        log_json("INFO", "orchestrator_shutdown_complete")

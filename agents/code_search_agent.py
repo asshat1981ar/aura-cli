@@ -1,4 +1,3 @@
-import logging
 from core.logging_utils import log_json
 
 class CodeSearchAgent:
@@ -28,6 +27,19 @@ class CodeSearchAgent:
             
         valid_results = self.validate_results(results, min_score)
         return self._present_results(valid_results)
+
+    def run(self, input_data: dict) -> dict:
+        """Uniform execution interface for the orchestrator loop."""
+        query_str = input_data.get("query", "")
+        limit = input_data.get("limit", 5)
+        min_score = input_data.get("min_score", 0.5)
+        
+        results = self.query(query_str, limit=limit, min_score=min_score)
+        return {
+            "status": "success",
+            "query": query_str,
+            "results": results
+        }
 
     def refine_query(self, failure_data: str) -> str:
         """

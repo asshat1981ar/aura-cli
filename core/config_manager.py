@@ -66,6 +66,10 @@ _KEY_VALIDATORS = {
     "auto_provision_mcp": lambda k, v: _validate_bool(k, v),
     "auto_start_mcp_servers": lambda k, v: _validate_bool(k, v),
     "auto_backfill_coverage": lambda k, v: _validate_bool(k, v),
+    "enable_mcp_registry": lambda k, v: _validate_bool(k, v),
+    "enable_new_orchestrator": lambda k, v: _validate_bool(k, v),
+    "force_legacy_orchestrator": lambda k, v: _validate_bool(k, v),
+    "new_orchestrator_shadow_mode": lambda k, v: _validate_bool(k, v),
     "reliability_threshold": lambda k, v: _validate_float_range(k, v, 0.0, 100.0),
     "gemini_cli_path":  lambda k, v: _validate_string(k, v),
     "codex_cli_path":   lambda k, v: _validate_string(k, v),
@@ -99,6 +103,10 @@ DEFAULT_CONFIG = {
     "auto_provision_mcp": False,
     "auto_start_mcp_servers": False,
     "auto_backfill_coverage": True,
+    "enable_mcp_registry": True,
+    "enable_new_orchestrator": True,
+    "force_legacy_orchestrator": False,
+    "new_orchestrator_shadow_mode": False,
     "reliability_threshold": 80.0,
     "gemini_cli_path": "/data/data/com.termux/files/usr/bin/gemini",
     "codex_cli_path": "/data/data/com.termux/files/usr/bin/codex",
@@ -213,6 +221,10 @@ class ConfigManager:
             "MCP_SERVER_URL": "mcp_server_url",
             "AURA_LOCAL_MODEL_COMMAND": "local_model_command",
             "AURA_LLM_TIMEOUT": "llm_timeout",
+            "AURA_ENABLE_MCP_REGISTRY": "enable_mcp_registry",
+            "AURA_ENABLE_NEW_ORCHESTRATOR": "enable_new_orchestrator",
+            "AURA_FORCE_LEGACY_ORCHESTRATOR": "force_legacy_orchestrator",
+            "AURA_NEW_ORCHESTRATOR_SHADOW_MODE": "new_orchestrator_shadow_mode",
         }
         
         for env_key, config_key in env_mappings.items():

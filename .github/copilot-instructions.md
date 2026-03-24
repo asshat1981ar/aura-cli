@@ -36,12 +36,13 @@ python3 -m pytest tests/test_file_tools.py::TestClassName::test_method_name
 
 # Start the CLI
 python3 main.py --help
+aura help
 
 # Add a goal and run it non-interactively
-python3 main.py --add-goal "Fix the goal queue" --run-goals
+python3 main.py goal add "Fix the goal queue" --run
 
 # Run a one-off goal (bypasses queue)
-python3 main.py --goal "Refactor core/model_adapter.py"
+python3 main.py goal once "Refactor core/model_adapter.py"
 
 # Dry run (no file writes, no memory writes)
 ./run_aura.sh --dry-run
@@ -67,15 +68,18 @@ uvicorn tools.github_copilot_mcp:app --port 8007
 Constructs all shared objects — `GoalQueue`, `ModelAdapter`, `Brain`, `VectorStore`, `RouterAgent`, `DebuggerAgent`, `PlannerAgent`, `LoopOrchestrator`, `GitTools` — and returns them as a dict.
 
 **Orchestration pipeline** (`core/orchestrator.py::LoopOrchestrator`):
-Each `run_cycle()` call executes these phases in order, with schema validation after each:
+Each `run_cycle()` call executes the current canonical pipeline in order, with schema validation after phase boundaries:
 
 1. `ingest` — gathers project context and memory hints
-2. `plan` — `PlannerAgent` produces a list of steps
-3. `critique` — `CriticAgent` flags issues in the plan
-4. `synthesize` — `SynthesizerAgent` builds a `task_bundle` from plan + critique
-5. `act` — `CoderAgent` generates code; on schema failure, `DebuggerAgent` retries once
-6. `verify` — `VerifierAgent` checks the change set
-7. `reflect` — `ReflectorAgent` records a cycle summary to `MemoryStore`
+2. `skill dispatch` — adaptive static-analysis and capability routing
+3. `plan` — `PlannerAgent` produces a list of steps
+4. `critique` — `CriticAgent` flags issues in the plan
+5. `synthesize` — `SynthesizerAgent` builds a `task_bundle` from plan + critique
+6. `act` — `CoderAgent` generates code; on schema failure, `DebuggerAgent` retries once
+7. `sandbox` — generated code is exercised in isolation before apply
+8. `apply` — validated file changes are written atomically
+9. `verify` — `VerifierAgent` checks the applied change set
+10. `reflect` — `ReflectorAgent` records a cycle summary to `MemoryStore`
 
 `HybridClosedLoop` (`core/hybrid_loop.py`) is a **legacy wrapper** around `LoopOrchestrator`; prefer `LoopOrchestrator` directly.
 
@@ -98,7 +102,7 @@ Applies changes using `{file_path, old_code, new_code, overwrite_file}`. When `o
 | `Brain` | `memory/brain_v2.db` (SQLite) | General memories, weaknesses, vector embeddings, response cache |
 | `VectorStore` | `Brain`'s `vector_store_data` table | Semantic retrieval |
 | `MemoryStore` | `memory/store/` (files) | Per-cycle summaries written by `ReflectorAgent` |
-| `GoalQueue` | `memory/goal_queue_v2.json` | Pending and in-progress goals |
+| `GoalQueue` | `memory/goal_queue.json` | Pending and in-progress goals |
 
 ## HTTP API
 

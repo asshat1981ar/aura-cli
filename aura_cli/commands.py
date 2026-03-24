@@ -33,6 +33,37 @@ def _handle_doctor(project_root: Path | None = None):
         capability_check=capability_doctor_check,
     )
 
+def _handle_readiness():
+    """M7-004: Validate async runtime and MCP registry health."""
+    import anyio
+    from core.mcp_health import check_all_mcp_health, get_health_summary
+    from core.mcp_agent_registry import agent_registry
+    from core.config_manager import config
+    
+    print("\n--- AURA Readiness Check (V2) ---")
+    print(f"Async Orchestrator: {'ENABLED' if config.get('enable_new_orchestrator') else 'DISABLED'}")
+    print(f"Typed Registry:     {'ENABLED' if config.get('enable_mcp_registry') else 'DISABLED'}")
+    
+    results = anyio.run(check_all_mcp_health)
+    summary = get_health_summary(results)
+    
+    print(f"\nMCP Servers: {summary['healthy_count']}/{summary['total_servers']} healthy")
+    for res in results:
+        status_icon = "✅" if res["status"] == "healthy" else "❌"
+        print(f"  {status_icon} {res['name']:<15} (Port: {res.get('port', 'N/A')})")
+        
+    agents = agent_registry.list_agents()
+    print(f"\nRegistered Agents: {len(agents)}")
+    local_count = sum(1 for a in agents if a.source == "local")
+    mcp_count = sum(1 for a in agents if a.source == "mcp")
+    print(f"  - Local: {local_count}")
+    print(f"  - MCP:   {mcp_count}")
+    
+    if summary["all_healthy"]:
+        print("\n✅ System is READY for autonomous operation.\n")
+    else:
+        print("\n⚠️  System is DEGRADED. Check unhealthy MCP servers.\n")
+
 def _handle_clear():
     import os
     os.system('clear' if os.name == 'posix' else 'cls')

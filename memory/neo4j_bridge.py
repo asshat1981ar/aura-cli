@@ -6,7 +6,7 @@ graceful degradation when Neo4j is unavailable.
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 
 class _CircuitBreaker:
@@ -124,7 +124,7 @@ class Neo4jBridge:
                 records = [dict(record) for record in result]
                 self._breaker.record_success()
                 return records
-        except Exception as exc:
+        except Exception:
             self._breaker.record_failure()
             return []
 

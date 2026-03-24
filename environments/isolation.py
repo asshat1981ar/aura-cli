@@ -100,7 +100,7 @@ def teardown_workspace(workspace: Path, *, preserve_secrets: bool = True) -> dic
         return {"status": "not_found", "path": str(workspace)}
 
     if preserve_secrets:
-        secrets_dir = workspace / "secrets"
+        workspace / "secrets"
         # Remove everything except secrets
         for item in workspace.iterdir():
             if item.name == "secrets":

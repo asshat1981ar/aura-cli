@@ -1,99 +1,99 @@
 {
   "feature": {
     "dependency_analyzer": {
-      "ema": 0.9698764669218108,
-      "runs": 26,
+      "ema": 0.9815003852483571,
+      "runs": 29,
       "suspended": false
     },
     "symbol_indexer": {
-      "ema": 0.8406858501385945,
-      "runs": 26,
+      "ema": 0.8469810727163642,
+      "runs": 29,
       "suspended": false
     },
     "complexity_scorer": {
-      "ema": 0.9770081264697927,
-      "runs": 26,
+      "ema": 0.9858801156682615,
+      "runs": 29,
       "suspended": false
     },
     "architecture_validator": {
-      "ema": 0.6111759793949364,
-      "runs": 26,
+      "ema": 0.6207549483459154,
+      "runs": 29,
       "suspended": false
     },
     "api_contract_validator": {
-      "ema": 0.7830683150132717,
-      "runs": 26,
+      "ema": 0.7896018289575254,
+      "runs": 29,
       "suspended": false
     }
   },
   "bug_fix": {
     "symbol_indexer": {
-      "ema": 0.8567631086884724,
-      "runs": 44,
+      "ema": 0.8569933661522795,
+      "runs": 66,
       "suspended": false
     },
     "type_checker": {
       "ema": 0.5,
-      "runs": 44,
+      "runs": 66,
       "suspended": false
     },
     "git_history_analyzer": {
-      "ema": 0.999607894679087,
-      "runs": 44,
+      "ema": 0.9999890195762247,
+      "runs": 66,
       "suspended": false
     },
     "error_pattern_matcher": {
-      "ema": 0.599921578935817,
-      "runs": 44,
+      "ema": 0.5999978039152446,
+      "runs": 66,
       "suspended": false
     },
     "linter_enforcer": {
-      "ema": 0.8057600315436011,
-      "runs": 44,
+      "ema": 0.8059932799806493,
+      "runs": 66,
       "suspended": false
     }
   },
   "default": {
     "linter_enforcer": {
-      "ema": 0.8053898951803009,
-      "runs": 45,
+      "ema": 0.8056253193776023,
+      "runs": 48,
       "suspended": false
     },
     "symbol_indexer": {
-      "ema": 0.856752165446236,
-      "runs": 45,
+      "ema": 0.8568477986046696,
+      "runs": 48,
       "suspended": false
     },
     "ast_analyzer": {
-      "ema": 0.886855355938985,
-      "runs": 32,
+      "ema": 0.887682920466029,
+      "runs": 35,
       "suspended": false
     }
   },
   "refactor": {
     "tech_debt_quantifier": {
-      "ema": 0.7947480394798305,
-      "runs": 14,
+      "ema": 0.8517054585241776,
+      "runs": 16,
       "suspended": false
     },
     "complexity_scorer": {
-      "ema": 0.9077415864786984,
-      "runs": 14,
+      "ema": 0.9333432962308595,
+      "runs": 16,
       "suspended": false
     },
     "code_clone_detector": {
-      "ema": 0.7484991622571643,
-      "runs": 14,
+      "ema": 0.8182906447308013,
+      "runs": 16,
       "suspended": false
     },
     "refactoring_advisor": {
-      "ema": 0.8864053229082726,
-      "runs": 14,
+      "ema": 0.917927845801227,
+      "runs": 16,
       "suspended": false
     },
     "symbol_indexer": {
-      "ema": 0.8680590864786983,
-      "runs": 14,
+      "ema": 0.8649901899808594,
+      "runs": 16,
       "suspended": false
     }
   }

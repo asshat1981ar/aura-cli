@@ -13,7 +13,8 @@ Developer entry points:
 - Active PR reviewer summary: `docs/ACTIVE_PR_REVIEWER_SUMMARY.md`
 - Sweep artifact generator: `python3 scripts/generate_active_sweep_artifacts.py --pr <number>`
 - Sweep artifact drift check: `python3 scripts/generate_active_sweep_artifacts.py --pr <number> --check`
-- Primary entrypoint: `main.py`
+- Canonical runtime entrypoint: installed `aura` console script → `aura_cli.cli_main:main`
+- Developer shim: `main.py` (lightweight wrapper that delegates to `aura_cli.cli_main.main()`)
 - Shell wrapper: `run_aura.sh`
 
 ## Sweep Artifact Generator

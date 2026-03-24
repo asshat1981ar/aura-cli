@@ -1,6 +1,5 @@
 import json
 import re
-from typing import Optional
 from core.logging_utils import log_json
 
 class SelfCorrectionAgent:

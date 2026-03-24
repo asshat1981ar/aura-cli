@@ -5,9 +5,8 @@ HTTP when the MCP server is not available.
 """
 from __future__ import annotations
 
-import json
 import time
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 
 class NotificationAgentAdapter:

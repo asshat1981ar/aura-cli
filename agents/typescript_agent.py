@@ -6,7 +6,6 @@ and uses api_contract_validator and schema_validator skills.
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 

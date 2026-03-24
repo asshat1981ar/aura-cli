@@ -219,7 +219,7 @@ def _alert_list(args: Dict) -> Any:
         if not recent:
             continue
 
-        avg = sum(recent) / len(recent)
+        sum(recent) / len(recent)
         max_val = max(recent)
         min_val = min(recent)
 

@@ -357,6 +357,9 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
                 if member.is_dir():
                     out.mkdir(parents=True, exist_ok=True)
                     continue
+                if member.file_size > MAX_READ_BYTES:
+                    skipped.append(f"{member.filename} (too large)")
+                    continue
                 out.parent.mkdir(parents=True, exist_ok=True)
                 out.write_bytes(zf.read(member))
         return {"data": {"dest": str(dest_str), "skipped": skipped}}

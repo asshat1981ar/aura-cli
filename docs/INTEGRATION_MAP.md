@@ -140,6 +140,37 @@ still exists, but the active runtime path for CLI/server/operator flows is the
 Shared operator-facing summaries are normalized in
 [core/operator_runtime.py](../core/operator_runtime.py).
 
+## MCP Service Architecture
+
+The repository now has a small shared MCP architecture layer for keeping
+service metadata and tool contracts aligned across multiple FastAPI surfaces.
+
+### Shared MCP architecture modules
+
+- [core/mcp_contracts.py](../core/mcp_contracts.py)
+  builds canonical tool descriptors, input schemas, health payloads, and
+  discovery payloads.
+- [core/mcp_registry.py](../core/mcp_registry.py)
+  defines the registered AURA MCP-compatible HTTP services (`aura-dev-tools`,
+  `aura-skills`, `aura-control`, `aura-agentic-loop`, `aura-copilot`) along
+  with ports, auth env vars, endpoints, and capabilities.
+- [core/ai_environment_registry.py](../core/ai_environment_registry.py)
+  defines isolated runtime environments for `gemini-cli`, `claude-code`, and
+  `codex-cli`.
+- [core/mcp_architecture.py](../core/mcp_architecture.py)
+  exposes routing, observability, and knowledge-backend metadata used by the
+  dev-tools API architecture snapshot.
+
+### Current discovery-enabled services
+
+- [aura_cli/server.py](../aura_cli/server.py)
+  exposes `/discovery`, `/environments`, and `/architecture` in addition to the
+  existing dev-tools API routes.
+- [tools/aura_mcp_skills_server.py](../tools/aura_mcp_skills_server.py)
+  exposes `/discovery` alongside `/tools`, `/call`, and `/skill/{name}`.
+- [tools/github_copilot_mcp.py](../tools/github_copilot_mcp.py)
+  exposes `/discovery` alongside its Copilot workflow tools.
+
 ### Shared summary helpers
 
 - `build_queue_summary(...)`

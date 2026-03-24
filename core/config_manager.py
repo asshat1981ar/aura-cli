@@ -1,5 +1,6 @@
 import os
 import json
+import copy
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 from core.logging_utils import log_json
@@ -52,9 +53,10 @@ _KEY_VALIDATORS = {
     "dry_run":          lambda k, v: _validate_bool(k, v),
     "decompose":        lambda k, v: _validate_bool(k, v),
     "strict_schema":    lambda k, v: _validate_bool(k, v),
-    "model_name":       lambda k, v: _validate_string(k, v),
+    "model_name":   lambda k, v: _validate_string(k, v),
     "api_key":          lambda k, v: _validate_string(k, v),
     "openai_api_key":   lambda k, v: _validate_string(k, v),
+    "anthropic_api_key": lambda k, v: _validate_string(k, v),
     "memory_store_path": lambda k, v: _validate_string(k, v),
     "brain_db_path":    lambda k, v: _validate_string(k, v),
     "goal_queue_path":  lambda k, v: _validate_string(k, v),
@@ -64,6 +66,10 @@ _KEY_VALIDATORS = {
     "auto_provision_mcp": lambda k, v: _validate_bool(k, v),
     "auto_start_mcp_servers": lambda k, v: _validate_bool(k, v),
     "auto_backfill_coverage": lambda k, v: _validate_bool(k, v),
+    "enable_mcp_registry": lambda k, v: _validate_bool(k, v),
+    "enable_new_orchestrator": lambda k, v: _validate_bool(k, v),
+    "force_legacy_orchestrator": lambda k, v: _validate_bool(k, v),
+    "new_orchestrator_shadow_mode": lambda k, v: _validate_bool(k, v),
     "reliability_threshold": lambda k, v: _validate_float_range(k, v, 0.0, 100.0),
     "gemini_cli_path":  lambda k, v: _validate_string(k, v),
     "codex_cli_path":   lambda k, v: _validate_string(k, v),
@@ -77,6 +83,7 @@ DEFAULT_CONFIG = {
     "model_name": "google/gemini-2.0-flash-exp:free",
     "api_key": None,
     "openai_api_key": None,
+    "anthropic_api_key": None,
     "dry_run": False,
     "decompose": False,
     "max_iterations": 10,
@@ -96,6 +103,10 @@ DEFAULT_CONFIG = {
     "auto_provision_mcp": False,
     "auto_start_mcp_servers": False,
     "auto_backfill_coverage": True,
+    "enable_mcp_registry": True,
+    "enable_new_orchestrator": True,
+    "force_legacy_orchestrator": False,
+    "new_orchestrator_shadow_mode": False,
     "reliability_threshold": 80.0,
     "gemini_cli_path": "/data/data/com.termux/files/usr/bin/gemini",
     "codex_cli_path": "/data/data/com.termux/files/usr/bin/codex",
@@ -203,12 +214,17 @@ class ConfigManager:
             "OPENROUTER_API_KEY": "api_key",
             "AURA_API_KEY": "api_key",
             "OPENAI_API_KEY": "openai_api_key",
+            "ANTHROPIC_API_KEY": "anthropic_api_key",
             "GEMINI_CLI_PATH": "gemini_cli_path",
             "CODEX_CLI_PATH": "codex_cli_path",
             "COPILOT_CLI_PATH": "copilot_cli_path",
             "MCP_SERVER_URL": "mcp_server_url",
             "AURA_LOCAL_MODEL_COMMAND": "local_model_command",
             "AURA_LLM_TIMEOUT": "llm_timeout",
+            "AURA_ENABLE_MCP_REGISTRY": "enable_mcp_registry",
+            "AURA_ENABLE_NEW_ORCHESTRATOR": "enable_new_orchestrator",
+            "AURA_FORCE_LEGACY_ORCHESTRATOR": "force_legacy_orchestrator",
+            "AURA_NEW_ORCHESTRATOR_SHADOW_MODE": "new_orchestrator_shadow_mode",
         }
         
         for env_key, config_key in env_mappings.items():
@@ -279,7 +295,7 @@ class ConfigManager:
         env_config = self._load_from_env()
         
         # Merge hierarchy: Defaults < JSON < ENV < Overrides
-        merged = DEFAULT_CONFIG.copy()
+        merged = copy.deepcopy(DEFAULT_CONFIG)
         
         # Deep merge for nested config groups to preserve defaults if partial override
         if "beads" in self.file_config:
@@ -447,6 +463,17 @@ class ConfigManager:
             new_openai = input(f"OpenAI API Key (optional){openai_hint} (leave blank to skip): ").strip()
             if new_openai:
                 self.file_config["openai_api_key"] = new_openai
+
+            # 2b. Anthropic API Key (optional)
+            current_anthropic = self.get("anthropic_api_key")
+            if current_anthropic:
+                anthropic_hint = f" [{current_anthropic[:4]}...{current_anthropic[-4:]}]"
+            else:
+                anthropic_hint = ""
+            
+            new_anthropic = input(f"Anthropic API Key (optional){anthropic_hint} (leave blank to skip): ").strip()
+            if new_anthropic:
+                self.file_config["anthropic_api_key"] = new_anthropic
 
             # 3. Default Model
             current_model = self.get("model_name")

@@ -77,6 +77,13 @@ class GoalQueue:
         """
         return len(self.queue) > 0
 
+    def clear(self):
+        """
+        Clears all goals from the queue and persists.
+        """
+        self.queue.clear()
+        self._save_queue()
+
     def _save_queue(self):
         """
         Persists the current state of the goal queue to the configured JSON file.

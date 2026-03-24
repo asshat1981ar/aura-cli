@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "skills": {
+    "Hook Development": {
+      "source": "smithery.ai",
+      "sourceType": "well-known",
+      "computedHash": "a1721df65785b6c0439d4326cdee0cb2b6aa98de09fc98463afc3e040fe00ce9"
+    },
+    "github-actions-templates": {
+      "source": "smithery.ai",
+      "sourceType": "well-known",
+      "computedHash": "8604814828637308a8cdc45c53e647f0029395328184937312330e4b8e8c587f"
+    },
+    "knowledge-synthesis": {
+      "source": "smithery.ai",
+      "sourceType": "well-known",
+      "computedHash": "f29d24bcd35f531c539a1f67f5cee3a525466ce9d10cffa53524a02fe4506feb"
+    }
+  }
+}

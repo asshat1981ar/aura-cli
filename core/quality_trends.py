@@ -9,6 +9,8 @@ import time
 from collections import deque
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
+
+from core.investigate_test_drop import investigate_test_count_drop
 from core.logging_utils import log_json
 
 @dataclass
@@ -172,12 +174,18 @@ class QualityTrendAnalyzer:
             prev = list(self.snapshots)[-2]
             test_delta = snapshot.test_count - prev.test_count
             if test_delta < self.thresholds["min_test_count_drop"]:
+                investigation = investigate_test_count_drop(
+                    prev.test_count,
+                    snapshot.test_count,
+                    goal=snapshot.goal or None,
+                    verification={"status": snapshot.verify_status},
+                )
                 alerts.append(TrendAlert(
                     alert_type="regression", metric="test_count",
                     current_value=snapshot.test_count, previous_value=prev.test_count,
                     threshold=self.thresholds["min_test_count_drop"],
-                    severity="medium",
-                    suggested_goal=f"Investigate test count drop: {prev.test_count} -> {snapshot.test_count}",
+                    severity=investigation["severity"],
+                    suggested_goal=investigation["suggested_goal"],
                 ))
 
         # Consecutive failure detection

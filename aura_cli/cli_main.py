@@ -40,7 +40,7 @@ from core.runtime_auth import (
 )
 
 from core.task_handler import _check_project_writability, run_goals_loop
-from aura_cli.commands import _handle_add, _handle_run, _handle_status, _handle_exit, _handle_help, _handle_doctor, _handle_clear
+from aura_cli.commands import _handle_add, _handle_run, _handle_status, _handle_exit, _handle_help, _handle_doctor, _handle_readiness, _handle_clear
 from aura_cli.cli_options import (
     CLIParseError,
     attach_cli_warnings,
@@ -447,8 +447,13 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
         scope=str(beads_config.get("scope", "goal_run")),
     )
 
+    agents = default_agents(brain_instance, model_adapter, context_manager=context_manager)
+    telemetry_agent = agents.get("telemetry")
+    if telemetry_agent:
+        model_adapter.set_telemetry_agent(telemetry_agent)
+
     orchestrator = LoopOrchestrator(
-        agents=default_agents(brain_instance, model_adapter, context_manager=context_manager),
+        agents=agents,
         memory_store=memory_store,
         policy=Policy.from_config(copy.deepcopy(runtime_config)),
         project_root=project_root,
@@ -521,11 +526,45 @@ def _resolve_dispatch_action(parsed) -> str:
     return "interactive"
 
 
+def _resolve_beads_runtime_override(args) -> tuple[dict[str, object] | None, dict[str, object] | None]:
+    beads_config = dict(config.get("beads", DEFAULT_CONFIG["beads"]) or {})
+    beads_override_requested = False
+
+    for arg_name, updates in (
+        ("beads", {"enabled": True}),
+        ("no_beads", {"enabled": False}),
+        ("beads_required", {"enabled": True, "required": True}),
+        ("beads_optional", {"enabled": True, "required": False}),
+    ):
+        if getattr(args, arg_name, False):
+            beads_config.update(updates)
+            beads_override_requested = True
+
+    if not beads_override_requested:
+        return None, None
+
+    beads_cli_override = {
+        "source": "cli",
+        "enabled": bool(beads_config.get("enabled", True)),
+        "required": bool(beads_config.get("required", True)),
+    }
+    return beads_config, beads_cli_override
+
+
+def _resolve_runtime_mode(action: str, args) -> str | None:
+    if action in {"goal_status", "goal_add", "interactive"}:
+        return "queue"
+    if action == "goal_once" and getattr(args, "dry_run", False):
+        return "lean"
+    return None
+
+
 def _prepare_runtime_context(ctx: DispatchContext) -> int | None:
     if ctx.runtime is not None:
         return None
 
     args = ctx.args
+    action = _resolve_dispatch_action(ctx.parsed)
     overrides: dict[str, object] = {}
     if getattr(args, "dry_run", False):
         overrides["dry_run"] = True
@@ -533,37 +572,17 @@ def _prepare_runtime_context(ctx: DispatchContext) -> int | None:
         overrides["decompose"] = True
     if getattr(args, "model", None):
         overrides["model_name"] = args.model
+    if getattr(args, "anthropic_api_key", None):
+        overrides["anthropic_api_key"] = args.anthropic_api_key
 
-    beads_config = dict(config.get("beads", DEFAULT_CONFIG["beads"]) or {})
-    beads_override_requested = False
-    beads_cli_override: dict[str, object] | None = None
-    if getattr(args, "beads", False):
-        beads_config["enabled"] = True
-        beads_override_requested = True
-    if getattr(args, "no_beads", False):
-        beads_config["enabled"] = False
-        beads_override_requested = True
-    if getattr(args, "beads_required", False):
-        beads_config["enabled"] = True
-        beads_config["required"] = True
-        beads_override_requested = True
-    if getattr(args, "beads_optional", False):
-        beads_config["enabled"] = True
-        beads_config["required"] = False
-        beads_override_requested = True
-    if beads_override_requested:
+    beads_config, beads_cli_override = _resolve_beads_runtime_override(args)
+    if beads_config is not None:
         overrides["beads"] = beads_config
-        beads_cli_override = {
-            "source": "cli",
-            "enabled": bool(beads_config.get("enabled", True)),
-            "required": bool(beads_config.get("required", True)),
-        }
         overrides["beads_cli_override"] = beads_cli_override
 
-    if _resolve_dispatch_action(ctx.parsed) in {"goal_status", "goal_add", "interactive"}:
-        overrides["runtime_mode"] = "queue"
-    elif _resolve_dispatch_action(ctx.parsed) == "goal_once" and getattr(args, "dry_run", False):
-        overrides["runtime_mode"] = "lean"
+    runtime_mode = _resolve_runtime_mode(action, args)
+    if runtime_mode is not None:
+        overrides["runtime_mode"] = runtime_mode
 
     ctx.runtime = ctx.runtime_factory(ctx.project_root, overrides=overrides or None)
     log_json("INFO", "aura_cli_online", details={"dry_run_mode": getattr(args, 'dry_run', False)})
@@ -596,7 +615,13 @@ def _handle_doctor_dispatch(ctx: DispatchContext) -> int:
     return 0
 
 
-def _handle_bootstrap_dispatch(_ctx: DispatchContext) -> int:
+def _handle_readiness_dispatch(ctx: DispatchContext) -> int:
+    _handle_readiness()
+    return 0
+
+
+def _handle_bootstrap_dispatch(ctx: DispatchContext) -> int:
+
     config.interactive_bootstrap()
     return 0
 
@@ -710,8 +735,7 @@ def _handle_queue_list_dispatch(ctx: DispatchContext) -> int:
 def _handle_queue_clear_dispatch(ctx: DispatchContext) -> int:
     goal_queue = ctx.runtime["goal_queue"]
     count = len(goal_queue.queue)
-    goal_queue.queue = []
-    goal_queue._save()
+    goal_queue.clear()
     if getattr(ctx.args, "json", False):
         _print_json_payload({"cleared_count": count}, parsed=ctx.parsed, indent=2)
     else:
@@ -1073,6 +1097,7 @@ COMMAND_DISPATCH_REGISTRY = {
     "json_help": _dispatch_rule("json_help", _handle_json_help_dispatch),
     "help": _dispatch_rule("help", _handle_help_dispatch),
     "doctor": _dispatch_rule("doctor", _handle_doctor_dispatch),
+    "readiness": _dispatch_rule("readiness", _handle_readiness_dispatch),
     "bootstrap": _dispatch_rule("bootstrap", _handle_bootstrap_dispatch),
     "show_config": _dispatch_rule("show_config", _handle_show_config_dispatch),
     "contract_report": _dispatch_rule("contract_report", _handle_contract_report_dispatch),

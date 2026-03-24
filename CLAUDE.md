@@ -23,7 +23,7 @@ python3 main.py --help
 ./run_aura.sh --help
 ./run_aura.sh run --dry-run
 ./run_aura.sh once "Refactor goal queue" --max-cycles 1
-python3 main.py --add-goal "Add unit tests" --run-goals
+python3 main.py goal add "Add unit tests" --run
 ```
 
 Set `AURA_SKIP_CHDIR=1` to keep the current working directory (recommended for local dev and tests).
@@ -57,7 +57,7 @@ aura-cli/
 │   ├── orchestrator.py        # Main 10-phase loop (ingest→reflect)
 │   ├── model_adapter.py       # LLM interface (Gemini, OpenAI, OpenRouter, local)
 │   ├── workflow_engine.py     # Orchestrated workflows with cycle limits
-│   ├── hybrid_loop.py         # Hybrid autonomous loop with human gates
+│   ├── hybrid_loop.py         # Deprecated legacy loop; prefer orchestrator.py
 │   ├── file_tools.py          # Atomic file operations + overwrite safety policy
 │   ├── task_handler.py        # Goal/task execution coordination
 │   ├── capability_manager.py  # Skill bootstrapping and MCP provisioning

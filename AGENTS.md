@@ -20,18 +20,34 @@ Typical flow:
 4. Review logs and `memory/` artifacts.
 
 Examples:
-- `python3 main.py --add-goal "Refactor goal queue" --run-goals`
-- `./run_aura.sh --dry-run`
+- `python3 main.py goal add "Refactor goal queue" --run`
+- `python3 main.py goal once "Summarize repo" --dry-run`
+- `./run_aura.sh run --dry-run`
 
 Tip: set `AURA_SKIP_CHDIR=1` to keep the current working directory when running locally or in tests.
 
 ## Agent & Loop Overview
-- Loop orchestrator: `core/hybrid_loop.py`.
+- Canonical loop orchestrator: `core/orchestrator.py` (`LoopOrchestrator`).
+- Deprecated legacy loop: `core/hybrid_loop.py` (`HybridClosedLoop`).
 - Model interface: `core/model_adapter.py`.
 - Goal queue/archive: `core/goal_queue.py`, `core/goal_archive.py`.
 - Agents: see `agents/` (planner, debugger, and others).
 
 The loop selects and coordinates agents per goal. Agent behavior evolves as the loop iterates.
+
+## Async Orchestration & Typed Registry (V2)
+AURA has migrated to a high-performance asynchronous orchestration engine and a modern typed registry.
+
+- **Async Pipeline:** Core phases in `LoopOrchestrator` now support non-blocking execution via `_dispatch_task`.
+- **Typed Registry:** Agents are now defined as `AgentSpec` objects in `core/mcp_agent_registry.py`, allowing for capability-based resolution.
+- **MCP Integration:** The registry autonomously discovers and provisions MCP-backed agents from configured servers.
+- **Observability:** Shadow mode and detailed latency/retry logging are built into the transport layer.
+
+Feature flags (enabled by default):
+- `AURA_ENABLE_NEW_ORCHESTRATOR=true`
+- `AURA_ENABLE_MCP_REGISTRY=true`
+
+Emergency bypass: `AURA_FORCE_LEGACY_ORCHESTRATOR=true`
 
 ## Build, Test, and Development Commands
 - `python3 main.py --help`: show CLI options.

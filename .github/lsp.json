@@ -1,0 +1,42 @@
+{
+  "lspServers": {
+    "pyright": {
+      "command": "pyright-langserver",
+      "args": [
+        "--stdio"
+      ],
+      "fileExtensions": {
+        ".py": "python"
+      }
+    },
+    "ruff": {
+      "command": "ruff",
+      "args": [
+        "server"
+      ],
+      "fileExtensions": {
+        ".py": "python"
+      }
+    },
+    "bash-language-server": {
+      "command": "bash-language-server",
+      "args": [
+        "start"
+      ],
+      "fileExtensions": {
+        ".sh": "shellscript",
+        ".bash": "shellscript"
+      }
+    },
+    "vscode-json-language-server": {
+      "command": "vscode-json-language-server",
+      "args": [
+        "--stdio"
+      ],
+      "fileExtensions": {
+        ".json": "json",
+        ".jsonc": "jsonc"
+      }
+    }
+  }
+}

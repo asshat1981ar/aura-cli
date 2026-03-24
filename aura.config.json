@@ -45,8 +45,17 @@
         "dev_tools": 8001,
         "skills": 8002,
         "control": 8003,
+        "thinking": 8004,
         "agentic_loop": 8006,
-        "copilot": 8007
+        "copilot": 8007,
+        "hub": 8010,
+        "docker": 8011,
+        "kubernetes": 8012,
+        "neo4j": 8013,
+        "redis": 8014,
+        "notification": 8015,
+        "monitoring": 8016,
+        "weaviate": 8017
     },
     "semantic_memory": {
         "top_k": 9,
@@ -59,8 +68,22 @@
     "skill_correlation_enabled": true,
     "hooks": {},
     "a2a": {
-        "enabled": false,
+        "enabled": true,
         "port": 8010
+    },
+    "environments": {
+        "gemini": {
+            "cli_type": "gemini-cli",
+            "port_range": [8020, 8029]
+        },
+        "claude": {
+            "cli_type": "claude-code",
+            "port_range": [8030, 8039]
+        },
+        "codex": {
+            "cli_type": "codex-cli",
+            "port_range": [8040, 8049]
+        }
     },
     "experiment_tracking": {
         "enabled": true,

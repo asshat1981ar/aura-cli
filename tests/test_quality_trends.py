@@ -99,6 +99,8 @@ class TestRegressionDetection:
         regression_alerts = [a for a in alerts if a.alert_type == "regression"]
         assert len(regression_alerts) == 1
         assert regression_alerts[0].metric == "test_count"
+        assert regression_alerts[0].severity == "high"
+        assert "40" in regression_alerts[0].suggested_goal
 
     def test_small_test_count_drop_no_alert(self, tmp_path):
         analyzer = QualityTrendAnalyzer(store_path=tmp_path / "trends.json")

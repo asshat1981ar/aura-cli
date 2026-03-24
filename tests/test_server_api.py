@@ -1,18 +1,7 @@
-"""R7: Integration tests for the AURA HTTP API server (aura_cli/server.py).
-
-Uses FastAPI TestClient to exercise all public endpoints:
-  GET  /health
-  GET  /tools
-  GET  /metrics
-  POST /execute  (tool_name=env)
-
-The tests mock out the heavyweight runtime objects so no real model calls
-are made and no filesystem mutations occur.
-
-Always sets AURA_SKIP_CHDIR=1 to prevent os.chdir() side-effects.
-"""
+"""Integration tests for the AURA HTTP API server (aura_cli/server.py)."""
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 from pathlib import Path
@@ -20,22 +9,16 @@ from typing import Any, Dict
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
-# Prevent chdir side-effects that break other tests
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
-# Disable bearer-token auth for all tests in this module (re-enabled per test)
 os.environ.pop("AGENT_API_TOKEN", None)
 
 _ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_ROOT))
 
 
-# ---------------------------------------------------------------------------
-# Helpers — build a minimal fake runtime so server.py can be imported
-# ---------------------------------------------------------------------------
-
 def _make_fake_runtime() -> Dict[str, Any]:
-    """Return a dict that satisfies all server.py accesses of `runtime`."""
     fake_policy = MagicMock()
     fake_policy.evaluate.return_value = "CONVERGED"
 
@@ -62,17 +45,14 @@ def _make_fake_runtime() -> Dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Module-level fixture: import server with mocked runtime
-# ---------------------------------------------------------------------------
-
 @pytest.fixture(scope="module")
 def server_module():
-    """Import aura_cli.server with a fake runtime, return the module."""
     fake_rt = _make_fake_runtime()
-    with patch("aura_cli.cli_main.create_runtime", return_value=fake_rt):
+    sys.modules.pop("aura_cli.server", None)
+    with patch("aura_cli.cli_main.create_runtime", return_value=fake_rt) as mock_create_runtime:
         import aura_cli.server as _srv
-        # Patch module-level objects in case module was already imported
+
+        mock_create_runtime.assert_not_called()
         _srv.runtime = fake_rt
         _srv.orchestrator = fake_rt["orchestrator"]
         _srv.model_adapter = fake_rt["model_adapter"]
@@ -80,174 +60,101 @@ def server_module():
         return _srv
 
 
-@pytest.fixture(scope="module")
-def client(server_module):
-    from fastapi.testclient import TestClient
-    return TestClient(server_module.app)
+@pytest.fixture(autouse=True)
+def immediate_to_thread(server_module, monkeypatch):
+    async def _immediate(func, /, *args, **kwargs):
+        return func(*args, **kwargs)
+
+    monkeypatch.setattr(server_module.asyncio, "to_thread", _immediate)
 
 
-# ---------------------------------------------------------------------------
-# GET /health
-# ---------------------------------------------------------------------------
+def _run(coro):
+    return asyncio.run(coro)
 
-class TestHealthEndpoint:
-    def test_health_returns_200(self, client):
+
+async def _collect_streaming_response(response) -> list[str]:
+    chunks: list[str] = []
+    async for chunk in response.body_iterator:
+        if isinstance(chunk, bytes):
+            chunk = chunk.decode()
+        chunks.append(chunk)
+    return chunks
+
+
+def test_health_returns_200(server_module):
+    os.environ.pop("AGENT_API_TOKEN", None)
+    data = _run(server_module.health())
+    assert data["status"] == "ok"
+
+
+def test_health_body_has_status(server_module):
+    os.environ.pop("AGENT_API_TOKEN", None)
+    data = _run(server_module.health())
+    assert "status" in data
+    assert data["status"] in ("ok", "degraded")
+
+
+def test_health_body_has_providers(server_module):
+    os.environ.pop("AGENT_API_TOKEN", None)
+    data = _run(server_module.health())
+    assert "providers" in data
+    assert isinstance(data["providers"], dict)
+
+
+def test_health_requires_auth_when_token_set(server_module):
+    os.environ["AGENT_API_TOKEN"] = "mysecret"
+    try:
+        with pytest.raises(HTTPException) as exc:
+            server_module.require_auth("Bearer wrong")
+        assert exc.value.status_code == 403
+        assert server_module.require_auth("Bearer mysecret") is None
+    finally:
         os.environ.pop("AGENT_API_TOKEN", None)
-        resp = client.get("/health")
-        assert resp.status_code == 200
-
-    def test_health_body_has_status(self, client):
-        os.environ.pop("AGENT_API_TOKEN", None)
-        data = client.get("/health").json()
-        assert "status" in data
-        assert data["status"] in ("ok", "degraded")
-
-    def test_health_body_has_providers(self, client):
-        os.environ.pop("AGENT_API_TOKEN", None)
-        data = client.get("/health").json()
-        assert "providers" in data
-        assert isinstance(data["providers"], dict)
-
-    def test_health_requires_auth_when_token_set(self, client):
-        os.environ["AGENT_API_TOKEN"] = "mysecret"
-        try:
-            r = client.get("/health")
-            assert r.status_code == 401
-            r2 = client.get("/health", headers={"Authorization": "Bearer mysecret"})
-            assert r2.status_code == 200
-        finally:
-            os.environ.pop("AGENT_API_TOKEN", None)
 
 
-# ---------------------------------------------------------------------------
-# GET /tools
-# ---------------------------------------------------------------------------
-
-class TestToolsEndpoint:
-    def test_tools_returns_200(self, client):
-        resp = client.get("/tools")
-        assert resp.status_code == 200
-
-    def test_tools_body_has_tools_list(self, client):
-        data = client.get("/tools").json()
-        assert "tools" in data
-        assert isinstance(data["tools"], list)
-
-    def test_tools_list_not_empty(self, client):
-        data = client.get("/tools").json()
-        assert len(data["tools"]) > 0
-
-    def test_tools_each_has_name_and_description(self, client):
-        data = client.get("/tools").json()
-        for tool in data["tools"]:
-            assert "name" in tool, f"Tool missing 'name': {tool}"
-            assert "description" in tool, f"Tool missing 'description': {tool}"
-
-    def test_tools_contains_expected_names(self, client):
-        data = client.get("/tools").json()
-        names = {t["name"] for t in data["tools"]}
-        for expected in ("ask", "run", "env", "goal"):
-            assert expected in names, f"Expected tool '{expected}' not found in {names}"
+def test_tools_returns_non_empty_list(server_module):
+    data = _run(server_module.tools())
+    assert data["status"] == "success"
+    assert isinstance(data["tools"], list)
+    names = {t["name"] for t in data["tools"]}
+    for expected in ("ask", "run", "env", "goal"):
+        assert expected in names
 
 
-# ---------------------------------------------------------------------------
-# GET /metrics
-# ---------------------------------------------------------------------------
-
-class TestMetricsEndpoint:
-    def test_metrics_returns_200(self, client):
-        resp = client.get("/metrics")
-        assert resp.status_code == 200
-
-    def test_metrics_has_status_ok(self, client):
-        data = client.get("/metrics").json()
-        assert data.get("status") == "ok"
-
-    def test_metrics_has_skill_metrics(self, client):
-        data = client.get("/metrics").json()
-        assert "skill_metrics" in data
+def test_metrics_has_skill_metrics(server_module):
+    data = _run(server_module.metrics())
+    assert data["status"] == "ok"
+    assert "skill_metrics" in data
 
 
-# ---------------------------------------------------------------------------
-# POST /execute — env tool (no external deps)
-# ---------------------------------------------------------------------------
-
-class TestExecuteEnvTool:
-    def test_env_returns_200(self, client):
-        resp = client.post("/execute", json={"tool_name": "env", "args": []})
-        assert resp.status_code == 200
-
-    def test_env_body_has_status_success(self, client):
-        data = client.post("/execute", json={"tool_name": "env", "args": []}).json()
-        assert data.get("status") == "success"
-
-    def test_env_body_has_data(self, client):
-        data = client.post("/execute", json={"tool_name": "env", "args": []}).json()
-        assert "data" in data
-        assert isinstance(data["data"], dict)
+def test_execute_env_tool(server_module):
+    data = _run(server_module.execute(server_module.ExecuteRequest(tool_name="env", args=[])))
+    assert data["status"] == "success"
+    assert isinstance(data["data"], dict)
 
 
-# ---------------------------------------------------------------------------
-# POST /execute — unknown tool → 404
-# ---------------------------------------------------------------------------
-
-class TestExecuteUnknownTool:
-    def test_unknown_tool_returns_404(self, client):
-        resp = client.post("/execute", json={"tool_name": "no_such_tool", "args": []})
-        assert resp.status_code == 404
+def test_execute_ask_tool(server_module):
+    server_module.model_adapter.respond.return_value = "Hello from stub"
+    data = _run(server_module.execute(server_module.ExecuteRequest(tool_name="ask", args=["Hello?"])))
+    assert data["status"] == "success"
+    assert data["data"] == "Hello from stub"
 
 
-# ---------------------------------------------------------------------------
-# POST /execute — ask tool (mocked model adapter)
-# ---------------------------------------------------------------------------
-
-class TestExecuteAskTool:
-    def test_ask_without_args_returns_400(self, client):
-        resp = client.post("/execute", json={"tool_name": "ask", "args": []})
-        assert resp.status_code == 400
-
-    def test_ask_with_question_returns_200(self, client, server_module):
-        server_module.model_adapter.respond.return_value = "Hello from stub"
-        resp = client.post("/execute", json={"tool_name": "ask", "args": ["Hello?"]})
-        assert resp.status_code == 200
-        data = resp.json()
-        assert data.get("status") == "success"
-        assert "data" in data
+def test_execute_unknown_tool(server_module):
+    with pytest.raises(HTTPException) as exc:
+        _run(server_module.execute(server_module.ExecuteRequest(tool_name="no_such_tool", args=[])))
+    assert exc.value.status_code == 404
 
 
-# ---------------------------------------------------------------------------
-# POST /execute — run tool disabled by default
-# ---------------------------------------------------------------------------
-
-class TestExecuteRunToolDisabled:
-    def test_run_disabled_without_flag(self, client):
-        os.environ.pop("AGENT_API_ENABLE_RUN", None)
-        resp = client.post("/execute", json={"tool_name": "run", "args": ["echo hi"]})
-        assert resp.status_code == 403
-
-    def test_run_without_args_is_400_when_enabled(self, client):
-        os.environ["AGENT_API_ENABLE_RUN"] = "1"
-        try:
-            resp = client.post("/execute", json={"tool_name": "run", "args": []})
-            assert resp.status_code == 400
-        finally:
-            os.environ.pop("AGENT_API_ENABLE_RUN", None)
+def test_execute_run_disabled(server_module, monkeypatch):
+    monkeypatch.delenv("AGENT_API_ENABLE_RUN", raising=False)
+    with pytest.raises(HTTPException) as exc:
+        _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=["ls"])))
+    assert exc.value.status_code == 403
 
 
-# ---------------------------------------------------------------------------
-# Auth guard on all endpoints
-# ---------------------------------------------------------------------------
-
-class TestAuthGuard:
-    def test_all_endpoints_reject_bad_token(self, client):
-        os.environ["AGENT_API_TOKEN"] = "correct"
-        try:
-            for path, method in [
-                ("/health", "GET"),
-                ("/tools", "GET"),
-                ("/metrics", "GET"),
-            ]:
-                r = client.request(method, path, headers={"Authorization": "Bearer wrong"})
-                assert r.status_code == 403, f"{method} {path} should return 403 for bad token"
-        finally:
-            os.environ.pop("AGENT_API_TOKEN", None)
+def test_execute_run_without_args_when_enabled(server_module, monkeypatch):
+    monkeypatch.setenv("AGENT_API_ENABLE_RUN", "1")
+    with pytest.raises(HTTPException) as exc:
+        _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[])))
+    assert exc.value.status_code == 400

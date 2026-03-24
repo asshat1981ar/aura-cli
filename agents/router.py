@@ -105,6 +105,7 @@ class RouterAgent:
     MODEL_REGISTRY = {
         "openai":     "call_openai",
         "gemini":     "call_gemini",
+        "anthropic":  "call_anthropic",
         "openrouter": "call_openrouter",
         "local":      "call_local",
         "codex":      "call_codex",
@@ -118,7 +119,7 @@ class RouterAgent:
     def __init__(self, brain, model_adapter, enabled_models: Optional[List[str]] = None):
         self.brain = brain
         self.adapter = model_adapter
-        self.enabled = enabled_models or ["openai", "gemini", "openrouter", "codex", "copilot"]
+        self.enabled = enabled_models or ["openai", "gemini", "anthropic", "openrouter", "codex", "copilot"]
 
         # Load persisted stats from brain or initialise fresh
         self.stats: Dict[str, ModelStats] = {}

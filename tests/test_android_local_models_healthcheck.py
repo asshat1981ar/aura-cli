@@ -5,6 +5,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import pytest
+
 
 SCRIPT_PATH = Path(__file__).resolve().parent.parent / "scripts" / "check_android_local_models.py"
 SPEC = importlib.util.spec_from_file_location("check_android_local_models", SCRIPT_PATH)
@@ -28,9 +30,12 @@ class _HealthHandler(BaseHTTPRequestHandler):
 
 
 def _free_port() -> int:
-    with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return sock.getsockname()[1]
+    try:
+        with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
+            sock.bind(("127.0.0.1", 0))
+            return sock.getsockname()[1]
+    except PermissionError as exc:
+        pytest.skip(f"Loopback socket binding is not permitted in this environment: {exc}")
 
 
 def _start_server(port: int):

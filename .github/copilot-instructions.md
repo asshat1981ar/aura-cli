@@ -1,6 +1,26 @@
 # AURA CLI — Copilot Onboarding Guide
 
-AURA is an autonomous AI development loop. Goals enter a queue and are processed through a fixed multi-agent pipeline each cycle. This file is the single source of truth for GitHub Copilot in this codebase.
+AURA is an autonomous AI development loop. Goals enter a queue and are processed through a fixed multi-agent pipeline each cycle. This file is the top-level Copilot guide for the repository.
+
+## Quick Copilot setup
+
+Prefer the repo-local setup assets instead of copying ad hoc JSON by hand:
+
+- MCP example: `.vscode/mcp.json.example`
+- MCP config helper: `bash scripts/configure_copilot_mcp.sh`
+- Repo LSP config: `.github/lsp.json`
+- Focused instruction shards: `.github/instructions/copilot/`
+
+Recommended local startup:
+
+```bash
+uvicorn aura_cli.server:app --port 8001
+uvicorn tools.aura_mcp_skills_server:app --port 8002
+uvicorn tools.github_copilot_mcp:app --port 8007
+bash scripts/configure_copilot_mcp.sh
+```
+
+Then launch `copilot` and verify `/mcp`, `/lsp`, and `/instructions`.
 
 ## Commands
 
@@ -16,12 +36,13 @@ python3 -m pytest tests/test_file_tools.py::TestClassName::test_method_name
 
 # Start the CLI
 python3 main.py --help
+aura help
 
 # Add a goal and run it non-interactively
-python3 main.py --add-goal "Fix the goal queue" --run-goals
+python3 main.py goal add "Fix the goal queue" --run
 
 # Run a one-off goal (bypasses queue)
-python3 main.py --goal "Refactor core/model_adapter.py"
+python3 main.py goal once "Refactor core/model_adapter.py"
 
 # Dry run (no file writes, no memory writes)
 ./run_aura.sh --dry-run
@@ -32,10 +53,13 @@ python3 main.py --bootstrap
 # Start the HTTP API server (FastAPI on port 8001)
 uvicorn aura_cli.server:app --port 8001
 
-# Start the MCP Skills Server (all 23 skills as HTTP tools, port 8002)
+# Start the MCP Skills Server (all registered skills as HTTP tools, port 8002)
 uvicorn tools.aura_mcp_skills_server:app --port 8002
 # Or directly:
 python3 tools/aura_mcp_skills_server.py
+
+# Start the GitHub Copilot MCP server (port 8007 by config default)
+uvicorn tools.github_copilot_mcp:app --port 8007
 ```
 
 ## Architecture
@@ -44,15 +68,18 @@ python3 tools/aura_mcp_skills_server.py
 Constructs all shared objects — `GoalQueue`, `ModelAdapter`, `Brain`, `VectorStore`, `RouterAgent`, `DebuggerAgent`, `PlannerAgent`, `LoopOrchestrator`, `GitTools` — and returns them as a dict.
 
 **Orchestration pipeline** (`core/orchestrator.py::LoopOrchestrator`):
-Each `run_cycle()` call executes these phases in order, with schema validation after each:
+Each `run_cycle()` call executes the current canonical pipeline in order, with schema validation after phase boundaries:
 
 1. `ingest` — gathers project context and memory hints
-2. `plan` — `PlannerAgent` produces a list of steps
-3. `critique` — `CriticAgent` flags issues in the plan
-4. `synthesize` — `SynthesizerAgent` builds a `task_bundle` from plan + critique
-5. `act` — `CoderAgent` generates code; on schema failure, `DebuggerAgent` retries once
-6. `verify` — `VerifierAgent` checks the change set
-7. `reflect` — `ReflectorAgent` records a cycle summary to `MemoryStore`
+2. `skill dispatch` — adaptive static-analysis and capability routing
+3. `plan` — `PlannerAgent` produces a list of steps
+4. `critique` — `CriticAgent` flags issues in the plan
+5. `synthesize` — `SynthesizerAgent` builds a `task_bundle` from plan + critique
+6. `act` — `CoderAgent` generates code; on schema failure, `DebuggerAgent` retries once
+7. `sandbox` — generated code is exercised in isolation before apply
+8. `apply` — validated file changes are written atomically
+9. `verify` — `VerifierAgent` checks the applied change set
+10. `reflect` — `ReflectorAgent` records a cycle summary to `MemoryStore`
 
 `HybridClosedLoop` (`core/hybrid_loop.py`) is a **legacy wrapper** around `LoopOrchestrator`; prefer `LoopOrchestrator` directly.
 
@@ -75,7 +102,7 @@ Applies changes using `{file_path, old_code, new_code, overwrite_file}`. When `o
 | `Brain` | `memory/brain_v2.db` (SQLite) | General memories, weaknesses, vector embeddings, response cache |
 | `VectorStore` | `Brain`'s `vector_store_data` table | Semantic retrieval |
 | `MemoryStore` | `memory/store/` (files) | Per-cycle summaries written by `ReflectorAgent` |
-| `GoalQueue` | `memory/goal_queue_v2.json` | Pending and in-progress goals |
+| `GoalQueue` | `memory/goal_queue.json` | Pending and in-progress goals |
 
 ## HTTP API
 
@@ -95,7 +122,7 @@ SSE streaming is supported on `/run`. Protect all endpoints with `AGENT_API_TOKE
 
 **File:** `tools/aura_mcp_skills_server.py` — FastAPI on port **8002**
 
-Exposes all 23 skills as MCP-compatible HTTP tools.
+Exposes all registered skills as MCP-compatible HTTP tools.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -106,7 +133,9 @@ Exposes all 23 skills as MCP-compatible HTTP tools.
 
 Auth: set `MCP_API_TOKEN` env var.
 
-**Add to Copilot MCP config** (`.vscode/mcp.json` or `~/.config/github-copilot/mcp.json`):
+**Add to Copilot MCP config** using `.vscode/mcp.json.example` or generate a local config with `bash scripts/configure_copilot_mcp.sh`.
+
+Minimal example:
 
 ```json
 {
@@ -178,7 +207,7 @@ All AURA variables are prefixed `AURA_`:
 
 ## Skills System
 
-23 pluggable skill modules live in `agents/skills/`. Each has `run(input_data: dict) -> dict` and **never raises** — errors are returned as `{"error": "..."}`.
+Registered skill modules live in `agents/skills/`. Each has `run(input_data: dict) -> dict` and **never raises** — errors are returned as `{"error": "..."}`.
 
 **Invoke any skill:**
 
@@ -188,7 +217,7 @@ skills = all_skills()
 result = skills["security_scanner"].run({"project_root": "."})
 ```
 
-**Available skills:**
+**Common skills:**
 
 | # | Name | Input keys | Primary output keys |
 |---|------|-----------|-------------------|

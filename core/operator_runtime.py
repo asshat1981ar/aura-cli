@@ -167,6 +167,7 @@ def build_cycle_summary(
 
     verification_status = _normalize_verification_status(verification)
     failures = list(verification.get("failures", [])) if isinstance(verification, dict) else []
+    remediation_plan = verification.get("remediation_plan", {}) if isinstance(verification, dict) else {}
     applied_files = list(apply_result.get("applied", [])) if isinstance(apply_result, dict) else []
     failed_files = [
         item.get("file", str(item))
@@ -203,6 +204,9 @@ def build_cycle_summary(
         "outcome": outcome,
         "stop_reason": stop_reason,
         "failures": failures,
+        "remediation_route": remediation_plan.get("route") if isinstance(remediation_plan, dict) else None,
+        "repeated_failure_detected": bool(remediation_plan.get("repeated_failure_detected")) if isinstance(remediation_plan, dict) else False,
+        "remediation_next_checks": list(remediation_plan.get("next_checks", [])) if isinstance(remediation_plan, dict) else [],
         "retry_count": retry_count,
         "applied_files": applied_files,
         "failed_files": failed_files,

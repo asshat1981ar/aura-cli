@@ -63,9 +63,9 @@ def test_full_backfill_flow_integration(mock_runtime, tmp_path):
         # 5. Assertions
         # Goal enqueued?
         goal_queue.add.assert_called()
-        enqueued_goal = goal_queue.add.call_args[0][0]
-        assert "test_backfill" in enqueued_goal
-        assert "core/untested.py" in enqueued_goal
+        enqueued_goals = [call.args[0] for call in goal_queue.add.call_args_list]
+        assert any("test_backfill" in goal for goal in enqueued_goals)
+        assert any("core/untested.py" in goal for goal in enqueued_goals)
         
         # Planner prompt included backfill instructions?
         prompt = model.respond.call_args[0][0]

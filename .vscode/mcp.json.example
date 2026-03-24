@@ -1,0 +1,39 @@
+{
+  "mcpServers": {
+    "aura-dev-tools": {
+      "type": "http",
+      "url": "http://127.0.0.1:8001",
+      "headers": {
+        "Authorization": "Bearer ${env:MCP_API_TOKEN}"
+      }
+    },
+    "aura-skills": {
+      "type": "http",
+      "url": "http://127.0.0.1:8002",
+      "headers": {
+        "Authorization": "Bearer ${env:MCP_API_TOKEN}"
+      }
+    },
+    "aura-control": {
+      "type": "http",
+      "url": "http://127.0.0.1:8003",
+      "headers": {
+        "Authorization": "Bearer ${env:MCP_CONTROL_TOKEN}"
+      }
+    },
+    "aura-agentic-loop": {
+      "type": "http",
+      "url": "http://127.0.0.1:8006",
+      "headers": {
+        "Authorization": "Bearer ${env:AGENTIC_LOOP_TOKEN}"
+      }
+    },
+    "aura-copilot": {
+      "type": "http",
+      "url": "http://127.0.0.1:8007",
+      "headers": {
+        "Authorization": "Bearer ${env:COPILOT_MCP_TOKEN}"
+      }
+    }
+  }
+}

@@ -1,7 +1,34 @@
-
-from fastapi.testclient import TestClient
+import asyncio
 
 from tools import mcp_server as server
+from tools.mcp_server import CallRequest
+
+
+class _Response:
+    def __init__(self, status_code, payload):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+class _DirectClient:
+    def post(self, path, *, headers=None, json=None):
+        if path != "/call":
+            raise AssertionError(f"Unhandled path in test harness: {path}")
+        try:
+            payload = asyncio.run(
+                server.call_tool(
+                    CallRequest(tool_name=json["tool_name"], args=json.get("args", {})),
+                    headers.get("Authorization", "").split(" ", 1)[1] if headers else "anon",
+                )
+            )
+            return _Response(200, payload)
+        except Exception as exc:
+            status = getattr(exc, "status_code", 500)
+            detail = getattr(exc, "detail", str(exc))
+            return _Response(status, {"detail": detail})
 
 
 def setup_client(monkeypatch, enable_run=True):
@@ -10,8 +37,7 @@ def setup_client(monkeypatch, enable_run=True):
         monkeypatch.setenv("MCP_ENABLE_RUN", "1")
     else:
         monkeypatch.delenv("MCP_ENABLE_RUN", raising=False)
-    c = TestClient(server.app)
-    return c, {"Authorization": "Bearer t"}
+    return _DirectClient(), {"Authorization": "Bearer t"}
 
 
 def test_format_echo(monkeypatch, tmp_path):
@@ -39,7 +65,7 @@ def test_dependency_audit_pip(monkeypatch, tmp_path):
     resp = c.post(
         "/call",
         headers=hdrs,
-        json={"tool_name": "dependency_audit", "args": {"cmd": ["python", "-c", "print('audit-ok')"]}},
+        json={"tool_name": "dependency_audit", "args": {"cmd": ["python3", "-c", "print('audit-ok')"]}},
     )
     assert resp.status_code == 200
     data = resp.json()["data"]

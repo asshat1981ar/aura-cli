@@ -53,3 +53,27 @@ class LoopError(AuraError):
 class ConfigurationError(AuraError):
     """Raised when there is a configuration-related error."""
     pass
+
+class MCPError(AuraError):
+    """Base class for all MCP-related errors."""
+    pass
+
+class MCPTransportError(MCPError):
+    """Raised for errors in the MCP transport layer (e.g., connection failure)."""
+    pass
+
+class MCPTimeoutError(MCPTransportError):
+    """Raised when an MCP request times out."""
+    pass
+
+class MCPServerUnavailableError(MCPTransportError):
+    """Raised when an MCP server is unavailable or down."""
+    pass
+
+class MCPInvalidResponseError(MCPTransportError):
+    """Raised when an MCP server returns a malformed response."""
+    pass
+
+class MCPRetryExhaustedError(MCPTransportError):
+    """Raised when all retries for an MCP request have failed."""
+    pass

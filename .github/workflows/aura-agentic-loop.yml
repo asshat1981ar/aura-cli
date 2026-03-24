@@ -34,13 +34,13 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
 
@@ -92,16 +92,16 @@ jobs:
           git add -A
           git diff --staged --quiet || \
             git commit -m "chore(aura-loop): apply autonomous loop changes [skip ci]
-
-Cycles completed: ${{ steps.loop.outputs.cycles }}
-Errors: ${{ steps.loop.outputs.errors }}
-
-Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+            
+            Cycles completed: ${{ steps.loop.outputs.cycles }}
+            Errors: ${{ steps.loop.outputs.errors }}
+            
+            Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
           git push || true
 
       - name: Create issue on error
         if: steps.loop.outputs.errors > '0'
-        uses: actions/github-script@v7
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
         with:
           script: |
             const output = `${{ steps.loop.outputs.output }}`;
@@ -129,7 +129,7 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
             });
 
       - name: Upload loop artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: aura-loop-output-${{ github.run_number }}
@@ -145,10 +145,10 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
     needs: aura-loop
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
 
@@ -218,10 +218,10 @@ Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
     needs: aura-reflect
     if: always()
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.11"
 

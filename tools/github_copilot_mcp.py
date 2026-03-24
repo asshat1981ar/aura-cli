@@ -16,7 +16,7 @@ Tools:
   issue_to_plan     — issue + codebase context → ordered implementation plan
   find_related_code — search repo code + AI relevance ranking
 
-Port:  8005 (override with COPILOT_MCP_PORT)
+Port:  configured "copilot" MCP server port (override with COPILOT_MCP_PORT)
 Auth:  set COPILOT_MCP_TOKEN env var
 
 Requirements:
@@ -24,7 +24,7 @@ Requirements:
   AURA_API_KEY — OpenRouter/OpenAI key (used by ModelAdapter)
 
 Start:
-  uvicorn tools.github_copilot_mcp:app --port 8005
+  uvicorn tools.github_copilot_mcp:app --port "${COPILOT_MCP_PORT:-<configured copilot MCP port>}"
 """
 from __future__ import annotations
 
@@ -46,6 +46,12 @@ os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 from fastapi import Depends, FastAPI, Header, HTTPException
 
 from core.logging_utils import log_json
+from core.mcp_contracts import (
+    build_discovery_payload,
+    build_health_payload,
+    build_tool_descriptors_from_schemas,
+)
+from core.mcp_registry import get_registered_service, list_registered_services
 
 # ---------------------------------------------------------------------------
 # Lazy-loaded singletons
@@ -87,6 +93,12 @@ _TOKEN = os.getenv("COPILOT_MCP_TOKEN", "")
 def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
     if _TOKEN and authorization != f"Bearer {_TOKEN}":
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+def _get_copilot_port() -> int:
+    from core.config_manager import config as _cfg
+
+    return int(os.getenv("COPILOT_MCP_PORT", _cfg.get_mcp_server_port("copilot")))
 
 
 # ---------------------------------------------------------------------------
@@ -208,16 +220,7 @@ _TOOL_SCHEMAS: Dict[str, Dict] = {
 
 
 def _build_descriptor(name: str) -> Dict:
-    s = _TOOL_SCHEMAS[name]
-    return {
-        "name": name,
-        "description": s["description"],
-        "inputSchema": {
-            "type": "object",
-            "properties": s.get("input", {}),
-            "required": [k for k, v in s.get("input", {}).items() if v.get("required")],
-        },
-    }
+    return build_tool_descriptors_from_schemas(_TOOL_SCHEMAS, names=[name])[0]
 
 
 # ---------------------------------------------------------------------------
@@ -732,19 +735,28 @@ from tools.mcp_types import ToolCallRequest, ToolResult  # noqa: F401, E402
 async def health(_: None = Depends(_check_auth)):
     github_ok = bool(os.getenv("GITHUB_PAT"))
     model_ok = bool(os.getenv("AURA_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY"))
-    return {
-        "status": "ok" if (github_ok and model_ok) else "degraded",
-        "github_pat_set": github_ok,
-        "model_key_set": model_ok,
-        "tool_count": len(_HANDLERS),
-        "server": "github_copilot_mcp",
-        "version": "1.0.0",
-    }
+    return build_health_payload(
+        status="ok" if (github_ok and model_ok) else "degraded",
+        server=get_registered_service("copilot")["name"],
+        version="1.0.0",
+        tool_count=len(_HANDLERS),
+        github_pat_set=github_ok,
+        model_key_set=model_ok,
+    )
+
+
+@app.get("/discovery")
+async def discovery(_: None = Depends(_check_auth)) -> Dict:
+    return build_discovery_payload(
+        current_server=get_registered_service("copilot"),
+        servers=list_registered_services(),
+        tool_count=len(_HANDLERS),
+    )
 
 
 @app.get("/tools")
 async def list_tools(_: None = Depends(_check_auth)) -> List[Dict]:
-    return [_build_descriptor(n) for n in _TOOL_SCHEMAS]
+    return build_tool_descriptors_from_schemas(_TOOL_SCHEMAS)
 
 
 @app.get("/tool/{name}")
@@ -778,7 +790,6 @@ async def call_tool(request: ToolCallRequest, _: None = Depends(_check_auth)) ->
 
 if __name__ == "__main__":
     import uvicorn
-    from core.config_manager import config as _cfg
     # R4: port from config registry; env var still overrides for backward-compat
-    port = int(os.getenv("COPILOT_MCP_PORT", _cfg.get_mcp_server_port("copilot")))
+    port = _get_copilot_port()
     uvicorn.run("tools.github_copilot_mcp:app", host="0.0.0.0", port=port, reload=False)

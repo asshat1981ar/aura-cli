@@ -169,3 +169,66 @@ class TestActLoopRetryBackoff(unittest.TestCase):
                 plan_attempt=0, max_plan_retries=1, skill_context={},
             )
         self.assertTrue(replan)
+
+    def test_verify_failure_attaches_root_cause_analysis(self):
+        orc = _make_orchestrator()
+        cfg = self._make_pipeline_cfg(max_attempts=2)
+        root_cause_agent = MagicMock()
+        root_cause_agent.run.return_value = {
+            "status": "analyzed",
+            "patterns": ["syntax_error"],
+            "summary": "Generated code is invalid.",
+            "recommended_actions": ["Inspect the failing file."],
+            "confidence": 0.95,
+            "likely_root_causes": ["Invalid syntax"],
+            "evidence": {},
+        }
+        investigation_agent = MagicMock()
+        investigation_agent.run.return_value = {
+            "status": "investigated",
+            "verification_investigation": {
+                "signals": ["syntax_error"],
+                "repeated_failure_detected": False,
+            },
+            "remediation_plan": {
+                "route": "replan",
+                "fix_hints": ["Inspect the failing file."],
+                "repeated_failure_detected": False,
+            },
+        }
+        orc.root_cause_analysis_agent = root_cause_agent
+        orc.investigation_agent = investigation_agent
+
+        with patch("time.sleep"), \
+             patch("core.orchestrator.validate_phase_output", return_value=[]), \
+             patch.object(orc, "_run_phase") as mock_phase, \
+             patch.object(orc, "_run_sandbox_loop", return_value=({"changes": []}, {}, 0)), \
+             patch.object(orc, "_route_failure", return_value="plan"):
+            mock_phase.side_effect = [
+                {"changes": []},
+                {"status": "fail", "failures": ["SyntaxError: invalid syntax"], "passed": [], "logs": "SyntaxError: invalid syntax"},
+            ]
+            phase_outputs = {}
+            _, replan, _ = orc._run_act_loop(
+                goal="test", plan={}, task_bundle={}, pipeline_cfg=cfg,
+                cycle_id="c1", phase_outputs=phase_outputs, dry_run=True,
+                plan_attempt=0, max_plan_retries=1, skill_context={},
+            )
+
+        self.assertTrue(replan)
+        self.assertEqual(
+            phase_outputs["_failure_context"]["root_cause_analysis"]["patterns"],
+            ["syntax_error"],
+        )
+        self.assertEqual(
+            phase_outputs["_failure_context"]["failure_investigation"]["signals"],
+            ["syntax_error"],
+        )
+        self.assertEqual(
+            phase_outputs["_failure_context"]["remediation_plan"]["route"],
+            "replan",
+        )
+        self.assertEqual(
+            phase_outputs["_failure_context"]["investigation"]["status"],
+            "investigated",
+        )

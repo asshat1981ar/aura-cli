@@ -1,0 +1,281 @@
+version: "3.9"
+
+# AURA Multi-Environment MCP Architecture
+# Usage: cd infra && docker compose up -d
+# Env:   Copy .env.example to .env and fill in secrets
+
+x-aura-common: &aura-common
+  build:
+    context: ..
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  networks:
+    - aura-net
+
+services:
+  # ═══════════════════════════════════════════════════════════════════════
+  # AURA MCP Servers
+  # ═══════════════════════════════════════════════════════════════════════
+
+  aura-hub:
+    <<: *aura-common
+    container_name: aura-hub
+    command: uvicorn orchestrator_hub.hub:app --host 0.0.0.0 --port 8010
+    ports:
+      - "8010:8010"
+    environment:
+      - HUB_TOKEN=${HUB_TOKEN:-}
+      - MOMENTO_API_KEY=${MOMENTO_API_KEY:-}
+    depends_on:
+      neo4j:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8010/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  aura-mcp-dev:
+    <<: *aura-common
+    container_name: aura-mcp-dev
+    command: uvicorn tools.mcp_server:app --host 0.0.0.0 --port 8001
+    ports:
+      - "8001:8001"
+    environment:
+      - MCP_API_TOKEN=${MCP_API_TOKEN:-}
+      - MCP_ENABLE_WRITE=${MCP_ENABLE_WRITE:-0}
+      - MCP_ENABLE_RUN=${MCP_ENABLE_RUN:-0}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  aura-mcp-skills:
+    <<: *aura-common
+    container_name: aura-mcp-skills
+    command: uvicorn tools.aura_mcp_skills_server:app --host 0.0.0.0 --port 8002
+    ports:
+      - "8002:8002"
+    environment:
+      - MCP_SKILLS_TOKEN=${MCP_SKILLS_TOKEN:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  aura-mcp-control:
+    <<: *aura-common
+    container_name: aura-mcp-control
+    command: uvicorn tools.aura_control_mcp:app --host 0.0.0.0 --port 8003
+    ports:
+      - "8003:8003"
+    environment:
+      - MCP_CONTROL_TOKEN=${MCP_CONTROL_TOKEN:-}
+    volumes:
+      - aura-memory:/app/memory
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  aura-mcp-loop:
+    <<: *aura-common
+    container_name: aura-mcp-loop
+    command: uvicorn tools.agentic_loop_mcp:app --host 0.0.0.0 --port 8006
+    ports:
+      - "8006:8006"
+    environment:
+      - AGENTIC_LOOP_TOKEN=${AGENTIC_LOOP_TOKEN:-}
+    volumes:
+      - aura-memory:/app/memory
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8006/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  aura-mcp-copilot:
+    <<: *aura-common
+    container_name: aura-mcp-copilot
+    command: uvicorn tools.github_copilot_mcp:app --host 0.0.0.0 --port 8007
+    ports:
+      - "8007:8007"
+    environment:
+      - COPILOT_MCP_TOKEN=${COPILOT_MCP_TOKEN:-}
+      - GITHUB_PAT=${GITHUB_PAT:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8007/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  aura-mcp-docker:
+    <<: *aura-common
+    container_name: aura-mcp-docker
+    command: uvicorn tools.docker_mcp:app --host 0.0.0.0 --port 8011
+    ports:
+      - "8011:8011"
+    environment:
+      - DOCKER_MCP_TOKEN=${DOCKER_MCP_TOKEN:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8011/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  aura-mcp-monitoring:
+    <<: *aura-common
+    container_name: aura-mcp-monitoring
+    command: uvicorn tools.monitoring_mcp:app --host 0.0.0.0 --port 8016
+    ports:
+      - "8016:8016"
+    environment:
+      - MONITORING_MCP_TOKEN=${MONITORING_MCP_TOKEN:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8016/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  aura-mcp-notification:
+    <<: *aura-common
+    container_name: aura-mcp-notification
+    command: uvicorn tools.notification_mcp:app --host 0.0.0.0 --port 8015
+    ports:
+      - "8015:8015"
+    environment:
+      - NOTIFICATION_MCP_TOKEN=${NOTIFICATION_MCP_TOKEN:-}
+      - SLACK_BOT_TOKEN=${SLACK_BOT_TOKEN:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8015/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Infrastructure Services
+  # ═══════════════════════════════════════════════════════════════════════
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: aura-neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-aura_dev}
+      - NEO4J_PLUGINS=["apoc"]
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+      - ./neo4j/schema.cypher:/var/lib/neo4j/import/schema.cypher
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - aura-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: aura-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --requirepass ${REDIS_PASSWORD:-aura_dev} --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-aura_dev}", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+    networks:
+      - aura-net
+
+  weaviate:
+    image: semitechnologies/weaviate:latest
+    container_name: aura-weaviate
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    environment:
+      - AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED=true
+      - PERSISTENCE_DATA_PATH=/var/lib/weaviate
+      - DEFAULT_VECTORIZER_MODULE=none
+      - CLUSTER_HOSTNAME=node1
+    volumes:
+      - weaviate-data:/var/lib/weaviate
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/v1/.well-known/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aura-net
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Observability Stack
+  # ═══════════════════════════════════════════════════════════════════════
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: aura-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=30d'
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:9090/-/healthy || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - aura-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: aura-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-aura_dev}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - aura-net
+
+# ═══════════════════════════════════════════════════════════════════════
+# Networks and Volumes
+# ═══════════════════════════════════════════════════════════════════════
+
+networks:
+  aura-net:
+    driver: bridge
+
+volumes:
+  aura-memory:
+  neo4j-data:
+  neo4j-logs:
+  redis-data:
+  weaviate-data:
+  prometheus-data:
+  grafana-data:

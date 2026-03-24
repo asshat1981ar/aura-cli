@@ -99,7 +99,6 @@ jobs:
           python3 << 'PYEOF'
           import os
           import secrets
-          import uuid
           from openai import OpenAI
           task = os.environ["TASK"]
           client = OpenAI()

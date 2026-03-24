@@ -53,6 +53,14 @@ jobs:
       task_category: ${{ steps.router.outputs.category }}
       architecture_plan: ${{ steps.architect.outputs.plan }}
     steps:
+      - name: Verify API key is configured
+        env:
+          AURA_API_KEY: ${{ secrets.AURA_API_KEY }}
+        run: |
+          if [ -z "$AURA_API_KEY" ]; then
+            echo "::error::AURA_API_KEY secret is not set. Add it in Settings → Secrets → Actions."
+            exit 1
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:

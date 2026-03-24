@@ -113,6 +113,15 @@ class TestA2ATask(unittest.TestCase):
 
 
 class TestA2AServer(unittest.TestCase):
+    def setUp(self):
+        # Ensure each test has a dedicated event loop to avoid cross-test leakage
+        self.loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(self.loop)
+
+    def tearDown(self):
+        self.loop.close()
+        asyncio.set_event_loop(None)
+
     def test_get_agent_card(self):
         server = A2AServer()
         card = server.get_agent_card()
@@ -120,7 +129,7 @@ class TestA2AServer(unittest.TestCase):
 
     def test_create_task_no_handler(self):
         server = A2AServer()
-        task = asyncio.get_event_loop().run_until_complete(
+        task = self.loop.run_until_complete(
             server.create_task("unknown", "do something")
         )
         self.assertEqual(task.state, TaskState.FAILED)
@@ -132,16 +141,14 @@ class TestA2AServer(unittest.TestCase):
             return {"summary": "completed successfully"}
 
         server.register_handler("code_gen", handler)
-        task = asyncio.get_event_loop().run_until_complete(
+        task = self.loop.run_until_complete(
             server.create_task("code_gen", "write hello world")
         )
         self.assertEqual(task.state, TaskState.COMPLETED)
 
     def test_get_task(self):
         server = A2AServer()
-        asyncio.get_event_loop().run_until_complete(
-            server.create_task("test", "msg")
-        )
+        self.loop.run_until_complete(server.create_task("test", "msg"))
         task_id = list(server.tasks.keys())[0]
         found = server.get_task(task_id)
         self.assertIsNotNone(found)
@@ -150,9 +157,7 @@ class TestA2AServer(unittest.TestCase):
     def test_cancel_task(self):
         server = A2AServer()
         # Create a task that will fail (no handler)
-        task = asyncio.get_event_loop().run_until_complete(
-            server.create_task("x", "msg")
-        )
+        task = self.loop.run_until_complete(server.create_task("x", "msg"))
         # Failed tasks can't be canceled
         self.assertFalse(server.cancel_task(task.id))
 

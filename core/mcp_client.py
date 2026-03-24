@@ -23,9 +23,11 @@ class MCPAsyncClient:
     async def get_client(cls, timeout: int) -> httpx.AsyncClient:
         """Get or create a pooled httpx.AsyncClient."""
         key = f"timeout_{timeout}"
-        if key not in cls._client_pool:
-            cls._client_pool[key] = httpx.AsyncClient(timeout=timeout)
-        return cls._client_pool[key]
+        client = cls._client_pool.get(key)
+        if client is None or client.is_closed:
+            client = httpx.AsyncClient(timeout=timeout)
+            cls._client_pool[key] = client
+        return client
 
     @classmethod
     async def close_all(cls):

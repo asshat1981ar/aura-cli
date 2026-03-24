@@ -31,9 +31,8 @@ permissions:
   issues: write
 
 env:
-  OPENAI_API_KEY: ${{ secrets.AURA_API_KEY }}
-  AURA_API_KEY: ${{ secrets.AURA_API_KEY }}
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  AURA_API_KEY: ${{ secrets.AURA_API_KEY }}
   AURA_MODEL: gpt-5.4
 
 jobs:
@@ -84,9 +83,6 @@ jobs:
           else
             TASK="${{ github.event.issue.title }}"
           fi
-          echo "task<<EOF" >> $GITHUB_OUTPUT
-          echo "$TASK" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
           DELIM="$(openssl rand -hex 16)"
           echo "task<<$DELIM" >> "$GITHUB_OUTPUT"
           echo "$TASK" >> "$GITHUB_OUTPUT"
@@ -99,7 +95,6 @@ jobs:
           python3 << 'PYEOF'
           import os
           import secrets
-          import uuid
           from openai import OpenAI
           task = os.environ["TASK"]
           client = OpenAI()

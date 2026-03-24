@@ -484,7 +484,21 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
     # run_sandboxed
     # ------------------------------------------------------------------ #
     if name == "run_sandboxed":
-        raise HTTPException(status_code=403, detail="run_sandboxed disabled pending real sandboxing")
+        # Minimal implementation: respect global run flag and execute the
+        # provided command via the existing _run_cmd helper.
+        if not ENABLE_RUN:
+            raise HTTPException(status_code=403, detail="Run disabled")
+        cmd = args.get("cmd")
+        if not cmd:
+            raise HTTPException(status_code=400, detail="Missing 'cmd' argument")
+        if isinstance(cmd, str):
+            cmd_list = shlex.split(cmd)
+        else:
+            cmd_list = list(cmd)
+        if not cmd_list:
+            raise HTTPException(status_code=400, detail="Empty command")
+        result = _run_cmd(cmd_list)
+        return {"data": result}
 
     # ------------------------------------------------------------------ #
     # format

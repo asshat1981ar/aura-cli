@@ -94,5 +94,54 @@
         "retention_threshold": 0.2,
         "summarize_after_days": 7,
         "max_memories": 10000
+    },
+    "openai_connector": {
+        "enabled": true,
+        "project_id": "proj_rIOqUaBNgcX5WrshqGtP76Sy",
+        "workflow_id": "wf_69c15cfbfebc8190bc011c463217ae48073852aff389ce81",
+        "webhook_url": "https://aura-webhooks.codeevo.dev/api/openai/events",
+        "webhook_events": [
+            "batch.completed",
+            "batch.failed",
+            "response.completed",
+            "response.failed",
+            "eval.run.succeeded",
+            "eval.run.failed"
+        ],
+        "agent_mapping": {
+            "code_architecture": "agents/coder.py",
+            "code_review": "agents/critic.py",
+            "devops": "agents/scaffolder.py",
+            "testing": "agents/tester.py",
+            "planning": "agents/planner.py",
+            "security_audit": "agents/verifier.py"
+        },
+        "sync_on_events": [
+            "response.completed",
+            "eval.run.succeeded"
+        ],
+        "auto_dispatch": true
+    },
+    "github_connector": {
+        "enabled": true,
+        "repo": "asshat1981ar/aura-cli",
+        "branch": "main",
+        "auto_pr": true,
+        "ci_workflows": [
+            "ci.yml",
+            "release.yml",
+            "claude-code-review.yml",
+            "coder-automation.yml"
+        ],
+        "webhook_bridge": {
+            "enabled": true,
+            "endpoint": "/api/github/events",
+            "events": [
+                "push",
+                "pull_request",
+                "workflow_run",
+                "issues"
+            ]
+        }
     }
 }

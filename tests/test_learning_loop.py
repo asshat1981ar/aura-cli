@@ -201,41 +201,96 @@ class TestAdaptivePipelineOutcome:
         fake_config.update_config.assert_called_once_with({"semantic_memory": {"top_k": 7}}, persist=False)
 
 
-# ── TestHybridClosedLoopDeprecation ──────────────────────────────────────────
+# ── TestCreateRuntimeUsesLoopOrchestrator ─────────────────────────────────────
 
-class TestHybridClosedLoopDeprecation:
-    def _make_deps(self):
-        model = MagicMock()
-        brain = MagicMock()
-        brain.recall_recent.return_value = []
-        git = MagicMock()
-        return model, brain, git
+class TestCreateRuntimeUsesLoopOrchestrator:
+    """Verify that create_runtime() builds a LoopOrchestrator, not HybridClosedLoop."""
 
-    def test_instantiation_warns(self):
-        from core.hybrid_loop import HybridClosedLoop
-        model, brain, git = self._make_deps()
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            HybridClosedLoop(model, brain, git)
-        assert any(issubclass(warning.category, DeprecationWarning) for warning in w)
+    @staticmethod
+    def _runtime_patches():
+        """Return the list of patches needed to isolate create_runtime() from
+        optional/expensive dependencies (gitpython, brain DB, etc.)."""
+        from unittest.mock import patch, MagicMock
+        return [
+            patch("aura_cli.cli_main._init_memory_and_brain", return_value=(MagicMock(), None)),
+            patch("aura_cli.cli_main.ModelAdapter", return_value=MagicMock()),
+            patch("aura_cli.cli_main.VectorStore", return_value=MagicMock()),
+            patch("aura_cli.cli_main.RouterAgent", return_value=MagicMock()),
+            patch("aura_cli.cli_main.DebuggerAgent", return_value=MagicMock()),
+            patch("aura_cli.cli_main.PlannerAgent", return_value=MagicMock()),
+            patch("aura_cli.cli_main.MemoryStore", return_value=MagicMock()),
+            patch("aura_cli.cli_main.GitTools", return_value=MagicMock()),
+            patch("aura_cli.cli_main._attach_advanced_loops"),
+            patch("aura_cli.cli_main._start_background_sync"),
+            patch("aura_cli.cli_main.resolve_config_api_key", return_value="test-key"),
+            patch("aura_cli.cli_main.runtime_provider_status", return_value={"chat_ready": True}),
+            patch("aura_cli.cli_main.default_agents", return_value={}),
+            patch("aura_cli.cli_main.GoalQueue", return_value=MagicMock()),
+            patch("aura_cli.cli_main.GoalArchive", return_value=MagicMock()),
+            patch("memory.controller.memory_controller"),
+        ]
 
-    def test_warning_message_contains_looporch(self):
-        from core.hybrid_loop import HybridClosedLoop
-        model, brain, git = self._make_deps()
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            HybridClosedLoop(model, brain, git)
-        msgs = [str(warning.message) for warning in w]
-        assert any("LoopOrchestrator" in m for m in msgs)
+    def test_create_runtime_orchestrator_is_loop_orchestrator(self):
+        """create_runtime() must return a runtime dict whose 'orchestrator'
+        key is a LoopOrchestrator instance, confirming the migration away from
+        HybridClosedLoop is complete."""
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch, MagicMock
+        from aura_cli.cli_main import create_runtime
+        from core.orchestrator import LoopOrchestrator
+        from contextlib import ExitStack
 
-    def test_warning_is_deprecation_warning(self):
-        from core.hybrid_loop import HybridClosedLoop
-        model, brain, git = self._make_deps()
-        with warnings.catch_warnings(record=True) as w:
-            warnings.simplefilter("always")
-            HybridClosedLoop(model, brain, git)
-        categories = [warning.category for warning in w]
-        assert DeprecationWarning in categories
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with ExitStack() as stack:
+                for p in self._runtime_patches():
+                    stack.enter_context(p)
+                mock_beads = stack.enter_context(patch("aura_cli.cli_main.BeadsBridge"))
+                mock_beads.from_defaults.return_value = MagicMock()
+                runtime = create_runtime(Path(tmpdir))
+
+        assert isinstance(runtime["orchestrator"], LoopOrchestrator), (
+            "create_runtime() must return a LoopOrchestrator, not HybridClosedLoop"
+        )
+
+    def test_create_runtime_does_not_use_hybrid_closed_loop(self):
+        """HybridClosedLoop must not be instantiated by create_runtime()."""
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch, MagicMock
+        from aura_cli.cli_main import create_runtime
+        from contextlib import ExitStack
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with ExitStack() as stack:
+                for p in self._runtime_patches():
+                    stack.enter_context(p)
+                mock_beads = stack.enter_context(patch("aura_cli.cli_main.BeadsBridge"))
+                mock_beads.from_defaults.return_value = MagicMock()
+                mock_hybrid = stack.enter_context(patch("core.hybrid_loop.HybridClosedLoop"))
+                create_runtime(Path(tmpdir))
+
+        mock_hybrid.assert_not_called()
+
+    def test_create_runtime_loop_key_is_none_not_hybrid(self):
+        """The 'loop' key in the runtime dict is None (LoopOrchestrator is under
+        'orchestrator') — confirm HybridClosedLoop is not stored there."""
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch, MagicMock
+        from aura_cli.cli_main import create_runtime
+        from contextlib import ExitStack
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with ExitStack() as stack:
+                for p in self._runtime_patches():
+                    stack.enter_context(p)
+                mock_beads = stack.enter_context(patch("aura_cli.cli_main.BeadsBridge"))
+                mock_beads.from_defaults.return_value = MagicMock()
+                runtime = create_runtime(Path(tmpdir))
+
+        # The deprecated 'loop' key is gone; LoopOrchestrator lives under 'orchestrator'
+        assert "loop" not in runtime or runtime.get("loop") is None
 
 
 # ── TestAutonomousDiscoveryEnqueue ───────────────────────────────────────────

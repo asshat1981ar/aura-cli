@@ -53,7 +53,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install openai pydantic
+      - run: |
+          python -m pip install --upgrade pip
+          pip install openai==1.59.3 pydantic==2.10.6
       - name: Extract task
         id: extract-task
         run: |

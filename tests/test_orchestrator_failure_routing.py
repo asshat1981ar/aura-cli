@@ -183,7 +183,21 @@ class TestActLoopRetryBackoff(unittest.TestCase):
             "likely_root_causes": ["Invalid syntax"],
             "evidence": {},
         }
+        investigation_agent = MagicMock()
+        investigation_agent.run.return_value = {
+            "status": "investigated",
+            "verification_investigation": {
+                "signals": ["syntax_error"],
+                "repeated_failure_detected": False,
+            },
+            "remediation_plan": {
+                "route": "replan",
+                "fix_hints": ["Inspect the failing file."],
+                "repeated_failure_detected": False,
+            },
+        }
         orc.root_cause_analysis_agent = root_cause_agent
+        orc.investigation_agent = investigation_agent
 
         with patch("time.sleep"), \
              patch("core.orchestrator.validate_phase_output", return_value=[]), \
@@ -213,4 +227,8 @@ class TestActLoopRetryBackoff(unittest.TestCase):
         self.assertEqual(
             phase_outputs["_failure_context"]["remediation_plan"]["route"],
             "replan",
+        )
+        self.assertEqual(
+            phase_outputs["_failure_context"]["investigation"]["status"],
+            "investigated",
         )

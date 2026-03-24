@@ -32,8 +32,6 @@ from core.cycle_outcome import CycleOutcome
 from core.hooks import HookEngine
 from core.phase_result import PhaseResult, ConfidenceRouter
 from core.quality_trends import QualityTrendAnalyzer
-from core.investigate_verification_failures import investigate_verification_failure
-from core.remediation_plan import build_remediation_plan
 from core.capability_manager import (
     analyze_capability_needs,
     provision_capability_actions,
@@ -173,6 +171,7 @@ class LoopOrchestrator:
         self.beads_required = beads_required
         self.beads_scope = beads_scope
         self.self_correction_agent = agents.get("self_correction")
+        self.investigation_agent = agents.get("investigation")
         self.root_cause_analysis_agent = agents.get("root_cause_analysis")
         self.last_capability_plan: dict = {}
         self.last_capability_goal_queue: dict = {}
@@ -266,6 +265,39 @@ class LoopOrchestrator:
             )
         except Exception as exc:
             log_json("WARN", "root_cause_analysis_failed", details={"error": str(exc)})
+            return None
+
+    def _run_investigation(
+        self,
+        *,
+        goal: str,
+        verification: Dict[str, Any],
+        context: Optional[dict] = None,
+        route: str = "act",
+        analysis_suggestion: str | None = None,
+        root_cause_analysis: Optional[dict] = None,
+        previous_test_count: int | None = None,
+        current_test_count: int | None = None,
+    ) -> Optional[dict]:
+        """Optionally produce a structured investigation report for a failed phase."""
+        if not self.investigation_agent:
+            return None
+        try:
+            return self.investigation_agent.run(
+                {
+                    "goal": goal,
+                    "verification": verification,
+                    "context": context or {},
+                    "route": route,
+                    "analysis_suggestion": analysis_suggestion,
+                    "root_cause_analysis": root_cause_analysis or {},
+                    "history": self._failure_history(),
+                    "previous_test_count": previous_test_count,
+                    "current_test_count": current_test_count,
+                }
+            )
+        except Exception as exc:
+            log_json("WARN", "investigation_failed", details={"error": str(exc)})
             return None
 
     def _failure_history(self, limit: int = 5) -> List[dict]:
@@ -645,25 +677,23 @@ class LoopOrchestrator:
                 failure_context,
                 history=self._failure_history(),
             )
-            failure_investigation = investigate_verification_failure(
-                {"failures": [stderr_hint], "logs": stderr_hint},
-                root_cause_analysis=root_cause_analysis,
-                history=self._failure_history(),
+            investigation = self._run_investigation(
+                goal=goal,
+                verification={"failures": [stderr_hint], "logs": stderr_hint},
                 context=failure_context,
-            )
-            remediation_plan = build_remediation_plan(
-                {"failures": [stderr_hint], "logs": stderr_hint},
                 route="act",
                 analysis_suggestion=analysis_suggestion,
                 root_cause_analysis=root_cause_analysis,
-                investigation=failure_investigation,
-                context=failure_context,
             )
+            failure_investigation = (investigation or {}).get("verification_investigation", {})
+            remediation_plan = (investigation or {}).get("remediation_plan", {})
             fix_hints = remediation_plan.get("fix_hints", []) or [stderr_hint]
             if root_cause_analysis:
                 sandbox_result["root_cause_analysis"] = root_cause_analysis
             sandbox_result["failure_investigation"] = failure_investigation
             sandbox_result["remediation_plan"] = remediation_plan
+            if investigation:
+                sandbox_result["investigation"] = investigation
 
             log_json("WARN", "sandbox_pre_apply_failed",
                      details={"try": _sandbox_try + 1,
@@ -829,23 +859,37 @@ class LoopOrchestrator:
                 failure_context,
                 history=self._failure_history(),
             )
-            failure_investigation = investigate_verification_failure(
-                verification,
-                root_cause_analysis=root_cause_analysis,
-                history=self._failure_history(),
+            current_test_count = None
+            previous_test_count = None
+            quality = phase_outputs.get("quality", {}) if isinstance(phase_outputs.get("quality"), dict) else {}
+            if "test_count" in quality:
+                current_test_count = quality.get("test_count")
+            recent_history = self._failure_history(limit=2)
+            if recent_history:
+                latest_quality = (
+                    recent_history[-1].get("phase_outputs", {}).get("quality", {})
+                    if isinstance(recent_history[-1], dict)
+                    else {}
+                )
+                if isinstance(latest_quality, dict) and "test_count" in latest_quality:
+                    previous_test_count = latest_quality.get("test_count")
+            investigation = self._run_investigation(
+                goal=goal,
+                verification=verification,
                 context=failure_context,
-            )
-            remediation_plan = build_remediation_plan(
-                verification,
                 route=route,
                 analysis_suggestion=analysis_suggestion,
                 root_cause_analysis=root_cause_analysis,
-                investigation=failure_investigation,
-                context=failure_context,
+                previous_test_count=previous_test_count,
+                current_test_count=current_test_count,
             )
+            failure_investigation = (investigation or {}).get("verification_investigation", {})
+            remediation_plan = (investigation or {}).get("remediation_plan", {})
             fix_hints = remediation_plan.get("fix_hints", []) or verification.get("failures", [])
             verification["failure_investigation"] = failure_investigation
             verification["remediation_plan"] = remediation_plan
+            if investigation:
+                verification["investigation"] = investigation
             if root_cause_analysis:
                 verification["root_cause_analysis"] = root_cause_analysis
 
@@ -859,6 +903,7 @@ class LoopOrchestrator:
                     "failure_investigation": failure_investigation,
                     "root_cause_analysis": root_cause_analysis,
                     "remediation_plan": remediation_plan,
+                    "investigation": investigation,
                 }
                 replan_needed = True
                 break

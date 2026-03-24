@@ -29,7 +29,6 @@ on:
 permissions:
   contents: read
   issues: write
-  pull-requests: write
 
 env:
   AURA_API_KEY: ${{ secrets.AURA_API_KEY }}
@@ -106,6 +105,10 @@ jobs:
         env:
           TASK: ${{ steps.extract-task.outputs.task }}
         run: |
+          python3 << 'PYEOF'
+          import os
+          import secrets as _s
+          from openai import OpenAI
           delim_task = f"EOF_{secrets.token_hex(8)}"
           delim_plan = f"EOF_{secrets.token_hex(8)}"
           with open(os.environ["GITHUB_OUTPUT"],"a") as f:
@@ -122,6 +125,9 @@ jobs:
               f.write(f"plan<<{d2}\n{plan}\n{d2}\n")
           delim = f"EOF_{secrets.token_hex(8)}"
           with open(os.environ["GITHUB_OUTPUT"],"a") as f:
+              d1, d2 = _s.token_hex(16), _s.token_hex(16)
+              f.write(f"task_description<<{d1}\n"+task+f"\n{d1}\n")
+              f.write(f"plan<<{d2}\n"+plan+f"\n{d2}\n")
               f.write(f"task_description<<{delim}\n{task}\n{delim}\n")
               f.write(f"plan<<{delim}\n{plan}\n{delim}\n")
           print(plan)
@@ -324,13 +330,15 @@ jobs:
           merge-multiple: true
       - name: Post results
         uses: actions/github-script@v7
+        env:
+          TASK_CATEGORY: ${{ needs.code-architect.outputs.task_category }}
         with:
           script: |
             const MAX_BODY_LENGTH = 60000;      // conservative limit below GitHub's comment size cap
             const MAX_SECTION_LENGTH = 15000;   // per-result cap to avoid any single huge section
 
             let body = '## Aura Dev Suite Results\n\n';
-            const cat = '${{ needs.code-architect.outputs.task_category }}';
+            const cat = process.env.TASK_CATEGORY || 'unknown';
             body += '**Category:** ' + cat + '\n\n';
 
             const files = fs.readdirSync('.').filter(f => f.endsWith('-results.md'));
@@ -369,6 +377,5 @@ jobs:
                 issue_number: context.payload.issue.number,
                 body,
               });
-            }
             }
             await core.summary.addRaw(body).write();

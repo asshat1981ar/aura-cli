@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import ast
 import base64
+import hmac
 import io
 import json
 import os
@@ -23,8 +24,8 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException
-from pydantic import BaseModel
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
 # Module-level configuration — tests may monkeypatch these at any time.
@@ -47,17 +48,15 @@ ENABLE_RUN: bool = os.getenv("MCP_ENABLE_RUN", "") == "1"
 
 #: Allowed executable names for shell-execution tools.
 RUN_ALLOW: set = {
-    "python",
-    "python3",
     "ruff",
-    "pip",
     "pip-audit",
-    "npm",
-    "npx",
     "prettier",
     "semgrep",
     "echo",
 }
+
+#: Subprocess timeout in seconds (configurable via env var).
+RUN_TIMEOUT_SECONDS: int = int(os.getenv("MCP_RUN_TIMEOUT_SECONDS", "30"))
 
 #: Rate-limit ceiling (calls per minute, per token).  0 = disabled.
 RATE_LIMIT_PER_MIN: int = int(os.getenv("MCP_RATE_LIMIT_PER_MIN", "0"))
@@ -89,21 +88,40 @@ def _check_rate_limit(token: str) -> None:
 app = FastAPI(title="AURA MCP Server", version="0.2.0")
 
 
+# Fail closed at startup if auth is not configured
+@app.on_event("startup")
+async def _startup_auth_guard() -> None:
+    token = os.getenv("MCP_API_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("MCP_API_TOKEN must be set before starting the MCP server")
+
+
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
 
-def _require_auth(authorization: Optional[str] = Header(default=None)) -> str:
-    """Validate bearer token; return token string (or ``'anon'`` if auth disabled)."""
-    token = os.getenv("MCP_API_TOKEN", "")
+def _require_auth(
+    request: Request,
+    authorization: Optional[str] = Header(default=None),
+) -> str:
+    """Validate bearer token; fail closed; rate-limit all auth attempts."""
+    client_id = request.client.host if request.client else "unknown"
+    _check_rate_limit(f"auth:{client_id}")
+
+    token = os.getenv("MCP_API_TOKEN", "").strip()
     if not token:
-        return "anon"
+        raise HTTPException(status_code=503, detail="Authentication not configured")
+
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
+
     parts = authorization.split(" ", 1)
-    if len(parts) != 2 or parts[0].lower() != "bearer" or parts[1] != token:
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Invalid Authorization scheme")
+
+    if not hmac.compare_digest(parts[1], token):
         raise HTTPException(status_code=403, detail="Invalid token")
-    _check_rate_limit(parts[1])
+
     return parts[1]
 
 
@@ -115,7 +133,7 @@ class CallRequest(BaseModel):
     """Generic tool-invocation payload."""
 
     tool_name: str
-    args: Dict[str, Any] = {}
+    args: Dict[str, Any] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -150,10 +168,13 @@ def _run_cmd(cmd: List[str], cwd: Optional[Path] = None) -> Dict[str, Any]:
         proc = subprocess.run(
             cmd,
             cwd=cwd or PROJECT_ROOT,
+            timeout=RUN_TIMEOUT_SECONDS,
             capture_output=True,
             text=True,
         )
         return {"returncode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr}
+    except subprocess.TimeoutExpired:
+        return {"returncode": 124, "stdout": "", "stderr": f"command timed out after {RUN_TIMEOUT_SECONDS}s"}
     except FileNotFoundError:
         return {"returncode": 127, "stdout": "", "stderr": f"{cmd[0]}: command not found"}
 
@@ -320,17 +341,24 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
     if name == "decompress":
         b64_str = args.get("base64", "")
         dest_str = args.get("dest", "tmp_out")
-        dest = PROJECT_ROOT / dest_str
+        dest = _jail(dest_str)
         dest.mkdir(parents=True, exist_ok=True)
         raw = base64.b64decode(b64_str)
         skipped: List[str] = []
+        dest_root = dest.resolve()
         with zipfile.ZipFile(io.BytesIO(raw)) as zf:
-            for member in zf.namelist():
-                out = (dest / member).resolve()
+            for member in zf.infolist():
+                out = (dest / member.filename).resolve()
                 try:
-                    out.relative_to(dest.resolve())
+                    out.relative_to(dest_root)
                 except ValueError:
-                    skipped.append(member)
+                    skipped.append(member.filename)
+                    continue
+                if member.is_dir():
+                    out.mkdir(parents=True, exist_ok=True)
+                    continue
+                if member.file_size > MAX_READ_BYTES:
+                    skipped.append(f"{member.filename} (too large)")
                     continue
                 out.parent.mkdir(parents=True, exist_ok=True)
                 out.write_bytes(zf.read(member))
@@ -459,29 +487,43 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
     # run_sandboxed
     # ------------------------------------------------------------------ #
     if name == "run_sandboxed":
-        cmd = args.get("cmd", [])
+        # Minimal implementation: respect global run flag and execute the
+        # provided command via the existing _run_cmd helper.
+        if not ENABLE_RUN:
+            raise HTTPException(status_code=403, detail="Run disabled")
+        cmd = args.get("cmd")
+        if not cmd:
+            raise HTTPException(status_code=400, detail="Missing 'cmd' argument")
         if isinstance(cmd, str):
-            cmd = shlex.split(cmd)
-        result = _run_cmd(cmd)
+            cmd_list = shlex.split(cmd)
+        elif isinstance(cmd, (list, tuple)) and all(isinstance(part, str) for part in cmd):
+            cmd_list = list(cmd)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid 'cmd' argument: expected string or list of strings",
+            )
+        if not cmd_list:
+            raise HTTPException(status_code=400, detail="Empty command")
+        result = _run_cmd(cmd_list)
         return {"data": result}
 
     # ------------------------------------------------------------------ #
     # format
     # ------------------------------------------------------------------ #
     if name == "format":
-        cmd_str = args.get("cmd", "")
-        cmd = shlex.split(cmd_str) if isinstance(cmd_str, str) else list(cmd_str)
-        result = _run_cmd(cmd)
+        paths_arg = args.get("paths", ["."])
+        if isinstance(paths_arg, str):
+            paths_arg = [paths_arg]
+        safe_paths = [str(_jail(p).relative_to(PROJECT_ROOT)) for p in paths_arg]
+        result = _run_cmd(["ruff", "format", *safe_paths])
         return {"data": result}
 
     # ------------------------------------------------------------------ #
     # dependency_audit
     # ------------------------------------------------------------------ #
     if name == "dependency_audit":
-        cmd = args.get("cmd", ["pip-audit"])
-        if isinstance(cmd, str):
-            cmd = shlex.split(cmd)
-        result = _run_cmd(cmd)
+        result = _run_cmd(["pip-audit"])
         return {"data": {**result, "report": result["stdout"] or result["stderr"]}}
 
     # ------------------------------------------------------------------ #
@@ -636,9 +678,12 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
     # debug_trace
     # ------------------------------------------------------------------ #
     if name == "debug_trace":
-        module = args.get("module", "")
-        result = _run_cmd(["python3", "-m", module])
-        return {"data": result}
+        # Explicitly signal that this tool does not execute code and is not implemented.
+        # Clients should treat this as an unavailable / disabled capability.
+        raise HTTPException(
+            status_code=501,
+            detail="debug_trace is disabled and does not execute modules.",
+        )
 
     raise HTTPException(status_code=404, detail=f"Unknown tool: {name}")
 

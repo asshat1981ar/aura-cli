@@ -324,7 +324,7 @@ jobs:
 
   report:
     name: Report Results
-    needs: [code-architect, security-auditor, code-architecture]
+    needs: [code-architect, security-auditor, code-architecture, code-reviewer, devops-engineer, test-engineer, planner]
     runs-on: ubuntu-latest
     if: always() && needs.code-architect.result == 'success'
     steps:

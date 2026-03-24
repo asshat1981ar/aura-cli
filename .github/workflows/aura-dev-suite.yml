@@ -84,6 +84,8 @@ jobs:
           else
             TASK="${{ github.event.issue.title }}"
           fi
+          DELIM="AURA_EOF_$(openssl rand -hex 16)"
+          printf 'task<<%s\n%s\n%s\n' "$DELIM" "$TASK" "$DELIM" >> "$GITHUB_OUTPUT"
           DELIM="GH_DELIM_$(openssl rand -hex 16)"
           echo "task<<$DELIM" >> $GITHUB_OUTPUT
           echo "$TASK" >> $GITHUB_OUTPUT
@@ -123,6 +125,11 @@ jobs:
           plan = r.choices[0].message.content
           import secrets
           with open(os.environ["GITHUB_OUTPUT"],"a") as f:
+              import uuid
+              delim_td = "AURA_EOF_" + uuid.uuid4().hex
+              delim_pl = "AURA_EOF_" + uuid.uuid4().hex
+              f.write(f"task_description<<{delim_td}\n"+task+f"\n{delim_td}\n")
+              f.write(f"plan<<{delim_pl}\n"+plan+f"\n{delim_pl}\n")
               d1 = "GH_DELIM_" + secrets.token_hex(16)
               f.write(f"task_description<<{d1}\n"+task+f"\n{d1}\n")
               d2 = "GH_DELIM_" + secrets.token_hex(16)

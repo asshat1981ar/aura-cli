@@ -194,8 +194,11 @@ class PropagationEngine:
         po = entry.get("phase_outputs", {})
         verif = po.get("verification", {}) or {}
         apply_result = po.get("apply_result", {}) or {}
+        remediation_plan = verif.get("remediation_plan", {}) if isinstance(verif, dict) else {}
+        failure_investigation = verif.get("failure_investigation", {}) if isinstance(verif, dict) else {}
         return {
             "cycle_id":       entry.get("cycle_id", ""),
+            "goal":           entry.get("goal", ""),
             "goal_type":      entry.get("goal_type", "default"),
             "events":         events,
             "verification":   verif,
@@ -203,6 +206,8 @@ class PropagationEngine:
             "applied_files":  apply_result.get("applied", []),
             "failed_files":   apply_result.get("failed", []),
             "failures":       verif.get("failures", []),
+            "remediation_plan": remediation_plan if isinstance(remediation_plan, dict) else {},
+            "failure_investigation": failure_investigation if isinstance(failure_investigation, dict) else {},
             "phase_outputs":  po,
             "consecutive_fails": self._consecutive_fail_count,
             "goal_queue":     self.queue,
@@ -299,6 +304,17 @@ class PropagationEngine:
                 ),
                 max_fires_per_goal=1,
             ),
+            # 8. Structured remediation on failure → targeted follow-up goal
+            PropagationRule(
+                name="remediation_follow_up_goal",
+                event="verification_fail",
+                condition=lambda ctx: bool(ctx["remediation_plan"]) and (
+                    ctx["remediation_plan"].get("repeated_failure_detected")
+                    or ctx["remediation_plan"].get("route") in ("replan", "skip")
+                ),
+                action=lambda ctx: self._remediation_follow_up_goal(ctx),
+                max_fires_per_goal=1,
+            ),
             # 8. Security fix passed → update security scan baseline
             PropagationRule(
                 name="security_baseline_after_fix",
@@ -325,4 +341,22 @@ class PropagationEngine:
                     f"Investigate and fix repeated '{ins['phase']}' phase failures "
                     f"(rate: {ins.get('failure_rate', '?')})"
                 )
+        return None
+
+    @staticmethod
+    def _remediation_follow_up_goal(ctx: Dict) -> Optional[str]:
+        """Craft a follow-up goal from remediation planning output."""
+        remediation = ctx.get("remediation_plan", {}) or {}
+        investigation = ctx.get("failure_investigation", {}) or {}
+        route = remediation.get("route")
+        goal = str(ctx.get("goal", "")).strip() or "current goal"
+        signals = list(investigation.get("signals", [])) or ["unknown_failure"]
+        signal_summary = ", ".join(signals[:2])
+
+        if route == "skip":
+            return f"Review external blocker for '{goal}' ({signal_summary}) before retrying"
+        if remediation.get("repeated_failure_detected"):
+            return f"Investigate repeated failure on '{goal}' ({signal_summary}) and narrow the failing surface"
+        if route == "replan":
+            return f"Re-plan '{goal}' using remediation evidence ({signal_summary})"
         return None

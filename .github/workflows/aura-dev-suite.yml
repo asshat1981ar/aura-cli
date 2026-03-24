@@ -182,7 +182,7 @@ jobs:
           python3 << 'PYEOF'
           import os; from openai import OpenAI; client=OpenAI()
           t,p=os.environ["TASK"],os.environ.get("PLAN","")
-          r=client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura DevOps Engineer for asshat1981ar/aura-cli. Manage CI/CD pipelines, Docker configurations, GitHub Actions workflows, and deployment infrastructure. The project uses GitHub Actions, Docker, webhook integration at aura-webhooks.codeevo.dev, and MCP server deployment on ports 8001-8007. Generate workflow YAML, Dockerfiles, and infrastructure-as-code."},{"role":"user","content":f"Context:\n{p}\nTask:\n{t}\nGenerate DevOps configs."}])
+          r=client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura DevOps Engineer for asshat1981ar/aura-cli. Manage CI/CD pipelines, Docker configurations, GitHub Actions workflows, and deployment infrastructure. The project uses GitHub Actions, Docker, webhook integration at aura-webhooks.codeevo.dev, and MCP servers configured via the mcp_servers registry in aura.config.json and/or environment variables. Do not hardcode MCP port numbers; read them from config or keep them configurable. Generate workflow YAML, Dockerfiles, and infrastructure-as-code."},{"role":"user","content":f"Context:\n{p}\nTask:\n{t}\nGenerate DevOps configs."}])
           open("devops-results.md","w").write("# DevOps Results\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4

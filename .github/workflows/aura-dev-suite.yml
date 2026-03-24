@@ -27,12 +27,12 @@ on:
           - security_audit
 
 permissions:
-  contents: write
+  contents: read
   issues: write
-  pull-requests: write
 
 env:
-  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  AURA_API_KEY: ${{ secrets.AURA_API_KEY }}
+  OPENAI_API_KEY: ${{ secrets.AURA_API_KEY }}
   AURA_MODEL: gpt-5.4
 
 jobs:
@@ -40,9 +40,13 @@ jobs:
     name: Aura Code Architect
     runs-on: ubuntu-latest
     if: |
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'aura-dev')) ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/aura'))
+      (github.event_name == 'issue_comment' &&
+        contains(github.event.comment.body, '/aura') &&
+        (github.event.comment.author_association == 'OWNER' ||
+         github.event.comment.author_association == 'MEMBER' ||
+         github.event.comment.author_association == 'COLLABORATOR')))
     outputs:
       task_description: ${{ steps.architect.outputs.task_description }}
       task_category: ${{ steps.router.outputs.category }}
@@ -68,24 +72,27 @@ jobs:
           else
             TASK="$WF_ISSUE_TITLE"
           fi
-          echo "task<<EOF" >> $GITHUB_OUTPUT
-          echo "$TASK" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          DELIMITER=$(openssl rand -hex 16)
+          echo "task<<$DELIMITER" >> "$GITHUB_OUTPUT"
+          echo "$TASK" >> "$GITHUB_OUTPUT"
+          echo "$DELIMITER" >> "$GITHUB_OUTPUT"
       - name: Architect - Analyze
         id: architect
         env:
           TASK: ${{ steps.extract-task.outputs.task }}
         run: |
           python3 << 'PYEOF'
-          import os
+          import os, secrets
           from openai import OpenAI
           client = OpenAI()
           task = os.environ["TASK"]
           r = client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Code Architect for asshat1981ar/aura-cli. Design architecture, scaffold modules, generate Python code with async patterns, pydantic models, type hints. Integrate with core/orchestrator.py and agents/registry.py. Use MCP servers on ports 8001-8007. Output complete runnable modules with docstrings and tests."},{"role":"user","content":f"Analyze this task and create an architecture plan:\n\n{task}"}])
           plan = r.choices[0].message.content
           with open(os.environ["GITHUB_OUTPUT"],"a") as f:
-              f.write("task_description<<EOF\n"+task+"\nEOF\n")
-              f.write("plan<<EOF\n"+plan+"\nEOF\n")
+              delim_task = secrets.token_hex(16)
+              f.write(f"task_description<<{delim_task}\n"+task+f"\n{delim_task}\n")
+              delim_plan = secrets.token_hex(16)
+              f.write(f"plan<<{delim_plan}\n"+plan+f"\n{delim_plan}\n")
           print(plan)
           PYEOF
       - name: Task Router

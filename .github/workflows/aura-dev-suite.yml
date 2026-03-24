@@ -83,7 +83,7 @@ jobs:
           if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
             pip install -e ".[dev]"
           fi
-          pip install openai
+          pip install openai==1.55.3
       - name: Extract task
         id: extract-task
         run: |

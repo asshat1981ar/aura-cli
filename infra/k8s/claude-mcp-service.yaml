@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: aura-claude-mcp-service
+  labels:
+    app: aura-claude-mcp
+spec:
+  type: ClusterIP
+  selector:
+    app: aura-claude-mcp
+  ports:
+  - name: hub
+    port: 8010
+    targetPort: 8010
+  - name: dev-tools
+    port: 8001
+    targetPort: 8001
+  - name: skills
+    port: 8002
+    targetPort: 8002

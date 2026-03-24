@@ -1,0 +1,35 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: "aura-hub"
+    static_configs:
+      - targets: ["aura-hub:8010"]
+    metrics_path: /metrics
+    scrape_interval: 10s
+
+  - job_name: "aura-mcp-servers"
+    static_configs:
+      - targets:
+          - "aura-mcp-dev:8001"
+          - "aura-mcp-skills:8002"
+          - "aura-mcp-control:8003"
+          - "aura-mcp-loop:8006"
+          - "aura-mcp-copilot:8007"
+          - "aura-mcp-docker:8011"
+          - "aura-mcp-notification:8015"
+          - "aura-mcp-monitoring:8016"
+    metrics_path: /metrics
+
+  - job_name: "neo4j"
+    static_configs:
+      - targets: ["aura-neo4j:7474"]
+    metrics_path: /metrics
+
+  - job_name: "redis"
+    static_configs:
+      - targets: ["aura-redis:6379"]

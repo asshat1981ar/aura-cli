@@ -216,6 +216,9 @@ class ServerLifecycle:
 
 def _listening(host: str, port: int) -> bool:
     """Check if a TCP port is listening."""
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.settimeout(0.3)
-        return sock.connect_ex((host, port)) == 0
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.settimeout(0.3)
+            return sock.connect_ex((host, port)) == 0
+    except OSError:
+        return False

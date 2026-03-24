@@ -496,8 +496,13 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
             raise HTTPException(status_code=400, detail="Missing 'cmd' argument")
         if isinstance(cmd, str):
             cmd_list = shlex.split(cmd)
-        else:
+        elif isinstance(cmd, (list, tuple)) and all(isinstance(part, str) for part in cmd):
             cmd_list = list(cmd)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid 'cmd' argument: expected string or list of strings",
+            )
         if not cmd_list:
             raise HTTPException(status_code=400, detail="Empty command")
         result = _run_cmd(cmd_list)

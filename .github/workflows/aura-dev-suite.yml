@@ -73,6 +73,10 @@ jobs:
           else
             TASK="$WF_ISSUE_TITLE"
           fi
+          DELIM="EOF_$(openssl rand -hex 8)"
+          echo "task<<$DELIM" >> $GITHUB_OUTPUT
+          echo "$TASK" >> $GITHUB_OUTPUT
+          echo "$DELIM" >> $GITHUB_OUTPUT
           DELIM="$(openssl rand -hex 16)"
           echo "task<<${DELIM}" >> $GITHUB_OUTPUT
           echo "$TASK" >> $GITHUB_OUTPUT
@@ -84,14 +88,16 @@ jobs:
         run: |
           python3 << 'PYEOF'
           import os
+          import secrets
           from openai import OpenAI
           client = OpenAI()
           task = os.environ["TASK"]
           r = client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Code Architect for asshat1981ar/aura-cli. Design architecture, scaffold modules, generate Python code with async patterns, pydantic models, type hints. Integrate with core/orchestrator.py and agents/registry.py. Use MCP servers on ports 8001-8007. Output complete runnable modules with docstrings and tests."},{"role":"user","content":f"Analyze this task and create an architecture plan:\n\n{task}"}])
           plan = r.choices[0].message.content
+          delim = f"EOF_{secrets.token_hex(8)}"
           with open(os.environ["GITHUB_OUTPUT"],"a") as f:
-              f.write("task_description<<EOF\n"+task+"\nEOF\n")
-              f.write("plan<<EOF\n"+plan+"\nEOF\n")
+              f.write(f"task_description<<{delim}\n{task}\n{delim}\n")
+              f.write(f"plan<<{delim}\n{plan}\n{delim}\n")
           print(plan)
           PYEOF
       - name: Task Router
@@ -136,6 +142,7 @@ jobs:
           open("review-results.md","w").write("# Code Review\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: code-review-results
           path: review-results.md
@@ -163,6 +170,7 @@ jobs:
           open("devops-results.md","w").write("# DevOps Results\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: devops-results
           path: devops-results.md
@@ -190,6 +198,7 @@ jobs:
           open("test-results.md","w").write("# Test Results\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: test-results
           path: test-results.md
@@ -217,6 +226,7 @@ jobs:
           open("planning-results.md","w").write("# Planning Results\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: planning-results
           path: planning-results.md
@@ -244,6 +254,7 @@ jobs:
           open("security-results.md","w").write("# Security Audit\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: security-audit-results
           path: security-results.md
@@ -271,6 +282,7 @@ jobs:
           open("architecture-results.md","w").write("# Architecture Results\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: architecture-results
           path: architecture-results.md

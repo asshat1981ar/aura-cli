@@ -69,7 +69,7 @@ jobs:
           if [ "$WF_EVENT_NAME" = "workflow_dispatch" ]; then
             TASK="$WF_INPUT_TASK"
           elif [ "$WF_EVENT_NAME" = "issue_comment" ]; then
-            TASK=$(echo "$WF_COMMENT_BODY" | sed 's|/aura ||')
+            TASK=$(echo "$WF_COMMENT_BODY" | sed 's|^/aura[[:space:]]*||')
           else
             TASK="$WF_ISSUE_TITLE"
           fi

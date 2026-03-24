@@ -1,5 +1,6 @@
-# R1: Shim — canonical entry point lives in aura_cli/cli_main.py.
-# Keep this wrapper lazy so lightweight/help paths do not trigger full runtime imports.
+# Shim — canonical entry point lives in aura_cli/cli_main.py.
+# aura_cli.cli_main is imported lazily to prevent module-level
+# ConfigManager instantiation from emitting logs on lightweight paths.
 import json
 import sys
 try:
@@ -7,10 +8,14 @@ try:
     load_dotenv()
 except ImportError:
     pass
-
-from aura_cli.cli_options import CLIParseError, attach_cli_warnings, parse_cli_args, render_help
-from aura_cli.cli_options import cli_parse_error_payload, unknown_command_help_topic_payload
-
+from aura_cli.cli_options import (
+    CLIParseError,
+    attach_cli_warnings,
+    cli_parse_error_payload,
+    parse_cli_args,
+    render_help,
+    unknown_command_help_topic_payload,
+)
 
 if __name__ == "__main__":
     raw_argv = sys.argv[1:]
@@ -41,16 +46,16 @@ if __name__ == "__main__":
                 print(f"Error: {exc}", file=sys.stderr)
             sys.exit(2)
 
-    from aura_cli.cli_main import main as _main
+    from aura_cli.cli_main import main
     try:
-        sys.exit(_main(argv=raw_argv))
+        sys.exit(main(argv=raw_argv))
     except Exception as exc:
-        if "--json" in raw_argv:
-            print(json.dumps(attach_cli_warnings({
+        if getattr(parsed.namespace, "json", False) or "--json" in raw_argv:
+            payload = {
                 "status": "error",
                 "code": "unexpected_runtime_error",
-                "message": str(exc)
-            }, parsed)))
-        else:
-            raise
-        sys.exit(1)
+                "message": str(exc),
+            }
+            print(json.dumps(attach_cli_warnings(payload, parsed)))
+            sys.exit(1)
+        raise

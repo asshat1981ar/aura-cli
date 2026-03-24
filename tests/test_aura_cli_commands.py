@@ -9,6 +9,7 @@ invocations succeed with a status code of 0.
 import json
 import os
 import sys
+import tempfile
 from pathlib import Path
 from unittest import TestCase
 
@@ -38,3 +39,43 @@ class TestCLIEntrypointSmoke(TestCase):
         payload = json.loads(proc.stdout)
         self.assertIn("commands", payload)
         self.assertIn("json_contracts", payload)
+
+    def test_main_json_runtime_failures_preserve_structured_error_contract(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            sitecustomize = Path(tmpdir) / "sitecustomize.py"
+            sitecustomize.write_text(
+                "\n".join(
+                    (
+                        "import sys",
+                        "import types",
+                        "",
+                        "module = types.ModuleType('aura_cli.cli_main')",
+                        "",
+                        "def main(argv=None):",
+                        "    raise RuntimeError('boom')",
+                        "",
+                        "module.main = main",
+                        "sys.modules['aura_cli.cli_main'] = module",
+                    )
+                ),
+                encoding="utf-8",
+            )
+
+            env_pythonpath = tmpdir
+            if existing := os.environ.get("PYTHONPATH"):
+                env_pythonpath = os.pathsep.join((tmpdir, existing))
+
+            proc = run_main_subprocess(
+                "goal",
+                "status",
+                "--json",
+                env_overrides={"PYTHONPATH": env_pythonpath},
+            )
+
+        self.assertEqual(proc.returncode, 1)
+        self.assertEqual(proc.stderr, "")
+
+        payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["code"], "unexpected_runtime_error")
+        self.assertEqual(payload["message"], "boom")

@@ -46,7 +46,7 @@ jobs:
       (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'aura-dev')) ||
       (
         github.event_name == 'issue_comment' &&
-        contains(github.event.comment.body, '/aura') &&
+        startsWith(github.event.comment.body, '/aura') &&
         (
           github.event.comment.author_association == 'OWNER' ||
           github.event.comment.author_association == 'MEMBER' ||

@@ -6,7 +6,7 @@ This file is the live reviewer-facing summary for the current active sweep branc
 
 PR: `#239`  
 Branch: `feature/multi-env-mcp-architecture`  
-HEAD SHA: `42cff023194a79b74ea274ba22b1ed3d5557f0ba`
+HEAD SHA: `caf73e4ebdf34a6b92a53d7f7d83128779c6e8c2`
 
 Description:
 
@@ -34,8 +34,8 @@ Testing Performed:
   - `python3 -m pytest -q tests/test_workflow_engine.py -k get_orchestrator`
   - `python3 -m pytest -q tests/integration/test_sprint2_integration.py`
 - broader CI/workflow verification:
-  - `Python CI` green on `42cff02`
-  - `Claude Code Review` green on `42cff02`
+  - `Python CI` green on `caf73e4`
+  - `Claude Code Review` green on `caf73e4`
 - anything intentionally not verified:
   - no additional broad runtime or repo-wide regression sweep beyond the repaired PR surfaces
 

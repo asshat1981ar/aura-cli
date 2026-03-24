@@ -254,6 +254,7 @@ class TestAgentRegistryIntegration(unittest.TestCase):
             "python_agent", "typescript_agent", "external_llm",
             "monitoring", "notification", "telemetry", "self_correction",
             "code_search", "investigation", "root_cause_analysis",
+            "mcp_discovery", "mcp_health",
         }
         self.assertEqual(set(agents.keys()), expected)
 

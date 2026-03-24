@@ -54,14 +54,9 @@ jobs:
     steps:
       - name: Verify API key is configured
         env:
-          AURA_API_KEY: ${{ secrets.AURA_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           missing=0
-          if [ -z "$AURA_API_KEY" ]; then
-            echo "::error::AURA_API_KEY secret is not set. Add it in Settings → Secrets → Actions."
-            missing=1
-          fi
           if [ -z "$OPENAI_API_KEY" ]; then
             echo "::error::OPENAI_API_KEY secret is not set. Add it in Settings → Secrets → Actions."
             missing=1

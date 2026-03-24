@@ -138,6 +138,8 @@ def _slack_send(args: Dict) -> Any:
     bot_token = os.getenv("SLACK_BOT_TOKEN", "")
     if not bot_token:
         raise ValueError("SLACK_BOT_TOKEN environment variable is not set.")
+    if not bot_token.startswith(("xoxb-", "xoxp-", "xapp-")):
+        raise ValueError("SLACK_BOT_TOKEN does not appear to be a valid Slack token format.")
 
     payload: Dict[str, Any] = {"channel": channel, "text": text}
     thread_ts = args.get("thread_ts", "").strip()

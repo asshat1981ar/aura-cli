@@ -180,8 +180,8 @@ echo "Running health check..."
 if python3 main.py doctor &> /dev/null; then
     info "Health check passed"
 else
-    warn "Health check had warnings (this is normal on first run)"
-    warn "You may need to configure API keys in aura.config.json or .env"
+    warn "Health check had warnings (expected on first run — missing API keys is normal)"
+    warn "Configure your API key in aura.config.json (set 'api_key') or via AURA_API_KEY env var"
 fi
 
 # Summary

@@ -99,7 +99,7 @@ class TaskRouter:
 
         return None
 
-    def _pick_agent(self, capability: str, agents: List[AgentInfo]) -> str:
+    def _pick_agent(self, capability: str, agents: List[AgentInfo]) -> Optional[str]:
         """Round-robin selection among agents for a capability."""
         if not agents:
             return None

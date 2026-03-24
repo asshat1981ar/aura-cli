@@ -165,15 +165,8 @@ def _vector_upsert(args: Dict) -> Any:
     vector = args.get("vector")
 
     client = _get_client()
-    data_object = {
-        "class": collection,
-        "id": obj_id,
-        "properties": properties,
-    }
-    if vector is not None:
-        if not isinstance(vector, list):
-            raise ValueError("'vector' must be a list of floats.")
-        data_object["vector"] = vector
+    if vector is not None and not isinstance(vector, list):
+        raise ValueError("'vector' must be a list of floats.")
 
     # Use batch for upsert semantics
     try:

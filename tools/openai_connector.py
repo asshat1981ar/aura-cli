@@ -165,7 +165,7 @@ def _get_connector() -> OpenAIConnector:
     return _connector
 
 
-async def handle_response(event_data: dict[str, Any]) -> dict[str, Any]:
+async def handle_response_completed_hook(event_data: dict[str, Any]) -> dict[str, Any]:
     """Hook handler for on_response_completed events."""
     connector = _get_connector()
     event = WebhookEvent(

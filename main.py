@@ -56,7 +56,7 @@ if __name__ == "__main__":
     try:
         sys.exit(main(argv=raw_argv))
     except Exception as exc:
-        if getattr(parsed.namespace, "json", False) or "--json" in raw_argv:
+        if getattr(getattr(parsed, "namespace", None), "json", False) or "--json" in raw_argv:
             payload = {
                 "status": "error",
                 "code": "unexpected_runtime_error",

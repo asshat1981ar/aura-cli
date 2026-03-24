@@ -95,11 +95,8 @@ jobs:
         run: |
           python3 << 'PYEOF'
           import os
-          import secrets as _s
+          import secrets
           from openai import OpenAI
-          delim_task = f"EOF_{secrets.token_hex(8)}"
-          delim_plan = f"EOF_{secrets.token_hex(8)}"
-          with open(os.environ["GITHUB_OUTPUT"],"a") as f:
           task = os.environ["TASK"]
           client = OpenAI()
           r = client.chat.completions.create(
@@ -116,10 +113,9 @@ jobs:
               ],
           )
           plan = r.choices[0].message.content
-          import uuid
+          d1 = f"AURA_{secrets.token_hex(8)}"
+          d2 = f"AURA_{secrets.token_hex(8)}"
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              d1 = f"AURA_{uuid.uuid4().hex}"
-              d2 = f"AURA_{uuid.uuid4().hex}"
               f.write(f"task_description<<{d1}\n{task}\n{d1}\n")
               f.write(f"plan<<{d2}\n{plan}\n{d2}\n")
           print(plan)
@@ -318,6 +314,7 @@ jobs:
     if: always() && needs.code-architect.result == 'success'
     steps:
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           merge-multiple: true
       - name: Post results

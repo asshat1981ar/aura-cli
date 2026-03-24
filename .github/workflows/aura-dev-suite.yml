@@ -67,7 +67,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TASK="${{ github.event.inputs.task }}"
           elif [ "${{ github.event_name }}" = "issue_comment" ]; then
-            TASK=$(echo "${{ github.event.comment.body }}" | sed 's|/aura ||')
+            TASK=$(echo "${{ github.event.comment.body }}" | sed 's|^/aura[[:space:]]*||')
           else
             TASK="${{ github.event.issue.title }}"
           fi

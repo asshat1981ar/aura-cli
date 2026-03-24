@@ -314,6 +314,7 @@ jobs:
     if: always() && needs.code-architect.result == 'success'
     steps:
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           merge-multiple: true
       - name: Post results
@@ -322,10 +323,10 @@ jobs:
           TASK_CATEGORY: ${{ needs.code-architect.outputs.task_category }}
         with:
           script: |
+            const fs = require('fs');
             const MAX_BODY_LENGTH = 60000;      // conservative limit below GitHub's comment size cap
             const MAX_SECTION_LENGTH = 15000;   // per-result cap to avoid any single huge section
 
-            const fs = require('fs');
             let body = '## Aura Dev Suite Results\n\n';
             const cat = process.env.TASK_CATEGORY || 'unknown';
             body += '**Category:** ' + cat + '\n\n';

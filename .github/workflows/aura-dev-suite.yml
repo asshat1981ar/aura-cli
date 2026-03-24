@@ -77,6 +77,10 @@ jobs:
           echo "task<<$DELIM" >> $GITHUB_OUTPUT
           echo "$TASK" >> $GITHUB_OUTPUT
           echo "$DELIM" >> $GITHUB_OUTPUT
+          DELIM="$(openssl rand -hex 16)"
+          echo "task<<${DELIM}" >> $GITHUB_OUTPUT
+          echo "$TASK" >> $GITHUB_OUTPUT
+          echo "${DELIM}" >> $GITHUB_OUTPUT
       - name: Architect - Analyze
         id: architect
         env:

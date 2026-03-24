@@ -1,0 +1,293 @@
+# Aura Dev Suite - Autonomous Development Workflow
+# Mirrors the OpenAI Agent Builder "Aura Dev Suite" multi-agent workflow
+name: Aura Dev Suite
+
+on:
+  issues:
+    types: [opened, labeled]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Development task to process"
+        required: true
+        type: string
+      task_type:
+        description: "Task category (auto-routes if empty)"
+        required: false
+        type: choice
+        options:
+          - ""
+          - code_architecture
+          - code_review
+          - devops
+          - testing
+          - planning
+          - security_audit
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+env:
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  AURA_MODEL: gpt-5.4
+
+jobs:
+  code-architect:
+    name: Aura Code Architect
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'aura-dev')) ||
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/aura'))
+    outputs:
+      task_description: ${{ steps.architect.outputs.task_description }}
+      task_category: ${{ steps.router.outputs.category }}
+      architecture_plan: ${{ steps.architect.outputs.plan }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install openai pydantic
+      - name: Extract task
+        id: extract-task
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TASK="${{ github.event.inputs.task }}"
+          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
+            TASK=$(echo "${{ github.event.comment.body }}" | sed 's|/aura ||')
+          else
+            TASK="${{ github.event.issue.title }}"
+          fi
+          echo "task<<EOF" >> $GITHUB_OUTPUT
+          echo "$TASK" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      - name: Architect - Analyze
+        id: architect
+        env:
+          TASK: ${{ steps.extract-task.outputs.task }}
+        run: |
+          python3 << 'PYEOF'
+          import os
+          from openai import OpenAI
+          client = OpenAI()
+          task = os.environ["TASK"]
+          r = client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Code Architect for asshat1981ar/aura-cli. Design architecture, scaffold modules, generate Python code with async patterns, pydantic models, type hints. Integrate with core/orchestrator.py and agents/registry.py. Use MCP servers on ports 8001-8007. Output complete runnable modules with docstrings and tests."},{"role":"user","content":f"Analyze this task and create an architecture plan:\n\n{task}"}])
+          plan = r.choices[0].message.content
+          with open(os.environ["GITHUB_OUTPUT"],"a") as f:
+              f.write("task_description<<EOF\n"+task+"\nEOF\n")
+              f.write("plan<<EOF\n"+plan+"\nEOF\n")
+          print(plan)
+          PYEOF
+      - name: Task Router
+        id: router
+        env:
+          TASK: ${{ steps.extract-task.outputs.task }}
+          MANUAL_CATEGORY: ${{ github.event.inputs.task_type }}
+        run: |
+          if [ -n "$MANUAL_CATEGORY" ]; then echo "category=$MANUAL_CATEGORY" >> $GITHUB_OUTPUT; exit 0; fi
+          python3 << 'PYEOF'
+          import os
+          from openai import OpenAI
+          client = OpenAI()
+          task = os.environ["TASK"]
+          r = client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"Classify into one category. Reply ONLY the name.\nCategories: code_architecture, code_review, devops, testing, planning, security_audit"},{"role":"user","content":task}])
+          cat = r.choices[0].message.content.strip().lower()
+          if cat not in ["code_architecture","code_review","devops","testing","planning","security_audit"]: cat="code_architecture"
+          with open(os.environ["GITHUB_OUTPUT"],"a") as f: f.write(f"category={cat}\n")
+          print(f"Routed: {cat}")
+          PYEOF
+
+  code-reviewer:
+    name: Aura Code Reviewer
+    needs: code-architect
+    runs-on: ubuntu-latest
+    if: needs.code-architect.outputs.task_category == 'code_review'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install openai pydantic
+      - name: Review Code
+        env:
+          TASK: ${{ needs.code-architect.outputs.task_description }}
+          PLAN: ${{ needs.code-architect.outputs.architecture_plan }}
+        run: |
+          python3 << 'PYEOF'
+          import os; from openai import OpenAI; client=OpenAI()
+          t,p=os.environ["TASK"],os.environ.get("PLAN","")
+          r=client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Code Reviewer for asshat1981ar/aura-cli. Review pull requests and code changes for quality, security, and adherence to project patterns. Check for: proper async/await usage, type annotations, pydantic model validation, error handling, test coverage. Verify MCP tool definitions match the OpenAI Agents SDK format. Output structured review comments with severity levels."},{"role":"user","content":f"Context:\n{p}\nTask:\n{t}\nProvide structured review."}])
+          open("review-results.md","w").write("# Code Review\n\n"+r.choices[0].message.content)
+          PYEOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: code-review-results
+          path: review-results.md
+
+  devops-engineer:
+    name: Aura DevOps Engineer
+    needs: code-architect
+    runs-on: ubuntu-latest
+    if: needs.code-architect.outputs.task_category == 'devops'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install openai pydantic
+      - name: DevOps
+        env:
+          TASK: ${{ needs.code-architect.outputs.task_description }}
+          PLAN: ${{ needs.code-architect.outputs.architecture_plan }}
+        run: |
+          python3 << 'PYEOF'
+          import os; from openai import OpenAI; client=OpenAI()
+          t,p=os.environ["TASK"],os.environ.get("PLAN","")
+          r=client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura DevOps Engineer for asshat1981ar/aura-cli. Manage CI/CD pipelines, Docker configurations, GitHub Actions workflows, and deployment infrastructure. The project uses GitHub Actions, Docker, webhook integration at aura-webhooks.codeevo.dev, and MCP server deployment on ports 8001-8007. Generate workflow YAML, Dockerfiles, and infrastructure-as-code."},{"role":"user","content":f"Context:\n{p}\nTask:\n{t}\nGenerate DevOps configs."}])
+          open("devops-results.md","w").write("# DevOps Results\n\n"+r.choices[0].message.content)
+          PYEOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: devops-results
+          path: devops-results.md
+
+  test-engineer:
+    name: Aura Test Engineer
+    needs: code-architect
+    runs-on: ubuntu-latest
+    if: needs.code-architect.outputs.task_category == 'testing'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install openai pydantic
+      - name: Generate Tests
+        env:
+          TASK: ${{ needs.code-architect.outputs.task_description }}
+          PLAN: ${{ needs.code-architect.outputs.architecture_plan }}
+        run: |
+          python3 << 'PYEOF'
+          import os; from openai import OpenAI; client=OpenAI()
+          t,p=os.environ["TASK"],os.environ.get("PLAN","")
+          r=client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Test Engineer for asshat1981ar/aura-cli. Write comprehensive pytest test suites. The project uses tests/ with pytest and ruff. Generate unit tests, integration tests, MCP endpoint tests. Mock external APIs, use fixtures, pytest-asyncio. Target 80%+ coverage for core/, agents/, tools/. Include edge cases and error paths."},{"role":"user","content":f"Context:\n{p}\nTask:\n{t}\nGenerate tests."}])
+          open("test-results.md","w").write("# Test Results\n\n"+r.choices[0].message.content)
+          PYEOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results.md
+
+  planner:
+    name: Aura Planner
+    needs: code-architect
+    runs-on: ubuntu-latest
+    if: needs.code-architect.outputs.task_category == 'planning'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install openai pydantic
+      - name: Create Plan
+        env:
+          TASK: ${{ needs.code-architect.outputs.task_description }}
+          PLAN: ${{ needs.code-architect.outputs.architecture_plan }}
+        run: |
+          python3 << 'PYEOF'
+          import os; from openai import OpenAI; client=OpenAI()
+          t,p=os.environ["TASK"],os.environ.get("PLAN","")
+          r=client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Planner for asshat1981ar/aura-cli. Create project roadmaps, feature plans, architectural decision records, and sprint breakdowns. Decompose complex features into actionable tasks with dependencies. Output structured plans with priorities, effort estimates, and integration points across the agent system, core engine, and MCP servers."},{"role":"user","content":f"Context:\n{p}\nTask:\n{t}\nCreate structured plan."}])
+          open("planning-results.md","w").write("# Planning Results\n\n"+r.choices[0].message.content)
+          PYEOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: planning-results
+          path: planning-results.md
+
+  security-auditor:
+    name: Aura Security Auditor
+    needs: code-architect
+    runs-on: ubuntu-latest
+    if: needs.code-architect.outputs.task_category == 'security_audit'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install openai pydantic
+      - name: Security Audit
+        env:
+          TASK: ${{ needs.code-architect.outputs.task_description }}
+          PLAN: ${{ needs.code-architect.outputs.architecture_plan }}
+        run: |
+          python3 << 'PYEOF'
+          import os; from openai import OpenAI; client=OpenAI()
+          t,p=os.environ["TASK"],os.environ.get("PLAN","")
+          r=client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Security Auditor for asshat1981ar/aura-cli. Perform security audits on code, configurations, and infrastructure. Check for auth vulnerabilities, injection attacks, insecure dependencies, misconfigurations. Review MCP server endpoints on ports 8001-8007 for input validation and access controls. Audit Docker, CI/CD pipelines, secrets management. Output findings with severity levels and remediation steps."},{"role":"user","content":f"Context:\n{p}\nTask:\n{t}\nPerform security audit."}])
+          open("security-results.md","w").write("# Security Audit\n\n"+r.choices[0].message.content)
+          PYEOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-results
+          path: security-results.md
+
+  code-architecture:
+    name: Aura Code Architect - Build
+    needs: code-architect
+    runs-on: ubuntu-latest
+    if: needs.code-architect.outputs.task_category == 'code_architecture'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install openai pydantic
+      - name: Build Architecture
+        env:
+          TASK: ${{ needs.code-architect.outputs.task_description }}
+          PLAN: ${{ needs.code-architect.outputs.architecture_plan }}
+        run: |
+          python3 << 'PYEOF'
+          import os; from openai import OpenAI; client=OpenAI()
+          t,p=os.environ["TASK"],os.environ.get("PLAN","")
+          r=client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Code Architect for asshat1981ar/aura-cli. Design architecture, scaffold modules, generate Python code with async patterns, pydantic models, type hints. Integrate with core/orchestrator.py and agents/registry.py. Use MCP servers on ports 8001-8007. Output complete runnable modules with docstrings and tests."},{"role":"user","content":f"Plan:\n{p}\nTask:\n{t}\nGenerate complete implementation."}])
+          open("architecture-results.md","w").write("# Architecture Results\n\n"+r.choices[0].message.content)
+          PYEOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: architecture-results
+          path: architecture-results.md
+
+  report:
+    name: Report Results
+    needs: [code-architect, code-reviewer, devops-engineer, test-engineer, planner, security-auditor, code-architecture]
+    runs-on: ubuntu-latest
+    if: always() && needs.code-architect.result == 'success'
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Post results
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = '## Aura Dev Suite Results\n\n';
+            const cat = '${{ needs.code-architect.outputs.task_category }}';
+            body += '**Category:** ' + cat + '\n\n';
+            const files = fs.readdirSync('.').filter(f => f.endsWith('-results.md'));
+            for (const file of files) body += fs.readFileSync(file, 'utf8') + '\n\n---\n\n';
+            if (!files.length) body += '_No results generated._\n';
+            if (context.payload.issue) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: context.payload.issue.number, body
+              });
+            }
+            await core.summary.addRaw(body).write();

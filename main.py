@@ -20,6 +20,12 @@ from aura_cli.cli_options import (
 if __name__ == "__main__":
     raw_argv = sys.argv[1:]
 
+    # --stdio-rpc: launch JSON-RPC 2.0 over stdin/stdout transport.
+    # Intercepted before argparse so the flag doesn't need to be a registered argument.
+    if "--stdio-rpc" in raw_argv:
+        from aura_cli.cli_main import main as _main
+        sys.exit(_main(argv=raw_argv))
+
     if "--json-help" in raw_argv:
         print(render_help(format="json"))
         sys.exit(0)

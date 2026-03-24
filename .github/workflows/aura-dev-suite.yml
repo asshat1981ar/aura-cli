@@ -81,6 +81,7 @@ jobs:
           if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
             pip install -e ".[dev]"
           fi
+          pip install openai
       - name: Extract task
         id: extract-task
         run: |
@@ -172,6 +173,7 @@ jobs:
           if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
             pip install -e ".[dev]"
           fi
+          pip install openai
       - name: Review Code
         env:
           TASK: ${{ needs.code-architect.outputs.task_description }}
@@ -208,6 +210,7 @@ jobs:
           if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
             pip install -e ".[dev]"
           fi
+          pip install openai
       - name: DevOps
         env:
           TASK: ${{ needs.code-architect.outputs.task_description }}
@@ -244,6 +247,7 @@ jobs:
           if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
             pip install -e ".[dev]"
           fi
+          pip install openai
       - name: Generate Tests
         env:
           TASK: ${{ needs.code-architect.outputs.task_description }}
@@ -280,6 +284,7 @@ jobs:
           if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
             pip install -e ".[dev]"
           fi
+          pip install openai
       - name: Create Plan
         env:
           TASK: ${{ needs.code-architect.outputs.task_description }}
@@ -316,6 +321,7 @@ jobs:
           if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
             pip install -e ".[dev]"
           fi
+          pip install openai
       - name: Security Audit
         env:
           TASK: ${{ needs.code-architect.outputs.task_description }}
@@ -352,6 +358,7 @@ jobs:
           if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
             pip install -e ".[dev]"
           fi
+          pip install openai
       - name: Build Architecture
         env:
           TASK: ${{ needs.code-architect.outputs.task_description }}

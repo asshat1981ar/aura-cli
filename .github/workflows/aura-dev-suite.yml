@@ -140,8 +140,22 @@ jobs:
         run: |
           python3 << 'PYEOF'
           import os; from openai import OpenAI; client=OpenAI()
-          t,p=os.environ["TASK"],os.environ.get("PLAN","")
-          r=client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Code Reviewer for asshat1981ar/aura-cli. Review pull requests and code changes for quality, security, and adherence to project patterns. Check for: proper async/await usage, type annotations, pydantic model validation, error handling, test coverage. Verify MCP tool definitions match the OpenAI Agents SDK format. Output structured review comments with severity levels."},{"role":"user","content":f"Context:\n{p}\nTask:\n{t}\nProvide structured review."}])
+          repo = os.environ.get("GITHUB_REPOSITORY", "this repository")
+          t, p = os.environ["TASK"], os.environ.get("PLAN", "")
+          system_prompt = (
+              f"You are Aura Code Reviewer for {repo}. Review pull requests and code changes for "
+              "quality, security, and adherence to project patterns. Check for: proper async/await "
+              "usage, type annotations, pydantic model validation, error handling, test coverage. "
+              "Verify MCP tool definitions match the OpenAI Agents SDK format. Output structured "
+              "review comments with severity levels."
+          )
+          r = client.chat.completions.create(
+              model=os.environ.get("AURA_MODEL", "gpt-5.4"),
+              messages=[
+                  {"role": "system", "content": system_prompt},
+                  {"role": "user", "content": f"Context:\n{p}\nTask:\n{t}\nProvide structured review."},
+              ],
+          )
           open("review-results.md","w").write("# Code Review\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4

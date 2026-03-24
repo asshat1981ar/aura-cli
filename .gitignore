@@ -6,7 +6,46 @@ tmp*/
 tmp_out/
 tmp_tail.log
 tmp2*
+tmp_*.txt
 *.tmp
+*.log
+
+# ── Virtual environments ────────────────────────────────────────────────
+test-aura-env/
+
+# ── Agent session logs ──────────────────────────────────────────────────
+.remember/
+
+# ── AI tool config directories (multi-env skill symlinks) ───────────────
+.adal/
+.agent/
+.agents/
+.augment/
+.codebuddy/
+.commandcode/
+.continue/
+.cortex/
+.crush/
+.factory/
+.goose/
+.iflow/
+.junie/
+.kilocode/
+.kiro/
+.kode/
+.mcpjam/
+.mux/
+.neovate/
+.openhands/
+.pi/
+.pochi/
+.qoder/
+.qwen/
+.roo/
+.trae/
+.vibe/
+.windsurf/
+.zencoder/
 
 # ── Environment and secrets ───────────────────────────────────────────────
 .env

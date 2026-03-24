@@ -332,7 +332,7 @@ jobs:
 
   report:
     name: Report Results
-    needs: [code-architect]
+    needs: [code-architect, security-auditor, code-architecture]
     runs-on: ubuntu-latest
     if: always() && needs.code-architect.result == 'success'
     steps:

@@ -14,11 +14,12 @@ on:
         required: true
         type: string
       task_type:
-        description: "Task category (auto-routes if empty)"
+        description: "Task category (auto-routes when set to 'auto')"
         required: false
         type: choice
+        default: auto
         options:
-          - ""
+          - auto
           - code_architecture
           - code_review
           - devops

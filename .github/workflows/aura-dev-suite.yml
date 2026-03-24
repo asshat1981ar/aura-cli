@@ -4,7 +4,7 @@ name: Aura Dev Suite
 
 on:
   issues:
-    types: [opened, labeled]
+    types: [labeled]
   issue_comment:
     types: [created]
   workflow_dispatch:
@@ -27,32 +27,48 @@ on:
           - security_audit
 
 permissions:
-  contents: write
+  contents: read
   issues: write
-  pull-requests: write
 
 env:
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
   AURA_API_KEY: ${{ secrets.AURA_API_KEY }}
-  OPENAI_API_KEY: ${{ secrets.AURA_API_KEY }}
   AURA_MODEL: gpt-5.4
 
 jobs:
   code-architect:
     name: Aura Code Architect
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'aura-dev')) ||
-      (github.event_name == 'issue_comment' &&
+      (
+        github.event_name == 'issue_comment' &&
         contains(github.event.comment.body, '/aura') &&
-        (github.event.comment.author_association == 'OWNER' ||
-         github.event.comment.author_association == 'MEMBER' ||
-         github.event.comment.author_association == 'COLLABORATOR'))
+        (
+          github.event.comment.author_association == 'OWNER' ||
+          github.event.comment.author_association == 'MEMBER' ||
+          github.event.comment.author_association == 'COLLABORATOR'
+        )
+      )
     outputs:
       task_description: ${{ steps.architect.outputs.task_description }}
       task_category: ${{ steps.router.outputs.category }}
       architecture_plan: ${{ steps.architect.outputs.plan }}
     steps:
+      - name: Verify API key is configured
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          missing=0
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::OPENAI_API_KEY secret is not set. Add it in Settings → Secrets → Actions."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -60,23 +76,22 @@ jobs:
       - run: pip install openai pydantic
       - name: Extract task
         id: extract-task
-        env:
-          WF_EVENT_NAME: ${{ github.event_name }}
-          WF_INPUT_TASK: ${{ github.event.inputs.task }}
-          WF_COMMENT_BODY: ${{ github.event.comment.body }}
-          WF_ISSUE_TITLE: ${{ github.event.issue.title }}
         run: |
-          if [ "$WF_EVENT_NAME" = "workflow_dispatch" ]; then
-            TASK="$WF_INPUT_TASK"
-          elif [ "$WF_EVENT_NAME" = "issue_comment" ]; then
-            TASK=$(echo "$WF_COMMENT_BODY" | sed 's|/aura ||')
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TASK="${{ github.event.inputs.task }}"
+          elif [ "${{ github.event_name }}" = "issue_comment" ]; then
+            TASK=$(echo "${{ github.event.comment.body }}" | sed 's|^/aura[[:space:]]*||')
           else
-            TASK="$WF_ISSUE_TITLE"
+            TASK="${{ github.event.issue.title }}"
           fi
           DELIM="GH_DELIM_$(openssl rand -hex 16)"
           echo "task<<$DELIM" >> $GITHUB_OUTPUT
           echo "$TASK" >> $GITHUB_OUTPUT
           echo "$DELIM" >> $GITHUB_OUTPUT
+          DELIM="$(openssl rand -hex 16)"
+          echo "task<<$DELIM" >> "$GITHUB_OUTPUT"
+          echo "$TASK" >> "$GITHUB_OUTPUT"
+          echo "$DELIM" >> "$GITHUB_OUTPUT"
       - name: Architect - Analyze
         id: architect
         env:
@@ -84,10 +99,27 @@ jobs:
         run: |
           python3 << 'PYEOF'
           import os
+          import uuid
           from openai import OpenAI
           client = OpenAI()
           task = os.environ["TASK"]
-          r = client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Code Architect for asshat1981ar/aura-cli. Design architecture, scaffold modules, generate Python code with async patterns, pydantic models, type hints. Integrate with core/orchestrator.py and agents/registry.py. Use MCP servers on ports 8001-8007. Output complete runnable modules with docstrings and tests."},{"role":"user","content":f"Analyze this task and create an architecture plan:\n\n{task}"}])
+          import secrets
+          from openai import OpenAI
+          task = os.environ["TASK"]
+          client = OpenAI()
+          r = client.chat.completions.create(
+              model=os.environ.get("AURA_MODEL", "gpt-5.4"),
+              messages=[
+                  {
+                      "role": "system",
+                      "content": "You are Aura Code Architect for asshat1981ar/aura-cli. Design architecture, scaffold modules, generate Python code with async patterns, pydantic models, type hints. Integrate with core/orchestrator.py and agents/registry.py. Use MCP servers on ports 8001-8007. Output complete runnable modules with docstrings and tests.",
+                  },
+                  {
+                      "role": "user",
+                      "content": f"Analyze this task and create an architecture plan:\n\n{task}",
+                  },
+              ],
+          )
           plan = r.choices[0].message.content
           import secrets
           with open(os.environ["GITHUB_OUTPUT"],"a") as f:
@@ -95,6 +127,13 @@ jobs:
               f.write(f"task_description<<{d1}\n"+task+f"\n{d1}\n")
               d2 = "GH_DELIM_" + secrets.token_hex(16)
               f.write(f"plan<<{d2}\n"+plan+f"\n{d2}\n")
+          d1 = f"AURA_{uuid.uuid4().hex}"
+          d2 = f"AURA_{uuid.uuid4().hex}"
+          d1 = f"AURA_{secrets.token_hex(8)}"
+          d2 = f"AURA_{secrets.token_hex(8)}"
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"task_description<<{d1}\n{task}\n{d1}\n")
+              f.write(f"plan<<{d2}\n{plan}\n{d2}\n")
           print(plan)
           PYEOF
       - name: Task Router
@@ -139,6 +178,7 @@ jobs:
           open("review-results.md","w").write("# Code Review\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: code-review-results
           path: review-results.md
@@ -166,6 +206,7 @@ jobs:
           open("devops-results.md","w").write("# DevOps Results\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: devops-results
           path: devops-results.md
@@ -193,6 +234,7 @@ jobs:
           open("test-results.md","w").write("# Test Results\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: test-results
           path: test-results.md
@@ -220,6 +262,7 @@ jobs:
           open("planning-results.md","w").write("# Planning Results\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: planning-results
           path: planning-results.md
@@ -247,6 +290,7 @@ jobs:
           open("security-results.md","w").write("# Security Audit\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: security-audit-results
           path: security-results.md
@@ -274,34 +318,70 @@ jobs:
           open("architecture-results.md","w").write("# Architecture Results\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: architecture-results
           path: architecture-results.md
 
   report:
     name: Report Results
-    needs: [code-architect, code-reviewer, devops-engineer, test-engineer, planner, security-auditor, code-architecture]
+    needs: [code-architect]
     runs-on: ubuntu-latest
     if: always() && needs.code-architect.result == 'success'
     steps:
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           merge-multiple: true
       - name: Post results
         uses: actions/github-script@v7
+        env:
+          TASK_CATEGORY: ${{ needs.code-architect.outputs.task_category }}
         with:
           script: |
             const fs = require('fs');
+            const MAX_BODY_LENGTH = 60000;      // conservative limit below GitHub's comment size cap
+            const MAX_SECTION_LENGTH = 15000;   // per-result cap to avoid any single huge section
+
             let body = '## Aura Dev Suite Results\n\n';
-            const cat = '${{ needs.code-architect.outputs.task_category }}';
+            const cat = process.env.TASK_CATEGORY || 'unknown';
             body += '**Category:** ' + cat + '\n\n';
+
             const files = fs.readdirSync('.').filter(f => f.endsWith('-results.md'));
-            for (const file of files) body += fs.readFileSync(file, 'utf8') + '\n\n---\n\n';
-            if (!files.length) body += '_No results generated._\n';
+
+            for (const file of files) {
+              let content = fs.readFileSync(file, 'utf8') || '';
+
+              // Truncate individual sections if they are too large
+              if (content.length > MAX_SECTION_LENGTH) {
+                content =
+                  content.slice(0, MAX_SECTION_LENGTH) +
+                  '\n\n...[section truncated due to size limits]...\n';
+              }
+
+              const separator = '\n\n---\n\n';
+              const proposedAddition = content + separator;
+
+              // If adding this section would exceed the overall limit, add a note and stop
+              if ((body + proposedAddition).length > MAX_BODY_LENGTH) {
+                body +=
+                  '\n\n...[additional results truncated due to overall size limits]...\n';
+                break;
+              }
+
+              body += proposedAddition;
+            }
+
+            if (!files.length) {
+              body += '_No results generated._\n';
+            }
+
             if (context.payload.issue) {
               await github.rest.issues.createComment({
-                owner: context.repo.owner, repo: context.repo.repo,
-                issue_number: context.payload.issue.number, body
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                body,
               });
             }
             await core.summary.addRaw(body).write();

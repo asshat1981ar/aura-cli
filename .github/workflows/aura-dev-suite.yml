@@ -51,7 +51,6 @@ jobs:
     outputs:
       task_description: ${{ steps.architect.outputs.task_description }}
       task_category: ${{ steps.router.outputs.category }}
-      architecture_plan: ${{ steps.architect.outputs.plan }}
     steps:
       - name: Verify API key is configured
         env:

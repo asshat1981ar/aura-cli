@@ -27,9 +27,8 @@ on:
           - security_audit
 
 permissions:
-  contents: write
+  contents: read
   issues: write
-  pull-requests: write
 
 env:
   AURA_API_KEY: ${{ secrets.AURA_API_KEY }}
@@ -84,14 +83,16 @@ jobs:
         run: |
           python3 << 'PYEOF'
           import os
+          import secrets as _s
           from openai import OpenAI
           client = OpenAI()
           task = os.environ["TASK"]
           r = client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Code Architect for asshat1981ar/aura-cli. Design architecture, scaffold modules, generate Python code with async patterns, pydantic models, type hints. Integrate with core/orchestrator.py and agents/registry.py. Use MCP servers on ports 8001-8007. Output complete runnable modules with docstrings and tests."},{"role":"user","content":f"Analyze this task and create an architecture plan:\n\n{task}"}])
           plan = r.choices[0].message.content
           with open(os.environ["GITHUB_OUTPUT"],"a") as f:
-              f.write("task_description<<EOF\n"+task+"\nEOF\n")
-              f.write("plan<<EOF\n"+plan+"\nEOF\n")
+              d1, d2 = _s.token_hex(16), _s.token_hex(16)
+              f.write(f"task_description<<{d1}\n"+task+f"\n{d1}\n")
+              f.write(f"plan<<{d2}\n"+plan+f"\n{d2}\n")
           print(plan)
           PYEOF
       - name: Task Router
@@ -286,13 +287,15 @@ jobs:
           merge-multiple: true
       - name: Post results
         uses: actions/github-script@v7
+        env:
+          TASK_CATEGORY: ${{ needs.code-architect.outputs.task_category }}
         with:
           script: |
             const MAX_BODY_LENGTH = 60000;      // conservative limit below GitHub's comment size cap
             const MAX_SECTION_LENGTH = 15000;   // per-result cap to avoid any single huge section
 
             let body = '## Aura Dev Suite Results\n\n';
-            const cat = '${{ needs.code-architect.outputs.task_category }}';
+            const cat = process.env.TASK_CATEGORY || 'unknown';
             body += '**Category:** ' + cat + '\n\n';
 
             const files = fs.readdirSync('.').filter(f => f.endsWith('-results.md'));
@@ -331,6 +334,5 @@ jobs:
                 issue_number: context.payload.issue.number,
                 body,
               });
-            }
             }
             await core.summary.addRaw(body).write();

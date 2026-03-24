@@ -113,7 +113,8 @@ jobs:
           TASK: ${{ steps.extract-task.outputs.task }}
           MANUAL_CATEGORY: ${{ github.event.inputs.task_type }}
         run: |
-          if [ -n "$MANUAL_CATEGORY" ] && [ "$MANUAL_CATEGORY" != "auto" ]; then echo "category=$MANUAL_CATEGORY" >> $GITHUB_OUTPUT; exit 0; fi
+          normalized=$(printf '%s' "$MANUAL_CATEGORY" | tr '[:upper:]' '[:lower:]')
+          if [ -n "$normalized" ] && [ "$normalized" != "auto" ]; then echo "category=$normalized" >> "$GITHUB_OUTPUT"; exit 0; fi
           python3 << 'PYEOF'
           import os
           from openai import OpenAI

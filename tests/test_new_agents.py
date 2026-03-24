@@ -7,6 +7,7 @@ from agents.typescript_agent import TypeScriptAgentAdapter
 from agents.external_llm_agent import ExternalLLMAgentAdapter
 from agents.monitoring_agent import MonitoringAgentAdapter
 from agents.notification_agent import NotificationAgentAdapter
+from agents.investigation_agent import InvestigationAgent
 from agents.root_cause_analysis import RootCauseAnalysisAgent
 
 
@@ -212,6 +213,27 @@ class TestRootCauseAnalysisAgent(unittest.TestCase):
         self.assertIn("syntax_error", result["patterns"])
 
 
+class TestInvestigationAgent(unittest.TestCase):
+    """Tests for InvestigationAgent."""
+
+    def test_run_returns_structured_report(self):
+        agent = InvestigationAgent()
+        result = agent.run(
+            {
+                "goal": "Fix parser",
+                "verification": {
+                    "failures": ["SyntaxError: invalid syntax"],
+                    "logs": "SyntaxError: invalid syntax",
+                },
+                "context": {"phase": "verify", "route": "plan"},
+                "route": "plan",
+            }
+        )
+        self.assertEqual(result["status"], "investigated")
+        self.assertIn("verification_investigation", result)
+        self.assertIn("remediation_plan", result)
+
+
 class TestAgentRegistryIntegration(unittest.TestCase):
     """Test that new agents integrate with the registry."""
 
@@ -231,7 +253,7 @@ class TestAgentRegistryIntegration(unittest.TestCase):
             "sandbox", "verify", "reflect",
             "python_agent", "typescript_agent", "external_llm",
             "monitoring", "notification", "telemetry", "self_correction",
-            "code_search", "root_cause_analysis",
+            "code_search", "investigation", "root_cause_analysis",
         }
         self.assertEqual(set(agents.keys()), expected)
 

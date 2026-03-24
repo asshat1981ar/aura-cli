@@ -1,39 +1,65 @@
-def investigate_root_cause_five_failures():
-    # Step 1: Engage stakeholders early to gather insights and expectations
-    stakeholder_engagement = engage_stakeholders()
-    
-    # Step 2: Analyze current verification workflows for misalignments and inefficiencies
-    workflows_analysis = analyze_verification_workflows()
-    
-    # Step 3: Review historical data and contextualize the failures
-    historical_data = review_historical_verification_data()
-    contextual_analysis = analyze_failure_context(historical_data)
-    
-    # Step 4: Apply root cause analysis methodologies and predict potential failure modes
-    root_causes = conduct_root_cause_analysis()
-    predicted_issues = predict_failure_modes(root_causes)
-    
-    # Step 5: Assess structural gaps and identify required upgrades
-    structural_gaps = analyze_structural_gaps()
-    available_resources = assess_resources()
-    if not available_resources:
-        return "Resource limitation; explore partnerships."
-    
-    # Step 6: Design clear execution steps with defined roles
-    execution_steps = design_execution_steps()
-    roles_assigned = assign_roles(execution_steps)
-    
-    # Step 7: Create a timeline for investigation phases and feedback mechanisms
-    timeline = create_investigation_timeline()
-    feedback_mechanism = establish_feedback_mechanism()
-    
-    # Step 8: Define performance metrics for monitoring effectiveness post-implementation
-    performance_metrics = define_performance_metrics()
-    
-    # Step 9: Schedule an iterative review process to adapt the investigation based on findings
-    schedule_iterative_reviews()
-    
-    # Step 10: Document lessons learned and establish continuous improvement protocols
-    documentation = document_lessons_learned()
-    
-    return "Investigation into consecutive verification failures completed successfully."
+"""Deterministic investigation agent for repeated workflow failures."""
+
+from __future__ import annotations
+
+from typing import Any, Dict
+
+from core.investigate_test_drop import investigate_test_count_drop
+from core.investigate_verification_failures import investigate_verification_failure
+from core.remediation_plan import build_remediation_plan
+
+
+class InvestigationAgent:
+    """Aggregate existing failure-analysis helpers into one investigation report."""
+
+    name = "investigation"
+
+    def run(self, input_data: Dict[str, Any] | None) -> Dict[str, Any]:
+        input_data = input_data if isinstance(input_data, dict) else {}
+
+        goal = input_data.get("goal")
+        verification = input_data.get("verification", {})
+        context = input_data.get("context", {})
+        history = input_data.get("history", [])
+        root_cause_analysis = input_data.get("root_cause_analysis", {})
+        route = str(input_data.get("route", "act"))
+
+        verification_investigation = investigate_verification_failure(
+            verification,
+            root_cause_analysis=root_cause_analysis,
+            history=history,
+            context=context,
+        )
+        remediation_plan = build_remediation_plan(
+            verification,
+            route=route,
+            analysis_suggestion=input_data.get("analysis_suggestion"),
+            root_cause_analysis=root_cause_analysis,
+            investigation=verification_investigation,
+            context=context,
+        )
+
+        test_drop = None
+        previous_test_count = input_data.get("previous_test_count")
+        current_test_count = input_data.get("current_test_count")
+        if previous_test_count is not None and current_test_count is not None:
+            test_drop = investigate_test_count_drop(
+                previous_test_count,
+                current_test_count,
+                goal=goal,
+                verification=verification,
+                remediation_plan=remediation_plan,
+            )
+
+        summary_parts = [verification_investigation["summary"], remediation_plan["summary"]]
+        if test_drop:
+            summary_parts.append(test_drop["summary"])
+
+        return {
+            "status": "investigated",
+            "goal": goal,
+            "verification_investigation": verification_investigation,
+            "remediation_plan": remediation_plan,
+            "test_drop_investigation": test_drop,
+            "summary": " ".join(part for part in summary_parts if part),
+        }

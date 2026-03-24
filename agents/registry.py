@@ -32,6 +32,7 @@ from agents.sandbox import SandboxAgent
 from agents.telemetry_agent import TelemetryAgent
 from agents.self_correction_agent import SelfCorrectionAgent
 from agents.code_search_agent import CodeSearchAgent
+from agents.investigation_agent import InvestigationAgent
 from agents.root_cause_analysis import RootCauseAnalysisAgent
 
 
@@ -488,5 +489,6 @@ def default_agents(brain, model, context_manager=None, skills=None, health_monit
         "telemetry": TelemetryAgent(),
         "self_correction": SelfCorrectionAgent(brain=brain),
         "code_search": CodeSearchAgent(vector_store=getattr(brain, 'vector_store', None) if brain else None),
+        "investigation": InvestigationAgent(),
         "root_cause_analysis": RootCauseAnalysisAgent(),
     }

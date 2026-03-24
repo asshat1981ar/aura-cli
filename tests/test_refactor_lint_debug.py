@@ -39,4 +39,5 @@ def test_debug_trace(monkeypatch):
     monkeypatch.setattr(server, "RUN_ALLOW", {"python", "python3"})
     monkeypatch.setattr(server, "ENABLE_RUN", True)
     r = c.post("/call", headers=hdrs, json={"tool_name": "debug_trace", "args": {"module": mod}})
-    assert r.status_code == 200
+    # debug_trace is disabled pending real sandboxing
+    assert r.status_code == 403

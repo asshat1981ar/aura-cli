@@ -14,34 +14,41 @@ def setup_client(monkeypatch, enable_run=True):
     return c, {"Authorization": "Bearer t"}
 
 
-def test_format_echo(monkeypatch, tmp_path):
-    monkeypatch.setenv("MCP_MAX_READ_BYTES", "20000")
-    server.ENABLE_RUN = True
-    server.RUN_ALLOW = {"echo", "python", "python3", "ruff", "pip", "npm", "npx", "pip-audit"}
-    # use echo as formatter to avoid tool deps
-    c, hdrs = setup_client(monkeypatch)
-    resp = c.post(
-        "/call",
-        headers=hdrs,
-        json={"tool_name": "format", "args": {"cmd": "echo ok", "mode": "check"}},
-    )
-    assert resp.status_code == 200
-    data = resp.json()["data"]
-    assert data["returncode"] == 0
-    assert "ok" in data["stdout"]
-
-
-def test_dependency_audit_pip(monkeypatch, tmp_path):
-    # Offline-safe audit using python -c
+def test_format_uses_ruff(monkeypatch, tmp_path):
+    # format now delegates to `ruff format` on jailed paths; cmd arg is ignored
     monkeypatch.setattr(server, "ENABLE_RUN", True)
-    monkeypatch.setattr(server, "RUN_ALLOW", {"pip-audit", "python", "python3", "pip"})
+    monkeypatch.setattr(server, "RUN_ALLOW", {"ruff"})
+    c, hdrs = setup_client(monkeypatch)
+    # Create a real file inside PROJECT_ROOT so _jail succeeds
+    p = server.PROJECT_ROOT / "tmp_fmt_test.py"
+    p.write_text("x=1\n")
+    try:
+        resp = c.post(
+            "/call",
+            headers=hdrs,
+            json={"tool_name": "format", "args": {"paths": [str(p.relative_to(server.PROJECT_ROOT))]}},
+        )
+    finally:
+        p.unlink(missing_ok=True)
+    assert resp.status_code == 200
+    data = resp.json()["data"]
+    # ruff format exits 0 on success (or 127 if not installed)
+    assert data["returncode"] in (0, 127)
+
+
+def test_dependency_audit_fixed_cmd(monkeypatch):
+    # dependency_audit no longer accepts a cmd argument; it always runs pip-audit
+    monkeypatch.setattr(server, "ENABLE_RUN", True)
+    monkeypatch.setattr(server, "RUN_ALLOW", {"pip-audit"})
     c, hdrs = setup_client(monkeypatch)
     resp = c.post(
         "/call",
         headers=hdrs,
-        json={"tool_name": "dependency_audit", "args": {"cmd": ["python", "-c", "print('audit-ok')"]}},
+        # cmd arg is now ignored
+        json={"tool_name": "dependency_audit", "args": {}},
     )
     assert resp.status_code == 200
     data = resp.json()["data"]
-    assert data["returncode"] == 0
-    assert "audit-ok" in str(data["report"])
+    # pip-audit may not be installed in CI; 127 is acceptable
+    assert data["returncode"] in (0, 1, 127)
+    assert "report" in data

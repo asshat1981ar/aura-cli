@@ -39,6 +39,7 @@ jobs:
   code-architect:
     name: Aura Code Architect
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'aura-dev')) ||
@@ -48,6 +49,19 @@ jobs:
       task_category: ${{ steps.router.outputs.category }}
       architecture_plan: ${{ steps.architect.outputs.plan }}
     steps:
+      - name: Check authorization
+        if: github.event_name == 'issue_comment'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: perm } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: context.actor,
+            });
+            if (!['admin', 'write', 'maintain'].includes(perm.permission)) {
+              core.setFailed(`Unauthorized: ${context.actor} does not have write access to trigger this workflow.`);
+            }
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -106,6 +120,7 @@ jobs:
     name: Aura Code Reviewer
     needs: code-architect
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: needs.code-architect.outputs.task_category == 'code_review'
     steps:
       - uses: actions/checkout@v4
@@ -133,6 +148,7 @@ jobs:
     name: Aura DevOps Engineer
     needs: code-architect
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: needs.code-architect.outputs.task_category == 'devops'
     steps:
       - uses: actions/checkout@v4
@@ -160,6 +176,7 @@ jobs:
     name: Aura Test Engineer
     needs: code-architect
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: needs.code-architect.outputs.task_category == 'testing'
     steps:
       - uses: actions/checkout@v4
@@ -187,6 +204,7 @@ jobs:
     name: Aura Planner
     needs: code-architect
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: needs.code-architect.outputs.task_category == 'planning'
     steps:
       - uses: actions/checkout@v4
@@ -214,6 +232,7 @@ jobs:
     name: Aura Security Auditor
     needs: code-architect
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: needs.code-architect.outputs.task_category == 'security_audit'
     steps:
       - uses: actions/checkout@v4
@@ -241,6 +260,7 @@ jobs:
     name: Aura Code Architect - Build
     needs: code-architect
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     if: needs.code-architect.outputs.task_category == 'code_architecture'
     steps:
       - uses: actions/checkout@v4
@@ -268,6 +288,7 @@ jobs:
     name: Report Results
     needs: [code-architect, code-reviewer, devops-engineer, test-engineer, planner, security-auditor, code-architecture]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     if: always() && needs.code-architect.result == 'success'
     steps:
       - uses: actions/download-artifact@v4

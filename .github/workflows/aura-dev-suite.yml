@@ -32,7 +32,7 @@ permissions:
 
 env:
   AURA_API_KEY: ${{ secrets.AURA_API_KEY }}
-  OPENAI_API_KEY: ${{ secrets.AURA_API_KEY }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
   AURA_MODEL: gpt-5.4
 
 jobs:
@@ -50,8 +50,24 @@ jobs:
     outputs:
       task_description: ${{ steps.architect.outputs.task_description }}
       task_category: ${{ steps.router.outputs.category }}
-      architecture_plan: ${{ steps.architect.outputs.plan }}
     steps:
+      - name: Verify API key is configured
+        env:
+          AURA_API_KEY: ${{ secrets.AURA_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          missing=0
+          if [ -z "$AURA_API_KEY" ]; then
+            echo "::error::AURA_API_KEY secret is not set. Add it in Settings → Secrets → Actions."
+            missing=1
+          fi
+          if [ -z "$OPENAI_API_KEY" ]; then
+            echo "::error::OPENAI_API_KEY secret is not set. Add it in Settings → Secrets → Actions."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -72,6 +88,14 @@ jobs:
           else
             TASK="$WF_ISSUE_TITLE"
           fi
+          DELIM=$(openssl rand -hex 16)
+          echo "task<<$DELIM" >> "$GITHUB_OUTPUT"
+          echo "$TASK" >> "$GITHUB_OUTPUT"
+          echo "$DELIM" >> "$GITHUB_OUTPUT"
+          DELIM="EOF_$(openssl rand -hex 8)"
+          echo "task<<$DELIM" >> $GITHUB_OUTPUT
+          echo "$TASK" >> $GITHUB_OUTPUT
+          echo "$DELIM" >> $GITHUB_OUTPUT
           DELIM="$(openssl rand -hex 16)"
           echo "task<<${DELIM}" >> $GITHUB_OUTPUT
           echo "$TASK" >> $GITHUB_OUTPUT
@@ -85,14 +109,27 @@ jobs:
           import os
           import secrets as _s
           from openai import OpenAI
+          delim_task = f"EOF_{secrets.token_hex(8)}"
+          delim_plan = f"EOF_{secrets.token_hex(8)}"
+          with open(os.environ["GITHUB_OUTPUT"],"a") as f:
+              f.write(f"task_description<<{delim_task}\n{task}\n{delim_task}\n")
+              f.write(f"plan<<{delim_plan}\n{plan}\n{delim_plan}\n")
           client = OpenAI()
           task = os.environ["TASK"]
           r = client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Code Architect for asshat1981ar/aura-cli. Design architecture, scaffold modules, generate Python code with async patterns, pydantic models, type hints. Integrate with core/orchestrator.py and agents/registry.py. Use MCP servers on ports 8001-8007. Output complete runnable modules with docstrings and tests."},{"role":"user","content":f"Analyze this task and create an architecture plan:\n\n{task}"}])
           plan = r.choices[0].message.content
+          import uuid
+          with open(os.environ["GITHUB_OUTPUT"],"a") as f:
+              d1,d2=f"AURA_{uuid.uuid4().hex}",f"AURA_{uuid.uuid4().hex}"
+              f.write(f"task_description<<{d1}\n{task}\n{d1}\n")
+              f.write(f"plan<<{d2}\n{plan}\n{d2}\n")
+          delim = f"EOF_{secrets.token_hex(8)}"
           with open(os.environ["GITHUB_OUTPUT"],"a") as f:
               d1, d2 = _s.token_hex(16), _s.token_hex(16)
               f.write(f"task_description<<{d1}\n"+task+f"\n{d1}\n")
               f.write(f"plan<<{d2}\n"+plan+f"\n{d2}\n")
+              f.write(f"task_description<<{delim}\n{task}\n{delim}\n")
+              f.write(f"plan<<{delim}\n{plan}\n{delim}\n")
           print(plan)
           PYEOF
       - name: Task Router
@@ -137,6 +174,7 @@ jobs:
           open("review-results.md","w").write("# Code Review\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: code-review-results
           path: review-results.md
@@ -164,6 +202,7 @@ jobs:
           open("devops-results.md","w").write("# DevOps Results\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: devops-results
           path: devops-results.md
@@ -191,6 +230,7 @@ jobs:
           open("test-results.md","w").write("# Test Results\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: test-results
           path: test-results.md
@@ -218,6 +258,7 @@ jobs:
           open("planning-results.md","w").write("# Planning Results\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: planning-results
           path: planning-results.md
@@ -245,6 +286,7 @@ jobs:
           open("security-results.md","w").write("# Security Audit\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: security-audit-results
           path: security-results.md
@@ -272,6 +314,7 @@ jobs:
           open("architecture-results.md","w").write("# Architecture Results\n\n"+r.choices[0].message.content)
           PYEOF
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: architecture-results
           path: architecture-results.md

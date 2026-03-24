@@ -31,14 +31,16 @@ permissions:
   issues: write
 
 env:
-  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
   AURA_MODEL: gpt-5.4
+
 
 jobs:
   code-architect:
     name: Aura Code Architect
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'issues' && contains(github.event.issue.labels.*.name, 'aura-dev')) ||

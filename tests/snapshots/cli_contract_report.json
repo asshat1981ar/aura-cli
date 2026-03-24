@@ -21,6 +21,7 @@
     "metrics_show",
     "queue_clear",
     "queue_list",
+    "readiness",
     "scaffold",
     "show_config",
     "studio",
@@ -130,6 +131,7 @@
     "metrics_show",
     "queue_clear",
     "queue_list",
+    "readiness",
     "scaffold",
     "show_config",
     "studio",
@@ -160,6 +162,7 @@
     "metrics_show",
     "queue_clear",
     "queue_list",
+    "readiness",
     "scaffold",
     "show_config",
     "studio",
@@ -248,6 +251,9 @@
       "list"
     ],
     [
+      "readiness"
+    ],
+    [
       "scaffold"
     ],
     [
@@ -331,6 +337,9 @@
     [
       "queue",
       "list"
+    ],
+    [
+      "readiness"
     ],
     [
       "scaffold"
@@ -450,6 +459,9 @@
       "list"
     ],
     [
+      "readiness"
+    ],
+    [
       "scaffold"
     ],
     [
@@ -565,6 +577,9 @@
     [
       "queue",
       "list"
+    ],
+    [
+      "readiness"
     ],
     [
       "scaffold"

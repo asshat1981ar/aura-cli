@@ -95,6 +95,10 @@ jobs:
         run: |
           python3 << 'PYEOF'
           import os
+          import uuid
+          from openai import OpenAI
+          client = OpenAI()
+          task = os.environ["TASK"]
           import secrets
           from openai import OpenAI
           task = os.environ["TASK"]
@@ -113,6 +117,8 @@ jobs:
               ],
           )
           plan = r.choices[0].message.content
+          d1 = f"AURA_{uuid.uuid4().hex}"
+          d2 = f"AURA_{uuid.uuid4().hex}"
           d1 = f"AURA_{secrets.token_hex(8)}"
           d2 = f"AURA_{secrets.token_hex(8)}"
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
@@ -309,7 +315,7 @@ jobs:
 
   report:
     name: Report Results
-    needs: [code-architect, code-reviewer, devops-engineer, test-engineer, planner, security-auditor, code-architecture]
+    needs: [code-architect]
     runs-on: ubuntu-latest
     if: always() && needs.code-architect.result == 'success'
     steps:

@@ -73,9 +73,10 @@ jobs:
           else
             TASK="$WF_ISSUE_TITLE"
           fi
-          echo "task<<EOF" >> $GITHUB_OUTPUT
-          echo "$TASK" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          DELIM=$(openssl rand -hex 16)
+          echo "task<<$DELIM" >> "$GITHUB_OUTPUT"
+          echo "$TASK" >> "$GITHUB_OUTPUT"
+          echo "$DELIM" >> "$GITHUB_OUTPUT"
       - name: Architect - Analyze
         id: architect
         env:
@@ -88,9 +89,11 @@ jobs:
           task = os.environ["TASK"]
           r = client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Code Architect for asshat1981ar/aura-cli. Design architecture, scaffold modules, generate Python code with async patterns, pydantic models, type hints. Integrate with core/orchestrator.py and agents/registry.py. Use MCP servers on ports 8001-8007. Output complete runnable modules with docstrings and tests."},{"role":"user","content":f"Analyze this task and create an architecture plan:\n\n{task}"}])
           plan = r.choices[0].message.content
+          import uuid
           with open(os.environ["GITHUB_OUTPUT"],"a") as f:
-              f.write("task_description<<EOF\n"+task+"\nEOF\n")
-              f.write("plan<<EOF\n"+plan+"\nEOF\n")
+              d1,d2=f"AURA_{uuid.uuid4().hex}",f"AURA_{uuid.uuid4().hex}"
+              f.write(f"task_description<<{d1}\n{task}\n{d1}\n")
+              f.write(f"plan<<{d2}\n{plan}\n{d2}\n")
           print(plan)
           PYEOF
       - name: Task Router

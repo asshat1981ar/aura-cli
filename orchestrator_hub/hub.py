@@ -195,18 +195,26 @@ async def start_server(name: str, _: None = Depends(_check_auth)):
     state = lifecycle.get_server(name)
     if state is None:
         raise HTTPException(status_code=404, detail=f"Server '{name}' not managed by lifecycle.")
-    result = lifecycle.start(name)
-    log_json("INFO", "hub_server_start", details=result)
-    return result
+    try:
+        result = lifecycle.start(name)
+        log_json("INFO", "hub_server_start", details=result)
+        return result
+    except Exception as exc:
+        log_json("ERROR", "hub_server_start_failed", details={"server": name, "error": str(exc)})
+        raise HTTPException(status_code=500, detail="Server start failed") from None
 
 
 @app.post("/servers/{name}/stop")
 async def stop_server(name: str, _: None = Depends(_check_auth)):
     _track("server_stop")
     lifecycle = _get_lifecycle()
-    result = lifecycle.stop(name)
-    log_json("INFO", "hub_server_stop", details=result)
-    return result
+    try:
+        result = lifecycle.stop(name)
+        log_json("INFO", "hub_server_stop", details=result)
+        return result
+    except Exception as exc:
+        log_json("ERROR", "hub_server_stop_failed", details={"server": name, "error": str(exc)})
+        raise HTTPException(status_code=500, detail="Server stop failed") from None
 
 
 @app.get("/servers/{name}/health")
@@ -328,7 +336,8 @@ async def list_environments(_: None = Depends(_check_auth)):
         envs = mgr.list_environments()
         return {"environments": [e.as_dict() for e in envs]}
     except Exception as exc:
-        return {"environments": [], "error": str(exc)}
+        log_json("ERROR", "hub_list_environments_failed", details={"error": str(exc)})
+        return {"environments": [], "error": "Failed to list environments"}
 
 
 # -- Metrics --

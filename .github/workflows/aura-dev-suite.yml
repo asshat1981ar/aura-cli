@@ -28,9 +28,8 @@ on:
           - security_audit
 
 permissions:
-  contents: write
+  contents: read
   issues: write
-  pull-requests: write
 
 env:
   OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

@@ -95,6 +95,7 @@ jobs:
         run: |
           python3 << 'PYEOF'
           import os
+          import secrets
           import uuid
           from openai import OpenAI
           task = os.environ["TASK"]
@@ -113,9 +114,9 @@ jobs:
               ],
           )
           plan = r.choices[0].message.content
+          d1 = f"AURA_{secrets.token_hex(8)}"
+          d2 = f"AURA_{secrets.token_hex(8)}"
           with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-              d1 = f"AURA_{uuid.uuid4().hex}"
-              d2 = f"AURA_{uuid.uuid4().hex}"
               f.write(f"task_description<<{d1}\n{task}\n{d1}\n")
               f.write(f"plan<<{d2}\n{plan}\n{d2}\n")
           print(plan)
@@ -314,6 +315,7 @@ jobs:
     if: always() && needs.code-architect.result == 'success'
     steps:
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           merge-multiple: true
       - name: Post results

@@ -2,6 +2,8 @@
   "dependencies": {
     "@beads/bd": "^0.57.0",
     "@github/copilot": "^0.0.420",
-    "ai-sdk-provider-codex-cli": "^1.0.5"
+    "ai-sdk-provider-codex-cli": "^1.0.5",
+    "codex-cli": "^0.1.3",
+    "docker-compose": "^1.3.2"
   }
 }

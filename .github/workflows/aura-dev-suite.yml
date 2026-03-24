@@ -27,7 +27,7 @@ on:
           - security_audit
 
 permissions:
-  contents: write
+  contents: read
   issues: write
   pull-requests: write
 

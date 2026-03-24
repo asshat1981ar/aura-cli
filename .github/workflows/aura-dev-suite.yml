@@ -141,17 +141,51 @@ jobs:
           TASK: ${{ steps.extract-task.outputs.task }}
           MANUAL_CATEGORY: ${{ github.event.inputs.task_type }}
         run: |
-          if [ -n "$MANUAL_CATEGORY" ]; then echo "category=$MANUAL_CATEGORY" >> $GITHUB_OUTPUT; exit 0; fi
+          if [ -n "$MANUAL_CATEGORY" ]; then
+            echo "category=$MANUAL_CATEGORY" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           python3 << 'PYEOF'
           import os
           from openai import OpenAI
-          client = OpenAI()
-          task = os.environ["TASK"]
-          r = client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"Classify into one category. Reply ONLY the name.\nCategories: code_architecture, code_review, devops, testing, planning, security_audit"},{"role":"user","content":task}])
-          cat = r.choices[0].message.content.strip().lower()
-          if cat not in ["code_architecture","code_review","devops","testing","planning","security_audit"]: cat="code_architecture"
-          with open(os.environ["GITHUB_OUTPUT"],"a") as f: f.write(f"category={cat}\n")
-          print(f"Routed: {cat}")
+
+          ALLOWED_CATEGORIES = {
+              "code_architecture",
+              "code_review",
+              "devops",
+              "testing",
+              "planning",
+              "security_audit",
+          }
+
+          def main() -> None:
+              task = os.environ["TASK"]
+              client = OpenAI()
+              r = client.chat.completions.create(
+                  model=os.environ.get("AURA_MODEL", "gpt-5.4"),
+                  messages=[
+                      {
+                          "role": "system",
+                          "content": (
+                              "Classify into one category. Reply ONLY the name.\n"
+                              "Categories: code_architecture, code_review, devops, "
+                              "testing, planning, security_audit"
+                          ),
+                      },
+                      {"role": "user", "content": task},
+                  ],
+              )
+              category = (r.choices[0].message.content or "").strip().lower()
+              if category not in ALLOWED_CATEGORIES:
+                  category = "code_architecture"
+
+              with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+                  f.write(f"category={category}\n")
+
+              print(f"Routed: {category}")
+
+          if __name__ == "__main__":
+              main()
           PYEOF
 
   code-reviewer:
@@ -400,7 +434,7 @@ jobs:
             const cat = process.env.TASK_CATEGORY || 'unknown';
             body += '**Category:** ' + cat + '\n\n';
 
-            const files = fs.readdirSync('.').filter(f => f.endsWith('-results.md'));
+            const files = fs.readdirSync('.').filter(f => f.endsWith('-results.md')).sort();
 
             for (const file of files) {
               let content = fs.readFileSync(file, 'utf8') || '';

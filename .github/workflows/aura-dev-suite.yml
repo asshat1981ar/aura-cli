@@ -288,17 +288,49 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            const fs = require('fs');
+            const MAX_BODY_LENGTH = 60000;      // conservative limit below GitHub's comment size cap
+            const MAX_SECTION_LENGTH = 15000;   // per-result cap to avoid any single huge section
+
             let body = '## Aura Dev Suite Results\n\n';
             const cat = '${{ needs.code-architect.outputs.task_category }}';
             body += '**Category:** ' + cat + '\n\n';
+
             const files = fs.readdirSync('.').filter(f => f.endsWith('-results.md'));
-            for (const file of files) body += fs.readFileSync(file, 'utf8') + '\n\n---\n\n';
-            if (!files.length) body += '_No results generated._\n';
+
+            for (const file of files) {
+              let content = fs.readFileSync(file, 'utf8') || '';
+
+              // Truncate individual sections if they are too large
+              if (content.length > MAX_SECTION_LENGTH) {
+                content =
+                  content.slice(0, MAX_SECTION_LENGTH) +
+                  '\n\n...[section truncated due to size limits]...\n';
+              }
+
+              const separator = '\n\n---\n\n';
+              const proposedAddition = content + separator;
+
+              // If adding this section would exceed the overall limit, add a note and stop
+              if ((body + proposedAddition).length > MAX_BODY_LENGTH) {
+                body +=
+                  '\n\n...[additional results truncated due to overall size limits]...\n';
+                break;
+              }
+
+              body += proposedAddition;
+            }
+
+            if (!files.length) {
+              body += '_No results generated._\n';
+            }
+
             if (context.payload.issue) {
               await github.rest.issues.createComment({
-                owner: context.repo.owner, repo: context.repo.repo,
-                issue_number: context.payload.issue.number, body
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue.number,
+                body,
               });
+            }
             }
             await core.summary.addRaw(body).write();

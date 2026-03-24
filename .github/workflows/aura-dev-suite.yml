@@ -73,7 +73,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install openai pydantic
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f "requirements.txt" ]; then
+            pip install -r requirements.txt
+          fi
+          if [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then
+            pip install -e ".[dev]"
+          fi
       - name: Extract task
         id: extract-task
         run: |

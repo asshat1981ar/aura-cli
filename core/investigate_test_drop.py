@@ -1,53 +1,69 @@
-def investigate_test_count_drop():
-    # Step 1: Analyze the error logs generated during the test run to identify specific error messages that may explain the drop in test count.
-    error_logs = collect_error_logs()
-    print('Error logs collected:', error_logs)
+"""Structured analysis for regressions in observed test counts."""
 
-    # Step 2: Review recent code changes that were implemented since the last successful test run to pinpoint potential sources of problems.
-    recent_changes = review_recent_changes()
-    print('Recent changes reviewed:', recent_changes)
+from __future__ import annotations
 
-    # Step 3: Engage with the development team to gather insights on recent changes and discuss any known issues or unexpected behaviors.
-    development_feedback = gather_development_feedback()
-    print('Development team feedback gathered:', development_feedback)
+from typing import Any, Dict, List
 
-    # Step 4: Conduct an analysis of dependencies for the test environment, focusing on any alterations that might impact test execution.
-    dependency_analysis = analyze_dependencies()
-    print('Dependency analysis results:', dependency_analysis)
 
-    # Step 5: Identify and assess resource availability, including hardware and software configurations, to ascertain their adequacy for current testing needs.
-    resource_assessment = assess_resource_availability()
-    print('Resource assessment results:', resource_assessment)
+def investigate_test_count_drop(
+    previous_test_count: int,
+    current_test_count: int,
+    *,
+    goal: str | None = None,
+    verification: Dict[str, Any] | None = None,
+    remediation_plan: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Summarize a test-count regression into stable investigation output."""
 
-    # Step 6: Identify potential root causes using the collected error logs, recent changes, and feedback from the development team.
-    root_causes = identify_root_causes(recent_changes, error_logs, development_feedback)
-    print('Identified root causes:', root_causes)
+    previous_test_count = int(previous_test_count or 0)
+    current_test_count = int(current_test_count or 0)
+    delta = current_test_count - previous_test_count
+    dropped_to_zero = previous_test_count > 0 and current_test_count == 0
+    verification = verification if isinstance(verification, dict) else {}
+    remediation_plan = remediation_plan if isinstance(remediation_plan, dict) else {}
 
-    # Step 7: Propose capability upgrades and optimizations based on the identified issues and input received from stakeholders, focusing on improving testing robustness.
-    proposed_upgrades = propose_upgrades(root_causes)
-    print('Proposed upgrades:', proposed_upgrades)
+    severity = "low"
+    if delta <= -20 or dropped_to_zero:
+        severity = "critical"
+    elif delta <= -10:
+        severity = "high"
+    elif delta <= -5:
+        severity = "medium"
 
-    # Step 8: Evaluate the risks associated with proposed changes and outline mitigation strategies for each identified risk.
-    risk_analysis = perform_risk_analysis(proposed_upgrades)
-    print('Risk analysis results:', risk_analysis)
+    likely_causes: List[str] = [
+        "Tests were removed, renamed, or stopped being discovered by the test runner.",
+        "A test package path or naming convention changed, reducing collected tests.",
+    ]
+    if verification.get("status") == "fail":
+        likely_causes.append("Verification is already failing; broken imports or syntax may prevent test collection.")
+    if remediation_plan.get("repeated_failure_detected"):
+        likely_causes.append("Repeated failures suggest the regression is systemic rather than a one-off edit.")
 
-    # Step 9: Plan clear implementation steps, including timelines, responsible teams, and necessary resource allocations to address the issues.
-    implementation_steps = define_implementation_steps(proposed_upgrades)
-    print('Implementation steps:', implementation_steps)
+    recommended_actions = [
+        "Inspect recent changes to test module names and discovery paths.",
+        "Run the narrowest test collection command and compare collected tests against the previous baseline.",
+    ]
+    if dropped_to_zero:
+        recommended_actions.append("Treat this as a collection outage and verify the test root and runner configuration immediately.")
+    if remediation_plan.get("route") == "replan":
+        recommended_actions.append("Re-plan around restoring the test surface before continuing feature work.")
 
-    # Step 10: Establish performance metrics to assess the effectiveness of the interventions made during the investigation.
-    performance_metrics = establish_metrics(proposed_upgrades)
-    print('Performance metrics established:', performance_metrics)
+    goal_prefix = f" for '{goal}'" if goal else ""
+    suggested_goal = (
+        f"Investigate test count drop{goal_prefix}: {previous_test_count} -> {current_test_count}"
+    )
 
-    # Step 11: Develop a comprehensive documentation plan to track decisions, interventions, and the learning outcome from this investigation for future reference.
-    documentation_plan = create_documentation_plan()
-    print('Documentation plan created:', documentation_plan)
+    summary = (
+        f"Observed a test-count regression from {previous_test_count} to {current_test_count} "
+        f"({delta}). Severity: {severity}."
+    )
 
-    # Step 12: Schedule follow-up reviews to assess the effectiveness of implemented changes and maintain an open feedback loop with stakeholders.
-    follow_up_analysis = schedule_follow_up_analysis()
-    print('Follow-up analysis scheduled for:', follow_up_analysis)
-
-    return 'Investigation plan executed successfully!'
-
-# Example execution
-investigate_test_count_drop()
+    return {
+        "summary": summary,
+        "severity": severity,
+        "delta": delta,
+        "dropped_to_zero": dropped_to_zero,
+        "likely_causes": likely_causes,
+        "recommended_actions": recommended_actions,
+        "suggested_goal": suggested_goal,
+    }

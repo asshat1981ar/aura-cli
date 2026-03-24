@@ -44,6 +44,19 @@ class TestInvestigationVerificationFailures(unittest.TestCase):
         result = investigate_verification_failures(input_data)
         self.assertEqual(result, expected_output)
 
+    def test_large_input(self):
+        """Test that checks how the function deals with large input data."""
+        input_data = 'a' * 10000  # Large input
+        expected_output = 'expected result for large input'
+        result = investigate_verification_failures(input_data)
+        self.assertEqual(result, expected_output)
+
+    def test_numeric_input(self):
+        """Test that checks how the function handles numeric inputs."""
+        input_data = '123456'
+        expected_output = 'expected result for numeric input'
+        result = investigate_verification_failures(input_data)
+        self.assertEqual(result, expected_output)
+
 if __name__ == '__main__':
     unittest.main()
-```

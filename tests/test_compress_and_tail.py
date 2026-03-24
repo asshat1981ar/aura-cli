@@ -1,10 +1,39 @@
-from fastapi.testclient import TestClient
+import asyncio
+
 from tools import mcp_server as server
+from tools.mcp_types import ToolCallRequest
+
+
+class _Response:
+    def __init__(self, status_code, payload):
+        self.status_code = status_code
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+class _DirectClient:
+    def post(self, path, headers=None, json=None):
+        if path != "/call":
+            raise AssertionError(f"Unhandled POST path in test harness: {path}")
+        try:
+            payload = asyncio.run(
+                server.call_tool(
+                    ToolCallRequest(tool_name=json["tool_name"], args=json.get("args", {})),
+                    "t",
+                )
+            )
+            return _Response(200, payload)
+        except Exception as exc:
+            status = getattr(exc, "status_code", 500)
+            detail = getattr(exc, "detail", str(exc))
+            return _Response(status, {"detail": detail})
 
 
 def setup_auth(monkeypatch):
     monkeypatch.setenv("MCP_API_TOKEN", "t")
-    return TestClient(server.app), {"Authorization": "Bearer t"}
+    return _DirectClient(), {"Authorization": "Bearer t"}
 
 
 def test_compress_and_decompress_skips(monkeypatch, tmp_path):

@@ -1,7 +1,7 @@
 import httpx
 import asyncio
 import time
-from typing import Any, Dict, List
+from typing import Any, ClassVar, Dict, List
 from core.exceptions import (
     MCPTimeoutError,
     MCPServerUnavailableError,
@@ -10,10 +10,12 @@ from core.exceptions import (
 )
 from core.logging_utils import log_json
 
+
 class MCPAsyncClient:
     """Async client for interacting with MCP-compatible HTTP services."""
-    
-    _client_pool: Dict[str, httpx.AsyncClient] = {}
+
+    _client_pool: ClassVar[Dict[str, httpx.AsyncClient]] = {}
+    _pool_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
 
     def __init__(self, base_url: str, timeout: int = 30):
         self.base_url = base_url.rstrip("/")
@@ -23,9 +25,12 @@ class MCPAsyncClient:
     async def get_client(cls, timeout: int) -> httpx.AsyncClient:
         """Get or create a pooled httpx.AsyncClient."""
         key = f"timeout_{timeout}"
-        if key not in cls._client_pool:
-            cls._client_pool[key] = httpx.AsyncClient(timeout=timeout)
-        return cls._client_pool[key]
+        async with cls._pool_lock:
+            client = cls._client_pool.get(key)
+            if client is None or client.is_closed:
+                client = httpx.AsyncClient(timeout=timeout)
+                cls._client_pool[key] = client
+        return client
 
     @classmethod
     async def close_all(cls):
@@ -39,7 +44,7 @@ class MCPAsyncClient:
         max_retries = 3
         backoff = 1.0
         start_time = time.perf_counter()
-        
+
         client = await self.get_client(self.timeout)
         for attempt in range(max_retries):
             try:
@@ -48,12 +53,7 @@ class MCPAsyncClient:
                 duration = time.perf_counter() - start_time
                 try:
                     res_json = response.json()
-                    log_json("DEBUG", "mcp_client_request_success", details={
-                        "url": url,
-                        "method": method,
-                        "duration_ms": round(duration * 1000, 2),
-                        "attempts": attempt + 1
-                    })
+                    log_json("DEBUG", "mcp_client_request_success", details={"url": url, "method": method, "duration_ms": round(duration * 1000, 2), "attempts": attempt + 1})
                     return res_json
                 except Exception:
                     raise MCPInvalidResponseError(f"MCP server at {url} returned invalid JSON")
@@ -61,13 +61,13 @@ class MCPAsyncClient:
                 is_timeout = isinstance(e, httpx.TimeoutException)
                 err_type = "timeout" if is_timeout else "connection_error"
                 log_json("WARN", f"mcp_client_{err_type}", details={"url": url, "attempt": attempt + 1})
-                
+
                 if attempt == max_retries - 1:
                     if is_timeout:
                         raise MCPTimeoutError(f"Request to {url} timed out after {max_retries} attempts")
                     else:
                         raise MCPServerUnavailableError(f"MCP server at {url} is unavailable")
-                
+
                 await asyncio.sleep(backoff)
                 backoff *= 2
                 continue
@@ -77,7 +77,7 @@ class MCPAsyncClient:
             except Exception as e:
                 log_json("ERROR", "mcp_client_unexpected_error", details={"url": url, "error": str(e)})
                 raise MCPInvalidResponseError(f"Unexpected error calling MCP server at {url}: {e}")
-        
+
         raise MCPRetryExhaustedError(f"All {max_retries} retries exhausted for {url}")
 
     async def get_health(self) -> Dict[str, Any]:

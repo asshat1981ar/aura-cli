@@ -248,8 +248,12 @@ async def _execute_ask(req: ExecuteRequest):
     return {"status": "success", "data": res}
 
 
+SAFE_ENV_KEYS = {"PATH", "HOME", "USER", "SHELL", "TERM", "LANG", "PWD", "VIRTUAL_ENV", "CONDA_DEFAULT_ENV"}
+
+
 async def _execute_env(_: ExecuteRequest):
-    raise HTTPException(status_code=501, detail="The 'env' tool is currently disabled due to security concerns.")
+    safe_env = {k: v for k, v in os.environ.items() if k in SAFE_ENV_KEYS or k.startswith("AURA_")}
+    return {"status": "success", "data": safe_env}
 
 
 async def _execute_run(req: ExecuteRequest):
@@ -501,7 +505,7 @@ def require_auth(authorization: Optional[str] = Header(default=None)) -> None:
 
 
 @app.get("/health")
-async def health(_: None = Depends(require_auth)) -> Dict:
+async def health() -> Dict:
     return build_health_payload(
         status="ok",
         server="aura-dev-tools",

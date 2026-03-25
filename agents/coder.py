@@ -2,6 +2,7 @@ import inspect
 import re
 from core.logging_utils import log_json
 
+
 class CoderAgent:
     """
     The CoderAgent is responsible for autonomously generating and refining code
@@ -9,6 +10,8 @@ class CoderAgent:
     It operates in an iterative loop, attempting to produce working Python code
     that adheres to specified requirements and conventions.
     """
+
+    capabilities = ["code_generation", "coding", "implement", "refactor"]
 
     MAX_ITERATIONS = 3
     AURA_TARGET_DIRECTIVE = "# AURA_TARGET: "
@@ -48,6 +51,7 @@ class CoderAgent:
                  generated code if no TesterAgent is provided.
         """
         import json as _json
+
         code = ""
         tests = ""
         feedback = ""
@@ -86,7 +90,7 @@ The "code" value must be a valid Python string (escape newlines as \\n).
             brace_idx = stripped.find("{")
             if brace_idx != -1:
                 try:
-                    obj = _json.loads(stripped[brace_idx:stripped.rfind("}") + 1])
+                    obj = _json.loads(stripped[brace_idx : stripped.rfind("}") + 1])
                     if "aura_target" in obj and "code" in obj:
                         parsed_target = obj["aura_target"]
                         parsed_code = obj["code"]
@@ -97,7 +101,7 @@ The "code" value must be a valid Python string (escape newlines as \\n).
             if parsed_code is None:
                 for line in stripped.splitlines():
                     if line.startswith(self.AURA_TARGET_DIRECTIVE):
-                        parsed_target = line[len(self.AURA_TARGET_DIRECTIVE):].strip()
+                        parsed_target = line[len(self.AURA_TARGET_DIRECTIVE) :].strip()
                         break
                 code_match = self.CODE_BLOCK_RE.search(stripped)
                 parsed_code = code_match.group(1).strip() if code_match else stripped
@@ -114,13 +118,13 @@ The "code" value must be a valid Python string (escape newlines as \\n).
                 feedback = evaluation["summary"]
 
                 if "likely pass" in feedback.lower():
-                    log_json("INFO", "coder_iteration_pass", goal=task, details={"iteration": i+1, "status": "Tests likely pass. Code accepted."})
+                    log_json("INFO", "coder_iteration_pass", goal=task, details={"iteration": i + 1, "status": "Tests likely pass. Code accepted."})
                     self.brain.remember(f"Code for '{task}': {code}")
                     self.brain.remember(f"Tests for '{task}': {tests}")
                     return code
                 else:
-                    log_json("WARN", "coder_iteration_feedback", goal=task, details={"iteration": i+1, "status": "Tests likely fail or need improvement. Applying feedback..."})
-                    self.brain.remember(f"Attempt {i+1} for '{task}': {code} -> Feedback: {feedback}")
+                    log_json("WARN", "coder_iteration_feedback", goal=task, details={"iteration": i + 1, "status": "Tests likely fail or need improvement. Applying feedback..."})
+                    self.brain.remember(f"Attempt {i + 1} for '{task}': {code} -> Feedback: {feedback}")
             else:
                 self.brain.remember(f"Code for '{task}': {code}")
                 return code

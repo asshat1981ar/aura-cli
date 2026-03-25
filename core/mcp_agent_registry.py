@@ -18,6 +18,19 @@ _MCP_CAPABILITY_GROUPS: Dict[str, List[str]] = {
     "database":    ["execute_query", "list_tables", "describe_schema", "run_migration"],
     "web":         ["fetch_url", "http_get", "http_post", "web_search"],
     "github":      ["gh_issue", "gh_pr", "gh_repo", "gh_release", "gh_workflow"],
+    # AURA skills exposed as MCP tools (via aura_mcp_skills_server)
+    "code_analysis": ["ast_analyzer", "symbol_indexer", "complexity_scorer", "code_clone_detector"],
+    "security":      ["security_scanner", "security_hardener", "semgrep_scan"],
+    "lint_check":    ["linter_enforcer", "type_checker", "error_pattern_matcher"],
+    "architecture":  ["architecture_validator", "dependency_analyzer", "structural_analyzer"],
+    "test_coverage": ["test_coverage_analyzer", "incremental_differ"],
+    "git_analysis":  ["git_history_analyzer", "git_blame", "git_log", "git_diff"],
+    "documentation": ["doc_generator", "changelog_generator"],
+    # MCP external servers by capability cluster
+    "browser":       ["playwright_navigate", "playwright_click", "puppeteer_screenshot"],
+    "search":        ["brave_search", "fetch_url", "web_search"],
+    "memory_store":  ["memory_add", "memory_search", "memory_get"],
+    "sadd":          ["sadd_parse_spec", "sadd_session_status", "sadd_list_sessions", "sadd_session_events", "sadd_session_artifacts"],
 }
 
 

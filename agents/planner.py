@@ -34,12 +34,16 @@ Example: ["Step 1: ...", "Step 2: ..."]
 Ensure your response contains ONLY the JSON array, with no conversational text or other explanations.
 """
 
+
 class PlannerAgent:
     """
     The PlannerAgent is responsible for generating and updating plans based on a given goal,
     system state, and feedback. It leverages the LLM to analyze problems, propose solutions,
     and decompose complex tasks into atomic steps.
     """
+
+    capabilities = ["planning", "decomposition", "design", "tree_of_thought", "strategy"]
+
     def __init__(self, brain, model):
         """
         Initializes the PlannerAgent with access to the system's brain and model.
@@ -85,13 +89,7 @@ class PlannerAgent:
                 backfill_instr += f"- {item['file']} ({pct}% coverage)\n"
             backfill_instr += "\nPRIORITIZE these modules by adding 'Test Backfill' steps at the BEGINNING of your plan."
 
-        prompt = EVOLUTION_PROMPT.format(
-            goal=goal,
-            memory=memory_snapshot,
-            similar=similar_past_problems,
-            weakness=known_weaknesses,
-            backfill_instr=backfill_instr
-        )
+        prompt = EVOLUTION_PROMPT.format(goal=goal, memory=memory_snapshot, similar=similar_past_problems, weakness=known_weaknesses, backfill_instr=backfill_instr)
         response = self._respond(prompt)
         self.brain.remember(f"Planned for goal: {goal} with raw response: {response[:100]}...")
         try:

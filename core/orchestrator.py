@@ -853,6 +853,23 @@ class LoopOrchestrator:
 
         return act, sandbox_passed, act_attempts_used
 
+    def _select_act_agent(self, goal: str) -> str:
+        """Return the agents-dict key for the best code-generation agent for *goal*.
+
+        Uses resolve_agent_for_goal() when a model_adapter is available and
+        the resolved agent is actually registered in self.agents; falls back
+        to "act" otherwise so existing behaviour is preserved.
+        """
+        try:
+            from core.skill_dispatcher import resolve_agent_for_goal
+            model_adapter = getattr(self, "model_adapter", None) or getattr(self, "model", None)
+            spec = resolve_agent_for_goal(goal, model_adapter=model_adapter)
+            if spec and spec.name in self.agents:
+                return spec.name
+        except Exception:
+            pass
+        return "act"
+
     def _execute_act_verify_attempt(self, goal: str, plan: Dict, task_bundle: Dict, cycle_id: str, phase_outputs: Dict, dry_run: bool):
         """Execute one attempt of act -> sandbox -> apply -> verify.
 
@@ -901,7 +918,7 @@ class LoopOrchestrator:
             except ValueError:
                 # Fallback to single-path if no valid candidates
                 act = self._run_phase(
-                    "act",
+                    self._select_act_agent(goal),
                     {
                         "task": goal,
                         "task_bundle": task_bundle,
@@ -912,7 +929,7 @@ class LoopOrchestrator:
                 )
         else:
             act = self._run_phase(
-                "act",
+                self._select_act_agent(goal),
                 {
                     "task": goal,
                     "task_bundle": task_bundle,
@@ -932,7 +949,7 @@ class LoopOrchestrator:
 
         if validate_phase_output("change_set", act) and self.debugger:
             debug_hint = self.debugger.diagnose(error="CoderAgent produced invalid change_set", context={"goal": goal, "plan": plan, "task_bundle": task_bundle})
-            act = self._run_phase("act", {"task": goal, "task_bundle": task_bundle, "dry_run": dry_run, "project_root": str(self.project_root), "debug_hint": debug_hint})
+            act = self._run_phase(self._select_act_agent(goal), {"task": goal, "task_bundle": task_bundle, "dry_run": dry_run, "project_root": str(self.project_root), "debug_hint": debug_hint})
 
         phase_outputs["change_set"] = act
         act, _passed, extra_uses = self._run_sandbox_loop(goal, act, task_bundle, dry_run, phase_outputs)

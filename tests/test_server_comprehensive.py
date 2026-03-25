@@ -142,6 +142,17 @@ def test_execute_goal_requires_args(server_module):
     assert exc.value.status_code == 400
 
 
+def test_execute_goal_requires_runtime_component(server_module):
+    original = server_module.orchestrator
+    server_module.orchestrator = None
+    try:
+        with pytest.raises(HTTPException) as exc:
+            _run(server_module.execute(server_module.ExecuteRequest(tool_name="goal", args=["Fix the bug"])))
+        assert exc.value.status_code == 503
+    finally:
+        server_module.orchestrator = original
+
+
 def test_execute_unknown_tool(server_module):
     with pytest.raises(HTTPException):
         _run(server_module.execute(server_module.ExecuteRequest(tool_name="invalid", args=[])))

@@ -142,6 +142,17 @@ def test_execute_ask_tool(server_module):
     assert data["data"] == "Hello from stub"
 
 
+def test_execute_ask_requires_runtime_component(server_module):
+    original = server_module.model_adapter
+    server_module.model_adapter = None
+    try:
+        with pytest.raises(HTTPException) as exc:
+            _run(server_module.execute(server_module.ExecuteRequest(tool_name="ask", args=["Hello?"])))
+        assert exc.value.status_code == 503
+    finally:
+        server_module.model_adapter = original
+
+
 def test_execute_unknown_tool(server_module):
     with pytest.raises(HTTPException) as exc:
         _run(server_module.execute(server_module.ExecuteRequest(tool_name="no_such_tool", args=[])))

@@ -768,32 +768,42 @@ class ModelAdapter:
         return None 
 
     # [LLM Call methods unchanged]
-    def call_openrouter(self, prompt: str) -> str:
+    def call_openrouter(self, prompt: str, route_key: str | None = None) -> str:
         openrouter_key = resolve_openrouter_api_key() or os.environ.get("OPENROUTER_API_KEY")
         if not openrouter_key:
             raise ValueError("OpenRouter-compatible API key not set for OpenRouter call.")
 
-        # Free models to rotate through to avoid rate limits
-        free_models = [
-            "mistralai/mistral-7b-instruct:free",
-            "google/gemini-2.0-flash-exp:free",
-            "meta-llama/llama-3-8b-instruct:free",
-            "qwen/qwen-2-7b-instruct:free"
-        ]
-        import random
-        selected_model = random.choice(free_models)
+        # Select model based on task routing from settings.json
+        routing = config.get("model_routing", {})
+        selected_model = None
+        if route_key:
+            selected_model = routing.get(route_key)
+        if not selected_model:
+            selected_model = routing.get("fast", "google/gemini-2.0-flash-001")
 
         url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {openrouter_key}",
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://github.com/asshat1981ar/aura-cli",
+            "X-Title": "AURA CLI",
         }
         payload = {
             "model": selected_model,
-            "messages": [{"role": "user", "content": prompt}]
+            "messages": [{"role": "user", "content": prompt}],
         }
+        log_json("INFO", "openrouter_call", details={"model": selected_model, "route_key": route_key or "default"})
         response = self._make_request_with_retries("POST", url, headers, payload)
         data = response.json()
+
+        # Handle rate-limit or model errors — fallback to free model
+        if "error" in data:
+            fallback = routing.get("fallback", "meta-llama/llama-3.3-70b-instruct:free")
+            log_json("WARN", "openrouter_model_error", details={"model": selected_model, "error": str(data["error"]), "fallback": fallback})
+            payload["model"] = fallback
+            response = self._make_request_with_retries("POST", url, headers, payload)
+            data = response.json()
+
         return data["choices"][0]["message"]["content"]
 
     def call_gemini(self, prompt: str) -> str:
@@ -922,23 +932,35 @@ class ModelAdapter:
             return "Local model not configured. Set 'local_model_command' in aura.config.json or AURA_LOCAL_MODEL_COMMAND env var."
 
     def respond_for_role(self, route_key: str, prompt: str) -> str:
+        # Try local profile first (for Android/local models)
         profile_name = self._resolve_local_profile_name(route_key)
-        if not profile_name:
-            return self.respond(prompt)
+        if profile_name:
+            cache_key = f"[local-role:{route_key}|profile:{profile_name}] {prompt}"
+            cached = self._get_cached_response(cache_key)
+            if cached:
+                return cached
+            try:
+                model_response = self._call_with_timeout(self.call_local_profile, profile_name, prompt)
+                self._save_to_cache(cache_key, model_response)
+                return model_response
+            except Exception as e:
+                log_json("WARN", "local_role_call_failed", details={"route_key": route_key, "profile": profile_name, "error": str(e), "fallback": "openrouter_routed"})
 
-        cache_key = f"[local-role:{route_key}|profile:{profile_name}] {prompt}"
-        cached = self._get_cached_response(cache_key)
-        if cached:
-            return cached
+        # Route through OpenRouter with task-specific model selection
+        routing = config.get("model_routing", {})
+        if route_key in routing and config.get("primary_provider") == "openrouter":
+            cache_key = f"[openrouter-role:{route_key}] {prompt}"
+            cached = self._get_cached_response(cache_key)
+            if cached:
+                return cached
+            try:
+                model_response = self._call_with_timeout(self.call_openrouter, prompt, route_key)
+                self._save_to_cache(cache_key, model_response)
+                return model_response
+            except Exception as e:
+                log_json("WARN", "openrouter_role_call_failed", details={"route_key": route_key, "error": str(e), "fallback": "default_respond"})
 
-        try:
-            model_response = self._call_with_timeout(self.call_local_profile, profile_name, prompt)
-        except Exception as e:
-            log_json("WARN", "local_role_call_failed", details={"route_key": route_key, "profile": profile_name, "error": str(e), "fallback": "default_model_path"})
-            return self.respond(prompt)
-
-        self._save_to_cache(cache_key, model_response)
-        return model_response
+        return self.respond(prompt)
 
     # Default timeout (seconds) for a single LLM call
     @property
@@ -970,18 +992,22 @@ class ModelAdapter:
             except Exception as e:
                 log_json("WARN", "router_call_failed", details={"error": str(e), "fallback": "Direct fallbacks"})
         if not model_response:
-            try:
-                model_response = self._call_with_timeout(self.call_openai, prompt)
-            except Exception as e:
-                log_json("WARN", "openai_call_failed", details={"error": str(e), "fallback": "Anthropic"})
+            # Primary provider: OpenRouter (routes to task-specific models)
+            primary = config.get("primary_provider", "openrouter")
+            if primary == "openrouter":
                 try:
-                    model_response = self._call_with_timeout(self.call_anthropic, prompt)
+                    model_response = self._call_with_timeout(self.call_openrouter, prompt)
                 except Exception as e:
-                    log_json("WARN", "anthropic_call_failed", details={"error": str(e), "fallback": "OpenRouter"})
+                    log_json("WARN", "openrouter_call_failed", details={"error": str(e), "fallback": "OpenAI"})
+            if not model_response:
+                try:
+                    model_response = self._call_with_timeout(self.call_openai, prompt)
+                except Exception as e:
+                    log_json("WARN", "openai_call_failed", details={"error": str(e), "fallback": "Anthropic"})
                     try:
-                        model_response = self._call_with_timeout(self.call_openrouter, prompt)
+                        model_response = self._call_with_timeout(self.call_anthropic, prompt)
                     except Exception as e:
-                        log_json("WARN", "openrouter_call_failed", details={"error": str(e), "fallback": "Local Model"})
+                        log_json("WARN", "anthropic_call_failed", details={"error": str(e), "fallback": "Local Model"})
                         model_response = self._call_with_timeout(self.call_local, prompt)
         if model_response is None:
             return "Error: No model successfully responded."

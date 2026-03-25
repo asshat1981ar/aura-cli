@@ -383,6 +383,10 @@ def _customize_sadd_resume(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--session-id", dest="session_id", required=True, help="Session ID to resume.")
 
 
+def _customize_transport(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--root", dest="project_root", default=".", help="Project root directory.")
+
+
 _PARSER_CUSTOMIZERS.update(
     {
         ("help",): _customize_help,
@@ -412,10 +416,6 @@ _PARSER_CUSTOMIZERS.update(
         ("transport",): _customize_transport,
     }
 )
-
-
-def _customize_transport(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--root", dest="project_root", default=".", help="Project root directory.")
 
 
 def _apply_parser_customizations(parser_map: Mapping[tuple[str, ...], argparse.ArgumentParser]) -> None:

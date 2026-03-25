@@ -1,0 +1,8 @@
+{
+  "key": "adaptive-dag-sub-agent-prompt-pattern",
+  "type": "pattern",
+  "content": "DAG orchestrator pattern for structured sub-agent self-prompting. Each agent gets rich contextual prompt: task, current state, prior feedback, debug trace, previous code. LLM output validated via Pydantic. State machine: PLANNING→CODING→REVIEWING→TESTING→DEBUGGING→SUCCESS. Route: {PLANNING: architect, CODING: coder, REVIEWING: reviewer, DEBUGGING: debugger, TESTING: run sandbox}. Key insight: inject context conditionally — reviewer_feedback if exists, debug_strategy.fix_instructions if exists, previous code if exists. Template: sys_prompt='You are [Role]. Output JSON matching schema.' user_prompt='Task: {task}\\nPlan: {plan}\\n[URGENT] Fix: {feedback}\\nPrevious:\\n```{code}```'. Use temp=0.1 for deterministic agents (coder, debugger), 0.4 for creative (architect). Always validate output schema before proceeding.",
+  "tags": ["dag", "prompt-engineering", "sub-agents", "pydantic", "state-machine", "self-reflection"],
+  "created_at": "2026-03-25",
+  "source": "user-provided-pattern"
+}

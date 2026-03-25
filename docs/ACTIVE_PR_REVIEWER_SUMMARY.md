@@ -6,7 +6,7 @@ This file is the live reviewer-facing summary for the current active sweep branc
 
 PR: `#294`  
 Branch: `fix/restore-server-and-tests`  
-HEAD SHA: `ad03c58c37a5c28f3e017cf791232a43dc8535f9`
+HEAD SHA: `b0128382b2d6277140996049572d41ecf937db74`
 
 Description:
 
@@ -34,8 +34,8 @@ Testing Performed:
   - `python3 -m pytest -q tests/test_workflow_engine.py -k get_orchestrator`
   - `python3 -m pytest -q tests/integration/test_sprint2_integration.py`
 - broader CI/workflow verification:
-  - `Python CI` green on `ad03c58`
-  - `Claude Code Review` green on `ad03c58`
+  - `Python CI` green on `b012838`
+  - `Claude Code Review` green on `b012838`
 - anything intentionally not verified:
   - no additional broad runtime or repo-wide regression sweep beyond the repaired PR surfaces
 

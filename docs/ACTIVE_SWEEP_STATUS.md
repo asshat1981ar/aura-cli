@@ -4,8 +4,8 @@ This file is the live audit, queue, and closeout surface for the current repo-wi
 
 ## Audit Summary
 
-Branch: `HEAD`  
-HEAD SHA: `bd828eae11a6bca742f31072f70baf132b12e8b2`  
+Branch: `fix/restore-server-and-tests`  
+HEAD SHA: `ad03c58c37a5c28f3e017cf791232a43dc8535f9`  
 Target PR(s): `#294`
 
 Active error buckets:
@@ -36,16 +36,16 @@ Notes: keep all unrelated local worktree changes untouched; use focused commits 
 
 | Bucket | Owner | Status | Branch/SHA | Verification target | Notes |
 | --- | --- | --- | --- | --- | --- |
-| workflow/setup | main agent | resolved | `HEAD` / `bd828ea` | GitHub Actions setup passes and Claude workflow starts real steps | Broken Claude action pin and workflow gating issues fixed |
-| required CI lane | main agent | resolved | `HEAD` / `bd828ea` | `Python CI` green on current SHA | Python 3.10/macOS regression path fixed |
-| PR review blocker | main agent | resolved | `HEAD` / `bd828ea` | review-targeted tests and comment alignment verified | Sprint 2 integration review blockers addressed |
-| developer-surface drift | main agent | in_progress | `HEAD` / `bd828ea` | doc and prompt cross-reference verification | sweep templates and workflow alignment underway |
-| external blocker | main agent | none | `HEAD` / `bd828ea` | n/a | none currently identified |
+| workflow/setup | main agent | resolved | `fix/restore-server-and-tests` / `ad03c58` | GitHub Actions setup passes and Claude workflow starts real steps | Broken Claude action pin and workflow gating issues fixed |
+| required CI lane | main agent | resolved | `fix/restore-server-and-tests` / `ad03c58` | `Python CI` green on current SHA | Python 3.10/macOS regression path fixed |
+| PR review blocker | main agent | resolved | `fix/restore-server-and-tests` / `ad03c58` | review-targeted tests and comment alignment verified | Sprint 2 integration review blockers addressed |
+| developer-surface drift | main agent | in_progress | `fix/restore-server-and-tests` / `ad03c58` | doc and prompt cross-reference verification | sweep templates and workflow alignment underway |
+| external blocker | main agent | none | `fix/restore-server-and-tests` / `ad03c58` | n/a | none currently identified |
 
 ## Latest Closeout
 
-Branch: `HEAD`  
-HEAD SHA: `bd828eae11a6bca742f31072f70baf132b12e8b2`  
+Branch: `fix/restore-server-and-tests`  
+HEAD SHA: `ad03c58c37a5c28f3e017cf791232a43dc8535f9`  
 Bucket addressed: workflow/setup and required CI lanes  
 Files/surfaces changed: workflow YAML, workflow-engine tests, Sprint 2 integration tests  
 Verification performed: targeted pytest, local YAML validation, GitHub Actions polling on the pushed SHA  

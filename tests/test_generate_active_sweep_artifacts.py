@@ -2,10 +2,19 @@ import subprocess
 import sys
 from pathlib import Path
 import os
+import importlib.util
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "generate_active_sweep_artifacts.py"
+
+
+def _load_script_module():
+    spec = importlib.util.spec_from_file_location("generate_active_sweep_artifacts", SCRIPT)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _run_script(*args: str) -> subprocess.CompletedProcess:
@@ -197,6 +206,24 @@ def test_script_uses_env_checks_and_reviewer_complete(tmp_path: Path):
     assert "- exact CI lane fixed: `Security`" in summary_text
     assert "- exact workflow/check fixed: `Package`" in summary_text
     assert "- reviewer-complete: no, for the currently known CI and review blocker set" in summary_text
+
+
+def test_detect_display_sha_prefers_pr_head_on_detached_merge_checkout(monkeypatch):
+    mod = _load_script_module()
+
+    def fake_git_output(*args: str) -> str:
+        if args == ("rev-parse", "--abbrev-ref", "HEAD"):
+            return "HEAD"
+        if args == ("rev-parse", "HEAD"):
+            return "mergecommit1234567890"
+        if args == ("rev-list", "--parents", "-n", "1", "HEAD"):
+            return "mergecommit1234567890 baseparent0987654321 prheadabcdef123456"
+        raise AssertionError(f"unexpected git args: {args}")
+
+    monkeypatch.setattr(mod, "_git_output", fake_git_output)
+    monkeypatch.setenv("GITHUB_PR_NUMBER", "294")
+
+    assert mod.detect_display_sha() == "prheadabcdef123456"
 
 
 def test_script_fails_without_pr_flag_or_env(tmp_path: Path):

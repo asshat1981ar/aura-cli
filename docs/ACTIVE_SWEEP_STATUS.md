@@ -5,8 +5,8 @@ This file is the live audit, queue, and closeout surface for the current repo-wi
 ## Audit Summary
 
 Branch: `HEAD`  
-HEAD SHA: `648c0e1ac70f9220926654742f3573bdabe417bc`  
-Target PR(s): `#290`
+HEAD SHA: `bd828eae11a6bca742f31072f70baf132b12e8b2`  
+Target PR(s): `#294`
 
 Active error buckets:
 
@@ -36,16 +36,16 @@ Notes: keep all unrelated local worktree changes untouched; use focused commits 
 
 | Bucket | Owner | Status | Branch/SHA | Verification target | Notes |
 | --- | --- | --- | --- | --- | --- |
-| workflow/setup | main agent | resolved | `HEAD` / `648c0e1` | GitHub Actions setup passes and Claude workflow starts real steps | Broken Claude action pin and workflow gating issues fixed |
-| required CI lane | main agent | resolved | `HEAD` / `648c0e1` | `Python CI` green on current SHA | Python 3.10/macOS regression path fixed |
-| PR review blocker | main agent | resolved | `HEAD` / `648c0e1` | review-targeted tests and comment alignment verified | Sprint 2 integration review blockers addressed |
-| developer-surface drift | main agent | in_progress | `HEAD` / `648c0e1` | doc and prompt cross-reference verification | sweep templates and workflow alignment underway |
-| external blocker | main agent | none | `HEAD` / `648c0e1` | n/a | none currently identified |
+| workflow/setup | main agent | resolved | `HEAD` / `bd828ea` | GitHub Actions setup passes and Claude workflow starts real steps | Broken Claude action pin and workflow gating issues fixed |
+| required CI lane | main agent | resolved | `HEAD` / `bd828ea` | `Python CI` green on current SHA | Python 3.10/macOS regression path fixed |
+| PR review blocker | main agent | resolved | `HEAD` / `bd828ea` | review-targeted tests and comment alignment verified | Sprint 2 integration review blockers addressed |
+| developer-surface drift | main agent | in_progress | `HEAD` / `bd828ea` | doc and prompt cross-reference verification | sweep templates and workflow alignment underway |
+| external blocker | main agent | none | `HEAD` / `bd828ea` | n/a | none currently identified |
 
 ## Latest Closeout
 
 Branch: `HEAD`  
-HEAD SHA: `648c0e1ac70f9220926654742f3573bdabe417bc`  
+HEAD SHA: `bd828eae11a6bca742f31072f70baf132b12e8b2`  
 Bucket addressed: workflow/setup and required CI lanes  
 Files/surfaces changed: workflow YAML, workflow-engine tests, Sprint 2 integration tests  
 Verification performed: targeted pytest, local YAML validation, GitHub Actions polling on the pushed SHA  
@@ -54,6 +54,6 @@ Next highest-priority bucket: developer-surface drift
 
 PR-facing note:
 
-- comment or check addressed: PR `#290` CI failures and active review blockers
-- follow-up still needed: keep the active sweep artifact current if the branch scope expands beyond `#290`
+- comment or check addressed: PR `#294` CI failures and active review blockers
+- follow-up still needed: keep the active sweep artifact current if the branch scope expands beyond `#294`
 - reviewer summary artifact: `docs/ACTIVE_PR_REVIEWER_SUMMARY.md`

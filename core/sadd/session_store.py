@@ -9,13 +9,12 @@ import uuid
 from contextlib import contextmanager
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from core.sadd.types import (
     DesignSpec,
     SessionConfig,
     SessionReport,
-    WorkstreamSpec,
 )
 
 # Default DB location (alongside other memory DBs).

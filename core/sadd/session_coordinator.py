@@ -13,7 +13,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 from core.sadd.sub_agent_runner import SubAgentRunner
 from core.sadd.types import (
@@ -49,6 +49,7 @@ def create_orchestrator_factory(
     def _factory() -> LoopOrchestrator:
         if model_adapter is None:
             from core.model_adapter import ModelAdapter
+
             _model = ModelAdapter()
         else:
             _model = model_adapter
@@ -61,6 +62,7 @@ def create_orchestrator_factory(
             project_root=_root,
             policy=Policy(max_cycles=10),
         )
+
     return _factory
 
 

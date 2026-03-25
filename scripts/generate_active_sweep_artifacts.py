@@ -61,6 +61,27 @@ def detect_sha() -> str:
     return _git_output("rev-parse", "HEAD")
 
 
+def detect_display_sha(branch: str | None = None) -> str:
+    """Prefer the PR head SHA when CI checks out a detached merge commit.
+
+    GitHub `pull_request` workflows commonly check out a synthetic merge commit,
+    which would otherwise make the committed active-sweep artifacts perpetually
+    stale. When we are detached on a merge commit and the PR env is present,
+    use the second parent (`HEAD^2`), which is the PR branch head.
+    """
+    branch = branch or detect_branch()
+    sha = detect_sha()
+    if branch != "HEAD" or not detect_pr_number():
+        return sha
+    try:
+        parents = _git_output("rev-list", "--parents", "-n", "1", "HEAD").split()
+        if len(parents) >= 3:
+            return parents[2]
+    except Exception:
+        pass
+    return sha
+
+
 def parse_csv(value: str) -> list[str]:
     return [item.strip() for item in value.split(",") if item.strip()]
 
@@ -369,7 +390,7 @@ def main(argv: list[str] | None = None) -> int:
             if getattr(args, key, None) == DEFAULT_ARG_VALUES.get(key):
                 setattr(args, key, value)
     branch = args.branch or detect_branch()
-    sha = args.sha or detect_sha()
+    sha = args.sha or detect_display_sha(branch)
     args.pr = args.pr or detect_pr_number()
     if not args.pr:
         print(
@@ -377,13 +398,8 @@ def main(argv: list[str] | None = None) -> int:
             file=sys.stderr,
         )
         return 2
-    args.targeted_tests = args.targeted_tests or detect_csv_env("AURA_TARGETED_TESTS") or (
-        "python3 -m pytest -q tests/test_workflow_engine.py -k get_orchestrator,"
-        "python3 -m pytest -q tests/integration/test_sprint2_integration.py"
-    )
-    args.ci_checks = args.ci_checks or detect_csv_env("AURA_CI_CHECKS", "GITHUB_CHECKS") or (
-        "Python CI,Claude Code Review"
-    )
+    args.targeted_tests = args.targeted_tests or detect_csv_env("AURA_TARGETED_TESTS") or ("python3 -m pytest -q tests/test_workflow_engine.py -k get_orchestrator,python3 -m pytest -q tests/integration/test_sprint2_integration.py")
+    args.ci_checks = args.ci_checks or detect_csv_env("AURA_CI_CHECKS", "GITHUB_CHECKS") or ("Python CI,Claude Code Review")
     args.reviewer_complete = args.reviewer_complete or detect_bool_env("AURA_REVIEWER_COMPLETE") or "yes"
     status_text = render_status(args, branch, sha)
     summary_text = render_summary(args, branch, sha)

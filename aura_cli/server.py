@@ -222,11 +222,17 @@ async def _enqueue_stream(stream: asyncio.StreamReader | None, event_type: str, 
 
 async def _terminate_process(process: asyncio.subprocess.Process) -> int:
     if process.returncode is None:
-        process.terminate()
+        try:
+            process.terminate()
+        except ProcessLookupError:
+            return int(process.returncode or 0)
         try:
             await asyncio.wait_for(process.wait(), timeout=1.0)
         except asyncio.TimeoutError:
-            process.kill()
+            try:
+                process.kill()
+            except ProcessLookupError:
+                return int(process.returncode or 0)
             await process.wait()
     return int(process.returncode or 0)
 
@@ -248,12 +254,8 @@ async def _execute_ask(req: ExecuteRequest):
     return {"status": "success", "data": res}
 
 
-SAFE_ENV_KEYS = {"PATH", "HOME", "USER", "SHELL", "TERM", "LANG", "PWD", "VIRTUAL_ENV", "CONDA_DEFAULT_ENV"}
-
-
 async def _execute_env(_: ExecuteRequest):
-    safe_env = {k: v for k, v in os.environ.items() if k in SAFE_ENV_KEYS or k.startswith("AURA_")}
-    return {"status": "success", "data": safe_env}
+    raise HTTPException(status_code=501, detail="The 'env' tool is currently disabled due to security concerns.")
 
 
 async def _execute_run(req: ExecuteRequest):

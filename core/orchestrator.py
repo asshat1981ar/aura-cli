@@ -862,6 +862,7 @@ class LoopOrchestrator:
         """
         try:
             from core.skill_dispatcher import resolve_agent_for_goal
+
             model_adapter = getattr(self, "model_adapter", None) or getattr(self, "model", None)
             spec = resolve_agent_for_goal(goal, model_adapter=model_adapter)
             if spec and spec.name in self.agents:
@@ -948,7 +949,14 @@ class LoopOrchestrator:
         phase_outputs["act_confidence"] = act_confidence
 
         if validate_phase_output("change_set", act) and self.debugger:
-            debug_hint = self.debugger.diagnose(error="CoderAgent produced invalid change_set", context={"goal": goal, "plan": plan, "task_bundle": task_bundle})
+            debug_hint = self.debugger.diagnose(
+                error_message="CoderAgent produced invalid change_set",
+                current_goal=goal,
+                context=json.dumps(
+                    {"goal": goal, "plan": plan, "task_bundle": task_bundle},
+                    default=str,
+                ),
+            )
             act = self._run_phase(self._select_act_agent(goal), {"task": goal, "task_bundle": task_bundle, "dry_run": dry_run, "project_root": str(self.project_root), "debug_hint": debug_hint})
 
         phase_outputs["change_set"] = act

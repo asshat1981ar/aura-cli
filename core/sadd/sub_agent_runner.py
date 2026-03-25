@@ -6,7 +6,7 @@ import logging
 import time
 from typing import Any, Callable
 
-from core.sadd.types import WorkstreamResult, WorkstreamSpec
+from core.sadd.types import WorkstreamResult
 from core.sadd.workstream_graph import WorkstreamNode
 
 

@@ -3,14 +3,20 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /build
 COPY pyproject.toml requirements.txt ./
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip install --no-cache-dir --upgrade pip setuptools wheel
+
+COPY pyproject.toml requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY aura_cli/ aura_cli/
 COPY core/ core/
 COPY agents/ agents/
 COPY memory/ memory/
 COPY tools/ tools/
-COPY task_queue/ task_queue/
+COPY orchestrator_hub/ orchestrator_hub/
 COPY main.py run_aura.sh ./
-COPY __init__.py ./
 
 RUN pip install --no-cache-dir --prefix=/install .
 

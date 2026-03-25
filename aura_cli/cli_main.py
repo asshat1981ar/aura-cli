@@ -147,7 +147,14 @@ def cli_interaction_loop(args, runtime):
                 orchestrator = runtime.get("orchestrator")
                 _handle_run(args, runtime["goal_queue"], runtime["goal_archive"], orchestrator, runtime["debugger"], runtime["planner"], project_root)
             elif cmd_name == "status":
-                _handle_status(runtime["goal_queue"], runtime["goal_archive"], runtime.get("orchestrator"), project_root=project_root, memory_persistence_path=runtime.get("memory_persistence_path"))
+                _handle_status(
+                    runtime["goal_queue"],
+                    runtime["goal_archive"],
+                    runtime.get("orchestrator"),
+                    project_root=project_root,
+                    memory_persistence_path=runtime.get("memory_persistence_path"),
+                    memory_store=runtime.get("memory_store"),
+                )
             elif cmd_name == "doctor":
                 _handle_doctor(project_root)
             elif cmd_name == "clear":
@@ -991,6 +998,7 @@ def _handle_goal_status_dispatch(ctx: DispatchContext) -> int:
             as_json=True,
             project_root=ctx.project_root,
             memory_persistence_path=runtime.get("memory_persistence_path"),
+            memory_store=runtime.get("memory_store"),
         )
     else:
         _handle_status(
@@ -1000,6 +1008,7 @@ def _handle_goal_status_dispatch(ctx: DispatchContext) -> int:
             as_json=False,
             project_root=ctx.project_root,
             memory_persistence_path=runtime.get("memory_persistence_path"),
+            memory_store=runtime.get("memory_store"),
         )
     return 0
 
@@ -1139,7 +1148,36 @@ def _handle_sadd_run_dispatch(ctx: DispatchContext) -> int:
         if dry_run:
             print("  Mode: dry-run (no execution)")
         else:
-            print("  Mode: execute (not yet implemented in R0)")
+            from core.sadd.session_coordinator import SessionCoordinator, create_orchestrator_factory
+            from core.sadd.session_store import SessionStore
+            from core.sadd.types import SessionConfig
+
+            runtime = ctx.runtime
+            _brain = runtime.get("brain") or Brain()
+            _model = runtime.get("model_adapter")
+
+            config = SessionConfig(
+                max_parallel=getattr(args, "max_parallel", 3),
+                max_cycles_per_workstream=getattr(args, "max_cycles", 5),
+                dry_run=False,
+                fail_fast=getattr(args, "fail_fast", False),
+            )
+            factory = create_orchestrator_factory(
+                brain=_brain, project_root=ctx.project_root, model_adapter=_model,
+            )
+            store = SessionStore()
+            coordinator = SessionCoordinator(
+                design_spec=design_spec,
+                orchestrator_factory=factory,
+                brain=_brain,
+                config=config,
+                session_store=store,
+            )
+            report = coordinator.run()
+            if as_json:
+                print(json.dumps(report.to_dict(), indent=2))
+            else:
+                print(report.summary())
 
     return 0
 

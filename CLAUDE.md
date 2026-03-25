@@ -76,6 +76,14 @@ aura-cli/
 │   ├── logging_utils.py       # Structured JSON logging with secret masking
 │   ├── runtime_auth.py        # API key management
 │   ├── policy.py              # Stopping conditions
+│   ├── sadd/                  # Sub-Agent Driven Development
+│   │   ├── types.py           # Dataclasses and validation
+│   │   ├── design_spec_parser.py  # Markdown → workstreams
+│   │   ├── workstream_graph.py    # DAG + state machine
+│   │   ├── sub_agent_runner.py    # Per-workstream orchestrator
+│   │   ├── session_coordinator.py # Parallel execution
+│   │   ├── session_store.py       # SQLite persistence
+│   │   └── mcp_tool_bridge.py     # MCP tool matching
 │   └── tests/                 # Core module unit tests
 │
 ├── agents/                    # Specialized agents
@@ -121,6 +129,7 @@ aura-cli/
 │   ├── aura_control_mcp.py    # Control plane MCP
 │   ├── aura_mcp_skills_server.py
 │   ├── github_copilot_mcp.py  # Copilot integration
+│   ├── sadd_mcp_server.py     # SADD MCP server (port 8020)
 │   └── sequential_thinking_mcp.py
 │
 ├── tests/                     # Test suite (120+ files)
@@ -326,6 +335,25 @@ AURA can expand its skill set mid-cycle and provision MCP servers:
 | Distributed cache | `memory/momento_adapter.py` | Momento |
 
 Runtime memory files are git-ignored. See `.gitignore` for the exact list — only specific named files are excluded (e.g. `memory/brain.db`, `memory/capability_status.json`), not all `memory/*.json` files.
+
+---
+
+## SADD (Sub-Agent Driven Development)
+
+SADD decomposes design specs into parallel workstreams executed by sub-agents, each running the full LoopOrchestrator pipeline.
+
+| Component | File | Purpose |
+|-----------|------|---------|
+| Types | `core/sadd/types.py` | Dataclasses: WorkstreamSpec, WorkstreamResult, DesignSpec, SessionReport |
+| Parser | `core/sadd/design_spec_parser.py` | Markdown → workstream extraction with confidence scoring |
+| Graph | `core/sadd/workstream_graph.py` | DAG with state machine for dependency-ordered execution |
+| Runner | `core/sadd/sub_agent_runner.py` | Per-workstream LoopOrchestrator wrapper with context injection |
+| Coordinator | `core/sadd/session_coordinator.py` | ThreadPool parallel execution with failure routing |
+| Store | `core/sadd/session_store.py` | SQLite checkpoints, events, resume |
+| MCP Bridge | `core/sadd/mcp_tool_bridge.py` | Tool discovery and matching for workstreams |
+| MCP Server | `tools/sadd_mcp_server.py` | Expose SADD as MCP tools (port 8020) |
+
+**CLI commands:** `sadd run --spec <file> [--dry-run]`, `sadd status [--session-id <id>]`, `sadd resume --session-id <id>`
 
 ---
 

@@ -17,6 +17,7 @@ Typical usage::
                                    max_cycles=3)
     print(result["stop_reason"])
 """
+
 import os
 import json
 import dataclasses
@@ -60,6 +61,7 @@ MAX_SANDBOX_RETRIES = 3
 
 class BeadsSyncLoop:
     """Triggers beads synchronization (dolt push/pull) periodically."""
+
     EVERY_N = 5
 
     def __init__(self, beads_skill):
@@ -116,7 +118,7 @@ class LoopOrchestrator:
     def __init__(
         self,
         agents: Dict[str, object],
-        memory_store: Any = None, # Deprecated in favor of global memory_controller
+        memory_store: Any = None,  # Deprecated in favor of global memory_controller
         policy: Policy = None,
         project_root: Path = None,
         strict_schema: bool = False,
@@ -189,6 +191,7 @@ class LoopOrchestrator:
         # Lazy-load skills so missing optional deps don't break startup
         try:
             from agents.skills.registry import all_skills
+
             self.skills = all_skills(brain=self.brain, model=self.model)
         except Exception as exc:  # pragma: no cover
             log_json("WARN", "skills_load_failed", details={"error": str(exc)})
@@ -204,6 +207,7 @@ class LoopOrchestrator:
         # Skill correlation matrix: self-organizing skill system
         try:
             from core.skill_correlation import SkillCorrelationMatrix
+
             self.skill_correlation = SkillCorrelationMatrix()
         except Exception:
             self.skill_correlation = None
@@ -212,9 +216,9 @@ class LoopOrchestrator:
         self._improvement_loops: list = []
 
         # CASPA-W components — set via attach_caspa() after construction
-        self.adaptive_pipeline = None   # AdaptivePipeline
+        self.adaptive_pipeline = None  # AdaptivePipeline
         self.propagation_engine = None  # PropagationEngine
-        self.context_graph = None       # ContextGraph
+        self.context_graph = None  # ContextGraph
         self._consecutive_fails: int = 0
         self._ui_callbacks: list = []
 
@@ -331,9 +335,7 @@ class LoopOrchestrator:
                                                    KnowledgeDistiller())
         """
         self._improvement_loops.extend(loops)
-        log_json("INFO", "orchestrator_loops_attached",
-                 details={"count": len(self._improvement_loops),
-                           "types": [type(l).__name__ for l in self._improvement_loops]})
+        log_json("INFO", "orchestrator_loops_attached", details={"count": len(self._improvement_loops), "types": [type(l).__name__ for l in self._improvement_loops]})
 
     def attach_caspa(
         self,
@@ -366,11 +368,15 @@ class LoopOrchestrator:
         self.adaptive_pipeline = adaptive_pipeline
         self.propagation_engine = propagation_engine
         self.context_graph = context_graph
-        log_json("INFO", "orchestrator_caspa_attached", details={
-            "adaptive_pipeline": adaptive_pipeline is not None,
-            "propagation_engine": propagation_engine is not None,
-            "context_graph": context_graph is not None,
-        })
+        log_json(
+            "INFO",
+            "orchestrator_caspa_attached",
+            details={
+                "adaptive_pipeline": adaptive_pipeline is not None,
+                "propagation_engine": propagation_engine is not None,
+                "context_graph": context_graph is not None,
+            },
+        )
 
     def _retrieve_hints(self, goal: str, limit: int = 5) -> list[dict]:
         """Return the most relevant past cycle summaries for *goal*.
@@ -454,31 +460,27 @@ class LoopOrchestrator:
         # M5-002, M5-003: Canary Waves - Route low-risk and core tooling to async path
         canary_phases = ["mcp_discovery", "mcp_health", "code_search", "investigation"]
         if name in canary_phases and self.config.get("enable_new_orchestrator"):
-             log_json("INFO", "orchestrator_canary_routing", details={"phase": name})
-             try:
-                 import anyio
-                 import asyncio
-                 req = TaskRequest(
-                     task_id=f"canary_{uuid.uuid4().hex[:8]}",
-                     agent_name=name,
-                     input_data=input_data,
-                     context=ExecutionContext(project_root=str(self.project_root))
-                 )
-                 
-                 async def call_dispatch():
-                     return await self._dispatch_task(req)
+            log_json("INFO", "orchestrator_canary_routing", details={"phase": name})
+            try:
+                import anyio
+                import asyncio
 
-                 try:
-                     asyncio.get_running_loop()
-                     task_res = anyio.from_thread.run(call_dispatch)
-                 except RuntimeError:
-                     task_res = anyio.run(call_dispatch)
+                req = TaskRequest(task_id=f"canary_{uuid.uuid4().hex[:8]}", agent_name=name, input_data=input_data, context=ExecutionContext(project_root=str(self.project_root)))
 
-                 if task_res.status == "success":
-                     return task_res.output
-                 log_json("ERROR", "orchestrator_canary_failed", details={"phase": name, "error": task_res.error})
-             except Exception as e:
-                 log_json("ERROR", "orchestrator_canary_exception", details={"phase": name, "error": str(e)})
+                async def call_dispatch():
+                    return await self._dispatch_task(req)
+
+                try:
+                    asyncio.get_running_loop()
+                    task_res = anyio.from_thread.run(call_dispatch)
+                except RuntimeError:
+                    task_res = anyio.run(call_dispatch)
+
+                if task_res.status == "success":
+                    return task_res.output
+                log_json("ERROR", "orchestrator_canary_failed", details={"phase": name, "error": task_res.error})
+            except Exception as e:
+                log_json("ERROR", "orchestrator_canary_exception", details={"phase": name, "error": str(e)})
 
         agent = self.agents.get(name)
         if not agent:
@@ -499,37 +501,26 @@ class LoopOrchestrator:
         """Execute the async pipeline in the background and compare results (M4-005)."""
         import anyio
         import asyncio
-        
+
         async def perform_check():
-            req = TaskRequest(
-                task_id=f"shadow_{uuid.uuid4().hex[:8]}",
-                agent_name=name,
-                input_data=input_data,
-                context=ExecutionContext(project_root=str(self.project_root))
-            )
+            req = TaskRequest(task_id=f"shadow_{uuid.uuid4().hex[:8]}", agent_name=name, input_data=input_data, context=ExecutionContext(project_root=str(self.project_root)))
             shadow_res = await self._dispatch_task(req)
-            
+
             # Compare basic metadata
             mismatch = False
             if shadow_res.status != "success":
                 mismatch = True
             elif set(sync_result.keys()) != set(shadow_res.output.keys()):
                 mismatch = True
-                
-            log_json("INFO", "orchestrator_shadow_comparison", details={
-                "phase": name,
-                "status": shadow_res.status,
-                "mismatch": mismatch,
-                "sync_keys": list(sync_result.keys()),
-                "shadow_keys": list(shadow_res.output.keys()) if shadow_res.status == "success" else []
-            })
+
+            log_json("INFO", "orchestrator_shadow_comparison", details={"phase": name, "status": shadow_res.status, "mismatch": mismatch, "sync_keys": list(sync_result.keys()), "shadow_keys": list(shadow_res.output.keys()) if shadow_res.status == "success" else []})
 
         try:
             # Try to run in current loop or create one
             try:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
-                    # We are in a sync method but maybe on an async thread? 
+                    # We are in a sync method but maybe on an async thread?
                     # For shadow mode, we can block briefly or use a thread.
                     anyio.from_thread.run(perform_check)
                 else:
@@ -542,14 +533,15 @@ class LoopOrchestrator:
     async def _dispatch_task(self, request: TaskRequest) -> TaskResult:
         """Async resolution and invocation pipeline (M4-002)."""
         import anyio
+
         agent_spec = agent_registry.get_agent(request.agent_name)
-        
+
         # Fallback to local agents if not in typed registry
         if not agent_spec:
             legacy_agent = self.agents.get(request.agent_name)
             if not legacy_agent:
                 return TaskResult(task_id=request.task_id, status="error", output={}, error=f"Agent {request.agent_name} not found")
-            
+
             try:
                 result = await anyio.to_thread.run_sync(legacy_agent.run, request.input_data)
                 return TaskResult(task_id=request.task_id, status="success", output=result)
@@ -558,6 +550,7 @@ class LoopOrchestrator:
 
         if agent_spec.source == "mcp":
             from core.mcp_registry import get_registered_service
+
             try:
                 service = get_registered_service(agent_spec.mcp_server)
                 client = MCPAsyncClient(service["url"])
@@ -616,9 +609,7 @@ class LoopOrchestrator:
         if failed:
             log_json("WARN", "verify_fail_restore_failed", details={"failures": failed})
 
-    def _apply_change_set(
-        self, change_set: Dict, dry_run: bool
-    ) -> Dict[str, List]:
+    def _apply_change_set(self, change_set: Dict, dry_run: bool) -> Dict[str, List]:
         """Apply each change in *change_set* independently to the filesystem.
 
         Unlike the old all-or-nothing approach, a failure on one file is
@@ -681,7 +672,10 @@ class LoopOrchestrator:
                     snapshots.append(self._snapshot_file_state(file_path))
                     snapshotted_files.add(file_path)
                 apply_change_with_explicit_overwrite_policy(
-                    self.project_root, file_path, old_code, new_code,
+                    self.project_root,
+                    file_path,
+                    old_code,
+                    new_code,
                     overwrite_file=overwrite_file,
                 )
                 applied.append(file_path)
@@ -722,12 +716,23 @@ class LoopOrchestrator:
         combined = (failures + " " + logs).lower()
 
         structural_signals = [
-            "architecture", "circular", "api_breaking", "breaking_change",
-            "design", "interface", "contract",
+            "architecture",
+            "circular",
+            "api_breaking",
+            "breaking_change",
+            "design",
+            "interface",
+            "contract",
         ]
         external_signals = [
-            "dependency", "network", "env", "environment", "permission",
-            "not found", "no module", "import error",
+            "dependency",
+            "network",
+            "env",
+            "environment",
+            "permission",
+            "not found",
+            "no module",
+            "import error",
         ]
 
         if any(s in combined for s in structural_signals):
@@ -774,11 +779,17 @@ class LoopOrchestrator:
         for _sandbox_try in range(MAX_SANDBOX_RETRIES):
             self._notify_ui("on_phase_start", "sandbox")
             t0_sandbox = time.time()
-            sandbox_result = self._run_phase("sandbox", {
-                "act": act,
-                "dry_run": dry_run,
-                "project_root": str(self.project_root),
-            }) or {}
+            sandbox_result = (
+                self._run_phase(
+                    "sandbox",
+                    {
+                        "act": act,
+                        "dry_run": dry_run,
+                        "project_root": str(self.project_root),
+                    },
+                )
+                or {}
+            )
             self._notify_ui("on_phase_complete", "sandbox", (time.time() - t0_sandbox) * 1000)
 
             phase_outputs["sandbox"] = sandbox_result
@@ -786,10 +797,7 @@ class LoopOrchestrator:
             if sandbox_passed or dry_run:
                 break
 
-            stderr_hint = (
-                (sandbox_result.get("details") or {}).get("stderr", "")
-                or sandbox_result.get("summary", "sandbox_failed")
-            )
+            stderr_hint = (sandbox_result.get("details") or {}).get("stderr", "") or sandbox_result.get("summary", "sandbox_failed")
             failure_context = {"goal": goal, "phase": "sandbox"}
             analysis_suggestion = self._analyze_error(stderr_hint, failure_context)
             root_cause_analysis = self._run_root_cause_analysis(
@@ -816,35 +824,32 @@ class LoopOrchestrator:
             if investigation:
                 sandbox_result["investigation"] = investigation
 
-            log_json("WARN", "sandbox_pre_apply_failed",
-                     details={"try": _sandbox_try + 1,
-                              "summary": sandbox_result.get("summary", ""),
-                              "suggestion": analysis_suggestion,
-                              "root_cause_patterns": (root_cause_analysis or {}).get("patterns", []),
-                              "investigation_signals": failure_investigation.get("signals", [])})
+            log_json(
+                "WARN",
+                "sandbox_pre_apply_failed",
+                details={"try": _sandbox_try + 1, "summary": sandbox_result.get("summary", ""), "suggestion": analysis_suggestion, "root_cause_patterns": (root_cause_analysis or {}).get("patterns", []), "investigation_signals": failure_investigation.get("signals", [])},
+            )
 
             if _sandbox_try < MAX_SANDBOX_RETRIES - 1:
                 phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
                 task_bundle["fix_hints"] = fix_hints
-                act = self._run_phase("act", {
-                    "task": goal,
-                    "task_bundle": task_bundle,
-                    "dry_run": dry_run,
-                    "project_root": str(self.project_root),
-                    "fix_hints": fix_hints,
-                })
+                act = self._run_phase(
+                    "act",
+                    {
+                        "task": goal,
+                        "task_bundle": task_bundle,
+                        "dry_run": dry_run,
+                        "project_root": str(self.project_root),
+                        "fix_hints": fix_hints,
+                    },
+                )
                 act_attempts_used += 1
                 phase_outputs["change_set"] = act
             else:
-                log_json("WARN", "sandbox_max_retries_exceeded",
-                         details={"max": MAX_SANDBOX_RETRIES,
-                                  "continuing_with_best_attempt": True})
+                log_json("WARN", "sandbox_max_retries_exceeded", details={"max": MAX_SANDBOX_RETRIES, "continuing_with_best_attempt": True})
 
         if not sandbox_passed and not dry_run:
-            task_bundle["fix_hints"] = [
-                (sandbox_result.get("details") or {}).get("stderr", "")
-                or sandbox_result.get("summary", "sandbox_failed")
-            ]
+            task_bundle["fix_hints"] = [(sandbox_result.get("details") or {}).get("stderr", "") or sandbox_result.get("summary", "sandbox_failed")]
 
         return act, sandbox_passed, act_attempts_used
 
@@ -864,8 +869,9 @@ class LoopOrchestrator:
         rag_context = None
         try:
             from core.code_rag import CodeRAG
+
             code_rag = CodeRAG(
-                vector_store=getattr(self, 'vector_store', None),
+                vector_store=getattr(self, "vector_store", None),
                 brain=self.brain,
             )
             rag_context = code_rag.retrieve_context(goal, task_bundle)
@@ -879,6 +885,7 @@ class LoopOrchestrator:
         if n_best > 1 and self.model and not dry_run:
             # N-Best code generation with critic tournament
             from core.nbest import NBestEngine
+
             engine = NBestEngine(
                 n_candidates=n_best,
                 temperature_spread=tuple(config.get("n_best_temperature_spread", [0.2, 0.5, 0.8])),
@@ -890,19 +897,30 @@ class LoopOrchestrator:
                 candidates = engine.sandbox_all(sandbox_agent, candidates)
             try:
                 winner = engine.critic_tournament(self.model, candidates, goal)
-                act = {"changes": winner.changes, "confidence": winner.total_score,
-                       "variant_id": winner.variant_id, "n_best": True}
+                act = {"changes": winner.changes, "confidence": winner.total_score, "variant_id": winner.variant_id, "n_best": True}
             except ValueError:
                 # Fallback to single-path if no valid candidates
-                act = self._run_phase("act", {
-                    "task": goal, "task_bundle": task_bundle, "dry_run": dry_run,
-                    "project_root": str(self.project_root), "fix_hints": task_bundle.get("fix_hints", []),
-                })
+                act = self._run_phase(
+                    "act",
+                    {
+                        "task": goal,
+                        "task_bundle": task_bundle,
+                        "dry_run": dry_run,
+                        "project_root": str(self.project_root),
+                        "fix_hints": task_bundle.get("fix_hints", []),
+                    },
+                )
         else:
-            act = self._run_phase("act", {
-                "task": goal, "task_bundle": task_bundle, "dry_run": dry_run,
-                "project_root": str(self.project_root), "fix_hints": task_bundle.get("fix_hints", []),
-            })
+            act = self._run_phase(
+                "act",
+                {
+                    "task": goal,
+                    "task_bundle": task_bundle,
+                    "dry_run": dry_run,
+                    "project_root": str(self.project_root),
+                    "fix_hints": task_bundle.get("fix_hints", []),
+                },
+            )
 
         self._notify_ui("on_phase_complete", "act", (time.time() - t0_act) * 1000)
 
@@ -915,7 +933,7 @@ class LoopOrchestrator:
         if validate_phase_output("change_set", act) and self.debugger:
             debug_hint = self.debugger.diagnose(error="CoderAgent produced invalid change_set", context={"goal": goal, "plan": plan, "task_bundle": task_bundle})
             act = self._run_phase("act", {"task": goal, "task_bundle": task_bundle, "dry_run": dry_run, "project_root": str(self.project_root), "debug_hint": debug_hint})
-        
+
         phase_outputs["change_set"] = act
         act, _passed, extra_uses = self._run_sandbox_loop(goal, act, task_bundle, dry_run, phase_outputs)
 
@@ -938,7 +956,7 @@ class LoopOrchestrator:
             verification = self._run_phase("verify", {"change_set": act, "dry_run": dry_run, "project_root": str(self.project_root), "tests": tests})
         verification = self._normalize_verification_result(verification)
         self._notify_ui("on_phase_complete", "verify", (time.time() - t0_verify) * 1000, success=(verification.get("status") in ("pass", "skip")))
-        
+
         phase_outputs["verification"] = verification
         return act, apply_result, verification, extra_uses
 
@@ -987,11 +1005,7 @@ class LoopOrchestrator:
                 current_test_count = quality.get("test_count")
             recent_history = self._failure_history(limit=2)
             if recent_history:
-                latest_quality = (
-                    recent_history[-1].get("phase_outputs", {}).get("quality", {})
-                    if isinstance(recent_history[-1], dict)
-                    else {}
-                )
+                latest_quality = recent_history[-1].get("phase_outputs", {}).get("quality", {}) if isinstance(recent_history[-1], dict) else {}
                 if isinstance(latest_quality, dict) and "test_count" in latest_quality:
                     previous_test_count = latest_quality.get("test_count")
             investigation = self._run_investigation(
@@ -1051,15 +1065,19 @@ class LoopOrchestrator:
         if tot_candidates > 1 and self.model:
             try:
                 from core.tree_of_thought import TreeOfThoughtPlanner
+
                 tot = TreeOfThoughtPlanner(n_candidates=tot_candidates)
-                candidates = tot.generate_plans(self.model, goal, {
-                    "memory_snapshot": context.get("memory_summary", ""),
-                    "known_weaknesses": "",
-                    "skill_context": skill_context,
-                })
+                candidates = tot.generate_plans(
+                    self.model,
+                    goal,
+                    {
+                        "memory_snapshot": context.get("memory_summary", ""),
+                        "known_weaknesses": "",
+                        "skill_context": skill_context,
+                    },
+                )
                 winner = tot.score_plans(self.model, candidates, goal)
-                plan = {"steps": winner.steps, "strategy": winner.strategy,
-                        "confidence": winner.total_score, "tree_of_thought": True}
+                plan = {"steps": winner.steps, "strategy": winner.strategy, "confidence": winner.total_score, "tree_of_thought": True}
                 self._notify_ui("on_phase_complete", "plan", (time.time() - t0) * 1000)
                 phase_outputs["plan"] = plan
                 phase_outputs["tot_strategy"] = winner.strategy
@@ -1073,33 +1091,39 @@ class LoopOrchestrator:
                 # Synthesize directly (ToT already self-scored)
                 self._notify_ui("on_phase_start", "synthesize")
                 t0 = time.time()
-                task_bundle = self._run_phase("synthesize", {
-                    "goal": goal, "plan": plan,
-                    "critique": {"status": "skipped", "reason": "tree_of_thought_self_scored"},
-                    "beads_decision": beads_decision,
-                })
+                task_bundle = self._run_phase(
+                    "synthesize",
+                    {
+                        "goal": goal,
+                        "plan": plan,
+                        "critique": {"status": "skipped", "reason": "tree_of_thought_self_scored"},
+                        "beads_decision": beads_decision,
+                    },
+                )
                 self._notify_ui("on_phase_complete", "synthesize", (time.time() - t0) * 1000)
                 phase_outputs["task_bundle"] = task_bundle
                 return plan, task_bundle
             except Exception as exc:
-                log_json("WARN", "tree_of_thought_failed_fallback",
-                         details={"error": str(exc)})
+                log_json("WARN", "tree_of_thought_failed_fallback", details={"error": str(exc)})
                 # Fall through to standard planning
 
-        plan = self._run_phase("plan", {
-            "goal": goal,
-            "memory_snapshot": context.get("memory_summary", ""),
-            "similar_past_problems": context.get("hints_summary", ""),
-            "known_weaknesses": "",
-            "skill_context": skill_context,
-            "failure_context": phase_outputs.get("_failure_context", {}),
-            "extra_context": getattr(pipeline_cfg, "extra_plan_ctx", {}),
-            "backfill_context": context.get("backfill_context", []),
-            "beads_decision": beads_decision,
-            "beads_constraints": beads_decision.get("required_constraints", []),
-            "beads_required_tests": beads_decision.get("required_tests", []),
-            "beads_required_skills": beads_decision.get("required_skills", []),
-        })
+        plan = self._run_phase(
+            "plan",
+            {
+                "goal": goal,
+                "memory_snapshot": context.get("memory_summary", ""),
+                "similar_past_problems": context.get("hints_summary", ""),
+                "known_weaknesses": "",
+                "skill_context": skill_context,
+                "failure_context": phase_outputs.get("_failure_context", {}),
+                "extra_context": getattr(pipeline_cfg, "extra_plan_ctx", {}),
+                "backfill_context": context.get("backfill_context", []),
+                "beads_decision": beads_decision,
+                "beads_constraints": beads_decision.get("required_constraints", []),
+                "beads_required_tests": beads_decision.get("required_tests", []),
+                "beads_required_skills": beads_decision.get("required_skills", []),
+            },
+        )
         self._notify_ui("on_phase_complete", "plan", (time.time() - t0) * 1000)
         phase_outputs["plan"] = plan
 
@@ -1111,37 +1135,47 @@ class LoopOrchestrator:
 
         # Skip critique if plan confidence is very high
         if self.confidence_router.should_skip_optional(plan_result, "critique"):
-            log_json("INFO", "critique_skipped_high_confidence",
-                     details={"plan_confidence": plan_confidence})
+            log_json("INFO", "critique_skipped_high_confidence", details={"plan_confidence": plan_confidence})
             critique = {"status": "skipped", "reason": "high_plan_confidence"}
             phase_outputs["critique"] = critique
             self._notify_ui("on_phase_start", "synthesize")
             t0 = time.time()
-            task_bundle = self._run_phase("synthesize", {
-                "goal": goal, "plan": plan, "critique": critique,
-                "beads_decision": beads_decision,
-            })
+            task_bundle = self._run_phase(
+                "synthesize",
+                {
+                    "goal": goal,
+                    "plan": plan,
+                    "critique": critique,
+                    "beads_decision": beads_decision,
+                },
+            )
             self._notify_ui("on_phase_complete", "synthesize", (time.time() - t0) * 1000)
             phase_outputs["task_bundle"] = task_bundle
             return plan, task_bundle
 
         self._notify_ui("on_phase_start", "critique")
         t0 = time.time()
-        critique = self._run_phase("critique", {
-            "task": goal,
-            "plan": plan.get("steps", []),
-        })
+        critique = self._run_phase(
+            "critique",
+            {
+                "task": goal,
+                "plan": plan.get("steps", []),
+            },
+        )
         self._notify_ui("on_phase_complete", "critique", (time.time() - t0) * 1000)
         phase_outputs["critique"] = critique
 
         self._notify_ui("on_phase_start", "synthesize")
         t0 = time.time()
-        task_bundle = self._run_phase("synthesize", {
-            "goal": goal,
-            "plan": plan,
-            "critique": critique,
-            "beads_decision": beads_decision,
-        })
+        task_bundle = self._run_phase(
+            "synthesize",
+            {
+                "goal": goal,
+                "plan": plan,
+                "critique": critique,
+                "beads_decision": beads_decision,
+            },
+        )
         self._notify_ui("on_phase_complete", "synthesize", (time.time() - t0) * 1000)
         phase_outputs["task_bundle"] = task_bundle
         return plan, task_bundle
@@ -1156,9 +1190,7 @@ class LoopOrchestrator:
             plan, task_bundle = self._execute_plan_critique_synthesize(goal, context, skill_context, pipeline_cfg, phase_outputs)
 
             verification, replan_needed, early_return = self._run_act_loop(
-                goal=goal, plan=plan, task_bundle=task_bundle, pipeline_cfg=pipeline_cfg,
-                cycle_id=cycle_id, phase_outputs=phase_outputs, dry_run=dry_run,
-                plan_attempt=plan_attempt, max_plan_retries=max_plan_retries, skill_context=skill_context
+                goal=goal, plan=plan, task_bundle=task_bundle, pipeline_cfg=pipeline_cfg, cycle_id=cycle_id, phase_outputs=phase_outputs, dry_run=dry_run, plan_attempt=plan_attempt, max_plan_retries=max_plan_retries, skill_context=skill_context
             )
             if early_return:
                 return verification, early_return
@@ -1171,12 +1203,14 @@ class LoopOrchestrator:
         """Section 0: ADAPTIVE PIPELINE CONFIG."""
         if self.adaptive_pipeline:
             pipeline_cfg = self.adaptive_pipeline.configure(
-                goal, goal_type,
+                goal,
+                goal_type,
                 consecutive_fails=self._consecutive_fails,
                 past_failures=list(phase_outputs.get("_failure_context", {}).get("failures", [])),
             )
         else:
             from core.adaptive_pipeline import AdaptivePipeline
+
             pipeline_cfg = AdaptivePipeline()._default_config(goal_type)
 
         phase_outputs["pipeline_config"] = {
@@ -1217,7 +1251,12 @@ class LoopOrchestrator:
         t0 = time.time()
         working_memory = self.memory_controller.retrieve(MemoryTier.WORKING)
         session_memory = self.memory_controller.retrieve(MemoryTier.SESSION)
-        context = self._run_phase("ingest", {"goal": goal, "project_root": str(self.project_root), "hints": self._retrieve_hints(goal), "working_memory": working_memory, "session_memory": session_memory})
+        ingest_input = {"goal": goal, "project_root": str(self.project_root), "hints": self._retrieve_hints(goal), "working_memory": working_memory, "session_memory": session_memory}
+        # SADD context injection: merge dependency context from completed workstreams
+        ctx_inject = phase_outputs.get("context_injection")
+        if ctx_inject:
+            ingest_input["dependency_context"] = ctx_inject
+        context = self._run_phase("ingest", ingest_input)
         self._notify_ui("on_phase_complete", "ingest", (time.time() - t0) * 1000)
         if "bundle" in context:
             self._notify_ui("on_context_assembled", context["bundle"])
@@ -1252,8 +1291,7 @@ class LoopOrchestrator:
                     for suggested_name, corr_score in suggestions:
                         if suggested_name in self.skills and suggested_name not in active_skills:
                             active_skills[suggested_name] = self.skills[suggested_name]
-                            log_json("INFO", "skill_correlation_added",
-                                     details={"skill": suggested_name, "correlation": round(corr_score, 3)})
+                            log_json("INFO", "skill_correlation_added", details={"skill": suggested_name, "correlation": round(corr_score, 3)})
                 except Exception:
                     pass
 
@@ -1377,7 +1415,7 @@ class LoopOrchestrator:
     def _record_cycle_outcome(self, cycle_id: str, goal: str, goal_type: str, phase_outputs: Dict, started_at: float):
         """Final persistence and loop notification."""
         from core.quality_snapshot import run_quality_snapshot
-        
+
         verify_status = phase_outputs.get("verification", {}).get("status", "skip")
         passed = verify_status in ("pass", "skip")
         if passed:
@@ -1395,17 +1433,19 @@ class LoopOrchestrator:
 
         # ── Quality Trend Analysis ──
         try:
-            alerts = self.quality_trends.record_from_cycle({
-                "cycle_id": cycle_id, "goal": goal,
-                "completed_at": time.time(),
-                "duration_s": time.time() - started_at,
-                "phase_outputs": phase_outputs,
-            })
+            alerts = self.quality_trends.record_from_cycle(
+                {
+                    "cycle_id": cycle_id,
+                    "goal": goal,
+                    "completed_at": time.time(),
+                    "duration_s": time.time() - started_at,
+                    "phase_outputs": phase_outputs,
+                }
+            )
             if alerts and self.goal_queue:
                 for goal_text in self.quality_trends.get_remediation_goals():
                     self.goal_queue.add(goal_text)
-                    log_json("INFO", "quality_remediation_goal_enqueued",
-                             details={"goal": goal_text[:100]})
+                    log_json("INFO", "quality_remediation_goal_enqueued", details={"goal": goal_text[:100]})
         except Exception as exc:
             log_json("WARN", "quality_trend_record_failed", details={"error": str(exc)})
 
@@ -1442,7 +1482,7 @@ class LoopOrchestrator:
             "duration_s": outcome.duration_s(),
             "outcome": dataclasses.asdict(outcome),
         }
-        
+
         # Phase 9: learn()
         self._notify_ui("on_phase_start", "learn")
         t0_learn = time.time()
@@ -1453,12 +1493,8 @@ class LoopOrchestrator:
         if self.memory_controller.persistent_store:
             self.memory_controller.persistent_store.append_log(entry)
             # Store structured outcome for learning
-            self.memory_controller.store(
-                MemoryTier.PROJECT,
-                json.dumps(summary),
-                metadata={"type": "cycle_summary", "goal": goal, "cycle_id": cycle_id}
-            )
-        
+            self.memory_controller.store(MemoryTier.PROJECT, json.dumps(summary), metadata={"type": "cycle_summary", "goal": goal, "cycle_id": cycle_id})
+
         if self.brain:
             try:
                 self.brain.set(f"outcome:{cycle_id}", outcome.to_json())
@@ -1502,22 +1538,16 @@ class LoopOrchestrator:
         if self.brain and cycle_num % 10 == 0:
             try:
                 from memory.consolidation import MemoryConsolidator, MemoryEntry
+
                 consolidator = MemoryConsolidator()
                 # Convert brain memories to MemoryEntry format
                 raw_memories = self.brain.recall_with_budget(max_tokens=50000)
-                entries = [
-                    MemoryEntry(id=str(i), content=m, memory_type="decision")
-                    for i, m in enumerate(raw_memories)
-                ]
+                entries = [MemoryEntry(id=str(i), content=m, memory_type="decision") for i, m in enumerate(raw_memories)]
                 if len(entries) > 50:
                     retained, result = consolidator.consolidate(entries)
-                    log_json("INFO", "memory_consolidation_complete",
-                             details={"before": result.memories_before,
-                                      "after": result.memories_after,
-                                      "compression": f"{result.compression_ratio:.1%}"})
+                    log_json("INFO", "memory_consolidation_complete", details={"before": result.memories_before, "after": result.memories_after, "compression": f"{result.compression_ratio:.1%}"})
             except Exception as exc:
-                log_json("WARN", "memory_consolidation_error",
-                         details={"error": str(exc)})
+                log_json("WARN", "memory_consolidation_error", details={"error": str(exc)})
 
         return entry
 
@@ -1534,28 +1564,30 @@ class LoopOrchestrator:
         beads_skill = self._get_beads_skill()
         if beads_skill is not None:
             log_json("INFO", "orchestrator_claiming_bead", details={"bead_id": bead_id})
-            beads_skill.run({
-                "cmd": "update",
-                "id": bead_id,
-                "args": ["--status", "in_progress"]
-            })
+            beads_skill.run({"cmd": "update", "id": bead_id, "args": ["--status", "in_progress"]})
 
     def _close_bead(self, bead_id: str, reason: str):
         """Close a bead using BeadsSkill."""
         beads_skill = self._get_beads_skill()
         if beads_skill is not None:
             log_json("INFO", "orchestrator_closing_bead", details={"bead_id": bead_id})
-            beads_skill.run({
-                "cmd": "close",
-                "id": bead_id,
-                "args": ["--reason", reason]
-            })
+            beads_skill.run({"cmd": "close", "id": bead_id, "args": ["--reason", reason]})
 
-    def run_cycle(self, goal: str, dry_run: bool = False) -> Dict:
-        """Execute a single complete plan-act-verify cycle for *goal*."""
+    def run_cycle(self, goal: str, dry_run: bool = False, context_injection: Optional[Dict] = None) -> Dict:
+        """Execute a single complete plan-act-verify cycle for *goal*.
+
+        Parameters
+        ----------
+        context_injection:
+            Optional dict merged into the ingest phase input_data.  Used by
+            SADD SubAgentRunner to pass dependency context from completed
+            workstreams.
+        """
         cycle_id = f"cycle_{uuid.uuid4().hex[:12]}"
         started_at = time.time()
         phase_outputs = {"retry_count": 0, "dry_run": dry_run}
+        if context_injection:
+            phase_outputs["context_injection"] = context_injection
         self.confidence_router.reset()
         self._notify_ui("on_cycle_start", goal)
 
@@ -1578,14 +1610,14 @@ class LoopOrchestrator:
 
         context = self._run_ingest_phase(goal, cycle_id, phase_outputs)
         if self.strict_schema and validate_phase_output("context", context):
-             return self._build_early_stop_entry(
-                 cycle_id=cycle_id,
-                 goal=goal,
-                 goal_type=goal_type,
-                 phase_outputs=phase_outputs,
-                 started_at=started_at,
-                 stop_reason="INVALID_OUTPUT",
-             )
+            return self._build_early_stop_entry(
+                cycle_id=cycle_id,
+                goal=goal,
+                goal_type=goal_type,
+                phase_outputs=phase_outputs,
+                started_at=started_at,
+                stop_reason="INVALID_OUTPUT",
+            )
 
         # Autonomous MCP capability injection
         mcp_discovery = self._run_mcp_discovery_phase(phase_outputs)
@@ -1643,9 +1675,13 @@ class LoopOrchestrator:
             context["backfill_context"] = gaps
 
         verification, early_return = self._run_plan_loop(
-            goal=goal, context=context, skill_context=skill_context,
-            pipeline_cfg=pipeline_cfg, cycle_id=cycle_id,
-            phase_outputs=phase_outputs, dry_run=dry_run,
+            goal=goal,
+            context=context,
+            skill_context=skill_context,
+            pipeline_cfg=pipeline_cfg,
+            cycle_id=cycle_id,
+            phase_outputs=phase_outputs,
+            dry_run=dry_run,
         )
         if early_return is not None:
             return early_return
@@ -1708,18 +1744,18 @@ class LoopOrchestrator:
 
     def poll_external_goals(self) -> List[str]:
         """Poll external systems (like BEADS) for new goals.
-        
+
         Returns:
             A list of goal description strings.
         """
         new_goals = []
-        
+
         beads_skill = self._get_beads_skill()
         if beads_skill is not None:
             try:
                 log_json("INFO", "orchestrator_polling_beads")
                 result = beads_skill.run({"cmd": "ready"})
-                
+
                 # 'bd ready --json' returns a list of beads or an object with a list
                 beads = []
                 if isinstance(result, list):
@@ -1728,7 +1764,7 @@ class LoopOrchestrator:
                     beads = result["beads"]
                 elif isinstance(result, dict) and "ready" in result:
                     beads = result["ready"]
-                
+
                 for bead in beads:
                     if isinstance(bead, dict):
                         title = bead.get("title") or bead.get("summary")
@@ -1738,10 +1774,10 @@ class LoopOrchestrator:
                             new_goals.append(goal)
             except Exception as exc:
                 log_json("WARN", "beads_poll_failed", details={"error": str(exc)})
-                
+
         return new_goals
 
-    def run_loop(self, goal: str, max_cycles: int = 5, dry_run: bool = False) -> Dict:
+    def run_loop(self, goal: str, max_cycles: int = 5, dry_run: bool = False, context_injection: Optional[Dict] = None) -> Dict:
         """Run :meth:`run_cycle` repeatedly until a stopping condition is met.
 
         Stopping conditions (checked after every cycle in priority order):
@@ -1779,7 +1815,7 @@ class LoopOrchestrator:
         started_at = time.time()
         try:
             for _ in range(max_cycles):
-                entry = self.run_cycle(goal, dry_run=dry_run)
+                entry = self.run_cycle(goal, dry_run=dry_run, context_injection=context_injection)
                 history.append(entry)
                 if entry.get("stop_reason"):
                     stop_reason = entry["stop_reason"]
@@ -1807,6 +1843,7 @@ class LoopOrchestrator:
         finally:
             # M7-003: Cleanup async resources
             import anyio
+
             try:
                 anyio.run(self.shutdown)
             except Exception:

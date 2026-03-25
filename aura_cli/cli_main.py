@@ -1252,6 +1252,26 @@ def _handle_sadd_resume_dispatch(ctx: DispatchContext) -> int:
     return 0
 
 
+def _handle_transport_dispatch(ctx: DispatchContext) -> int:
+    """Start the JSON-RPC 2.0 stdio transport for IDE/TUI integration."""
+    import asyncio
+    from pathlib import Path
+    from core.transport import StdioTransport
+    from core.orchestrator import LoopOrchestrator
+    from memory.brain import Brain
+    from core.model_adapter import ModelAdapter
+
+    args = ctx.args
+    project_root = getattr(args, "project_root", None) or "."
+
+    brain = Brain(db_path=str(Path(project_root) / ".aura" / "brain.db"))
+    model = ModelAdapter()
+    orc = LoopOrchestrator(agents=default_agents(brain, model), project_root=Path(project_root))
+    t = StdioTransport(orc)
+    asyncio.run(t.serve_forever())
+    return 0
+
+
 def _dispatch_rule(action: str, handler) -> DispatchRule:
     return DispatchRule(action, action_runtime_required(action), handler)
 
@@ -1286,6 +1306,7 @@ COMMAND_DISPATCH_REGISTRY = {
     "sadd_run": _dispatch_rule("sadd_run", _handle_sadd_run_dispatch),
     "sadd_status": _dispatch_rule("sadd_status", _handle_sadd_status_dispatch),
     "sadd_resume": _dispatch_rule("sadd_resume", _handle_sadd_resume_dispatch),
+    "transport": _dispatch_rule("transport", _handle_transport_dispatch),
     "interactive": _dispatch_rule("interactive", _handle_interactive_dispatch),
 }
 

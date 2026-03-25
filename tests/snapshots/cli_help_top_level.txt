@@ -20,6 +20,7 @@ Commands:
   memory       Semantic memory operations
   metrics      Show performance metrics
   sadd         Sub-Agent Driven Development
+  transport    Start JSON-RPC stdio transport
 
 Examples:
   python3 main.py goal add "Refactor queue" --run

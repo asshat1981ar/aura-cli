@@ -641,6 +641,26 @@
       ],
       "requires_runtime": true,
       "summary": "Resume a SADD session"
+    },
+    {
+      "action": "transport",
+      "description": "Start the JSON-RPC 2.0 over stdio transport for IDE/TUI integration.",
+      "examples": [
+        "python3 main.py transport",
+        "python3 main.py transport --root /path/to/project"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "transport"
+      ],
+      "requires_runtime": false,
+      "summary": "Start JSON-RPC stdio transport"
     }
   ],
   "deterministic": true,

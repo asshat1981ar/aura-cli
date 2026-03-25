@@ -28,6 +28,7 @@
     "scaffold",
     "show_config",
     "studio",
+    "transport",
     "watch",
     "workflow_run"
   ],
@@ -116,6 +117,9 @@
       "studio"
     ],
     [
+      "transport"
+    ],
+    [
       "watch"
     ],
     [
@@ -153,6 +157,7 @@
     "scaffold",
     "show_config",
     "studio",
+    "transport",
     "watch",
     "workflow_run"
   ],
@@ -187,6 +192,7 @@
     "scaffold",
     "show_config",
     "studio",
+    "transport",
     "watch",
     "workflow_run"
   ],
@@ -296,6 +302,9 @@
       "studio"
     ],
     [
+      "transport"
+    ],
+    [
       "watch"
     ],
     [
@@ -394,6 +403,9 @@
     ],
     [
       "studio"
+    ],
+    [
+      "transport"
     ],
     [
       "watch"
@@ -534,6 +546,9 @@
       "studio"
     ],
     [
+      "transport"
+    ],
+    [
       "watch"
     ],
     [
@@ -670,6 +685,9 @@
     ],
     [
       "studio"
+    ],
+    [
+      "transport"
     ],
     [
       "watch"

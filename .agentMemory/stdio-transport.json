@@ -1,0 +1,7 @@
+{
+  "key": "stdio-transport-design",
+  "type": "architecture",
+  "content": "JSON-RPC 2.0 over stdio transport in core/transport.py. Methods: goal (run_loop), status, ask, cancel, ping. Error codes: -32700 parse, -32601 unknown method, -32603 internal. Entry point: aura_cli/cli_main.py transport command. Enables IDE extensions + TUI without HTTP overhead.",
+  "tags": ["transport", "json-rpc", "stdio", "ide", "issue-209"],
+  "created_at": "2026-03-25"
+}

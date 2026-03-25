@@ -27,6 +27,7 @@ positional arguments:
     sadd                Sub-Agent Driven Development
     scaffold            Scaffold a project
     studio              Launch AURA Studio
+    transport           Start JSON-RPC stdio transport
     watch               Launch TUI monitor
     workflow            Workflow operations
 

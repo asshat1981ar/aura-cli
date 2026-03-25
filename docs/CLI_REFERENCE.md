@@ -91,6 +91,7 @@ Known record codes:
   - [`aura sadd run`](#aura-sadd-run)
   - [`aura sadd status`](#aura-sadd-status)
   - [`aura sadd resume`](#aura-sadd-resume)
+- [`transport`](#transport)
 
 ## `help`
 
@@ -537,3 +538,17 @@ Resume an interrupted SADD session from its last checkpoint.
 
 Examples:
 - `python3 main.py sadd resume --session-id <id>`
+
+## `transport`
+
+### `aura transport`
+
+Start JSON-RPC stdio transport
+
+Start the JSON-RPC 2.0 over stdio transport for IDE/TUI integration.
+
+`action`: `transport` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py transport`
+- `python3 main.py transport --root /path/to/project`

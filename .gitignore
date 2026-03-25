@@ -94,6 +94,7 @@ memory/negative_examples.json
 # ── Node / npm ────────────────────────────────────────────────────────────
 node_modules/
 package-lock.json
+sdlc-orchestrator/
 
 # ── GitHub Actions loop artifacts ─────────────────────────────────────────
 loop-output.txt
@@ -124,3 +125,5 @@ cli/__pycache__/
 .venv/
 .coverage
 .mcp.json
+.agentMemory/
+.agenMemory/

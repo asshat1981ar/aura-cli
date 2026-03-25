@@ -14,6 +14,9 @@ Recommended update steps:
 - `python3 -m pytest -q tests/test_cli_docs_generator.py tests/test_cli_help_snapshots.py tests/test_cli_error_snapshots.py tests/test_cli_main_dispatch.py -k snapshot`
 - If output changes intentionally, update `tests/snapshots/*` in the same change.
 
+Pre-merge validation (run before opening a PR):
+- `python3 scripts/pre_merge_check.py` — validates CLI reference, help snapshots, and sweep artifact tests are all current. Exits non-zero with coloured ✓/✗ output if any check fails.
+
 ## JSON Output Contracts
 
 ### `cli_errors`

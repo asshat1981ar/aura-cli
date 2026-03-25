@@ -1255,15 +1255,9 @@ def _handle_sadd_resume_dispatch(ctx: DispatchContext) -> int:
 def _handle_transport_dispatch(ctx: DispatchContext) -> int:
     """Start the JSON-RPC 2.0 stdio transport for IDE/TUI integration."""
     import asyncio
-    from core.transport import StdioTransport
-    from core.orchestrator import LoopOrchestrator
-    from agents.registry import default_agents
-
     from pathlib import Path
-    import asyncio
     from core.transport import StdioTransport
     from core.orchestrator import LoopOrchestrator
-    from agents.registry import default_agents
     from memory.brain import Brain
     from core.model_adapter import ModelAdapter
 

@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import secrets
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -30,6 +31,7 @@ runtime: Dict[str, Any] = {}
 orchestrator = None
 model_adapter = None
 memory_store = None
+_runtime_init_error: str | None = None
 
 RUN_TOOL_TIMEOUT_S = float(os.getenv("AURA_RUN_TOOL_TIMEOUT_S", "15"))
 RUN_TOOL_MAX_OUTPUT_BYTES = int(os.getenv("AURA_RUN_TOOL_MAX_OUTPUT_BYTES", str(64 * 1024)))
@@ -51,10 +53,17 @@ def _beads_runtime_snapshot():
     return {"enabled": False, "required": False, "scope": "none"}
 
 
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await _ensure_runtime_initialized()
+    yield
+
+
 app = FastAPI(
     title="AURA Dev Tools MCP",
     description="Main entry point for AURA developer tools and orchestration.",
     version="1.0.0",
+    lifespan=lifespan,
 )
 
 
@@ -63,10 +72,49 @@ class ExecuteRequest(BaseModel):
     args: List[Any] = []
 
 
-def _require_runtime_component(name: str, component: Any) -> Any:
-    if component is None:
-        raise HTTPException(status_code=503, detail=f"{name} is not configured")
-    return component
+def _current_project_root() -> Path:
+    configured_root = os.getenv("AURA_PROJECT_ROOT")
+    return Path(configured_root).resolve() if configured_root else PROJECT_ROOT.resolve()
+
+
+def _apply_runtime_state(runtime_state: Dict[str, Any]) -> None:
+    global runtime, orchestrator, model_adapter, memory_store
+    runtime = runtime_state
+    orchestrator = runtime_state.get("orchestrator")
+    model_adapter = runtime_state.get("model_adapter")
+    memory_store = runtime_state.get("memory_store")
+
+
+async def _ensure_runtime_initialized() -> Dict[str, Any]:
+    global _runtime_init_error
+    if runtime:
+        return runtime
+    try:
+        from aura_cli.cli_main import create_runtime
+
+        runtime_state = await asyncio.to_thread(create_runtime, _current_project_root(), None)
+        _apply_runtime_state(runtime_state)
+        _runtime_init_error = None
+        return runtime_state
+    except Exception as exc:
+        _runtime_init_error = str(exc)
+        log_json("WARN", "aura_server_runtime_init_failed", details={"error": _runtime_init_error})
+        return {}
+
+
+async def _resolve_runtime_component(name: str) -> Any:
+    component = globals().get(name)
+    if component is not None:
+        return component
+    if not runtime:
+        await _ensure_runtime_initialized()
+        component = globals().get(name)
+        if component is not None:
+            return component
+    detail = f"{name} is not configured"
+    if _runtime_init_error and not runtime:
+        detail = f"{detail}: {_runtime_init_error}"
+    raise HTTPException(status_code=503, detail=detail)
 
 
 def _runtime_metrics_snapshot() -> Dict[str, Any]:
@@ -116,7 +164,7 @@ async def _terminate_process(process: asyncio.subprocess.Process) -> int:
 
 async def _execute_ask(req: ExecuteRequest):
     prompt = req.args[0] if req.args else ""
-    adapter = _require_runtime_component("model_adapter", model_adapter)
+    adapter = await _resolve_runtime_component("model_adapter")
     res = adapter.respond(prompt)
     return {"status": "success", "data": res}
 
@@ -206,7 +254,7 @@ async def _execute_run(req: ExecuteRequest):
 async def _execute_goal(req: ExecuteRequest):
     if not req.args:
         raise HTTPException(status_code=400, detail="Missing goal text in args")
-    active_orchestrator = _require_runtime_component("orchestrator", orchestrator)
+    active_orchestrator = await _resolve_runtime_component("orchestrator")
 
     async def goal_generator():
         yield f"data: {json.dumps({'type': 'start', 'goal': req.args[0]})}\n\n"

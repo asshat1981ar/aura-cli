@@ -153,3 +153,4 @@ async def execute(req: ExecuteRequest, _: None = Depends(require_auth)):
         return StreamingResponse(goal_generator(), media_type="text/event-stream")
 
     raise HTTPException(status_code=404, detail=f"Tool '{req.tool_name}' not found")
+# trigger 3

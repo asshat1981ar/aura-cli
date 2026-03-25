@@ -370,6 +370,9 @@ _SHA_NORM_PATTERNS = [
     _re.compile(r"green on `[0-9a-f]{7,40}`"),
     # / `abc1234` inside table cells
     _re.compile(r"/ `[0-9a-f]{7,40}`"),
+    # Branch names in table cells: `feat/xyz`, `fix/xyz`, `HEAD`, `main`, etc.
+    # GitHub CI checks out a detached HEAD so the branch renders as `HEAD`.
+    _re.compile(r"`(?:feat|fix|chore|refactor|docs|test|ci|HEAD|main|master)[a-zA-Z0-9_/.-]*`"),
 ]
 
 

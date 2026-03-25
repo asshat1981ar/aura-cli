@@ -23,6 +23,7 @@ _TASK_KEYWORDS: Dict[str, List[str]] = {
     "testing": ["test", "verify", "validate", "check", "lint", "coverage"],
     "debugging": ["debug", "fix", "error", "bug", "crash", "exception"],
     "review": ["review", "critique", "analyze", "audit", "inspect"],
+    "brainstorming": ["brainstorm", "ideate", "design session", "group chat", "collaborate", "strategy session"],
 }
 
 

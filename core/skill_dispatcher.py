@@ -14,15 +14,19 @@ Usage::
     goal_type = classify_goal("Fix the login crash when token is None")
     skill_context = dispatch_skills(goal_type, skills, project_root=".")
 """
+
 from __future__ import annotations
 
 import concurrent.futures
 import threading
 import time
 from functools import lru_cache
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 from core.logging_utils import log_json
+
+if TYPE_CHECKING:
+    from core.types import AgentSpec
 
 # Module-level cache for LLM-based goal classification results
 _classify_goal_cache: Dict[str, str] = {}
@@ -32,14 +36,14 @@ _classify_goal_cache: Dict[str, str] = {}
 # Skills are listed in priority order; only those present in the registry run.
 # ---------------------------------------------------------------------------
 SKILL_MAP: Dict[str, list[str]] = {
-    "bug_fix":  [
+    "bug_fix": [
         "symbol_indexer",
         "error_pattern_matcher",
         "git_history_analyzer",
         "type_checker",
         "linter_enforcer",
     ],
-    "feature":  [
+    "feature": [
         "symbol_indexer",
         "architecture_validator",
         "api_contract_validator",
@@ -74,17 +78,44 @@ SKILL_MAP: Dict[str, list[str]] = {
 
 # Keyword hints used to classify a goal string
 _GOAL_TYPE_HINTS: Dict[str, list[str]] = {
-    "bug_fix":  ["fix", "bug", "error", "crash", "broken", "fail", "issue",
-                 "regression", "exception", "traceback", "panic"],
-    "feature":  ["add", "implement", "feature", "new", "create", "build",
-                 "support", "integrate", "introduce"],
-    "refactor": ["refactor", "clean", "improve", "simplify", "restructure",
-                 "reorganize", "extract", "dedup", "consolidate"],
-    "security": ["security", "vulnerability", "auth", "permission", "sanitize",
-                 "injection", "cve", "exploit", "xss", "sqli"],
-    "docs":     ["doc", "docstring", "comment", "readme", "explain",
-                 "document", "annotate"],
+    "bug_fix": ["fix", "bug", "error", "crash", "broken", "fail", "issue", "regression", "exception", "traceback", "panic"],
+    "feature": ["add", "implement", "feature", "new", "create", "build", "support", "integrate", "introduce"],
+    "refactor": ["refactor", "clean", "improve", "simplify", "restructure", "reorganize", "extract", "dedup", "consolidate"],
+    "security": ["security", "vulnerability", "auth", "permission", "sanitize", "injection", "cve", "exploit", "xss", "sqli"],
+    "docs": ["doc", "docstring", "comment", "readme", "explain", "document", "annotate"],
 }
+
+# ---------------------------------------------------------------------------
+# Goal-type → primary agent capability mapping
+# Used by resolve_agent_for_goal() to bridge classification → registry.
+# ---------------------------------------------------------------------------
+GOAL_TYPE_TO_CAPABILITY: Dict[str, str] = {
+    "bug_fix":  "debugging",
+    "feature":  "code_generation",
+    "refactor": "refactor",
+    "security": "code_generation",  # security_scanner skill + generic coder
+    "docs":     "doc_generation",
+    "default":  "code_generation",
+}
+
+# Language-hint keywords used for secondary capability refinement
+_LANGUAGE_HINTS: Dict[str, str] = {
+    "python":     "python",
+    ".py":        "python",
+    "typescript": "typescript",
+    "javascript": "typescript",
+    ".ts":        "typescript",
+    ".js":        "typescript",
+}
+
+
+def _detect_language_cap(goal: str) -> Optional[str]:
+    """Return a language-specific capability string if the goal mentions one."""
+    gl = goal.lower()
+    for keyword, cap in _LANGUAGE_HINTS.items():
+        if keyword in gl:
+            return cap
+    return None
 
 
 class SkillMetrics:
@@ -132,22 +163,14 @@ def classify_goal(goal: str) -> str:
     to call in tight loops.
     """
     goal_lower = goal.lower()
-    scores = {
-        gt: sum(1 for kw in kws if kw in goal_lower)
-        for gt, kws in _GOAL_TYPE_HINTS.items()
-    }
+    scores = {gt: sum(1 for kw in kws if kw in goal_lower) for gt, kws in _GOAL_TYPE_HINTS.items()}
     best = max(scores, key=scores.get)
     return best if scores[best] > 0 else "default"
 
 
 _VALID_GOAL_TYPES = {"bug_fix", "feature", "refactor", "security", "docs", "default"}
 
-_CLASSIFY_PROMPT = (
-    "Classify the following software development goal into exactly one of these "
-    "categories: bug_fix, feature, refactor, security, docs, default.\n"
-    "Reply with ONLY the category name, no punctuation, no explanation.\n\n"
-    "Goal: {goal}"
-)
+_CLASSIFY_PROMPT = "Classify the following software development goal into exactly one of these categories: bug_fix, feature, refactor, security, docs, default.\nReply with ONLY the category name, no punctuation, no explanation.\n\nGoal: {goal}"
 
 
 def classify_goal_llm(goal: str, model_adapter) -> str:
@@ -177,11 +200,85 @@ def classify_goal_llm(goal: str, model_adapter) -> str:
         log_json("INFO", "classify_goal_llm", details={"goal_type": goal_type})
         return goal_type
     except Exception as exc:
-        log_json("WARN", "classify_goal_llm_fallback",
-                 details={"error": str(exc), "fallback": "keyword"})
+        log_json("WARN", "classify_goal_llm_fallback", details={"error": str(exc), "fallback": "keyword"})
         fallback = classify_goal(goal)
         _classify_goal_cache[goal] = fallback
         return fallback
+
+
+def classify_goal_smart(goal: str, model_adapter=None) -> str:
+    """Classify *goal* using LLM when a model adapter is available, falling back
+    to keyword-based :func:`classify_goal` otherwise.
+
+    This is the recommended entry-point for classification — it provides the
+    accuracy of LLM classification where possible without hard-requiring a model.
+
+    Args:
+        goal:          The goal description string.
+        model_adapter: Optional :class:`~core.model_adapter.ModelAdapter`.
+                       When ``None``, keyword classification is used directly.
+
+    Returns:
+        One of ``"bug_fix"``, ``"feature"``, ``"refactor"``, ``"security"``,
+        ``"docs"``, or ``"default"``.
+    """
+    if model_adapter is not None:
+        return classify_goal_llm(goal, model_adapter)
+    return classify_goal(goal)
+
+
+def resolve_agent_for_goal(
+    goal: str,
+    model_adapter=None,
+    goal_type: Optional[str] = None,
+) -> Optional["AgentSpec"]:
+    """Return the best registered agent for *goal* using the typed registry.
+
+    Resolution order:
+    1. Classify the goal (LLM if *model_adapter* provided, else keywords).
+    2. If the goal contains a language hint (Python/TypeScript), try that
+       capability first before the goal-type primary capability.
+    3. Query :func:`~core.mcp_agent_registry.TypedAgentRegistry.resolve_by_capability`
+       and return the top result (primary-capability-match + local-first ordering).
+    4. Return ``None`` if no agent is registered for the resolved capability.
+
+    Args:
+        goal:          The goal description string.
+        model_adapter: Optional model adapter for LLM-assisted classification.
+        goal_type:     Override classification (skip classification step).
+
+    Returns:
+        The best :class:`~core.types.AgentSpec`, or ``None``.
+    """
+    from core.mcp_agent_registry import agent_registry
+
+    resolved_type = goal_type or classify_goal_smart(goal, model_adapter)
+
+    # Try language-specific capability first (e.g. "python" before "code_generation")
+    lang_cap = _detect_language_cap(goal)
+    if lang_cap:
+        candidates = agent_registry.resolve_by_capability(lang_cap)
+        if candidates:
+            log_json(
+                "INFO",
+                "agent_resolved_for_goal",
+                details={"goal_type": resolved_type, "capability": lang_cap, "agent": candidates[0].name},
+            )
+            return candidates[0]
+
+    # Fall back to goal-type primary capability
+    primary_cap = GOAL_TYPE_TO_CAPABILITY.get(resolved_type, "code_generation")
+    candidates = agent_registry.resolve_by_capability(primary_cap)
+    if candidates:
+        log_json(
+            "INFO",
+            "agent_resolved_for_goal",
+            details={"goal_type": resolved_type, "capability": primary_cap, "agent": candidates[0].name},
+        )
+        return candidates[0]
+
+    log_json("WARN", "agent_resolve_no_match", details={"goal_type": resolved_type, "capability": primary_cap})
+    return None
 
 
 def dispatch_skills(
@@ -211,15 +308,15 @@ def dispatch_skills(
         return {}
 
     log_json(
-        "INFO", "skill_dispatch_start",
+        "INFO",
+        "skill_dispatch_start",
         details={"goal_type": goal_type, "skills": available},
     )
 
     results: Dict[str, Any] = {}
 
-    with concurrent.futures.ThreadPoolExecutor(
-        max_workers=min(len(available), 5), thread_name_prefix="skill"
-    ) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(available), 5), thread_name_prefix="skill") as pool:
+
         def _timed_run(name: str) -> Any:
             t0 = time.monotonic()
             try:
@@ -230,10 +327,7 @@ def dispatch_skills(
                 SKILL_METRICS.record(name, (time.monotonic() - t0) * 1000, error=True)
                 raise exc
 
-        futures: Dict[concurrent.futures.Future, str] = {
-            pool.submit(_timed_run, name): name
-            for name in available
-        }
+        futures: Dict[concurrent.futures.Future, str] = {pool.submit(_timed_run, name): name for name in available}
         done, not_done = concurrent.futures.wait(futures, timeout=timeout)
 
         for fut in done:
@@ -243,32 +337,25 @@ def dispatch_skills(
                 # Distinguish a real skill error ({"error": ...}) from a
                 # legitimate empty result so the orchestrator can tell them apart.
                 if isinstance(result, dict) and "error" in result:
-                    log_json("WARN", "skill_returned_error",
-                             details={"skill": name, "error": result["error"],
-                                      "is_skill_fault": True})
+                    log_json("WARN", "skill_returned_error", details={"skill": name, "error": result["error"], "is_skill_fault": True})
                 results[name] = result
             except Exception as exc:
-                log_json("WARN", "skill_dispatch_error",
-                         details={"skill": name, "error": str(exc),
-                                  "is_skill_fault": True})
-                results[name] = {"error": str(exc), "skill": name,
-                                 "is_skill_fault": True}
+                log_json("WARN", "skill_dispatch_error", details={"skill": name, "error": str(exc), "is_skill_fault": True})
+                results[name] = {"error": str(exc), "skill": name, "is_skill_fault": True}
 
         for fut in not_done:
             name = futures[fut]
             SKILL_METRICS.record(name, timeout * 1000, error=True)
-            log_json("WARN", "skill_dispatch_timeout",
-                     details={"skill": name, "timeout_s": timeout,
-                              "is_skill_fault": True})
+            log_json("WARN", "skill_dispatch_timeout", details={"skill": name, "timeout_s": timeout, "is_skill_fault": True})
             fut.cancel()
-            results[name] = {"error": "timeout", "skill": name,
-                             "is_skill_fault": True}
+            results[name] = {"error": "timeout", "skill": name, "is_skill_fault": True}
 
     log_json(
-        "INFO", "skill_dispatch_done",
+        "INFO",
+        "skill_dispatch_done",
         details={
             "completed": [k for k, v in results.items() if "error" not in v],
-            "failed":    [k for k, v in results.items() if "error" in v],
+            "failed": [k for k, v in results.items() if "error" in v],
         },
     )
     return results
@@ -277,6 +364,7 @@ def dispatch_skills(
 # ---------------------------------------------------------------------------
 # Skill chaining — queue follow-up goals based on skill results
 # ---------------------------------------------------------------------------
+
 
 class SkillChainer:
     """Chains skill results into follow-up goals queued for the next cycle."""
@@ -300,19 +388,13 @@ class SkillChainer:
         if skill_name == "security_scanner":
             critical_count = result.get("critical_count", 0)
             if critical_count and critical_count > 0:
-                goal = (
-                    f"Remediate {critical_count} critical security finding(s) "
-                    f"identified by the security scanner: "
-                    f"{result.get('scan_summary', '')}"
-                )
+                goal = f"Remediate {critical_count} critical security finding(s) identified by the security scanner: {result.get('scan_summary', '')}"
                 try:
                     goal_queue.add(goal)
                     queued.append(goal)
-                    log_json("INFO", "skill_chainer_queued",
-                             details={"skill": skill_name, "goal": goal})
+                    log_json("INFO", "skill_chainer_queued", details={"skill": skill_name, "goal": goal})
                 except Exception as exc:
-                    log_json("WARN", "skill_chainer_queue_failed",
-                             details={"skill": skill_name, "error": str(exc)})
+                    log_json("WARN", "skill_chainer_queue_failed", details={"skill": skill_name, "error": str(exc)})
         return queued
 
 

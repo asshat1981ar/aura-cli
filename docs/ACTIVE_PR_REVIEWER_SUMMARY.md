@@ -4,9 +4,9 @@ This file is the live reviewer-facing summary for the current active sweep branc
 
 ## PR Reviewer Summary
 
-PR: `#294`  
-Branch: `fix/restore-server-and-tests`  
-HEAD SHA: `b0128382b2d6277140996049572d41ecf937db74`
+PR: `#0`  
+Branch: `fix/openrouter-fallback-crash`  
+HEAD SHA: `7b02a329b8e5ef7634decfb9880eda00ab581c08`
 
 Description:
 
@@ -34,8 +34,7 @@ Testing Performed:
   - `python3 -m pytest -q tests/test_workflow_engine.py -k get_orchestrator`
   - `python3 -m pytest -q tests/integration/test_sprint2_integration.py`
 - broader CI/workflow verification:
-  - `Python CI` green on `b012838`
-  - `Claude Code Review` green on `b012838`
+  - `Python CI` green on `7b02a32`
 - anything intentionally not verified:
   - no additional broad runtime or repo-wide regression sweep beyond the repaired PR surfaces
 
@@ -43,5 +42,5 @@ Reviewer Notes:
 
 - remaining risks: adjacent developer-surface documentation may continue to evolve, but the active PR blocker set is clear
 - external blockers, if any: none currently identified
-- follow-up still needed: update this summary if the branch scope expands or new review comments appear on PR `#294`
-- reviewer-complete: yes, for the currently known CI and review blocker set
+- follow-up still needed: update this summary if the branch scope expands or new review comments appear on PR `#0`
+- reviewer-complete: no, for the currently known CI and review blocker set

@@ -5,7 +5,7 @@ Enables IDE extensions and TUI clients to talk to the orchestrator without HTTP.
 import asyncio
 import json
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 JSONRPC_VERSION = "2.0"
 

@@ -5,7 +5,7 @@ This file is the live audit, queue, and closeout surface for the current repo-wi
 ## Audit Summary
 
 Branch: `feat/stdio-transport`  
-HEAD SHA: `0afcbaed913a714dd941f553fbfa5273f2bda5c5`  
+HEAD SHA: `74e2f8ed0ec778bf93f3b8cb62becb47ea51b971`  
 Target PR(s): `#295`
 
 Active error buckets:
@@ -36,16 +36,16 @@ Notes: keep all unrelated local worktree changes untouched; use focused commits 
 
 | Bucket | Owner | Status | Branch/SHA | Verification target | Notes |
 | --- | --- | --- | --- | --- | --- |
-| workflow/setup | main agent | resolved | `feat/stdio-transport` / `0afcbae` | GitHub Actions setup passes and Claude workflow starts real steps | Broken Claude action pin and workflow gating issues fixed |
-| required CI lane | main agent | resolved | `feat/stdio-transport` / `0afcbae` | `Python CI` green on current SHA | Python 3.10/macOS regression path fixed |
-| PR review blocker | main agent | resolved | `feat/stdio-transport` / `0afcbae` | review-targeted tests and comment alignment verified | Sprint 2 integration review blockers addressed |
-| developer-surface drift | main agent | in_progress | `feat/stdio-transport` / `0afcbae` | doc and prompt cross-reference verification | sweep templates and workflow alignment underway |
-| external blocker | main agent | none | `feat/stdio-transport` / `0afcbae` | n/a | none currently identified |
+| workflow/setup | main agent | resolved | `feat/stdio-transport` / `74e2f8e` | GitHub Actions setup passes and Claude workflow starts real steps | Broken Claude action pin and workflow gating issues fixed |
+| required CI lane | main agent | resolved | `feat/stdio-transport` / `74e2f8e` | `Python CI` green on current SHA | Python 3.10/macOS regression path fixed |
+| PR review blocker | main agent | resolved | `feat/stdio-transport` / `74e2f8e` | review-targeted tests and comment alignment verified | Sprint 2 integration review blockers addressed |
+| developer-surface drift | main agent | in_progress | `feat/stdio-transport` / `74e2f8e` | doc and prompt cross-reference verification | sweep templates and workflow alignment underway |
+| external blocker | main agent | none | `feat/stdio-transport` / `74e2f8e` | n/a | none currently identified |
 
 ## Latest Closeout
 
 Branch: `feat/stdio-transport`  
-HEAD SHA: `0afcbaed913a714dd941f553fbfa5273f2bda5c5`  
+HEAD SHA: `74e2f8ed0ec778bf93f3b8cb62becb47ea51b971`  
 Bucket addressed: workflow/setup and required CI lanes  
 Files/surfaces changed: workflow YAML, workflow-engine tests, Sprint 2 integration tests  
 Verification performed: targeted pytest, local YAML validation, GitHub Actions polling on the pushed SHA  

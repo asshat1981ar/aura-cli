@@ -5,6 +5,7 @@ Enables IDE extensions and TUI clients to talk to the orchestrator without HTTP.
 import asyncio
 import json
 import sys
+import time
 from typing import Any, Dict
 
 JSONRPC_VERSION = "2.0"
@@ -14,12 +15,15 @@ class StdioTransport:
 
     def __init__(self, orchestrator):
         self.orchestrator = orchestrator
+        self._start_time = time.monotonic()
         self._handlers = {
             "goal": self._handle_goal,
             "status": self._handle_status,
             "ask": self._handle_ask,
             "cancel": self._handle_cancel,
             "ping": self._handle_ping,
+            "transport/health": self._handle_health,
+            "goal/queue": self._handle_goal_queue,
         }
 
     async def serve_forever(self) -> None:
@@ -78,6 +82,23 @@ class StdioTransport:
 
     async def _handle_ping(self, params: Dict[str, Any]) -> Dict:
         return {"pong": True}
+
+    async def _handle_health(self, params: Dict[str, Any]) -> Dict:
+        """Return liveness status, protocol version, and uptime in seconds."""
+        return {
+            "status": "ok",
+            "version": "1.0",
+            "uptime_s": time.monotonic() - self._start_time,
+        }
+
+    async def _handle_goal_queue(self, params: Dict[str, Any]) -> Dict:
+        """Return pending goals from the orchestrator's GoalQueue, if available."""
+        goal_queue = getattr(self.orchestrator, "goal_queue", None)
+        if goal_queue is not None:
+            pending = list(getattr(goal_queue, "queue", []))
+        else:
+            pending = []
+        return {"pending": pending, "count": len(pending)}
 
     def _write_result(self, req_id: Any, result: Any) -> None:
         resp = {"jsonrpc": JSONRPC_VERSION, "id": req_id, "result": result}

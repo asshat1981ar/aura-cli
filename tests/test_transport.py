@@ -1,7 +1,7 @@
 import asyncio
 import json
 import pytest
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock
 from core.transport import StdioTransport
 
 @pytest.fixture

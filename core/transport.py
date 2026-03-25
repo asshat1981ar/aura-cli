@@ -103,12 +103,12 @@ class StdioTransport:
         loop = asyncio.get_event_loop()
         self._write_notification("goal/progress", {"phase": "starting", "goal": goal})
         try:
-            self._write_notification("goal/progress", {"phase": "running"})
+            self._write_notification("goal/progress", {"phase": "running", "goal": goal})
             result = await loop.run_in_executor(
                 None, lambda: self.orchestrator.run_loop(goal, dry_run=dry_run, context_injection=context_injection)
             )
-            self._write_notification("goal/progress", {"phase": "complete", "result": str(result)})
+            self._write_notification("goal/progress", {"phase": "complete", "goal": goal, "result": str(result)})
             return {"status": "ok", "result": str(result)}
         except Exception as exc:
-            self._write_notification("goal/progress", {"phase": "error", "error": str(exc)})
+            self._write_notification("goal/progress", {"phase": "error", "goal": goal, "error": str(exc)})
             raise

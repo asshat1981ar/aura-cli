@@ -14,6 +14,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+from memory.store import MemoryStore
+
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 os.environ.pop("AGENT_API_TOKEN", None)
 
@@ -249,16 +251,43 @@ def test_execute_run_streams_stderr_and_exit_code(server_module, monkeypatch):
     assert any(evt.get("type") == "exit" and evt.get("code") == 3 for evt in payloads)
 
 
+def test_execute_run_persists_audit_entries_and_metrics_reflect_them(server_module, monkeypatch, tmp_path):
+    store = MemoryStore(tmp_path / "memory")
+    original_store = server_module.memory_store
+
+    server_module.memory_store = store
+    monkeypatch.setenv("AGENT_API_ENABLE_RUN", "1")
+    cmd = f"{sys.executable} -c \"print('audit-ok')\""
+
+    try:
+        response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
+        payloads = _sse_payloads(_run(_collect_streaming_response(response)))
+        assert any(evt.get("type") == "stdout" and "audit-ok" in evt.get("data", "") for evt in payloads)
+
+        audit_entries = store.read_log()
+        assert len(audit_entries) == 1
+        assert all(entry["type"] == "server_run_tool" for entry in audit_entries)
+        assert audit_entries[0]["command"] == cmd
+        assert audit_entries[0]["code"] == 0
+
+        metrics = _run(server_module.metrics())
+        assert metrics["skill_metrics"]["total_calls"] == len(audit_entries)
+        assert metrics["skill_metrics"]["run_tool_audit"]["count"] == 1
+        assert metrics["skill_metrics"]["run_tool_audit"]["last_command"] == cmd
+    finally:
+        server_module.memory_store = original_store
+
+
 def test_execute_run_timeouts_emit_timeout_metadata(server_module, monkeypatch):
     monkeypatch.setenv("AGENT_API_ENABLE_RUN", "1")
-    monkeypatch.setattr(server_module, "_clamped_run_tool_timeout_s", lambda: 0.0, raising=False)
-    cmd = f"{sys.executable} -c \"print('timeout-path')\""
+    monkeypatch.setattr(server_module, "_clamped_run_tool_timeout_s", lambda: 0.01, raising=False)
+    cmd = f"{sys.executable} -c \"import time; time.sleep(1)\""
 
     response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
     payloads = _sse_payloads(_run(_collect_streaming_response(response)))
 
     assert any(evt.get("type") == "start" and evt.get("command") == cmd for evt in payloads)
-    assert any(evt.get("type") == "error" and evt.get("timeout_s") == 0.0 for evt in payloads)
+    assert any(evt.get("type") == "error" and evt.get("timeout_s") == 0.01 for evt in payloads)
     assert any(evt.get("type") == "exit" and evt.get("timed_out") is True for evt in payloads)
 
 

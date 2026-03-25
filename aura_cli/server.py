@@ -36,6 +36,9 @@ _runtime_init_error: str | None = None
 RUN_TOOL_TIMEOUT_S = float(os.getenv("AURA_RUN_TOOL_TIMEOUT_S", "15"))
 RUN_TOOL_MAX_OUTPUT_BYTES = int(os.getenv("AURA_RUN_TOOL_MAX_OUTPUT_BYTES", str(64 * 1024)))
 RUN_TOOL_READ_CHUNK_BYTES = int(os.getenv("AURA_RUN_TOOL_READ_CHUNK_BYTES", "1024"))
+RUN_TOOL_MAX_TIMEOUT_S = 60.0
+RUN_TOOL_MAX_OUTPUT_HARD_CAP = 256 * 1024
+RUN_TOOL_MAX_READ_CHUNK_BYTES = 8 * 1024
 RUN_TOOL_ENV_ALLOWLIST = (
     "HOME",
     "LANG",
@@ -45,6 +48,16 @@ RUN_TOOL_ENV_ALLOWLIST = (
     "TERM",
     "TMPDIR",
     "USER",
+)
+RUN_TOOL_DENYLIST = (
+    "halt",
+    "poweroff",
+    "reboot",
+    "shutdown",
+    "rm -rf /",
+    "rm -fr /",
+    "mkfs",
+    ":(){ :|:& };:",
 )
 
 
@@ -131,6 +144,30 @@ def _runtime_metrics_snapshot() -> Dict[str, Any]:
     }
 
 
+def _clamped_run_tool_timeout_s() -> float:
+    return max(1.0, min(float(RUN_TOOL_TIMEOUT_S), RUN_TOOL_MAX_TIMEOUT_S))
+
+
+def _clamped_run_tool_output_bytes() -> int:
+    return max(1024, min(int(RUN_TOOL_MAX_OUTPUT_BYTES), RUN_TOOL_MAX_OUTPUT_HARD_CAP))
+
+
+def _clamped_run_tool_read_chunk_bytes() -> int:
+    return max(128, min(int(RUN_TOOL_READ_CHUNK_BYTES), RUN_TOOL_MAX_READ_CHUNK_BYTES))
+
+
+def _is_denylisted_command(command: str) -> str | None:
+    normalized = " ".join(command.lower().split())
+    for pattern in RUN_TOOL_DENYLIST:
+        if pattern in normalized:
+            return pattern
+    return None
+
+
+def _log_run_tool_event(event: str, *, command: str, **details: Any) -> None:
+    log_json("INFO", event, details={"command": command[:512], **details})
+
+
 def _sse_event(payload: Dict[str, Any]) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
@@ -144,7 +181,7 @@ async def _enqueue_stream(stream: asyncio.StreamReader | None, event_type: str, 
         await queue.put((event_type, None))
         return
     while True:
-        chunk = await stream.read(RUN_TOOL_READ_CHUNK_BYTES)
+        chunk = await stream.read(_clamped_run_tool_read_chunk_bytes())
         if not chunk:
             break
         await queue.put((event_type, chunk))
@@ -181,14 +218,27 @@ async def _execute_run(req: ExecuteRequest):
     command = str(req.args[0]).strip()
     if not command:
         raise HTTPException(status_code=400, detail="Missing command in args")
+    blocked_pattern = _is_denylisted_command(command)
+    if blocked_pattern is not None:
+        raise HTTPException(status_code=403, detail=f"Command blocked by policy: {blocked_pattern}")
 
     async def run_generator():
+        timeout_s = _clamped_run_tool_timeout_s()
+        output_limit = _clamped_run_tool_output_bytes()
+        started_at = asyncio.get_running_loop().time()
         process = await asyncio.create_subprocess_shell(
             command,
             cwd=str(PROJECT_ROOT),
             env=_run_tool_env(),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+        )
+        _log_run_tool_event(
+            "aura_server_run_tool_started",
+            command=command,
+            pid=process.pid,
+            timeout_s=timeout_s,
+            output_limit_bytes=output_limit,
         )
         yield _sse_event({"type": "start", "command": command, "pid": process.pid})
 
@@ -197,7 +247,7 @@ async def _execute_run(req: ExecuteRequest):
             asyncio.create_task(_enqueue_stream(process.stdout, "stdout", queue)),
             asyncio.create_task(_enqueue_stream(process.stderr, "stderr", queue)),
         ]
-        deadline = asyncio.get_running_loop().time() + RUN_TOOL_TIMEOUT_S
+        deadline = asyncio.get_running_loop().time() + timeout_s
         total_output = 0
         closed_streams = 0
 
@@ -206,19 +256,58 @@ async def _execute_run(req: ExecuteRequest):
                 remaining = deadline - asyncio.get_running_loop().time()
                 if remaining <= 0:
                     code = await _terminate_process(process)
-                    yield _sse_event({"type": "error", "error": "Command timed out", "timeout_s": RUN_TOOL_TIMEOUT_S})
+                    duration_s = round(asyncio.get_running_loop().time() - started_at, 4)
+                    _log_run_tool_event(
+                        "aura_server_run_tool_finished",
+                        command=command,
+                        pid=process.pid,
+                        code=code,
+                        timed_out=True,
+                        truncated=False,
+                        duration_s=duration_s,
+                        output_bytes=total_output,
+                    )
+                    yield _sse_event({"type": "error", "error": "Command timed out", "timeout_s": timeout_s})
                     yield _sse_event({"type": "exit", "code": code, "timed_out": True})
                     return
 
-                event_type, chunk = await asyncio.wait_for(queue.get(), timeout=remaining)
+                try:
+                    event_type, chunk = await asyncio.wait_for(queue.get(), timeout=remaining)
+                except asyncio.TimeoutError:
+                    code = await _terminate_process(process)
+                    duration_s = round(asyncio.get_running_loop().time() - started_at, 4)
+                    _log_run_tool_event(
+                        "aura_server_run_tool_finished",
+                        command=command,
+                        pid=process.pid,
+                        code=code,
+                        timed_out=True,
+                        truncated=False,
+                        duration_s=duration_s,
+                        output_bytes=total_output,
+                    )
+                    yield _sse_event({"type": "error", "error": "Command timed out", "timeout_s": timeout_s})
+                    yield _sse_event({"type": "exit", "code": code, "timed_out": True})
+                    return
                 if chunk is None:
                     closed_streams += 1
                     continue
 
-                remaining_bytes = RUN_TOOL_MAX_OUTPUT_BYTES - total_output
+                remaining_bytes = output_limit - total_output
                 if remaining_bytes <= 0:
                     code = await _terminate_process(process)
-                    yield _sse_event({"type": "truncated", "limit_bytes": RUN_TOOL_MAX_OUTPUT_BYTES})
+                    duration_s = round(asyncio.get_running_loop().time() - started_at, 4)
+                    _log_run_tool_event(
+                        "aura_server_run_tool_finished",
+                        command=command,
+                        pid=process.pid,
+                        code=code,
+                        timed_out=False,
+                        truncated=True,
+                        duration_s=duration_s,
+                        output_bytes=total_output,
+                    )
+                    yield _sse_event({"type": "truncated", "limit_bytes": output_limit})
                     yield _sse_event({"type": "exit", "code": code, "truncated": True})
                     return
 
@@ -228,19 +317,52 @@ async def _execute_run(req: ExecuteRequest):
                 if text:
                     yield _sse_event({"type": event_type, "data": text})
 
-                if len(chunk) > len(emitted) or total_output >= RUN_TOOL_MAX_OUTPUT_BYTES:
+                if len(chunk) > len(emitted) or total_output >= output_limit:
                     code = await _terminate_process(process)
-                    yield _sse_event({"type": "truncated", "limit_bytes": RUN_TOOL_MAX_OUTPUT_BYTES})
+                    duration_s = round(asyncio.get_running_loop().time() - started_at, 4)
+                    _log_run_tool_event(
+                        "aura_server_run_tool_finished",
+                        command=command,
+                        pid=process.pid,
+                        code=code,
+                        timed_out=False,
+                        truncated=True,
+                        duration_s=duration_s,
+                        output_bytes=total_output,
+                    )
+                    yield _sse_event({"type": "truncated", "limit_bytes": output_limit})
                     yield _sse_event({"type": "exit", "code": code, "truncated": True})
                     return
 
             remaining = max(0.1, deadline - asyncio.get_running_loop().time())
             try:
                 code = await asyncio.wait_for(process.wait(), timeout=remaining)
+                duration_s = round(asyncio.get_running_loop().time() - started_at, 4)
+                _log_run_tool_event(
+                    "aura_server_run_tool_finished",
+                    command=command,
+                    pid=process.pid,
+                    code=int(code or 0),
+                    timed_out=False,
+                    truncated=False,
+                    duration_s=duration_s,
+                    output_bytes=total_output,
+                )
                 yield _sse_event({"type": "exit", "code": int(code or 0)})
             except asyncio.TimeoutError:
                 code = await _terminate_process(process)
-                yield _sse_event({"type": "error", "error": "Command timed out", "timeout_s": RUN_TOOL_TIMEOUT_S})
+                duration_s = round(asyncio.get_running_loop().time() - started_at, 4)
+                _log_run_tool_event(
+                    "aura_server_run_tool_finished",
+                    command=command,
+                    pid=process.pid,
+                    code=code,
+                    timed_out=True,
+                    truncated=False,
+                    duration_s=duration_s,
+                    output_bytes=total_output,
+                )
+                yield _sse_event({"type": "error", "error": "Command timed out", "timeout_s": timeout_s})
                 yield _sse_event({"type": "exit", "code": code, "timed_out": True})
         finally:
             for reader in readers:

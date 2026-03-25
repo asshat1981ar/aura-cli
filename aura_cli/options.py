@@ -300,6 +300,15 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         description="Resume an interrupted SADD session from its last checkpoint.",
         examples=("python3 main.py sadd resume --session-id <id>",),
     ),
+    CommandSpec(
+        path=("transport",),
+        summary="Start JSON-RPC stdio transport",
+        description="Start the JSON-RPC 2.0 over stdio transport for IDE/TUI integration.",
+        examples=(
+            "python3 main.py transport",
+            "python3 main.py transport --root /path/to/project",
+        ),
+    ),
 )
 
 COMMAND_SPECS_BY_PATH: dict[tuple[str, ...], CommandSpec] = {spec.path: spec for spec in COMMAND_SPECS}
@@ -341,6 +350,7 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("sadd_run", True, ("sadd", "run")),
     CLIActionSpec("sadd_status", False, ("sadd", "status")),
     CLIActionSpec("sadd_resume", True, ("sadd", "resume")),
+    CLIActionSpec("transport", False, ("transport",)),
     CLIActionSpec("interactive", True, None),
 )
 
@@ -437,6 +447,7 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("sadd", "run"): "sadd_run",
     ("sadd", "status"): "sadd_status",
     ("sadd", "resume"): "sadd_resume",
+    ("transport",): "transport",
 }
 
 _LEGACY_PRIMARY_FLAGS: tuple[str, ...] = (

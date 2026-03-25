@@ -409,8 +409,13 @@ _PARSER_CUSTOMIZERS.update(
         ("sadd", "run"): _customize_sadd_run,
         ("sadd", "status"): _customize_sadd_status,
         ("sadd", "resume"): _customize_sadd_resume,
+        ("transport",): _customize_transport,
     }
 )
+
+
+def _customize_transport(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--root", dest="project_root", default=".", help="Project root directory.")
 
 
 def _apply_parser_customizations(parser_map: Mapping[tuple[str, ...], argparse.ArgumentParser]) -> None:

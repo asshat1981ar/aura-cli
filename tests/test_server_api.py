@@ -1,4 +1,5 @@
 """Integration tests for the AURA HTTP API server (aura_cli/server.py)."""
+
 from __future__ import annotations
 
 import asyncio
@@ -125,12 +126,13 @@ def test_metrics_has_skill_metrics(server_module):
     data = _run(server_module.metrics())
     assert data["status"] == "ok"
     assert "skill_metrics" in data
+    assert data["skill_metrics"]["total_calls"] >= 0
 
 
-def test_execute_env_tool(server_module):
-    data = _run(server_module.execute(server_module.ExecuteRequest(tool_name="env", args=[])))
-    assert data["status"] == "success"
-    assert isinstance(data["data"], dict)
+def test_execute_env_tool_disabled(server_module):
+    with pytest.raises(HTTPException) as exc:
+        _run(server_module.execute(server_module.ExecuteRequest(tool_name="env", args=[])))
+    assert exc.value.status_code == 501
 
 
 def test_execute_ask_tool(server_module):
@@ -157,4 +159,10 @@ def test_execute_run_without_args_when_enabled(server_module, monkeypatch):
     monkeypatch.setenv("AGENT_API_ENABLE_RUN", "1")
     with pytest.raises(HTTPException) as exc:
         _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[])))
+    assert exc.value.status_code == 400
+
+
+def test_execute_goal_without_args_when_enabled(server_module):
+    with pytest.raises(HTTPException) as exc:
+        _run(server_module.execute(server_module.ExecuteRequest(tool_name="goal", args=[])))
     assert exc.value.status_code == 400

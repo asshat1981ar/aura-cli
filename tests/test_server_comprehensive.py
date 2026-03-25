@@ -1,4 +1,5 @@
 """Comprehensive tests for AURA Agent API (aura_cli/server.py)."""
+
 from __future__ import annotations
 
 import asyncio
@@ -90,6 +91,7 @@ def test_metrics_endpoint_success(server_module):
     data = _run(server_module.metrics())
     assert data["status"] == "ok"
     assert "skill_metrics" in data
+    assert data["skill_metrics"]["registered_services"] >= 0
 
 
 def test_tools_endpoint_success(server_module):
@@ -105,10 +107,16 @@ def test_execute_ask_success(server_module):
     assert response["data"] == "Test answer"
 
 
+def test_execute_env_is_disabled(server_module):
+    with pytest.raises(HTTPException) as exc:
+        _run(server_module.execute(server_module.ExecuteRequest(tool_name="env", args=[])))
+    assert exc.value.status_code == 501
+
+
 def test_execute_run_streaming(server_module):
     response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=["ls"])))
     chunks = _run(_collect_streaming_response(response))
-    payloads = [json.loads(chunk[len("data: "):]) for chunk in chunks if chunk.startswith("data: ")]
+    payloads = [json.loads(chunk[len("data: ") :]) for chunk in chunks if chunk.startswith("data: ")]
     assert any(evt.get("type") == "stdout" for evt in payloads if isinstance(evt, dict))
     assert any(evt.get("type") == "exit" for evt in payloads if isinstance(evt, dict))
 
@@ -122,10 +130,16 @@ def test_execute_goal_streaming(server_module):
     server_module.orchestrator.run_cycle.return_value = mock_entry
     response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="goal", args=["Fix the bug"])))
     chunks = _run(_collect_streaming_response(response))
-    payloads = [json.loads(chunk[len("data: "):]) for chunk in chunks if chunk.startswith("data: ")]
+    payloads = [json.loads(chunk[len("data: ") :]) for chunk in chunks if chunk.startswith("data: ")]
     assert any(evt.get("type") == "start" for evt in payloads if isinstance(evt, dict))
     assert any(evt.get("type") == "cycle" for evt in payloads if isinstance(evt, dict))
     assert any(evt.get("type") == "complete" for evt in payloads if isinstance(evt, dict))
+
+
+def test_execute_goal_requires_args(server_module):
+    with pytest.raises(HTTPException) as exc:
+        _run(server_module.execute(server_module.ExecuteRequest(tool_name="goal", args=[])))
+    assert exc.value.status_code == 400
 
 
 def test_execute_unknown_tool(server_module):

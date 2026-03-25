@@ -6,7 +6,7 @@ This file is the live reviewer-facing summary for the current active sweep branc
 
 PR: `#295`  
 Branch: `feat/stdio-transport`  
-HEAD SHA: `7ad09fbb088ad57eeb014227e1dee5d1c70b6479`
+HEAD SHA: `1cf27d5ab8e2b5ffaba86ee5a52d8897f73968d3`
 
 Description:
 
@@ -34,8 +34,8 @@ Testing Performed:
   - `python3 -m pytest -q tests/test_workflow_engine.py -k get_orchestrator`
   - `python3 -m pytest -q tests/integration/test_sprint2_integration.py`
 - broader CI/workflow verification:
-  - `Python CI` green on `7ad09fb`
-  - `Claude Code Review` green on `7ad09fb`
+  - `Python CI` green on `1cf27d5`
+  - `Claude Code Review` green on `1cf27d5`
 - anything intentionally not verified:
   - no additional broad runtime or repo-wide regression sweep beyond the repaired PR surfaces
 

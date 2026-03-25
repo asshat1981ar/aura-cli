@@ -112,6 +112,26 @@ def test_health_body_has_providers(server_module):
     assert isinstance(data["providers"], dict)
 
 
+def test_health_still_serves_when_runtime_components_are_missing(server_module):
+    original_runtime = server_module.runtime
+    original_orchestrator = server_module.orchestrator
+    original_model_adapter = server_module.model_adapter
+    original_memory_store = server_module.memory_store
+    server_module.runtime = {}
+    server_module.orchestrator = None
+    server_module.model_adapter = None
+    server_module.memory_store = None
+    try:
+        data = _run(server_module.health())
+        assert data["status"] == "ok"
+        assert "providers" in data
+    finally:
+        server_module.runtime = original_runtime
+        server_module.orchestrator = original_orchestrator
+        server_module.model_adapter = original_model_adapter
+        server_module.memory_store = original_memory_store
+
+
 def test_health_requires_auth_when_token_set(server_module):
     os.environ["AGENT_API_TOKEN"] = "mysecret"
     try:

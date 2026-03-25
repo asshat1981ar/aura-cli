@@ -143,5 +143,15 @@
                 "issues"
             ]
         }
+    },
+    "autogen": {
+        "enabled": true,
+        "agents": [
+            {"name": "ideator", "system_message": "Generate creative solutions"},
+            {"name": "critic", "system_message": "Find risks and flaws"},
+            {"name": "synthesizer", "system_message": "Merge ideas into actionable plan"}
+        ],
+        "max_turns": 6,
+        "llm_config": {}
     }
 }

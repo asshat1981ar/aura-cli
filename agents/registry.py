@@ -421,7 +421,7 @@ class SandboxAdapter:
         }
 
 
-def default_agents(brain, model, context_manager=None, skills=None, health_monitor=None):
+def default_agents(brain, model, context_manager=None, skills=None, health_monitor=None, config=None):
     """Build and return the full agent dict used by :class:`~core.orchestrator.LoopOrchestrator`.
 
     Instantiates every pipeline phase adapter with the provided *brain* and
@@ -497,6 +497,11 @@ def default_agents(brain, model, context_manager=None, skills=None, health_monit
         "mcp_discovery": MCPDiscoveryAgent(),
         "mcp_health": MCPHealthAgent(),
     }
+
+    from agents.autogen_agent import AutoGenGroupChatAgent
+    agent_dict["autogen_group_chat"] = AutoGenGroupChatAgent(
+        brain=brain, model=model, config=(config or {}).get("autogen", {})
+    )
 
     # Register in typed registry
     from core.mcp_agent_registry import agent_registry

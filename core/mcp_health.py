@@ -26,9 +26,9 @@ async def check_mcp_health(server_name: str) -> Dict[str, Any]:
         }
 
 async def check_all_mcp_health() -> List[Dict[str, Any]]:
-    """Check the health of all registered MCP servers (ports 8001-8007)."""
-    mcp_config = config.get("mcp_servers", {})
-    tasks = [check_mcp_health(name) for name in mcp_config.keys()]
+    """Check the health of all registered MCP servers."""
+    from core.mcp_registry import iter_service_specs
+    tasks = [check_mcp_health(spec.config_name) for spec in iter_service_specs()]
     return await asyncio.gather(*tasks)
 
 def get_health_summary(results: List[Dict[str, Any]]) -> Dict[str, Any]:

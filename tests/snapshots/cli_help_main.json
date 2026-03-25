@@ -1,0 +1,719 @@
+{
+  "version": 3,
+  "generated_by": "aura_cli.options.help_schema",
+  "deterministic": true,
+  "json_contracts": {
+    "cli_warnings": {
+      "field": "cli_warnings",
+      "version": 1,
+      "description": "Structured CLI warnings attached to JSON outputs when legacy flags are used.",
+      "inclusion_rule": "Present when a parsed invocation emits structured warning records and the command outputs JSON.",
+      "record_fields": [
+        "code",
+        "message",
+        "category",
+        "action",
+        "replacement_command",
+        "legacy_flags",
+        "phase"
+      ],
+      "record_codes": [
+        {
+          "code": "legacy_cli_flags_deprecated",
+          "category": "deprecation",
+          "phase": "compatibility",
+          "description": "Legacy flat CLI flags were used and mapped to a canonical command."
+        }
+      ]
+    },
+    "cli_errors": {
+      "version": 1,
+      "description": "Structured CLI JSON error payloads for parse and help-topic failures.",
+      "inclusion_rule": "Returned as the top-level JSON payload when `--json` is used and an error occurs.",
+      "record_fields": [
+        "status",
+        "code",
+        "message"
+      ],
+      "optional_fields": [
+        "usage"
+      ],
+      "record_codes": [
+        {
+          "code": "cli_parse_error",
+          "status": "error",
+          "description": "CLI argument parsing or validation failed."
+        },
+        {
+          "code": "unknown_command_help_topic",
+          "status": "error",
+          "description": "Help topic path was not recognized."
+        }
+      ]
+    }
+  },
+  "commands": [
+    {
+      "path": [
+        "help"
+      ],
+      "summary": "Show CLI help",
+      "description": "Show top-level help or help for a specific command path.",
+      "examples": [
+        "python3 main.py help",
+        "python3 main.py help goal add"
+      ],
+      "legacy_flags": [],
+      "action": "help",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "doctor"
+      ],
+      "summary": "Run system diagnostics",
+      "description": "Run the AURA doctor checks for local environment health.",
+      "examples": [
+        "python3 main.py doctor"
+      ],
+      "legacy_flags": [],
+      "action": "doctor",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "readiness"
+      ],
+      "summary": "Check V2 runtime readiness",
+      "description": "Validate async runtime and MCP registry health.",
+      "examples": [
+        "python3 main.py readiness"
+      ],
+      "legacy_flags": [],
+      "action": "readiness",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "bootstrap"
+      ],
+      "summary": "Create default config",
+      "description": "Bootstrap local configuration files for AURA.",
+      "examples": [
+        "python3 main.py bootstrap"
+      ],
+      "legacy_flags": [
+        "--bootstrap"
+      ],
+      "action": "bootstrap",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "config"
+      ],
+      "summary": "Show effective config",
+      "description": "Print the resolved effective runtime configuration.",
+      "examples": [
+        "python3 main.py config"
+      ],
+      "legacy_flags": [],
+      "action": "show_config",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "contract-report"
+      ],
+      "summary": "Print CLI contract report",
+      "description": "Print aggregated parser/help/schema/dispatch contract checks as JSON.",
+      "examples": [
+        "python3 main.py contract-report --check",
+        "python3 main.py contract-report --compact"
+      ],
+      "legacy_flags": [],
+      "action": "contract_report",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "diag"
+      ],
+      "summary": "MCP diagnostics snapshot",
+      "description": "Fetch MCP health, metrics, limits, and recent logs via HTTP.",
+      "examples": [
+        "python3 main.py diag"
+      ],
+      "legacy_flags": [
+        "--diag"
+      ],
+      "action": "diag",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "logs"
+      ],
+      "summary": "Stream AURA logs",
+      "description": "Tail or follow logs from stdin or a file.",
+      "examples": [
+        "python3 main.py logs --tail 50",
+        "python3 main.py logs --file memory/aura.log --follow"
+      ],
+      "legacy_flags": [],
+      "action": "logs",
+      "requires_runtime": false,
+      "flags": []
+    },
+    {
+      "path": [
+        "watch"
+      ],
+      "summary": "Launch TUI monitor",
+      "description": "Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.",
+      "examples": [
+        "python3 main.py watch",
+        "python3 main.py watch --autonomous"
+      ],
+      "legacy_flags": [],
+      "action": "watch",
+      "requires_runtime": true,
+      "flags": []
+    },
+    {
+      "path": [
+        "studio"
+      ],
+      "summary": "Launch AURA Studio",
+      "description": "Launch the rich real-time dashboard. Use --autonomous to start the goal loop.",
+      "examples": [
+        "python3 main.py studio",
+        "python3 main.py studio --autonomous"
+      ],
+      "legacy_flags": [],
+      "action": "studio",
+      "requires_runtime": true,
+      "flags": []
+    },
+    {
+      "path": [
+        "goal"
+      ],
+      "summary": "Goal queue operations",
+      "description": "Manage queued goals and run one-off goals.",
+      "examples": [
+        "python3 main.py goal status",
+        "python3 main.py goal add \"Refactor queue\""
+      ],
+      "legacy_flags": [],
+      "action": null,
+      "requires_runtime": null,
+      "flags": []
+    },
+    {
+      "path": [
+        "goal",
+        "add"
+      ],
+      "summary": "Add a goal to the queue",
+      "description": "Add a goal, optionally running the queue immediately.",
+      "examples": [
+        "python3 main.py goal add \"Fix tests\"",
+        "python3 main.py goal add \"Fix tests\" --run"
+      ],
+      "legacy_flags": [
+        "--add-goal",
+        "--run-goals"
+      ],
+      "action": "goal_add",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "goal",
+        "run"
+      ],
+      "summary": "Run queued goals",
+      "description": "Run the goal queue through the autonomous loop.",
+      "examples": [
+        "python3 main.py goal run --dry-run"
+      ],
+      "legacy_flags": [
+        "--run-goals"
+      ],
+      "action": "goal_run",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "goal",
+        "status"
+      ],
+      "summary": "Show queue status",
+      "description": "Show queued and completed goals.",
+      "examples": [
+        "python3 main.py goal status",
+        "python3 main.py goal status --json"
+      ],
+      "legacy_flags": [
+        "--status"
+      ],
+      "action": "goal_status",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "goal",
+        "once"
+      ],
+      "summary": "Run a one-off goal",
+      "description": "Run a single goal directly without queueing it.",
+      "examples": [
+        "python3 main.py goal once \"Summarize repo\"",
+        "python3 main.py goal once \"Refactor core\" --max-cycles 3"
+      ],
+      "legacy_flags": [
+        "--goal"
+      ],
+      "action": "goal_once",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "workflow"
+      ],
+      "summary": "Workflow operations",
+      "description": "Run orchestrated workflow goals with explicit cycle limits.",
+      "examples": [
+        "python3 main.py workflow run \"Summarize repo\""
+      ],
+      "legacy_flags": [],
+      "action": null,
+      "requires_runtime": null,
+      "flags": []
+    },
+    {
+      "path": [
+        "workflow",
+        "run"
+      ],
+      "summary": "Run a workflow goal",
+      "description": "Run the orchestrator loop for a single workflow goal.",
+      "examples": [
+        "python3 main.py workflow run \"Summarize repo\" --max-cycles 3"
+      ],
+      "legacy_flags": [
+        "--workflow-goal"
+      ],
+      "action": "workflow_run",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "mcp"
+      ],
+      "summary": "MCP HTTP client commands",
+      "description": "Inspect and call MCP tools from the CLI.",
+      "examples": [
+        "python3 main.py mcp tools"
+      ],
+      "legacy_flags": [],
+      "action": null,
+      "requires_runtime": null,
+      "flags": []
+    },
+    {
+      "path": [
+        "mcp",
+        "tools"
+      ],
+      "summary": "List MCP tools",
+      "description": "List tools exposed by the MCP HTTP server.",
+      "examples": [
+        "python3 main.py mcp tools"
+      ],
+      "legacy_flags": [
+        "--mcp-tools"
+      ],
+      "action": "mcp_tools",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "mcp",
+        "call"
+      ],
+      "summary": "Call an MCP tool",
+      "description": "Invoke an MCP tool with optional JSON args.",
+      "examples": [
+        "python3 main.py mcp call limits",
+        "python3 main.py mcp call tail_logs --args '{\"lines\": 10}'"
+      ],
+      "legacy_flags": [
+        "--mcp-call"
+      ],
+      "action": "mcp_call",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "scaffold"
+      ],
+      "summary": "Scaffold a project",
+      "description": "Run the scaffolder agent for a named project type.",
+      "examples": [
+        "python3 main.py scaffold demo --desc \"small demo app\"",
+        "python3 main.py scaffold demo --json"
+      ],
+      "legacy_flags": [
+        "--scaffold"
+      ],
+      "action": "scaffold",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "evolve"
+      ],
+      "summary": "Run innovation workflow",
+      "description": "Run the innovation workflow and optional queue-backed implementation loop for AURA core.",
+      "examples": [
+        "python3 main.py evolve",
+        "python3 main.py evolve --json",
+        "python3 main.py evolve --queue-only --proposal-limit 3 --focus research"
+      ],
+      "legacy_flags": [
+        "--evolve"
+      ],
+      "action": "evolve",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "queue"
+      ],
+      "summary": "Goal queue management",
+      "description": "List, add, or clear goals in the autonomous queue.",
+      "examples": [
+        "python3 main.py queue list",
+        "python3 main.py queue list --json"
+      ],
+      "legacy_flags": [],
+      "action": null,
+      "requires_runtime": null,
+      "flags": []
+    },
+    {
+      "path": [
+        "queue",
+        "list"
+      ],
+      "summary": "List queued goals",
+      "description": "Show all pending and completed goals.",
+      "examples": [
+        "python3 main.py queue list",
+        "python3 main.py queue list --json"
+      ],
+      "legacy_flags": [],
+      "action": "queue_list",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "queue",
+        "clear"
+      ],
+      "summary": "Clear the goal queue",
+      "description": "Remove all pending goals from the queue.",
+      "examples": [
+        "python3 main.py queue clear",
+        "python3 main.py queue clear --json"
+      ],
+      "legacy_flags": [],
+      "action": "queue_clear",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "memory"
+      ],
+      "summary": "Semantic memory operations",
+      "description": "Search or browse through the AURA brain.",
+      "examples": [
+        "python3 main.py memory search \"workflow engine\"",
+        "python3 main.py memory search \"workflow engine\" --json"
+      ],
+      "legacy_flags": [],
+      "action": null,
+      "requires_runtime": null,
+      "flags": []
+    },
+    {
+      "path": [
+        "memory",
+        "search"
+      ],
+      "summary": "Search semantic memory",
+      "description": "Perform a semantic search over brain entries.",
+      "examples": [
+        "python3 main.py memory search \"workflow engine\"",
+        "python3 main.py memory search \"workflow engine\" --json"
+      ],
+      "legacy_flags": [],
+      "action": "memory_search",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "memory",
+        "reindex"
+      ],
+      "summary": "Rebuild semantic memory embeddings",
+      "description": "Rebuild semantic memory embeddings for the active model and force a project sync.",
+      "examples": [
+        "python3 main.py memory reindex",
+        "python3 main.py memory reindex --json"
+      ],
+      "legacy_flags": [],
+      "action": "memory_reindex",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "metrics"
+      ],
+      "summary": "Show performance metrics",
+      "description": "Display cycle success rates and timing stats.",
+      "examples": [
+        "python3 main.py metrics",
+        "python3 main.py metrics --json"
+      ],
+      "legacy_flags": [],
+      "action": "metrics_show",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "sadd"
+      ],
+      "summary": "Sub-Agent Driven Development",
+      "description": "Decompose a design spec into parallel workstreams and execute via sub-agents.",
+      "examples": [
+        "python3 main.py sadd run --spec design.md --dry-run",
+        "python3 main.py sadd run --spec design.md --max-parallel 3"
+      ],
+      "legacy_flags": [],
+      "action": null,
+      "requires_runtime": null,
+      "flags": []
+    },
+    {
+      "path": [
+        "sadd",
+        "run"
+      ],
+      "summary": "Run a SADD session",
+      "description": "Parse a design spec and execute workstreams. Use --dry-run to preview decomposition only.",
+      "examples": [
+        "python3 main.py sadd run --spec design.md --dry-run",
+        "python3 main.py sadd run --spec design.md --max-parallel 2 --max-cycles 3"
+      ],
+      "legacy_flags": [],
+      "action": "sadd_run",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "sadd",
+        "status"
+      ],
+      "summary": "Show SADD session status",
+      "description": "Show status of recent SADD sessions or a specific session.",
+      "examples": [
+        "python3 main.py sadd status",
+        "python3 main.py sadd status --session-id <id>"
+      ],
+      "legacy_flags": [],
+      "action": "sadd_status",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "sadd",
+        "resume"
+      ],
+      "summary": "Resume a SADD session",
+      "description": "Resume an interrupted SADD session from its last checkpoint.",
+      "examples": [
+        "python3 main.py sadd resume --session-id <id>"
+      ],
+      "legacy_flags": [],
+      "action": "sadd_resume",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "transport"
+      ],
+      "summary": "Start JSON-RPC stdio transport",
+      "description": "Start the JSON-RPC 2.0 over stdio transport for IDE/TUI integration.",
+      "examples": [
+        "python3 main.py transport",
+        "python3 main.py transport --root /path/to/project"
+      ],
+      "legacy_flags": [],
+      "action": "transport",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    }
+  ]
+}

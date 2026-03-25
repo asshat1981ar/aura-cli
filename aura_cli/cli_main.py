@@ -1259,10 +1259,20 @@ def _handle_transport_dispatch(ctx: DispatchContext) -> int:
     from core.orchestrator import LoopOrchestrator
     from agents.registry import default_agents
 
+    from pathlib import Path
+    import asyncio
+    from core.transport import StdioTransport
+    from core.orchestrator import LoopOrchestrator
+    from agents.registry import default_agents
+    from memory.brain import Brain
+    from core.model_adapter import ModelAdapter
+
     args = ctx.args
     project_root = getattr(args, "project_root", None) or "."
 
-    orc = LoopOrchestrator(agents={}, project_root=Path(project_root))
+    brain = Brain(db_path=str(Path(project_root) / ".aura" / "brain.db"))
+    model = ModelAdapter()
+    orc = LoopOrchestrator(agents=default_agents(brain, model), project_root=Path(project_root))
     t = StdioTransport(orc)
     asyncio.run(t.serve_forever())
     return 0

@@ -40,3 +40,17 @@ def test_goal_calls_orchestrator(mock_orc):
     result = asyncio.run(t._handle_goal({"goal": "add tests", "dry_run": True}))
     mock_orc.run_loop.assert_called_once_with("add tests", dry_run=True, context_injection=None)
     assert result["status"] == "ok"
+
+def test_notification_no_response(mock_orc, capsys):
+    """JSON-RPC 2.0: notifications (no id field) must not receive a response."""
+    t = StdioTransport(mock_orc)
+    asyncio.run(t._handle_line(json.dumps({"jsonrpc": "2.0", "method": "ping", "params": {}})))
+    captured = capsys.readouterr()
+    assert captured.out == "", "Server MUST NOT reply to a notification"
+
+def test_notification_unknown_method_silent(mock_orc, capsys):
+    """Unknown method on a notification should be silently ignored."""
+    t = StdioTransport(mock_orc)
+    asyncio.run(t._handle_line(json.dumps({"jsonrpc": "2.0", "method": "nonexistent", "params": {}})))
+    captured = capsys.readouterr()
+    assert captured.out == ""

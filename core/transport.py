@@ -42,17 +42,21 @@ class StdioTransport:
             self._write_error(None, -32700, f"Parse error: {exc}")
             return
         req_id = msg.get("id")
+        is_notification = "id" not in msg
         method = msg.get("method", "")
         params = msg.get("params", {})
         handler = self._handlers.get(method)
         if handler is None:
-            self._write_error(req_id, -32601, f"Method not found: {method}")
+            if not is_notification:
+                self._write_error(req_id, -32601, f"Method not found: {method}")
             return
         try:
             result = await handler(params)
-            self._write_result(req_id, result)
+            if not is_notification:
+                self._write_result(req_id, result)
         except Exception as exc:
-            self._write_error(req_id, -32603, str(exc))
+            if not is_notification:
+                self._write_error(req_id, -32603, str(exc))
 
     async def _handle_goal(self, params: Dict[str, Any]) -> Dict:
         goal = params.get("goal", "")

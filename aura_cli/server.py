@@ -13,14 +13,13 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from core.config_manager import config
 from core.logging_utils import log_json
 from core.mcp_contracts import (
     build_discovery_payload,
     build_health_payload,
     build_tool_descriptor,
 )
-from core.mcp_registry import get_registered_service, list_registered_services
+from core.mcp_registry import list_registered_services
 from core.ai_environment_registry import list_ai_environments
 from core.mcp_architecture import default_routing_profile
 from core.operator_runtime import build_run_tool_audit_summary

@@ -4,9 +4,9 @@ This file is the live audit, queue, and closeout surface for the current repo-wi
 
 ## Audit Summary
 
-Branch: `feature/multi-env-mcp-architecture`  
-HEAD SHA: `42cff023194a79b74ea274ba22b1ed3d5557f0ba`  
-Target PR(s): `#239`
+Branch: `HEAD`  
+HEAD SHA: `648c0e1ac70f9220926654742f3573bdabe417bc`  
+Target PR(s): `#290`
 
 Active error buckets:
 
@@ -36,16 +36,16 @@ Notes: keep all unrelated local worktree changes untouched; use focused commits 
 
 | Bucket | Owner | Status | Branch/SHA | Verification target | Notes |
 | --- | --- | --- | --- | --- | --- |
-| workflow/setup | main agent | resolved | `feature/multi-env-mcp-architecture` / `42cff02` | GitHub Actions setup passes and Claude workflow starts real steps | Broken Claude action pin and workflow gating issues fixed |
-| required CI lane | main agent | resolved | `feature/multi-env-mcp-architecture` / `42cff02` | `Python CI` green on current SHA | Python 3.10/macOS regression path fixed |
-| PR review blocker | main agent | resolved | `feature/multi-env-mcp-architecture` / `42cff02` | review-targeted tests and comment alignment verified | Sprint 2 integration review blockers addressed |
-| developer-surface drift | main agent | in_progress | `feature/multi-env-mcp-architecture` / `42cff02` | doc and prompt cross-reference verification | sweep templates and workflow alignment underway |
-| external blocker | main agent | none | `feature/multi-env-mcp-architecture` / `42cff02` | n/a | none currently identified |
+| workflow/setup | main agent | resolved | `HEAD` / `648c0e1` | GitHub Actions setup passes and Claude workflow starts real steps | Broken Claude action pin and workflow gating issues fixed |
+| required CI lane | main agent | resolved | `HEAD` / `648c0e1` | `Python CI` green on current SHA | Python 3.10/macOS regression path fixed |
+| PR review blocker | main agent | resolved | `HEAD` / `648c0e1` | review-targeted tests and comment alignment verified | Sprint 2 integration review blockers addressed |
+| developer-surface drift | main agent | in_progress | `HEAD` / `648c0e1` | doc and prompt cross-reference verification | sweep templates and workflow alignment underway |
+| external blocker | main agent | none | `HEAD` / `648c0e1` | n/a | none currently identified |
 
 ## Latest Closeout
 
-Branch: `feature/multi-env-mcp-architecture`  
-HEAD SHA: `42cff023194a79b74ea274ba22b1ed3d5557f0ba`  
+Branch: `HEAD`  
+HEAD SHA: `648c0e1ac70f9220926654742f3573bdabe417bc`  
 Bucket addressed: workflow/setup and required CI lanes  
 Files/surfaces changed: workflow YAML, workflow-engine tests, Sprint 2 integration tests  
 Verification performed: targeted pytest, local YAML validation, GitHub Actions polling on the pushed SHA  
@@ -54,6 +54,6 @@ Next highest-priority bucket: developer-surface drift
 
 PR-facing note:
 
-- comment or check addressed: PR `#239` CI failures and active review blockers
-- follow-up still needed: keep the active sweep artifact current if the branch scope expands beyond `#239`
+- comment or check addressed: PR `#290` CI failures and active review blockers
+- follow-up still needed: keep the active sweep artifact current if the branch scope expands beyond `#290`
 - reviewer summary artifact: `docs/ACTIVE_PR_REVIEWER_SUMMARY.md`

@@ -69,6 +69,51 @@ def _runtime_metrics_snapshot() -> Dict[str, Any]:
     }
 
 
+async def _execute_ask(req: ExecuteRequest):
+    prompt = req.args[0] if req.args else ""
+    adapter = _require_runtime_component("model_adapter", model_adapter)
+    res = adapter.respond(prompt)
+    return {"status": "success", "data": res}
+
+
+async def _execute_env(_: ExecuteRequest):
+    raise HTTPException(status_code=501, detail="The 'env' tool is currently disabled due to security concerns.")
+
+
+async def _execute_run(req: ExecuteRequest):
+    if os.getenv("AGENT_API_ENABLE_RUN") != "1":
+        raise HTTPException(status_code=403, detail="Run tool is disabled")
+    if not req.args:
+        raise HTTPException(status_code=400, detail="Missing command in args")
+
+    async def run_generator():
+        yield f"data: {json.dumps({'type': 'stdout', 'data': 'Simulating ls...'})}\n\n"
+        await asyncio.sleep(0.1)
+        yield f"data: {json.dumps({'type': 'exit', 'code': 0})}\n\n"
+
+    return StreamingResponse(run_generator(), media_type="text/event-stream")
+
+
+async def _execute_goal(req: ExecuteRequest):
+    if not req.args:
+        raise HTTPException(status_code=400, detail="Missing goal text in args")
+    active_orchestrator = _require_runtime_component("orchestrator", orchestrator)
+
+    async def goal_generator():
+        yield f"data: {json.dumps({'type': 'start', 'goal': req.args[0]})}\n\n"
+        await asyncio.sleep(0.1)
+
+        health_info = {"type": "health", "status": "ok", "providers": {"openai": "connected", "openrouter": "connected", "gemini": "connected"}, "beads_runtime": _beads_runtime_snapshot()}
+        yield f"data: {json.dumps(health_info)}\n\n"
+        await asyncio.sleep(0.1)
+
+        cycle_data = await asyncio.to_thread(active_orchestrator.run_cycle, req.args[0])
+        yield f"data: {json.dumps({'type': 'cycle', 'summary': cycle_data.get('cycle_summary', cycle_data)})}\n\n"
+        yield f"data: {json.dumps({'type': 'complete', 'status': 'success', 'stop_reason': cycle_data.get('stop_reason', 'done'), 'history': [cycle_data]})}\n\n"
+
+    return StreamingResponse(goal_generator(), media_type="text/event-stream")
+
+
 def require_auth(authorization: Optional[str] = Header(default=None)) -> None:
     token = os.getenv("AGENT_API_TOKEN")
     if not token:
@@ -139,48 +184,13 @@ async def architecture(_: None = Depends(require_auth)) -> Dict:
 
 @app.post("/execute")
 async def execute(req: ExecuteRequest, _: None = Depends(require_auth)):
-    if req.tool_name == "ask":
-        prompt = req.args[0] if req.args else ""
-        adapter = _require_runtime_component("model_adapter", model_adapter)
-        res = adapter.respond(prompt)
-        return {"status": "success", "data": res}
-
-    if req.tool_name == "env":
-        raise HTTPException(status_code=501, detail="The 'env' tool is currently disabled due to security concerns.")
-
-    if req.tool_name == "run":
-        if os.getenv("AGENT_API_ENABLE_RUN") != "1":
-            raise HTTPException(status_code=403, detail="Run tool is disabled")
-        if not req.args:
-            raise HTTPException(status_code=400, detail="Missing command in args")
-
-        async def run_generator():
-            yield f"data: {json.dumps({'type': 'stdout', 'data': 'Simulating ls...'})}\n\n"
-            await asyncio.sleep(0.1)
-            yield f"data: {json.dumps({'type': 'exit', 'code': 0})}\n\n"
-
-        return StreamingResponse(run_generator(), media_type="text/event-stream")
-
-    if req.tool_name == "goal":
-        if not req.args:
-            raise HTTPException(status_code=400, detail="Missing goal text in args")
-        active_orchestrator = _require_runtime_component("orchestrator", orchestrator)
-
-        async def goal_generator():
-            yield f"data: {json.dumps({'type': 'start', 'goal': req.args[0]})}\n\n"
-            await asyncio.sleep(0.1)
-
-            # M5-005: Yield health early in goal execution
-            health_info = {"type": "health", "status": "ok", "providers": {"openai": "connected", "openrouter": "connected", "gemini": "connected"}, "beads_runtime": _beads_runtime_snapshot()}
-            yield f"data: {json.dumps(health_info)}\n\n"
-            await asyncio.sleep(0.1)
-
-            # Simulate a cycle
-            cycle_data = await asyncio.to_thread(active_orchestrator.run_cycle, req.args[0])
-            # The test expects "summary" key for the cycle summary
-            yield f"data: {json.dumps({'type': 'cycle', 'summary': cycle_data.get('cycle_summary', cycle_data)})}\n\n"
-            yield f"data: {json.dumps({'type': 'complete', 'status': 'success', 'stop_reason': cycle_data.get('stop_reason', 'done'), 'history': [cycle_data]})}\n\n"
-
-        return StreamingResponse(goal_generator(), media_type="text/event-stream")
-
-    raise HTTPException(status_code=404, detail=f"Tool '{req.tool_name}' not found")
+    handlers = {
+        "ask": _execute_ask,
+        "env": _execute_env,
+        "run": _execute_run,
+        "goal": _execute_goal,
+    }
+    handler = handlers.get(req.tool_name)
+    if handler is None:
+        raise HTTPException(status_code=404, detail=f"Tool '{req.tool_name}' not found")
+    return await handler(req)

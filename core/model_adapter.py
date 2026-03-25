@@ -803,6 +803,8 @@ class ModelAdapter:
             payload["model"] = fallback
             response = self._make_request_with_retries("POST", url, headers, payload)
             data = response.json()
+            if "error" in data:
+                raise ValueError(f"OpenRouter request failed (primary and fallback): {data['error']}")
 
         return data["choices"][0]["message"]["content"]
 

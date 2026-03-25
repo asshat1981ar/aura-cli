@@ -9,6 +9,7 @@ from contextlib import redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 try:
     import readline
@@ -82,21 +83,20 @@ def _mcp_request(method: str, path: str, data: dict | None = None):
 
 
 def cmd_mcp_tools():
-    """List MCP tools via HTTP client."""
-    status, data = _mcp_request("GET", "/tools")
-    print(json.dumps({"status": status, "data": data}, indent=2))
+    """List repo-local MCP servers and tools via aura_cli.mcp_cli."""
+    from aura_cli import mcp_cli as repo_mcp_cli
+
+    return repo_mcp_cli.main([])
 
 
 def cmd_mcp_call(tool: str, args_json: str | None):
-    """Call an MCP tool by name with JSON args."""
-    try:
-        args_obj = json.loads(args_json) if args_json else {}
-    except json.JSONDecodeError as exc:
-        print(f"Invalid args JSON: {exc}")
-        return
-    payload = {"tool_name": tool, "args": args_obj}
-    status, data = _mcp_request("POST", "/call", payload)
-    print(json.dumps({"status": status, "data": data}, indent=2))
+    """Call a repo-local MCP server/tool target with optional JSON args."""
+    from aura_cli import mcp_cli as repo_mcp_cli
+
+    argv = [tool]
+    if args_json:
+        argv.append(args_json)
+    return repo_mcp_cli.main(argv)
 
 
 def cmd_diag():
@@ -663,40 +663,41 @@ def _print_json_payload(payload: dict, *, parsed=None, **json_kwargs) -> None:
 
 
 def _run_json_printing_callable_with_warnings(ctx: DispatchContext, func, *args, **kwargs) -> None:
+    def _normalize_exit_code(result: Any) -> int:
+        return result if isinstance(result, int) else 0
+
     warning_records = getattr(ctx.parsed, "warning_records", None) or []
     if not warning_records:
-        func(*args, **kwargs)
-        return
+        result = func(*args, **kwargs)
+        return _normalize_exit_code(result)
 
     buf = io.StringIO()
     with redirect_stdout(buf):
-        func(*args, **kwargs)
+        result = func(*args, **kwargs)
     raw = buf.getvalue()
     if raw == "":
-        return
+        return _normalize_exit_code(result)
 
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
         print(raw, end="")
-        return
+        return _normalize_exit_code(result)
 
     _print_json_payload(payload, parsed=ctx.parsed, indent=2)
+    return _normalize_exit_code(result)
 
 
 def _handle_mcp_tools_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_tools)
-    return 0
+    return _run_json_printing_callable_with_warnings(ctx, cmd_mcp_tools)
 
 
 def _handle_mcp_call_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_call, ctx.args.mcp_call, ctx.args.mcp_args)
-    return 0
+    return _run_json_printing_callable_with_warnings(ctx, cmd_mcp_call, ctx.args.mcp_call, ctx.args.mcp_args)
 
 
 def _handle_diag_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_diag)
-    return 0
+    return _run_json_printing_callable_with_warnings(ctx, cmd_diag)
 
 
 def _handle_logs_dispatch(ctx: DispatchContext) -> int:

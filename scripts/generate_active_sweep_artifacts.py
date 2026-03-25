@@ -359,23 +359,52 @@ def write_text(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+import re as _re
+
+_SHA_NORM_PATTERNS = [
+    # HEAD SHA: `abc1234` or full 40-char SHA
+    _re.compile(r"HEAD SHA: `[0-9a-f]{7,40}`"),
+    # Branch: `feat/...` (detached HEAD shows `HEAD` in CI)
+    _re.compile(r"^Branch: `.+`", _re.MULTILINE),
+    # green on `abc1234`
+    _re.compile(r"green on `[0-9a-f]{7,40}`"),
+    # / `abc1234` inside table cells
+    _re.compile(r"/ `[0-9a-f]{7,40}`"),
+    # Branch names in table cells: `feat/xyz`, `fix/xyz`, `HEAD`, `main`, etc.
+    # GitHub CI checks out a detached HEAD so the branch renders as `HEAD`.
+    _re.compile(r"`(?:feat|fix|chore|refactor|docs|test|ci|HEAD|main|master)[a-zA-Z0-9_/.-]*`"),
+]
+
+
+def _normalize_for_check(text: str) -> str:
+    """Strip volatile SHA/branch tokens so committed artifacts don't go stale on every push."""
+    for pattern in _SHA_NORM_PATTERNS:
+        text = pattern.sub("<SHA>", text)
+    return text
+
+
 def _check_output(path: Path, rendered: str, label: str) -> list[str]:
     existing = path.read_text(encoding="utf-8") if path.exists() else None
+    # Compare with SHA/branch tokens normalized — artifacts are inherently volatile
+    if existing is not None and _normalize_for_check(existing) == _normalize_for_check(rendered):
+        return []
     if existing == rendered:
         return []
 
     lines = [f"{label} is out of date: {path}"]
     if existing is not None:
         diff = difflib.unified_diff(
-            existing.splitlines(),
-            rendered.splitlines(),
-            fromfile=f"{path} (existing)",
-            tofile=f"{path} (rendered)",
+            _normalize_for_check(existing).splitlines(),
+            _normalize_for_check(rendered).splitlines(),
+            fromfile=f"{path} (existing, SHA-normalized)",
+            tofile=f"{path} (rendered, SHA-normalized)",
             lineterm="",
         )
         diff_text = "\n".join(diff)
         if diff_text:
             lines.extend(["", "Diff:", diff_text])
+        else:
+            return []  # Only SHA/branch differed — not a real staleness failure
     else:
         lines.append("File does not exist.")
     return lines

@@ -55,10 +55,7 @@ def build_queue_summary(
 
     return {
         "pending_count": len(pending_goals),
-        "pending": [
-            {"position": idx, "goal": str(goal)}
-            for idx, goal in enumerate(pending_goals, start=1)
-        ],
+        "pending": [{"position": idx, "goal": str(goal)} for idx, goal in enumerate(pending_goals, start=1)],
         "completed_count": len(completed_goals),
         "completed": completed_goals,
         "active_goal": active_goal,
@@ -164,16 +161,18 @@ def build_cycle_summary(
     verification = phase_outputs.get("verification", {}) if isinstance(phase_outputs, dict) else {}
     apply_result = phase_outputs.get("apply_result", {}) if isinstance(phase_outputs, dict) else {}
     capability_goal_queue = phase_outputs.get("capability_goal_queue", {}) if isinstance(phase_outputs, dict) else {}
+    innovation_report = phase_outputs.get("innovation_report", {}) if isinstance(phase_outputs, dict) else {}
 
     verification_status = _normalize_verification_status(verification)
     failures = list(verification.get("failures", [])) if isinstance(verification, dict) else []
     remediation_plan = verification.get("remediation_plan", {}) if isinstance(verification, dict) else {}
     applied_files = list(apply_result.get("applied", [])) if isinstance(apply_result, dict) else []
-    failed_files = [
-        item.get("file", str(item))
-        for item in apply_result.get("failed", [])
-    ] if isinstance(apply_result, dict) else []
+    failed_files = [item.get("file", str(item)) for item in apply_result.get("failed", [])] if isinstance(apply_result, dict) else []
     queued_follow_up_goals = list(capability_goal_queue.get("queued", [])) if isinstance(capability_goal_queue, dict) else []
+    innovation_subagents = list(innovation_report.get("subagents", [])) if isinstance(innovation_report, dict) else []
+    innovation_selected = list(innovation_report.get("selected_proposals", [])) if isinstance(innovation_report, dict) else []
+    innovation_queue = innovation_report.get("queue", {}) if isinstance(innovation_report, dict) else {}
+    innovation_implementation = innovation_report.get("implementation", {}) if isinstance(innovation_report, dict) else {}
     retry_count = int(phase_outputs.get("retry_count", 0)) if isinstance(phase_outputs, dict) else 0
     beads = entry.get("beads") or phase_outputs.get("beads_gate", {}) if isinstance(phase_outputs, dict) else {}
     if not isinstance(beads, dict):
@@ -211,6 +210,11 @@ def build_cycle_summary(
         "applied_files": applied_files,
         "failed_files": failed_files,
         "queued_follow_up_goals": queued_follow_up_goals,
+        "innovation_focus": innovation_report.get("focus") if isinstance(innovation_report, dict) else None,
+        "innovation_subagents": innovation_subagents,
+        "innovation_selected_count": len(innovation_selected),
+        "innovation_queue_count": len(innovation_queue.get("queued", [])) if isinstance(innovation_queue, dict) else 0,
+        "innovation_execution_count": len(innovation_implementation.get("executed", [])) if isinstance(innovation_implementation, dict) else 0,
         "beads_status": beads.get("status"),
         "beads_decision_id": beads.get("decision_id"),
         "beads_summary": beads.get("summary"),
@@ -257,6 +261,72 @@ def build_beads_runtime_metadata(orchestrator: Any = None) -> Dict[str, Any] | N
     return metadata or None
 
 
+def build_run_tool_audit_summary(memory_store: Any = None, *, limit: int = 10) -> Dict[str, Any] | None:
+    if memory_store is None or not hasattr(memory_store, "read_log"):
+        return None
+
+    try:
+        entries = list(memory_store.read_log(limit=200) or [])
+    except Exception:
+        return None
+
+    run_entries = [
+        entry
+        for entry in entries
+        if isinstance(entry, dict)
+        and entry.get("type") == "server_run_tool"
+        and (
+            entry.get("event") == "aura_server_run_tool_finished"
+            or any(key in entry for key in ("code", "timed_out", "truncated", "duration_s", "output_bytes"))
+        )
+    ]
+    if not run_entries:
+        return None
+
+    recent_entries = run_entries[-limit:]
+    recent = []
+    timeout_count = 0
+    truncated_count = 0
+    error_count = 0
+    success_count = 0
+    for entry in recent_entries:
+        timed_out = bool(entry.get("timed_out"))
+        truncated = bool(entry.get("truncated"))
+        code = entry.get("code")
+        if timed_out:
+            timeout_count += 1
+        if truncated:
+            truncated_count += 1
+        if code in (None, 0) and not timed_out:
+            success_count += 1
+        elif code not in (None, 0) or timed_out:
+            error_count += 1
+        recent.append(
+            {
+                "command": entry.get("command"),
+                "code": code,
+                "timed_out": timed_out,
+                "truncated": truncated,
+                "duration_s": entry.get("duration_s"),
+                "output_bytes": entry.get("output_bytes"),
+                "timestamp": entry.get("timestamp"),
+            }
+        )
+
+    last_entry = recent_entries[-1]
+    return {
+        "count": len(run_entries),
+        "recent_count": len(recent_entries),
+        "success_count": success_count,
+        "error_count": error_count,
+        "timeout_count": timeout_count,
+        "truncated_count": truncated_count,
+        "last_command": last_entry.get("command"),
+        "last_timestamp": last_entry.get("timestamp"),
+        "recent": recent,
+    }
+
+
 def build_operator_runtime_snapshot(
     goal_queue: Any = None,
     goal_archive: Any = None,
@@ -266,6 +336,7 @@ def build_operator_runtime_snapshot(
     active_goal: str | None = None,
     updated_at: float | None = None,
     beads_runtime: Dict[str, Any] | None = None,
+    memory_store: Any = None,
 ) -> Dict[str, Any]:
     if active_goal is None and isinstance(active_cycle, dict):
         active_goal = active_cycle.get("goal")
@@ -280,4 +351,5 @@ def build_operator_runtime_snapshot(
         "active_cycle": active_cycle,
         "last_cycle": last_cycle,
         "beads_runtime": beads_runtime,
+        "run_tool_audit": build_run_tool_audit_summary(memory_store),
     }

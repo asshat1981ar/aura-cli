@@ -1,36 +1,40 @@
 import sqlite3
 from pathlib import Path
-import json # Added this line
+import json  # Added this line
 import time
 from typing import List, Optional, Any
-from core.logging_utils import log_json # Import log_json
+from core.logging_utils import log_json  # Import log_json
 
 # textblob is only needed by analyze_critique_for_weaknesses — lazy import to avoid 1.3s startup cost
 _textblob_loaded = False
 TextBlob = None
 
+
 def _ensure_textblob():
     global TextBlob, _textblob_loaded
     if not _textblob_loaded:
         from textblob import TextBlob as _TB  # noqa: F401
+
         TextBlob = _TB
         _textblob_loaded = True
 
+
 # networkx is only needed by relate() and rarely used graph operations — lazy import to avoid 885ms startup
 _nx = None
+
 
 def _ensure_nx():
     global _nx
     if _nx is None:
         import networkx as _networkx  # noqa: F401
+
         _nx = _networkx
     return _nx
 
 
 class Brain:
-
     # Current schema version. Bump when adding columns / tables.
-    SCHEMA_VERSION = 3
+    SCHEMA_VERSION = 4
 
     def __init__(self, db_path: Optional[str] = None):
         # Construct absolute path for the database file
@@ -38,9 +42,9 @@ class Brain:
         self._db_path = db_file_path
         self.db = sqlite3.connect(str(db_file_path), check_same_thread=False)
         self.db.row_factory = sqlite3.Row
-        self._graph = None   # lazy — created on first relate() call
-        self._recall_cache: dict = {}   # {query_key: (result, timestamp)}
-        self._cache_ttl: float = 5.0    # seconds — invalidated on remember()
+        self._graph = None  # lazy — created on first relate() call
+        self._recall_cache: dict = {}  # {query_key: (result, timestamp)}
+        self._cache_ttl: float = 5.0  # seconds — invalidated on remember()
         self._init_db()
         self._migrate()
 
@@ -143,6 +147,18 @@ class Brain:
             self.db.commit()
             self._set_schema_version(3)
             log_json("INFO", "brain_migration", details={"from": 2, "to": 3})
+            current = 3
+
+        # v3 → v4: add tag column to memory table for SADD session-scoped context
+        if current < 4:
+            try:
+                self.db.execute("ALTER TABLE memory ADD COLUMN tag TEXT DEFAULT NULL")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            self.db.execute("CREATE INDEX IF NOT EXISTS idx_memory_tag ON memory(tag)")
+            self.db.commit()
+            self._set_schema_version(4)
+            log_json("INFO", "brain_migration", details={"from": 3, "to": 4})
 
     def _absorb_legacy_db(self, legacy_path: Path) -> None:
         """Copy rows from *legacy_path* into this DB, skipping duplicates."""
@@ -156,25 +172,18 @@ class Brain:
                 self.db.executemany("INSERT INTO memory(content) VALUES (?)", new_rows)
             # weaknesses rows
             wrows = legacy.execute("SELECT description, timestamp FROM weaknesses").fetchall()
-            self.db.executemany(
-                "INSERT OR IGNORE INTO weaknesses(description, timestamp) VALUES (?, ?)",
-                wrows
-            )
+            self.db.executemany("INSERT OR IGNORE INTO weaknesses(description, timestamp) VALUES (?, ?)", wrows)
             self.db.commit()
             legacy.close()
-            log_json("INFO", "brain_legacy_absorbed",
-                     details={"path": str(legacy_path),
-                              "memory_rows": len(new_rows),
-                              "weakness_rows": len(wrows)})
+            log_json("INFO", "brain_legacy_absorbed", details={"path": str(legacy_path), "memory_rows": len(new_rows), "weakness_rows": len(wrows)})
         except Exception as exc:
-            log_json("WARN", "brain_legacy_absorb_failed",
-                     details={"path": str(legacy_path), "error": str(exc)})
+            log_json("WARN", "brain_legacy_absorb_failed", details={"path": str(legacy_path), "error": str(exc)})
 
-    def remember(self, data): # Changed parameter name from 'text' to 'data' for clarity
+    def remember(self, data):  # Changed parameter name from 'text' to 'data' for clarity
         # If data is a dictionary, serialize it to JSON
         if isinstance(data, dict):
             content_to_store = json.dumps(data)
-        elif isinstance(data, (str, int, float)): # Also handle other basic types if needed
+        elif isinstance(data, (str, int, float)):  # Also handle other basic types if needed
             content_to_store = str(data)
         else:
             # Fallback for unexpected types, or raise an error
@@ -182,29 +191,56 @@ class Brain:
             content_to_store = str(data)
 
         # Store in textual memory
-        self.db.execute(
-            "INSERT INTO memory(content) VALUES (?)",
-            (content_to_store,)
-        )
+        self.db.execute("INSERT INTO memory(content) VALUES (?)", (content_to_store,))
         self.db.commit()
         # Invalidate recall cache on write
         self._recall_cache.clear()
+
+    def remember_tagged(self, text: str, tag: str) -> None:
+        """Store a tagged memory entry for session-scoped context (e.g. SADD)."""
+        content = str(text)
+        try:
+            self.db.execute(
+                "INSERT INTO memory(content, tag) VALUES (?, ?)",
+                (content, tag),
+            )
+            self.db.commit()
+            self._recall_cache.clear()
+        except sqlite3.OperationalError:
+            # tag column may not exist yet; fall back to untagged
+            self.remember(f"[{tag}] {content}")
+
+    def recall_tagged(self, tag: str, limit: int = 50) -> list:
+        """Retrieve memories with a specific tag."""
+        try:
+            rows = self.db.execute(
+                "SELECT content FROM memory WHERE tag = ? ORDER BY id DESC LIMIT ?",
+                (tag, limit),
+            ).fetchall()
+            return [row[0] for row in rows]
+        except sqlite3.OperationalError:
+            return []
+
+    def forget_tagged(self, tag: str) -> int:
+        """Delete all memories with the given tag. Returns count deleted."""
+        try:
+            cursor = self.db.execute("DELETE FROM memory WHERE tag = ?", (tag,))
+            self.db.commit()
+            self._recall_cache.clear()
+            return cursor.rowcount
+        except sqlite3.OperationalError:
+            return 0
 
     def set(self, key: str, value: Any) -> None:
         """Set a persistent key-value pair. value will be JSON serialized."""
         if not isinstance(value, str):
             value = json.dumps(value)
-        self.db.execute(
-            "INSERT OR REPLACE INTO kv_store(key, value) VALUES (?, ?)",
-            (key, value)
-        )
+        self.db.execute("INSERT OR REPLACE INTO kv_store(key, value) VALUES (?, ?)", (key, value))
         self.db.commit()
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a persistent key-value pair. Attempts to JSON deserialize the result."""
-        row = self.db.execute(
-            "SELECT value FROM kv_store WHERE key = ?", (key,)
-        ).fetchone()
+        row = self.db.execute("SELECT value FROM kv_store WHERE key = ?", (key,)).fetchone()
         if not row:
             return default
         raw = row[0]
@@ -253,9 +289,7 @@ class Brain:
         cached = self._recall_cache.get(key)
         if cached and (time.time() - cached[1]) < self._cache_ttl:
             return cached[0]
-        rows = self.db.execute(
-            "SELECT content FROM memory ORDER BY id DESC LIMIT ?", (limit,)
-        ).fetchall()
+        rows = self.db.execute("SELECT content FROM memory ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         result = [r[0] for r in reversed(rows)]
         self._recall_cache[key] = (result, time.time())
         return result
@@ -275,9 +309,7 @@ class Brain:
         max_chars = max_tokens * 4
         # Fetch enough recent rows to fill the budget; double for safety margin
         est_limit = min(max_chars // 10 + 200, 5000)
-        rows = self.db.execute(
-            "SELECT content FROM memory ORDER BY id DESC LIMIT ?", (est_limit,)
-        ).fetchall()
+        rows = self.db.execute("SELECT content FROM memory ORDER BY id DESC LIMIT ?", (est_limit,)).fetchall()
         entries = [r[0] for r in reversed(rows)]
         return self.compress_to_budget(entries, max_tokens)
 
@@ -310,7 +342,7 @@ class Brain:
         found_weaknesses = False
         for sentence in blob.sentences:
             # Check for negative sentiment
-            if sentence.sentiment.polarity < -0.1: # Threshold for negative sentiment
+            if sentence.sentiment.polarity < -0.1:  # Threshold for negative sentiment
                 weakness_description = f"Negative sentiment detected: '{sentence.strip()}'."
                 if sentence.noun_phrases:
                     weakness_description += f" Key phrases: {', '.join(sentence.noun_phrases)}."

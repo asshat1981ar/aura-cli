@@ -22,6 +22,9 @@
     "queue_clear",
     "queue_list",
     "readiness",
+    "sadd_resume",
+    "sadd_run",
+    "sadd_status",
     "scaffold",
     "show_config",
     "studio",
@@ -95,6 +98,18 @@
       "list"
     ],
     [
+      "sadd",
+      "resume"
+    ],
+    [
+      "sadd",
+      "run"
+    ],
+    [
+      "sadd",
+      "status"
+    ],
+    [
       "scaffold"
     ],
     [
@@ -132,6 +147,9 @@
     "queue_clear",
     "queue_list",
     "readiness",
+    "sadd_resume",
+    "sadd_run",
+    "sadd_status",
     "scaffold",
     "show_config",
     "studio",
@@ -163,6 +181,9 @@
     "queue_clear",
     "queue_list",
     "readiness",
+    "sadd_resume",
+    "sadd_run",
+    "sadd_status",
     "scaffold",
     "show_config",
     "studio",
@@ -254,6 +275,21 @@
       "readiness"
     ],
     [
+      "sadd"
+    ],
+    [
+      "sadd",
+      "resume"
+    ],
+    [
+      "sadd",
+      "run"
+    ],
+    [
+      "sadd",
+      "status"
+    ],
+    [
       "scaffold"
     ],
     [
@@ -342,6 +378,18 @@
       "readiness"
     ],
     [
+      "sadd",
+      "resume"
+    ],
+    [
+      "sadd",
+      "run"
+    ],
+    [
+      "sadd",
+      "status"
+    ],
+    [
       "scaffold"
     ],
     [
@@ -373,6 +421,9 @@
     ],
     [
       "queue"
+    ],
+    [
+      "sadd"
     ],
     [
       "workflow"
@@ -462,6 +513,21 @@
       "readiness"
     ],
     [
+      "sadd"
+    ],
+    [
+      "sadd",
+      "resume"
+    ],
+    [
+      "sadd",
+      "run"
+    ],
+    [
+      "sadd",
+      "status"
+    ],
+    [
       "scaffold"
     ],
     [
@@ -490,6 +556,9 @@
     ],
     [
       "queue"
+    ],
+    [
+      "sadd"
     ],
     [
       "workflow"
@@ -580,6 +649,21 @@
     ],
     [
       "readiness"
+    ],
+    [
+      "sadd"
+    ],
+    [
+      "sadd",
+      "resume"
+    ],
+    [
+      "sadd",
+      "run"
+    ],
+    [
+      "sadd",
+      "status"
     ],
     [
       "scaffold"

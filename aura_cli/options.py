@@ -107,7 +107,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         description="Manage queued goals and run one-off goals.",
         examples=(
             "python3 main.py goal status",
-            "python3 main.py goal add \"Refactor queue\"",
+            'python3 main.py goal add "Refactor queue"',
         ),
     ),
     CommandSpec(
@@ -115,8 +115,8 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         summary="Add a goal to the queue",
         description="Add a goal, optionally running the queue immediately.",
         examples=(
-            "python3 main.py goal add \"Fix tests\"",
-            "python3 main.py goal add \"Fix tests\" --run",
+            'python3 main.py goal add "Fix tests"',
+            'python3 main.py goal add "Fix tests" --run',
         ),
         legacy_flags=("--add-goal", "--run-goals"),
     ),
@@ -142,8 +142,8 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         summary="Run a one-off goal",
         description="Run a single goal directly without queueing it.",
         examples=(
-            "python3 main.py goal once \"Summarize repo\"",
-            "python3 main.py goal once \"Refactor core\" --max-cycles 3",
+            'python3 main.py goal once "Summarize repo"',
+            'python3 main.py goal once "Refactor core" --max-cycles 3',
         ),
         legacy_flags=("--goal",),
     ),
@@ -151,13 +151,13 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         path=("workflow",),
         summary="Workflow operations",
         description="Run orchestrated workflow goals with explicit cycle limits.",
-        examples=("python3 main.py workflow run \"Summarize repo\"",),
+        examples=('python3 main.py workflow run "Summarize repo"',),
     ),
     CommandSpec(
         path=("workflow", "run"),
         summary="Run a workflow goal",
         description="Run the orchestrator loop for a single workflow goal.",
-        examples=("python3 main.py workflow run \"Summarize repo\" --max-cycles 3",),
+        examples=('python3 main.py workflow run "Summarize repo" --max-cycles 3',),
         legacy_flags=("--workflow-goal",),
     ),
     CommandSpec(
@@ -188,18 +188,19 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         summary="Scaffold a project",
         description="Run the scaffolder agent for a named project type.",
         examples=(
-            "python3 main.py scaffold demo --desc \"small demo app\"",
+            'python3 main.py scaffold demo --desc "small demo app"',
             "python3 main.py scaffold demo --json",
         ),
         legacy_flags=("--scaffold",),
     ),
     CommandSpec(
         path=("evolve",),
-        summary="Run evolution loop",
-        description="Autonomous self-improvement loop for AURA core.",
+        summary="Run innovation workflow",
+        description="Run the innovation workflow and optional queue-backed implementation loop for AURA core.",
         examples=(
             "python3 main.py evolve",
             "python3 main.py evolve --json",
+            "python3 main.py evolve --queue-only --proposal-limit 3 --focus research",
         ),
         legacy_flags=("--evolve",),
     ),
@@ -235,8 +236,8 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         summary="Semantic memory operations",
         description="Search or browse through the AURA brain.",
         examples=(
-            "python3 main.py memory search \"workflow engine\"",
-            "python3 main.py memory search \"workflow engine\" --json",
+            'python3 main.py memory search "workflow engine"',
+            'python3 main.py memory search "workflow engine" --json',
         ),
     ),
     CommandSpec(
@@ -244,8 +245,8 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         summary="Search semantic memory",
         description="Perform a semantic search over brain entries.",
         examples=(
-            "python3 main.py memory search \"workflow engine\"",
-            "python3 main.py memory search \"workflow engine\" --json",
+            'python3 main.py memory search "workflow engine"',
+            'python3 main.py memory search "workflow engine" --json',
         ),
     ),
     CommandSpec(
@@ -265,6 +266,39 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
             "python3 main.py metrics",
             "python3 main.py metrics --json",
         ),
+    ),
+    CommandSpec(
+        path=("sadd",),
+        summary="Sub-Agent Driven Development",
+        description="Decompose a design spec into parallel workstreams and execute via sub-agents.",
+        examples=(
+            "python3 main.py sadd run --spec design.md --dry-run",
+            "python3 main.py sadd run --spec design.md --max-parallel 3",
+        ),
+    ),
+    CommandSpec(
+        path=("sadd", "run"),
+        summary="Run a SADD session",
+        description="Parse a design spec and execute workstreams. Use --dry-run to preview decomposition only.",
+        examples=(
+            "python3 main.py sadd run --spec design.md --dry-run",
+            "python3 main.py sadd run --spec design.md --max-parallel 2 --max-cycles 3",
+        ),
+    ),
+    CommandSpec(
+        path=("sadd", "status"),
+        summary="Show SADD session status",
+        description="Show status of recent SADD sessions or a specific session.",
+        examples=(
+            "python3 main.py sadd status",
+            "python3 main.py sadd status --session-id <id>",
+        ),
+    ),
+    CommandSpec(
+        path=("sadd", "resume"),
+        summary="Resume a SADD session",
+        description="Resume an interrupted SADD session from its last checkpoint.",
+        examples=("python3 main.py sadd resume --session-id <id>",),
     ),
 )
 
@@ -304,6 +338,9 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("memory_search", True, ("memory", "search")),
     CLIActionSpec("memory_reindex", True, ("memory", "reindex")),
     CLIActionSpec("metrics_show", True, ("metrics",)),
+    CLIActionSpec("sadd_run", True, ("sadd", "run")),
+    CLIActionSpec("sadd_status", False, ("sadd", "status")),
+    CLIActionSpec("sadd_resume", True, ("sadd", "resume")),
     CLIActionSpec("interactive", True, None),
 )
 
@@ -313,6 +350,8 @@ _ACTION_SMOKE_OVERRIDES: dict[str, tuple[str, ...]] = {
     "interactive": (),
     "json_help": ("--json-help",),
     "goal_add_run": ("goal", "add", "example-goal", "--run"),
+    "sadd_run": ("sadd", "run", "--spec", "example-spec.md", "--dry-run"),
+    "sadd_resume": ("sadd", "resume", "--session-id", "example-id"),
 }
 
 _SMOKE_POSITIONAL_ARGS_BY_PATH: dict[tuple[str, ...], tuple[str, ...]] = {
@@ -356,9 +395,7 @@ CLI_ERRORS_RECORD_FIELDS: tuple[str, ...] = (
     "code",
     "message",
 )
-CLI_ERRORS_OPTIONAL_FIELDS: tuple[str, ...] = (
-    "usage",
-)
+CLI_ERRORS_OPTIONAL_FIELDS: tuple[str, ...] = ("usage",)
 CLI_ERRORS_RECORD_CODES: tuple[dict[str, str], ...] = (
     {
         "code": CLI_PARSE_ERROR_CODE,
@@ -397,6 +434,9 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("memory", "search"): "memory_search",
     ("memory", "reindex"): "memory_reindex",
     ("metrics",): "metrics_show",
+    ("sadd", "run"): "sadd_run",
+    ("sadd", "status"): "sadd_status",
+    ("sadd", "resume"): "sadd_resume",
 }
 
 _LEGACY_PRIMARY_FLAGS: tuple[str, ...] = (
@@ -419,9 +459,7 @@ _LEGACY_AUX_FLAGS: tuple[str, ...] = (
     "scaffold_desc",
 )
 
-_ALLOWED_MULTI_PRIMARY_FLAG_SETS: tuple[frozenset[str], ...] = (
-    frozenset({"add_goal", "run_goals"}),
-)
+_ALLOWED_MULTI_PRIMARY_FLAG_SETS: tuple[frozenset[str], ...] = (frozenset({"add_goal", "run_goals"}),)
 
 
 def iter_cli_action_specs() -> tuple[CLIActionSpec, ...]:
@@ -563,7 +601,7 @@ def help_schema() -> dict[str, Any]:
         if spec.path == ("goal", "add"):
             default_action = "goal_add"
         action_spec = CLI_ACTION_SPECS_BY_ACTION.get(default_action) if default_action else None
-        
+
         flags = []
         if default_action and default_action not in {"logs", "watch", "studio", "interactive"}:
             flags.append({"name": "--json", "summary": "Output JSON instead of text"})
@@ -589,9 +627,7 @@ def help_schema() -> dict[str, Any]:
                 "field": CLI_WARNINGS_JSON_FIELD,
                 "version": CLI_WARNINGS_JSON_CONTRACT_VERSION,
                 "description": "Structured CLI warnings attached to JSON outputs when legacy flags are used.",
-                "inclusion_rule": (
-                    "Present when a parsed invocation emits structured warning records and the command outputs JSON."
-                ),
+                "inclusion_rule": ("Present when a parsed invocation emits structured warning records and the command outputs JSON."),
                 "record_fields": list(CLI_WARNINGS_RECORD_FIELDS),
                 "record_codes": [dict(item) for item in CLI_WARNINGS_RECORD_CODES],
             },

@@ -55,10 +55,7 @@ def build_queue_summary(
 
     return {
         "pending_count": len(pending_goals),
-        "pending": [
-            {"position": idx, "goal": str(goal)}
-            for idx, goal in enumerate(pending_goals, start=1)
-        ],
+        "pending": [{"position": idx, "goal": str(goal)} for idx, goal in enumerate(pending_goals, start=1)],
         "completed_count": len(completed_goals),
         "completed": completed_goals,
         "active_goal": active_goal,
@@ -164,16 +161,18 @@ def build_cycle_summary(
     verification = phase_outputs.get("verification", {}) if isinstance(phase_outputs, dict) else {}
     apply_result = phase_outputs.get("apply_result", {}) if isinstance(phase_outputs, dict) else {}
     capability_goal_queue = phase_outputs.get("capability_goal_queue", {}) if isinstance(phase_outputs, dict) else {}
+    innovation_report = phase_outputs.get("innovation_report", {}) if isinstance(phase_outputs, dict) else {}
 
     verification_status = _normalize_verification_status(verification)
     failures = list(verification.get("failures", [])) if isinstance(verification, dict) else []
     remediation_plan = verification.get("remediation_plan", {}) if isinstance(verification, dict) else {}
     applied_files = list(apply_result.get("applied", [])) if isinstance(apply_result, dict) else []
-    failed_files = [
-        item.get("file", str(item))
-        for item in apply_result.get("failed", [])
-    ] if isinstance(apply_result, dict) else []
+    failed_files = [item.get("file", str(item)) for item in apply_result.get("failed", [])] if isinstance(apply_result, dict) else []
     queued_follow_up_goals = list(capability_goal_queue.get("queued", [])) if isinstance(capability_goal_queue, dict) else []
+    innovation_subagents = list(innovation_report.get("subagents", [])) if isinstance(innovation_report, dict) else []
+    innovation_selected = list(innovation_report.get("selected_proposals", [])) if isinstance(innovation_report, dict) else []
+    innovation_queue = innovation_report.get("queue", {}) if isinstance(innovation_report, dict) else {}
+    innovation_implementation = innovation_report.get("implementation", {}) if isinstance(innovation_report, dict) else {}
     retry_count = int(phase_outputs.get("retry_count", 0)) if isinstance(phase_outputs, dict) else 0
     beads = entry.get("beads") or phase_outputs.get("beads_gate", {}) if isinstance(phase_outputs, dict) else {}
     if not isinstance(beads, dict):
@@ -211,6 +210,11 @@ def build_cycle_summary(
         "applied_files": applied_files,
         "failed_files": failed_files,
         "queued_follow_up_goals": queued_follow_up_goals,
+        "innovation_focus": innovation_report.get("focus") if isinstance(innovation_report, dict) else None,
+        "innovation_subagents": innovation_subagents,
+        "innovation_selected_count": len(innovation_selected),
+        "innovation_queue_count": len(innovation_queue.get("queued", [])) if isinstance(innovation_queue, dict) else 0,
+        "innovation_execution_count": len(innovation_implementation.get("executed", [])) if isinstance(innovation_implementation, dict) else 0,
         "beads_status": beads.get("status"),
         "beads_decision_id": beads.get("decision_id"),
         "beads_summary": beads.get("summary"),

@@ -31,6 +31,7 @@ _REQUIRED_SUBCOMMAND_PARENT_PATHS: set[tuple[str, ...]] = {
     ("mcp",),
     ("memory",),
     ("queue",),
+    ("sadd",),
     ("workflow",),
 }
 
@@ -125,11 +126,11 @@ _PARSER_CUSTOMIZERS: dict[tuple[str, ...], Any] = {}
 
 # Parser construction ---------------------------------------------------------
 
+
 def _subparser_dest(parent_path: tuple[str, ...]) -> str:
     if not parent_path:
         return "_command_1"
     return f"_command_{len(parent_path) + 1}"
-
 
 
 def _children_by_parent() -> dict[tuple[str, ...], set[tuple[str, ...]]]:
@@ -141,11 +142,9 @@ def _children_by_parent() -> dict[tuple[str, ...], set[tuple[str, ...]]]:
     return children
 
 
-
 def _leaf_command_paths() -> set[tuple[str, ...]]:
     children = _children_by_parent()
     return {spec.path for spec in COMMAND_SPECS if spec.path and spec.path not in children}
-
 
 
 def _add_common_flags(parser: argparse.ArgumentParser, *, include_max_cycles: bool = True) -> None:
@@ -175,7 +174,6 @@ def _add_common_flags(parser: argparse.ArgumentParser, *, include_max_cycles: bo
         setattr(parser, "_aura_common_flags_added", "partial")
 
 
-
 def _add_root_legacy_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--add-goal", dest="add_goal", help="Legacy: add a goal to the queue.")
     parser.add_argument("--run-goals", dest="run_goals", action="store_true", help="Legacy: run queued goals.")
@@ -193,8 +191,7 @@ def _add_root_legacy_flags(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--bootstrap", action="store_true", help="Legacy: bootstrap config.")
     parser.add_argument("--scaffold", dest="scaffold", help="Legacy: scaffold template name.")
     parser.add_argument("--scaffold-desc", dest="scaffold_desc", help="Legacy: scaffold description.")
-    parser.add_argument("--evolve", action="store_true", help="Legacy: run evolution loop.")
-
+    parser.add_argument("--evolve", action="store_true", help="Legacy: run innovation workflow.")
 
 
 def _add_spec_parser(
@@ -211,7 +208,6 @@ def _add_spec_parser(
     parser.set_defaults(_cmd_path=path)
     parser_map[path] = parser
     return parser
-
 
 
 def _build_parser_tree_from_specs(root_parser: argparse.ArgumentParser) -> dict[tuple[str, ...], argparse.ArgumentParser]:
@@ -246,9 +242,9 @@ def _build_parser_tree_from_specs(root_parser: argparse.ArgumentParser) -> dict[
 
 # Parser customizers ----------------------------------------------------------
 
+
 def _customize_help(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("help_topics", nargs="*", help="Command path to show help for.")
-
 
 
 def _customize_goal_add(parser: argparse.ArgumentParser) -> None:
@@ -256,20 +252,16 @@ def _customize_goal_add(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--run", dest="run_goals", action="store_true", help="Run the queue after adding.")
 
 
-
 def _customize_goal_run(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(run_goals=True)
-
 
 
 def _customize_goal_status(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(status=True)
 
 
-
 def _customize_goal_once(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("goal", help="Goal text to run once.")
-
 
 
 def _customize_workflow_run(parser: argparse.ArgumentParser) -> None:
@@ -277,10 +269,8 @@ def _customize_workflow_run(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--max-cycles", dest="workflow_max_cycles", type=int, help="Workflow-specific max cycles.")
 
 
-
 def _customize_mcp_tools(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(mcp_tools=True)
-
 
 
 def _customize_mcp_call(parser: argparse.ArgumentParser) -> None:
@@ -288,15 +278,12 @@ def _customize_mcp_call(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--args", dest="mcp_args", help="JSON arguments for the MCP tool.")
 
 
-
 def _customize_diag(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(diag=True)
 
 
-
 def _customize_bootstrap(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(bootstrap=True)
-
 
 
 def _customize_contract_report(parser: argparse.ArgumentParser) -> None:
@@ -317,17 +304,36 @@ def _customize_contract_report(parser: argparse.ArgumentParser) -> None:
     )
 
 
-
 def _customize_scaffold(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("scaffold", help="Scaffold template name.")
     parser.add_argument("--desc", dest="scaffold_desc", help="Scaffold description.")
 
 
-
 def _customize_evolve(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(evolve=True)
     parser.add_argument("goal", nargs="?", help="Optional evolution goal override.")
-
+    parser.add_argument(
+        "--queue-only",
+        action="store_true",
+        help="Generate and queue innovation goals without executing them immediately.",
+    )
+    parser.add_argument(
+        "--execute-queued",
+        action="store_true",
+        help="Explicitly execute selected queued innovation goals in the same run.",
+    )
+    parser.add_argument(
+        "--proposal-limit",
+        type=int,
+        default=None,
+        help="Maximum number of innovation proposals to select and queue.",
+    )
+    parser.add_argument(
+        "--focus",
+        choices=("capability", "quality", "throughput", "research"),
+        default="capability",
+        help="Prioritize proposal ranking for a specific innovation focus.",
+    )
 
 
 def _customize_logs(parser: argparse.ArgumentParser) -> None:
@@ -363,6 +369,20 @@ def _customize_metrics(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(metrics_show=True)
 
 
+def _customize_sadd_run(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--spec", required=True, help="Path to a design spec markdown file.")
+    parser.add_argument("--max-parallel", dest="max_parallel", type=int, default=3, help="Max concurrent sub-agents.")
+    parser.add_argument("--fail-fast", dest="fail_fast", action="store_true", help="Stop on first workstream failure.")
+
+
+def _customize_sadd_status(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--session-id", dest="session_id", help="Specific session ID to inspect.")
+
+
+def _customize_sadd_resume(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--session-id", dest="session_id", required=True, help="Session ID to resume.")
+
+
 _PARSER_CUSTOMIZERS.update(
     {
         ("help",): _customize_help,
@@ -386,9 +406,11 @@ _PARSER_CUSTOMIZERS.update(
         ("memory", "search"): _customize_memory_search,
         ("memory", "reindex"): _customize_memory_reindex,
         ("metrics",): _customize_metrics,
+        ("sadd", "run"): _customize_sadd_run,
+        ("sadd", "status"): _customize_sadd_status,
+        ("sadd", "resume"): _customize_sadd_resume,
     }
 )
-
 
 
 def _apply_parser_customizations(parser_map: Mapping[tuple[str, ...], argparse.ArgumentParser]) -> None:
@@ -414,9 +436,9 @@ def parser_required_subcommand_parent_paths() -> set[tuple[str, ...]]:
     return set(_REQUIRED_SUBCOMMAND_PARENT_PATHS)
 
 
-
 def build_parser() -> AuraArgumentParser:
     from aura_cli import __version__
+
     parser = AuraArgumentParser(prog="aura", allow_abbrev=False, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     parser.add_argument("--json-help", dest="json_help", action="store_true", help="Emit machine-readable CLI help schema.")
@@ -429,12 +451,12 @@ def build_parser() -> AuraArgumentParser:
 
 # Parsing and normalization ---------------------------------------------------
 
+
 def _usage(parser: argparse.ArgumentParser) -> str:
     try:
         return parser.format_usage()
     except Exception:
         return ""
-
 
 
 def _first_token_unknown_top_level(argv: Sequence[str]) -> tuple[str, str | None] | None:
@@ -449,7 +471,6 @@ def _first_token_unknown_top_level(argv: Sequence[str]) -> tuple[str, str | None
     return token, (matches[0] if matches else None)
 
 
-
 def _explicit_long_option_names(argv: Sequence[str]) -> set[str]:
     names: set[str] = set()
     for token in argv:
@@ -459,7 +480,6 @@ def _explicit_long_option_names(argv: Sequence[str]) -> set[str]:
         if option:
             names.add(option.replace("-", "_"))
     return names
-
 
 
 def _validate_args(
@@ -487,16 +507,13 @@ def _validate_args(
     if "beads_required" in explicit_long_options and "beads_optional" in explicit_long_options:
         raise CLIParseError("Cannot pass both `--beads-required` and `--beads-optional`.", usage=usage)
 
-    if "no_beads" in explicit_long_options and (
-        "beads_required" in explicit_long_options or "beads_optional" in explicit_long_options
-    ):
+    if "no_beads" in explicit_long_options and ("beads_required" in explicit_long_options or "beads_optional" in explicit_long_options):
         raise CLIParseError("`--no-beads` cannot be combined with BEADS mode overrides.", usage=usage)
 
     if not uses_subcommand and len(explicit_legacy_flags) > 1:
         if frozenset(explicit_legacy_flags) not in legacy_allowed_multi_primary_flag_sets():
             human_flags = ", ".join(f"--{name.replace('_', '-')}" for name in sorted(explicit_legacy_flags))
             raise CLIParseError(f"Conflicting legacy actions provided: {human_flags}.", usage=usage)
-
 
 
 def _legacy_warning_for_action(action: str) -> str:
@@ -519,7 +536,6 @@ def _legacy_warning_record(action: str, explicit_legacy_flags: set[str]) -> CLIW
     )
 
 
-
 def _normalize_command_identity(*, ns: argparse.Namespace, uses_subcommand: bool, action: str) -> tuple[str | None, str | None]:
     if uses_subcommand:
         path = tuple(getattr(ns, "_cmd_path", ()) or ())
@@ -527,7 +543,6 @@ def _normalize_command_identity(*, ns: argparse.Namespace, uses_subcommand: bool
             return None, None
         return path[0], (path[1] if len(path) > 1 else None)
     return action_display_command(action), action_display_subcommand(action)
-
 
 
 def parse_cli_args(argv: Sequence[str]) -> ParsedCLIArgs:
@@ -585,9 +600,9 @@ def parse_cli_args(argv: Sequence[str]) -> ParsedCLIArgs:
 
 # Help rendering --------------------------------------------------------------
 
+
 def _format_command_path(path: Sequence[str]) -> str:
     return " ".join(path)
-
 
 
 def _render_text_help_for_path(path: tuple[str, ...]) -> str:
@@ -616,7 +631,6 @@ def _render_text_help_for_path(path: tuple[str, ...]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-
 def _render_top_level_help() -> str:
     top_level = [spec for spec in COMMAND_SPECS if len(spec.path) == 1]
     lines = ["AURA CLI", "", "Commands:"]
@@ -626,7 +640,7 @@ def _render_top_level_help() -> str:
         [
             "",
             "Examples:",
-            "  python3 main.py goal add \"Refactor queue\" --run",
+            '  python3 main.py goal add "Refactor queue" --run',
             "  python3 main.py mcp tools",
             "  python3 main.py help goal add",
             "",
@@ -634,7 +648,6 @@ def _render_top_level_help() -> str:
         ]
     )
     return "\n".join(lines).rstrip() + "\n"
-
 
 
 def render_help(topics: Sequence[str] | None = None, *, format: str = "text") -> str:
@@ -648,6 +661,7 @@ def render_help(topics: Sequence[str] | None = None, *, format: str = "text") ->
 
 
 # Contract helpers ------------------------------------------------------------
+
 
 def iter_parser_command_paths() -> list[tuple[str, ...]]:
     return [spec.path for spec in COMMAND_SPECS]
@@ -744,9 +758,7 @@ def _legacy_flag_contracts() -> tuple[list[tuple[str, ...]], list[dict[str, Any]
         documented_flags = set(command_spec.legacy_flags)
         expected_flags = {f"--{name.replace('_', '-')}" for name in action_spec.legacy_primary_flags}
         if not expected_flags.issubset(documented_flags):
-            undocumented_action_flags.append(
-                {"action": action, "missing_flags": sorted(expected_flags - documented_flags)}
-            )
+            undocumented_action_flags.append({"action": action, "missing_flags": sorted(expected_flags - documented_flags)})
 
     return sorted(unknown_legacy_flags), undocumented_action_flags
 
@@ -780,22 +792,12 @@ def cli_contract_report(dispatch_registry: Mapping[str, Any] | None = None) -> d
         expected = CLI_ACTION_SPECS_BY_ACTION[action].requires_runtime
         actual = item.get("requires_runtime")
         if actual != expected:
-            runtime_requirement_mismatches.append(
-                {"action": action, "expected_requires_runtime": expected, "actual_requires_runtime": actual}
-            )
+            runtime_requirement_mismatches.append({"action": action, "expected_requires_runtime": expected, "actual_requires_runtime": actual})
 
-    actions_missing_command_specs = sorted(
-        action
-        for action, spec in CLI_ACTION_SPECS_BY_ACTION.items()
-        if spec.canonical_path is not None and spec.canonical_path not in COMMAND_SPECS_BY_PATH
-    )
+    actions_missing_command_specs = sorted(action for action, spec in CLI_ACTION_SPECS_BY_ACTION.items() if spec.canonical_path is not None and spec.canonical_path not in COMMAND_SPECS_BY_PATH)
 
     actions_with_positional_smoke_args_missing_customizers = sorted(
-        action
-        for action, spec in CLI_ACTION_SPECS_BY_ACTION.items()
-        if spec.canonical_path is not None
-        and any(token and not token.startswith("-") for token in action_smoke_argv(action)[len(spec.canonical_path):])
-        and spec.canonical_path not in customizer_paths
+        action for action, spec in CLI_ACTION_SPECS_BY_ACTION.items() if spec.canonical_path is not None and any(token and not token.startswith("-") for token in action_smoke_argv(action)[len(spec.canonical_path) :]) and spec.canonical_path not in customizer_paths
     )
 
     unknown_legacy_flags, undocumented_action_flags = _legacy_flag_contracts()
@@ -803,11 +805,7 @@ def cli_contract_report(dispatch_registry: Mapping[str, Any] | None = None) -> d
     unknown_help_actions = sorted(set(help_actions) - set(action_spec_actions))
 
     documented_default_actions = _documented_default_actions()
-    undocumented_actions = sorted(
-        action
-        for action, spec in CLI_ACTION_SPECS_BY_ACTION.items()
-        if spec.canonical_path is not None and action in documented_default_actions and action not in help_actions
-    )
+    undocumented_actions = sorted(action for action, spec in CLI_ACTION_SPECS_BY_ACTION.items() if spec.canonical_path is not None and action in documented_default_actions and action not in help_actions)
 
     smoke_invocation_failures, smoke_dispatch_mismatches = _smoke_invocation_and_dispatch_failures(dispatch_registry)
 

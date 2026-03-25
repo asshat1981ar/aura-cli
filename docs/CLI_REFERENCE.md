@@ -87,6 +87,10 @@ Known record codes:
   - [`aura memory search`](#aura-memory-search)
   - [`aura memory reindex`](#aura-memory-reindex)
 - [`metrics`](#metrics)
+- [`sadd`](#sadd)
+  - [`aura sadd run`](#aura-sadd-run)
+  - [`aura sadd status`](#aura-sadd-status)
+  - [`aura sadd resume`](#aura-sadd-resume)
 
 ## `help`
 
@@ -387,9 +391,9 @@ Examples:
 
 ### `aura evolve`
 
-Run evolution loop
+Run innovation workflow
 
-Autonomous self-improvement loop for AURA core.
+Run the innovation workflow and optional queue-backed implementation loop for AURA core.
 
 `action`: `evolve` `requires_runtime`: `true`
 
@@ -399,6 +403,7 @@ Legacy flags:
 Examples:
 - `python3 main.py evolve`
 - `python3 main.py evolve --json`
+- `python3 main.py evolve --queue-only --proposal-limit 3 --focus research`
 
 ## `queue`
 
@@ -485,3 +490,50 @@ Display cycle success rates and timing stats.
 Examples:
 - `python3 main.py metrics`
 - `python3 main.py metrics --json`
+
+## `sadd`
+
+### `aura sadd`
+
+Sub-Agent Driven Development
+
+Decompose a design spec into parallel workstreams and execute via sub-agents.
+
+Examples:
+- `python3 main.py sadd run --spec design.md --dry-run`
+- `python3 main.py sadd run --spec design.md --max-parallel 3`
+
+### `aura sadd run`
+
+Run a SADD session
+
+Parse a design spec and execute workstreams. Use --dry-run to preview decomposition only.
+
+`action`: `sadd_run` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py sadd run --spec design.md --dry-run`
+- `python3 main.py sadd run --spec design.md --max-parallel 2 --max-cycles 3`
+
+### `aura sadd status`
+
+Show SADD session status
+
+Show status of recent SADD sessions or a specific session.
+
+`action`: `sadd_status` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py sadd status`
+- `python3 main.py sadd status --session-id <id>`
+
+### `aura sadd resume`
+
+Resume a SADD session
+
+Resume an interrupted SADD session from its last checkpoint.
+
+`action`: `sadd_resume` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py sadd resume --session-id <id>`

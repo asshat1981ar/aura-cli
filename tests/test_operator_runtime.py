@@ -107,6 +107,13 @@ def test_build_cycle_summary_derives_operator_fields():
             },
             "reflection": {"summary": "retry later"},
             "capability_goal_queue": {"queued": ["Follow-up goal"]},
+            "innovation_report": {
+                "focus": "research",
+                "subagents": [{"role": "architecture_explorer", "status": "ok"}],
+                "selected_proposals": [{"proposal_id": "p1"}],
+                "queue": {"queued": ["Innovation goal"]},
+                "implementation": {"executed": [{"goal": "Innovation goal", "status": "PASS"}]},
+            },
         },
     }
 
@@ -127,6 +134,11 @@ def test_build_cycle_summary_derives_operator_fields():
     assert summary["applied_files"] == ["tests/test_example.py"]
     assert summary["failed_files"] == []
     assert summary["queued_follow_up_goals"] == ["Follow-up goal"]
+    assert summary["innovation_focus"] == "research"
+    assert summary["innovation_subagents"] == [{"role": "architecture_explorer", "status": "ok"}]
+    assert summary["innovation_selected_count"] == 1
+    assert summary["innovation_queue_count"] == 1
+    assert summary["innovation_execution_count"] == 1
     assert summary["beads_status"] == "allow"
     assert summary["beads_decision_id"] == "beads-123"
     assert summary["beads_summary"] == "Proceed with additional test coverage."
@@ -183,9 +195,7 @@ def test_build_operator_runtime_snapshot_composes_queue_and_cycle_summaries():
 
 def test_build_beads_runtime_metadata_reads_orchestrator_contract():
     orchestrator = SimpleNamespace(
-        beads_bridge=SimpleNamespace(
-            to_runtime_metadata=lambda: {"enabled": True, "required": True, "scope": "goal_run"}
-        ),
+        beads_bridge=SimpleNamespace(to_runtime_metadata=lambda: {"enabled": True, "required": True, "scope": "goal_run"}),
         beads_enabled=True,
         beads_required=True,
         beads_scope="goal_run",

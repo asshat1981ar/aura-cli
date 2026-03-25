@@ -410,10 +410,11 @@
     },
     {
       "action": "evolve",
-      "description": "Autonomous self-improvement loop for AURA core.",
+      "description": "Run the innovation workflow and optional queue-backed implementation loop for AURA core.",
       "examples": [
         "python3 main.py evolve",
-        "python3 main.py evolve --json"
+        "python3 main.py evolve --json",
+        "python3 main.py evolve --queue-only --proposal-limit 3 --focus research"
       ],
       "flags": [
         {
@@ -428,7 +429,7 @@
         "evolve"
       ],
       "requires_runtime": true,
-      "summary": "Run evolution loop"
+      "summary": "Run innovation workflow"
     },
     {
       "action": null,
@@ -563,6 +564,83 @@
       ],
       "requires_runtime": true,
       "summary": "Show performance metrics"
+    },
+    {
+      "action": null,
+      "description": "Decompose a design spec into parallel workstreams and execute via sub-agents.",
+      "examples": [
+        "python3 main.py sadd run --spec design.md --dry-run",
+        "python3 main.py sadd run --spec design.md --max-parallel 3"
+      ],
+      "flags": [],
+      "legacy_flags": [],
+      "path": [
+        "sadd"
+      ],
+      "requires_runtime": null,
+      "summary": "Sub-Agent Driven Development"
+    },
+    {
+      "action": "sadd_run",
+      "description": "Parse a design spec and execute workstreams. Use --dry-run to preview decomposition only.",
+      "examples": [
+        "python3 main.py sadd run --spec design.md --dry-run",
+        "python3 main.py sadd run --spec design.md --max-parallel 2 --max-cycles 3"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "sadd",
+        "run"
+      ],
+      "requires_runtime": true,
+      "summary": "Run a SADD session"
+    },
+    {
+      "action": "sadd_status",
+      "description": "Show status of recent SADD sessions or a specific session.",
+      "examples": [
+        "python3 main.py sadd status",
+        "python3 main.py sadd status --session-id <id>"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "sadd",
+        "status"
+      ],
+      "requires_runtime": false,
+      "summary": "Show SADD session status"
+    },
+    {
+      "action": "sadd_resume",
+      "description": "Resume an interrupted SADD session from its last checkpoint.",
+      "examples": [
+        "python3 main.py sadd resume --session-id <id>"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "sadd",
+        "resume"
+      ],
+      "requires_runtime": true,
+      "summary": "Resume a SADD session"
     }
   ],
   "deterministic": true,

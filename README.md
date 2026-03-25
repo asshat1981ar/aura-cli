@@ -4,6 +4,7 @@ Developer entry points:
 
 - CLI reference (generated): `docs/CLI_REFERENCE.md`
 - Integration map: `docs/INTEGRATION_MAP.md`
+- Development automation guide: `docs/DEVELOPMENT_AUTOMATION_GUIDE.md`
 - Operator prompt: `docs/AURA_OPERATOR_PROMPT.md`
 - Iterative workflow: `docs/AURA_ITERATIVE_WORKFLOW.md`
 - Multi-agent workflow: `docs/AURA_MULTI_AGENT_WORKFLOW.md`
@@ -91,6 +92,26 @@ Typical local flow:
    - `/mcp` shows the configured servers
    - `/lsp` picks up the repo-local Python LSP
    - `/instructions` shows the repo guidance
+
+## Repo-Local MCP CLI
+
+This repo now includes a local MCP CLI that reads [`./.mcp.json`](/home/westonaaron675/aura-cli/.mcp.json) by default and can inspect or call both `stdio` and HTTP-backed MCP servers.
+
+Examples:
+
+- `python3 -m aura_cli.mcp_cli`
+- `python3 -m aura_cli.mcp_cli filesystem`
+- `python3 -m aura_cli.mcp_cli filesystem/read_file '{"path":"README.md"}'`
+- `python3 -m aura_cli.mcp_cli grep '*git*'`
+
+If the package is installed, the same commands are available as `aura-mcp-cli`.
+
+Notes:
+
+- Use `-d` to include descriptions.
+- Use `--json` for machine-readable output.
+- Use `--raw` to print plain text tool results when available.
+- Set `AURA_MCP_CONFIG=/path/to/config.json` to target a different MCP config file.
 
 ## Autonomous Apply Safety
 

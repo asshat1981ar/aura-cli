@@ -15,7 +15,7 @@ positional arguments:
     contract-report     Print CLI contract report
     diag                MCP diagnostics snapshot
     doctor              Run system diagnostics
-    evolve              Run evolution loop
+    evolve              Run innovation workflow
     goal                Goal queue operations
     help                Show CLI help
     logs                Stream AURA logs
@@ -24,6 +24,7 @@ positional arguments:
     metrics             Show performance metrics
     queue               Goal queue management
     readiness           Check V2 runtime readiness
+    sadd                Sub-Agent Driven Development
     scaffold            Scaffold a project
     studio              Launch AURA Studio
     watch               Launch TUI monitor
@@ -63,4 +64,4 @@ options:
   --scaffold SCAFFOLD   Legacy: scaffold template name.
   --scaffold-desc SCAFFOLD_DESC
                         Legacy: scaffold description.
-  --evolve              Legacy: run evolution loop.
+  --evolve              Legacy: run innovation workflow.

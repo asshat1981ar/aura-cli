@@ -1,8 +1,6 @@
 import json
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List
 from core.logging_utils import log_json  # Import the new logging utility
@@ -10,36 +8,7 @@ from core.file_tools import _aura_safe_loads  # Import _aura_safe_loads
 from core.capability_manager import analyze_capability_needs
 from core.experiment_tracker import ExperimentTracker, MetricsCollector
 from core.evolution_prompts import EVOLUTION_HYPOTHESIS_PROMPT, EVOLUTION_TASK_DECOMPOSITION_PROMPT, EVOLUTION_MUTATION_PROMPT
-
-
-@dataclass(frozen=True)
-class InnovationProposal:
-    proposal_id: str
-    title: str
-    category: str
-    goal: str
-    rationale: str
-    evidence: List[str]
-    smallest_surface: str
-    expected_value: str
-    risk_level: str
-    verification_cost: str
-    recommended_action: str
-
-    def as_dict(self) -> Dict[str, Any]:
-        return {
-            "proposal_id": self.proposal_id,
-            "title": self.title,
-            "category": self.category,
-            "goal": self.goal,
-            "rationale": self.rationale,
-            "evidence": list(self.evidence),
-            "smallest_surface": self.smallest_surface,
-            "expected_value": self.expected_value,
-            "risk_level": self.risk_level,
-            "verification_cost": self.verification_cost,
-            "recommended_action": self.recommended_action,
-        }
+from core.self_prompting_innovation import InnovationProposal, SelfPromptingInnovationLoop
 
 
 class EvolutionLoop:
@@ -95,7 +64,6 @@ class EvolutionLoop:
         self.auto_execute_queued = auto_execute_queued
         self.innovation_goal_limit = max(1, int(innovation_goal_limit))
         self._cycle_count = 0
-        self.TRIGGER_EVERY_N = 20
 
         # Experiment tracking (Karpathy-style measure→keep/discard)
         memory_dir = Path(__file__).parent.parent / "memory"
@@ -104,6 +72,18 @@ class EvolutionLoop:
             memory_dir / "experiments.jsonl",
             metrics_collector,
         )
+        self.innovation_loop = SelfPromptingInnovationLoop(
+            architecture_explorer=self._architecture_explorer,
+            capability_researcher=self._capability_researcher,
+            verification_reviewer=self._verification_reviewer,
+            summarize_subagents=self._summarize_subagents,
+            proposal_builder=self._build_innovation_proposals,
+            goal_queue=self.goal_queue,
+            orchestrator=self.orchestrator,
+            auto_execute_queued=self.auto_execute_queued,
+            innovation_goal_limit=self.innovation_goal_limit,
+        )
+        self.TRIGGER_EVERY_N = self.innovation_loop.TRIGGER_EVERY_N
 
     def _available_skill_names(self) -> List[str]:
         skill_names = list(self.skills.keys())
@@ -314,117 +294,13 @@ class EvolutionLoop:
         return proposals
 
     def _select_proposals(self, proposals: List[InnovationProposal], *, focus: str, proposal_limit: int) -> List[InnovationProposal]:
-        focus_priority = {
-            "capability": {
-                "skill": 0,
-                "mcp": 1,
-                "capability": 2,
-                "verification": 3,
-                "orchestration": 4,
-                "developer-surface": 5,
-            },
-            "quality": {
-                "verification": 0,
-                "orchestration": 1,
-                "capability": 2,
-                "skill": 3,
-                "mcp": 4,
-                "developer-surface": 5,
-            },
-            "throughput": {
-                "developer-surface": 0,
-                "capability": 1,
-                "skill": 2,
-                "mcp": 3,
-                "verification": 4,
-                "orchestration": 5,
-            },
-            "research": {
-                "capability": 0,
-                "verification": 1,
-                "mcp": 2,
-                "skill": 3,
-                "orchestration": 4,
-                "developer-surface": 5,
-            },
-        }
-        category_priority = focus_priority.get(focus, focus_priority["capability"])
-        risk_priority = {"low": 0, "medium": 1, "high": 2, "critical": 3}
-        ranked = sorted(
-            proposals,
-            key=lambda item: (
-                category_priority.get(item.category, 99),
-                risk_priority.get(item.risk_level, 99),
-                item.title,
-            ),
-        )
-        return ranked[: max(1, int(proposal_limit))]
+        return self.innovation_loop._select_proposals(proposals, focus=focus, proposal_limit=proposal_limit)
 
     def _queue_selected_goals(self, selected: List[InnovationProposal], *, dry_run: bool) -> Dict[str, Any]:
-        if not selected:
-            return {"attempted": False, "queued": [], "skipped": [], "queue_strategy": None}
-        goals = [proposal.goal for proposal in selected]
-        if dry_run:
-            return {
-                "attempted": False,
-                "queued": [],
-                "skipped": [{"goal": goal, "reason": "dry_run"} for goal in goals],
-                "queue_strategy": None,
-            }
-        if self.goal_queue is None:
-            return {
-                "attempted": False,
-                "queued": [],
-                "skipped": [{"goal": goal, "reason": "goal_queue_unavailable"} for goal in goals],
-                "queue_strategy": None,
-            }
-
-        existing = set(getattr(self.goal_queue, "queue", []) or [])
-        new_goals = [goal for goal in goals if goal not in existing]
-        skipped = [{"goal": goal, "reason": "already_queued"} for goal in goals if goal in existing]
-        if not new_goals:
-            return {"attempted": True, "queued": [], "skipped": skipped, "queue_strategy": None}
-        if hasattr(self.goal_queue, "prepend_batch"):
-            self.goal_queue.prepend_batch(new_goals)
-            strategy = "prepend"
-        elif hasattr(self.goal_queue, "batch_add"):
-            self.goal_queue.batch_add(new_goals)
-            strategy = "append"
-        else:
-            for goal in new_goals:
-                self.goal_queue.add(goal)
-            strategy = "append"
-        return {
-            "attempted": True,
-            "queued": new_goals,
-            "skipped": skipped,
-            "queue_strategy": strategy,
-        }
+        return self.innovation_loop._queue_selected_goals(selected, dry_run=dry_run)
 
     def _execute_selected_goals(self, goals: List[str], *, dry_run: bool, execution_limit: int) -> Dict[str, Any]:
-        if not goals:
-            return {"attempted": False, "executed": []}
-        if dry_run:
-            return {
-                "attempted": False,
-                "executed": [{"goal": goal, "status": "planned"} for goal in goals],
-            }
-        if self.orchestrator is None:
-            return {
-                "attempted": False,
-                "executed": [{"goal": goal, "status": "orchestrator_unavailable"} for goal in goals],
-            }
-        executed = []
-        for goal in goals[: max(1, int(execution_limit))]:
-            result = self.orchestrator.run_loop(goal, max_cycles=1, dry_run=False)
-            executed.append(
-                {
-                    "goal": goal,
-                    "status": result.get("stop_reason", "unknown"),
-                    "history_length": len(result.get("history", [])),
-                }
-            )
-        return {"attempted": True, "executed": executed}
+        return self.innovation_loop._execute_selected_goals(goals, dry_run=dry_run, execution_limit=execution_limit)
 
     def _run_innovation_workflow(
         self,
@@ -435,32 +311,13 @@ class EvolutionLoop:
         proposal_limit: int,
         focus: str,
     ) -> Dict[str, Any]:
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            architecture_future = pool.submit(self._architecture_explorer)
-            capability_future = pool.submit(self._capability_researcher, goal)
-            architecture = architecture_future.result()
-            capability = capability_future.result()
-
-        proposals = self._build_innovation_proposals(goal, architecture, capability)
-        selected = self._select_proposals(proposals, focus=focus, proposal_limit=proposal_limit)
-        verification = self._verification_reviewer(selected, architecture)
-        queue_result = self._queue_selected_goals(selected, dry_run=dry_run)
-        execution_result = self._execute_selected_goals(queue_result.get("queued", []), dry_run=dry_run, execution_limit=proposal_limit) if execute_queued else {"attempted": False, "executed": []}
-
-        return {
-            "workflow": "innovation",
-            "focus": focus,
-            "subagents": self._summarize_subagents(architecture, capability, verification),
-            "analysis": {
-                "architecture": architecture,
-                "capability": capability,
-                "verification": verification,
-            },
-            "proposals": [proposal.as_dict() for proposal in proposals],
-            "selected_proposals": [proposal.as_dict() for proposal in selected],
-            "queue": queue_result,
-            "implementation": execution_result,
-        }
+        return self.innovation_loop.run(
+            goal,
+            execute_queued=execute_queued,
+            dry_run=dry_run,
+            proposal_limit=proposal_limit,
+            focus=focus,
+        )
 
     def _get_mutation_response(self, prompt: str, memory_snapshot: str, similar_past_problems: str, known_weaknesses: str) -> str:
         """Request a raw mutation plan instead of forcing planner list parsing."""
@@ -534,10 +391,6 @@ class EvolutionLoop:
     def on_cycle_complete(self, entry: dict) -> None:
         """Trigger evolution every N cycles, or immediately for structural hotspot signals."""
         self._cycle_count += 1
-
-        goal = entry.get("goal", "evolve and improve the AURA system")
-        is_hotspot = "structural_hotspot" in str(entry.get("phase_outputs", {}).get("skill_context", {})) or "refactor hotspot" in goal.lower()
-
         # If we have an improvement service, evaluate recent history
         if self.improvement_service and self.brain:
             recent_history = self.improvement_service.observe_cycle(entry)
@@ -545,11 +398,17 @@ class EvolutionLoop:
             for p in proposals:
                 self.improvement_service.log_proposal(p)
                 # In the future, we could auto-enqueue these proposals as goals
-
-        if self._cycle_count % self.TRIGGER_EVERY_N == 0 or is_hotspot:
-            if is_hotspot:
-                log_json("INFO", "evolution_loop_triggered_by_hotspot_signal", details={"goal": goal})
-            self.run(goal, execute_queued=False)
+        result = self.innovation_loop.on_cycle_complete(entry)
+        if result and result.get("selected_proposals"):
+            log_json(
+                "INFO",
+                "evolution_loop_innovation_cycle_complete",
+                details={
+                    "goal": entry.get("goal", "evolve and improve the AURA system"),
+                    "selected": len(result.get("selected_proposals", [])),
+                    "queued": len(result.get("queue", {}).get("queued", [])),
+                },
+            )
 
     def run(
         self,

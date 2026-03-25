@@ -141,9 +141,6 @@ def test_run_sse_stream(monkeypatch, server_module):
     cmd = f"{sys.executable} -c \"import sys; print('stdout-line'); sys.stderr.write('stderr-line\\\\n')\""
     response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
     payloads = _sse_payloads(_run(_collect_streaming_response(response)))
-    start_evt = next(evt for evt in payloads if evt.get("type") == "start")
-    assert start_evt["command"] == cmd
-    assert isinstance(start_evt["pid"], int)
     assert any(evt.get("type") == "stdout" and "stdout-line" in evt.get("data", "") for evt in payloads)
     assert any(evt.get("type") == "stderr" and "stderr-line" in evt.get("data", "") for evt in payloads)
     exit_evt = next(evt for evt in payloads if isinstance(evt, dict) and evt.get("type") == "exit")

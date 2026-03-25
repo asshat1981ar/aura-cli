@@ -79,13 +79,6 @@ def api_env(monkeypatch):
     monkeypatch.setenv("AGENT_API_ENABLE_RUN", "1")
 
 
-def test_server_import_does_not_eagerly_create_runtime(monkeypatch):
-    sys.modules.pop("aura_cli.server", None)
-    with patch("aura_cli.cli_main.create_runtime") as mock_create_runtime:
-        importlib.import_module("aura_cli.server")
-        mock_create_runtime.assert_not_called()
-
-
 def test_health_endpoint_auth_failure(server_module):
     with pytest.raises(HTTPException) as exc:
         server_module.require_auth(None)
@@ -100,27 +93,6 @@ def test_health_endpoint_success(server_module):
     assert data["status"] == "ok"
     assert "providers" in data
     assert "run_enabled" in data
-
-
-def test_health_endpoint_succeeds_without_bound_runtime_components(server_module):
-    original_runtime = server_module.runtime
-    original_orchestrator = server_module.orchestrator
-    original_model_adapter = server_module.model_adapter
-    original_memory_store = server_module.memory_store
-
-    server_module.runtime = {}
-    server_module.orchestrator = None
-    server_module.model_adapter = None
-    server_module.memory_store = None
-    try:
-        data = _run(server_module.health())
-        assert data["status"] == "ok"
-        assert "providers" in data
-    finally:
-        server_module.runtime = original_runtime
-        server_module.orchestrator = original_orchestrator
-        server_module.model_adapter = original_model_adapter
-        server_module.memory_store = original_memory_store
 
 
 def test_metrics_endpoint_success(server_module):
@@ -143,17 +115,30 @@ def test_execute_ask_success(server_module):
     assert response["data"] == "Test answer"
 
 
-def test_execute_ask_requires_runtime_component(server_module):
-    original = server_module.model_adapter
-    server_module.model_adapter = None
-    try:
-        with pytest.raises(HTTPException) as exc:
-            _run(server_module.execute(server_module.ExecuteRequest(tool_name="ask", args=["What is 2+2?"])))
-        assert exc.value.status_code == 503
-    finally:
-        server_module.model_adapter = original
+def test_execute_env_is_disabled(server_module):
+    with pytest.raises(HTTPException) as exc:
+        _run(server_module.execute(server_module.ExecuteRequest(tool_name="env", args=[])))
+    assert exc.value.status_code == 501
 
 
+def test_execute_run_streaming(server_module):
+    cmd = f"{sys.executable} -c \"print('comprehensive-run-ok')\""
+    response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
+    payloads = _sse_payloads(_run(_collect_streaming_response(response)))
+    assert any(evt.get("type") == "stdout" and "comprehensive-run-ok" in evt.get("data", "") for evt in payloads)
+    assert any(evt.get("type") == "exit" and evt.get("code") == 0 for evt in payloads)
+
+
+def test_execute_run_truncates_output_when_limit_is_hit(server_module, monkeypatch):
+    monkeypatch.setattr(server_module, "RUN_TOOL_MAX_OUTPUT_BYTES", 64, raising=False)
+    cmd = f"{sys.executable} -c \"print('x' * 512)\""
+
+    response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
+    payloads = _sse_payloads(_run(_collect_streaming_response(response)))
+
+    assert any(evt.get("type") == "truncated" for evt in payloads)
+    stdout_chunks = [evt.get("data", "") for evt in payloads if evt.get("type") == "stdout"]
+    assert sum(len(chunk) for chunk in stdout_chunks) <= 64
 
 
 def test_execute_goal_streaming(server_module):

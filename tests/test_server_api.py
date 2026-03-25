@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 from pathlib import Path
@@ -80,6 +81,15 @@ async def _collect_streaming_response(response) -> list[str]:
             chunk = chunk.decode()
         chunks.append(chunk)
     return chunks
+
+
+def _sse_payloads(chunks: list[str]) -> list[dict[str, Any]]:
+    payloads: list[dict[str, Any]] = []
+    for chunk in chunks:
+        if not chunk.startswith("data: "):
+            continue
+        payloads.append(json.loads(chunk[len("data: ") :]))
+    return payloads
 
 
 def test_health_returns_200(server_module):
@@ -171,6 +181,28 @@ def test_execute_run_without_args_when_enabled(server_module, monkeypatch):
     with pytest.raises(HTTPException) as exc:
         _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[])))
     assert exc.value.status_code == 400
+
+
+def test_execute_run_streams_stdout_and_exit(server_module, monkeypatch):
+    monkeypatch.setenv("AGENT_API_ENABLE_RUN", "1")
+    cmd = f"{sys.executable} -c \"print('run-ok')\""
+
+    response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
+    payloads = _sse_payloads(_run(_collect_streaming_response(response)))
+
+    assert any(evt.get("type") == "stdout" and "run-ok" in evt.get("data", "") for evt in payloads)
+    assert any(evt.get("type") == "exit" and evt.get("code") == 0 for evt in payloads)
+
+
+def test_execute_run_streams_stderr_and_exit_code(server_module, monkeypatch):
+    monkeypatch.setenv("AGENT_API_ENABLE_RUN", "1")
+    cmd = f"{sys.executable} -c \"import sys; sys.stderr.write('run-err\\\\n'); sys.exit(3)\""
+
+    response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
+    payloads = _sse_payloads(_run(_collect_streaming_response(response)))
+
+    assert any(evt.get("type") == "stderr" and "run-err" in evt.get("data", "") for evt in payloads)
+    assert any(evt.get("type") == "exit" and evt.get("code") == 3 for evt in payloads)
 
 
 def test_execute_goal_without_args_when_enabled(server_module):

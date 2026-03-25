@@ -65,6 +65,14 @@ async def _collect_streaming_response(response) -> list[str]:
     return chunks
 
 
+def _sse_payloads(chunks: list[str]) -> list[dict[str, object]]:
+    payloads: list[dict[str, object]] = []
+    for chunk in chunks:
+        if chunk.startswith("data: "):
+            payloads.append(json.loads(chunk[len("data: ") :]))
+    return payloads
+
+
 @pytest.fixture(autouse=True)
 def api_env(monkeypatch):
     monkeypatch.setenv("AGENT_API_TOKEN", "test-token")
@@ -114,11 +122,23 @@ def test_execute_env_is_disabled(server_module):
 
 
 def test_execute_run_streaming(server_module):
-    response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=["ls"])))
-    chunks = _run(_collect_streaming_response(response))
-    payloads = [json.loads(chunk[len("data: ") :]) for chunk in chunks if chunk.startswith("data: ")]
-    assert any(evt.get("type") == "stdout" for evt in payloads if isinstance(evt, dict))
-    assert any(evt.get("type") == "exit" for evt in payloads if isinstance(evt, dict))
+    cmd = f"{sys.executable} -c \"print('comprehensive-run-ok')\""
+    response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
+    payloads = _sse_payloads(_run(_collect_streaming_response(response)))
+    assert any(evt.get("type") == "stdout" and "comprehensive-run-ok" in evt.get("data", "") for evt in payloads)
+    assert any(evt.get("type") == "exit" and evt.get("code") == 0 for evt in payloads)
+
+
+def test_execute_run_truncates_output_when_limit_is_hit(server_module, monkeypatch):
+    monkeypatch.setattr(server_module, "RUN_TOOL_MAX_OUTPUT_BYTES", 64, raising=False)
+    cmd = f"{sys.executable} -c \"print('x' * 512)\""
+
+    response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
+    payloads = _sse_payloads(_run(_collect_streaming_response(response)))
+
+    assert any(evt.get("type") == "truncated" for evt in payloads)
+    stdout_chunks = [evt.get("data", "") for evt in payloads if evt.get("type") == "stdout"]
+    assert sum(len(chunk) for chunk in stdout_chunks) <= 64
 
 
 def test_execute_goal_streaming(server_module):

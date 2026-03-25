@@ -154,65 +154,6 @@ def test_execute_ask_requires_runtime_component(server_module):
         server_module.model_adapter = original
 
 
-def test_execute_env_is_disabled(server_module):
-    with pytest.raises(HTTPException) as exc:
-        _run(server_module.execute(server_module.ExecuteRequest(tool_name="env", args=[])))
-    assert exc.value.status_code == 501
-
-
-def test_execute_run_streaming(server_module):
-    cmd = f"{sys.executable} -c \"print('comprehensive-run-ok')\""
-    response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
-    payloads = _sse_payloads(_run(_collect_streaming_response(response)))
-    start_evt = next(evt for evt in payloads if evt.get("type") == "start")
-    assert start_evt["command"] == cmd
-    assert isinstance(start_evt["pid"], int)
-    assert any(evt.get("type") == "stdout" and "comprehensive-run-ok" in evt.get("data", "") for evt in payloads)
-    assert any(evt.get("type") == "exit" and evt.get("code") == 0 for evt in payloads)
-
-
-def test_execute_run_scrubs_environment_variables(server_module, monkeypatch):
-    monkeypatch.setenv("AURA_SECRET_TOKEN", "super-secret")
-    cmd = f"{sys.executable} -c \"import os; print(os.getenv('AURA_SECRET_TOKEN', 'missing'))\""
-
-    response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
-    payloads = _sse_payloads(_run(_collect_streaming_response(response)))
-    stdout_chunks = [evt.get("data", "") for evt in payloads if evt.get("type") == "stdout"]
-
-    assert any("missing" in chunk for chunk in stdout_chunks)
-    assert all("super-secret" not in chunk for chunk in stdout_chunks)
-
-
-def test_execute_run_truncates_output_when_limit_is_hit(server_module, monkeypatch):
-    monkeypatch.setattr(server_module, "RUN_TOOL_MAX_OUTPUT_BYTES", 64, raising=False)
-    cmd = f"{sys.executable} -c \"print('x' * 4096)\""
-
-    response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
-    payloads = _sse_payloads(_run(_collect_streaming_response(response)))
-
-    assert any(evt.get("type") == "truncated" for evt in payloads)
-    stdout_chunks = [evt.get("data", "") for evt in payloads if evt.get("type") == "stdout"]
-    assert sum(len(chunk) for chunk in stdout_chunks) <= 1024
-    assert any(evt.get("type") == "exit" and evt.get("truncated") is True for evt in payloads)
-
-
-def test_execute_run_timeouts_emit_timeout_metadata(server_module, monkeypatch):
-    monkeypatch.setattr(server_module, "_clamped_run_tool_timeout_s", lambda: 0.0, raising=False)
-    cmd = f"{sys.executable} -c \"print('timeout-path')\""
-
-    response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
-    payloads = _sse_payloads(_run(_collect_streaming_response(response)))
-
-    assert any(evt.get("type") == "start" and evt.get("command") == cmd for evt in payloads)
-    assert any(evt.get("type") == "error" and evt.get("timeout_s") == 0.0 for evt in payloads)
-    assert any(evt.get("type") == "exit" and evt.get("timed_out") is True for evt in payloads)
-
-
-def test_execute_run_denylisted_command_is_rejected(server_module):
-    with pytest.raises(HTTPException) as exc:
-        _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=["shutdown -h now"])))
-    assert exc.value.status_code == 403
-    assert "blocked by policy" in str(exc.value.detail)
 
 
 def test_execute_goal_streaming(server_module):

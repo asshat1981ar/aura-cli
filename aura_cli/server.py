@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import time
+import secrets
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -31,9 +31,11 @@ orchestrator = None
 model_adapter = None
 memory_store = None
 
+
 def _beads_runtime_snapshot():
     """Helper for TUI/Studio metadata (used in SSE)."""
     return {"enabled": False, "required": False, "scope": "none"}
+
 
 app = FastAPI(
     title="AURA Dev Tools MCP",
@@ -41,9 +43,31 @@ app = FastAPI(
     version="1.0.0",
 )
 
+
 class ExecuteRequest(BaseModel):
     tool_name: str
     args: List[Any] = []
+
+
+def _require_runtime_component(name: str, component: Any) -> Any:
+    if component is None:
+        raise HTTPException(status_code=503, detail=f"{name} is not configured")
+    return component
+
+
+def _runtime_metrics_snapshot() -> Dict[str, Any]:
+    entries: list[Any] = []
+    if memory_store is not None and hasattr(memory_store, "read_log"):
+        try:
+            entries = list(memory_store.read_log(limit=1000) or [])
+        except Exception:
+            entries = []
+    return {
+        "total_calls": len(entries),
+        "registered_services": len(list_registered_services()),
+        "environment_count": len(list_ai_environments(PROJECT_ROOT)),
+    }
+
 
 def require_auth(authorization: Optional[str] = Header(default=None)) -> None:
     token = os.getenv("AGENT_API_TOKEN")
@@ -51,8 +75,9 @@ def require_auth(authorization: Optional[str] = Header(default=None)) -> None:
         return
     if not authorization:
         raise HTTPException(status_code=401, detail="Missing Authorization header")
-    if authorization != f"Bearer {token}":
+    if not secrets.compare_digest(authorization, f"Bearer {token}"):
         raise HTTPException(status_code=403, detail="Invalid token")
+
 
 @app.get("/health")
 async def health(_: None = Depends(require_auth)) -> Dict:
@@ -64,12 +89,14 @@ async def health(_: None = Depends(require_auth)) -> Dict:
         run_enabled=os.getenv("AGENT_API_ENABLE_RUN") == "1",
     )
 
+
 @app.get("/metrics")
 async def metrics(_: None = Depends(require_auth)) -> Dict:
     return {
         "status": "ok",
-        "skill_metrics": {"total_calls": 42},
+        "skill_metrics": _runtime_metrics_snapshot(),
     }
+
 
 @app.get("/tools")
 async def tools(_: None = Depends(require_auth)) -> Dict:
@@ -83,6 +110,7 @@ async def tools(_: None = Depends(require_auth)) -> Dict:
         ],
     }
 
+
 @app.get("/discovery")
 async def discovery(_: None = Depends(require_auth)) -> Dict:
     return build_discovery_payload(
@@ -91,12 +119,14 @@ async def discovery(_: None = Depends(require_auth)) -> Dict:
         supported_environments=list_ai_environments(PROJECT_ROOT),
     )
 
+
 @app.get("/environments")
 async def environments(_: None = Depends(require_auth)) -> Dict:
     return {
         "status": "success",
         "environments": list_ai_environments(PROJECT_ROOT),
     }
+
 
 @app.get("/architecture")
 async def architecture(_: None = Depends(require_auth)) -> Dict:
@@ -106,50 +136,51 @@ async def architecture(_: None = Depends(require_auth)) -> Dict:
         "supported_environments": list_ai_environments(PROJECT_ROOT),
     }
 
+
 @app.post("/execute")
 async def execute(req: ExecuteRequest, _: None = Depends(require_auth)):
     if req.tool_name == "ask":
         prompt = req.args[0] if req.args else ""
-        res = model_adapter.respond(prompt)
+        adapter = _require_runtime_component("model_adapter", model_adapter)
+        res = adapter.respond(prompt)
         return {"status": "success", "data": res}
-    
+
     if req.tool_name == "env":
-        return {"status": "success", "data": dict(os.environ)}
+        raise HTTPException(status_code=501, detail="The 'env' tool is currently disabled due to security concerns.")
 
     if req.tool_name == "run":
         if os.getenv("AGENT_API_ENABLE_RUN") != "1":
             raise HTTPException(status_code=403, detail="Run tool is disabled")
         if not req.args:
             raise HTTPException(status_code=400, detail="Missing command in args")
-        
+
         async def run_generator():
             yield f"data: {json.dumps({'type': 'stdout', 'data': 'Simulating ls...'})}\n\n"
             await asyncio.sleep(0.1)
             yield f"data: {json.dumps({'type': 'exit', 'code': 0})}\n\n"
-        
+
         return StreamingResponse(run_generator(), media_type="text/event-stream")
 
     if req.tool_name == "goal":
+        if not req.args:
+            raise HTTPException(status_code=400, detail="Missing goal text in args")
+        active_orchestrator = _require_runtime_component("orchestrator", orchestrator)
+
         async def goal_generator():
             yield f"data: {json.dumps({'type': 'start', 'goal': req.args[0]})}\n\n"
             await asyncio.sleep(0.1)
-            
+
             # M5-005: Yield health early in goal execution
-            health_info = {
-                "type": "health",
-                "status": "ok",
-                "providers": {"openai": "connected", "openrouter": "connected", "gemini": "connected"},
-                "beads_runtime": _beads_runtime_snapshot()
-            }
+            health_info = {"type": "health", "status": "ok", "providers": {"openai": "connected", "openrouter": "connected", "gemini": "connected"}, "beads_runtime": _beads_runtime_snapshot()}
             yield f"data: {json.dumps(health_info)}\n\n"
             await asyncio.sleep(0.1)
 
             # Simulate a cycle
-            cycle_data = orchestrator.run_cycle(req.args[0])
+            cycle_data = await asyncio.to_thread(active_orchestrator.run_cycle, req.args[0])
             # The test expects "summary" key for the cycle summary
             yield f"data: {json.dumps({'type': 'cycle', 'summary': cycle_data.get('cycle_summary', cycle_data)})}\n\n"
             yield f"data: {json.dumps({'type': 'complete', 'status': 'success', 'stop_reason': cycle_data.get('stop_reason', 'done'), 'history': [cycle_data]})}\n\n"
-            
+
         return StreamingResponse(goal_generator(), media_type="text/event-stream")
 
     raise HTTPException(status_code=404, detail=f"Tool '{req.tool_name}' not found")

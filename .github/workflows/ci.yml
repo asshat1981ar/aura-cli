@@ -105,6 +105,9 @@ jobs:
     - name: Verify sweep artifact generator tests
       run: |
         pytest -q tests/test_generate_active_sweep_artifacts.py
+    - name: Verify migration assistant tests
+      run: |
+        pytest -q tests/test_migration_assistant.py
     - name: Verify CLI parser/dispatch contracts
       run: |
         pytest -q tests/test_cli_contract.py tests/test_cli_options.py

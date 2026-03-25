@@ -55,7 +55,8 @@
         "redis": 8014,
         "notification": 8015,
         "monitoring": 8016,
-        "weaviate": 8017
+        "weaviate": 8017,
+    "sadd": 8020
     },
     "semantic_memory": {
         "top_k": 9,

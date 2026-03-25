@@ -1113,7 +1113,7 @@ def _handle_sadd_run_dispatch(ctx: DispatchContext) -> int:
 
     errors = validate_spec(design_spec)
     if errors:
-        print(f"Validation errors:", file=sys.stderr)
+        print("Validation errors:", file=sys.stderr)
         for e in errors:
             print(f"  - {e}", file=sys.stderr)
         return 1

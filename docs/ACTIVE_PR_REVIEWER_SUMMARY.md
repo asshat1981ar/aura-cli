@@ -4,9 +4,9 @@ This file is the live reviewer-facing summary for the current active sweep branc
 
 ## PR Reviewer Summary
 
-PR: `#239`  
-Branch: `feature/multi-env-mcp-architecture`  
-HEAD SHA: `42cff023194a79b74ea274ba22b1ed3d5557f0ba`
+PR: `#294`  
+Branch: `fix/restore-server-and-tests`  
+HEAD SHA: `b0128382b2d6277140996049572d41ecf937db74`
 
 Description:
 
@@ -34,8 +34,8 @@ Testing Performed:
   - `python3 -m pytest -q tests/test_workflow_engine.py -k get_orchestrator`
   - `python3 -m pytest -q tests/integration/test_sprint2_integration.py`
 - broader CI/workflow verification:
-  - `Python CI` green on `42cff02`
-  - `Claude Code Review` green on `42cff02`
+  - `Python CI` green on `b012838`
+  - `Claude Code Review` green on `b012838`
 - anything intentionally not verified:
   - no additional broad runtime or repo-wide regression sweep beyond the repaired PR surfaces
 
@@ -43,5 +43,5 @@ Reviewer Notes:
 
 - remaining risks: adjacent developer-surface documentation may continue to evolve, but the active PR blocker set is clear
 - external blockers, if any: none currently identified
-- follow-up still needed: update this summary if the branch scope expands or new review comments appear on PR `#239`
+- follow-up still needed: update this summary if the branch scope expands or new review comments appear on PR `#294`
 - reviewer-complete: yes, for the currently known CI and review blocker set

@@ -223,8 +223,6 @@ class DesignSpecParser:
                     short = lower_title[len(prefix) :].strip()
                     if short and short not in id_by_title:
                         id_by_title[short] = ws.id
-        title_list = list(id_by_title.keys())
-
         for ws in workstreams:
             deps: list[str] = list(ws.depends_on)  # preserve any existing
             text_lower = ws.goal_text.lower()

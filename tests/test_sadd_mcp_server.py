@@ -3,16 +3,15 @@ from fastapi.testclient import TestClient
 
 class TestSADDMCPServer(unittest.TestCase):
     def setUp(self):
-        from tools.sadd_mcp_server import create_app
-        self.app = create_app()
-        self.client = TestClient(self.app)
+        from tools.sadd_mcp_server import app
+        self.client = TestClient(app)
 
     def test_health_endpoint(self):
         resp = self.client.get("/health")
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
-        self.assertEqual(data["server"], "aura-sadd")
-        self.assertIn("tools", data)
+        self.assertEqual(data["server"], "sadd_mcp")
+        self.assertIn("tool_count", data)
 
     def test_tools_endpoint(self):
         resp = self.client.get("/tools")
@@ -27,12 +26,12 @@ class TestSADDMCPServer(unittest.TestCase):
         spec_md = "# Test Spec\n## Task: Do thing\n- Build it\n- Test it"
         resp = self.client.post("/call", json={
             "tool_name": "sadd_parse_spec",
-            "args": {"markdown": spec_md}
+            "args": {"spec_text": spec_md}
         })
         self.assertEqual(resp.status_code, 200)
-        data = resp.json()["data"]
+        data = resp.json()["result"]
         self.assertEqual(data["title"], "Test Spec")
-        self.assertGreaterEqual(data["workstreams"], 1)
+        self.assertGreaterEqual(data["workstream_count"], 1)
 
     def test_call_list_sessions(self):
         resp = self.client.post("/call", json={

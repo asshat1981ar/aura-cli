@@ -212,6 +212,7 @@ class TestCLIMainDispatch(unittest.TestCase):
             as_json=True,
             project_root=Path("."),
             memory_persistence_path=None,
+            memory_store=None,
         )
 
     def test_create_runtime_queue_mode_skips_heavy_components(self):
@@ -738,6 +739,7 @@ class TestCLIMainDispatch(unittest.TestCase):
                     as_json=True,
                     project_root=Path("."),
                     memory_persistence_path=None,
+                    memory_store=None,
                 ),
                 call(
                     fake_runtime["goal_queue"],
@@ -746,6 +748,7 @@ class TestCLIMainDispatch(unittest.TestCase):
                     as_json=True,
                     project_root=Path("."),
                     memory_persistence_path=None,
+                    memory_store=None,
                 ),
             ],
         )

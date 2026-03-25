@@ -12,6 +12,7 @@ from core.logging_utils import log_json
 
 class VerifierAgent(Agent):
     name = "verify"
+    capabilities = ["testing", "verification", "lint", "quality", "test_runner"]
 
     def __init__(self, timeout: int = 120):
         self.timeout = timeout
@@ -20,11 +21,7 @@ class VerifierAgent(Agent):
         tests_root = project_root / "tests"
         if not tests_root.is_dir():
             return []
-        return sorted(
-            str(path.relative_to(project_root))
-            for path in tests_root.rglob("test_*.py")
-            if path.is_file()
-        )
+        return sorted(str(path.relative_to(project_root)) for path in tests_root.rglob("test_*.py") if path.is_file())
 
     def _tokenize_path(self, value: str) -> list[str]:
         return [token for token in re.findall(r"[a-zA-Z0-9]+", (value or "").lower()) if len(token) > 1]
@@ -64,10 +61,7 @@ class VerifierAgent(Agent):
 
     def _changed_files_from_git(self, project_root: Path) -> list[str]:
         try:
-            result = subprocess.run(
-                ["git", "diff", "--name-only", "HEAD"],
-                cwd=str(project_root), capture_output=True, text=True, timeout=10
-            )
+            result = subprocess.run(["git", "diff", "--name-only", "HEAD"], cwd=str(project_root), capture_output=True, text=True, timeout=10)
             return [line.strip() for line in result.stdout.splitlines() if line.strip()]
         except Exception as e:
             log_json("WARN", "verifier_changed_files_failed", details={"error": str(e)})

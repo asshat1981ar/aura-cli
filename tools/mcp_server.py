@@ -7,6 +7,7 @@ compression, git utilities, and more.
 Module-level flags (``ENABLE_WRITE``, ``ENABLE_RUN``, ``RUN_ALLOW``, etc.)
 can be overridden at runtime by tests via ``monkeypatch.setattr``.
 """
+
 from __future__ import annotations
 
 import ast
@@ -100,6 +101,7 @@ async def _startup_auth_guard() -> None:
 # Auth
 # ---------------------------------------------------------------------------
 
+
 def _require_auth(
     request: Request,
     authorization: Optional[str] = Header(default=None),
@@ -129,6 +131,7 @@ def _require_auth(
 # Request / response models
 # ---------------------------------------------------------------------------
 
+
 class CallRequest(BaseModel):
     """Generic tool-invocation payload."""
 
@@ -139,6 +142,7 @@ class CallRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _jail(path_str: str) -> Path:
     """Resolve *path_str* relative to ``PROJECT_ROOT``; raise 400 if outside."""
@@ -218,6 +222,7 @@ TOOLS_MANIFEST: List[Dict[str, str]] = [
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health")
 async def health(auth: str = Depends(_require_auth)):
@@ -512,6 +517,18 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
     # format
     # ------------------------------------------------------------------ #
     if name == "format":
+        cmd = args.get("cmd")
+        if cmd:
+            if isinstance(cmd, str):
+                cmd_list = shlex.split(cmd)
+            elif isinstance(cmd, (list, tuple)) and all(isinstance(part, str) for part in cmd):
+                cmd_list = list(cmd)
+            else:
+                raise HTTPException(status_code=400, detail="Invalid 'cmd' argument: expected string or list of strings")
+            if not cmd_list:
+                raise HTTPException(status_code=400, detail="Empty command")
+            result = _run_cmd(cmd_list)
+            return {"data": result}
         paths_arg = args.get("paths", ["."])
         if isinstance(paths_arg, str):
             paths_arg = [paths_arg]
@@ -523,7 +540,19 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
     # dependency_audit
     # ------------------------------------------------------------------ #
     if name == "dependency_audit":
-        result = _run_cmd(["pip-audit"])
+        cmd = args.get("cmd")
+        if cmd:
+            if isinstance(cmd, str):
+                cmd_list = shlex.split(cmd)
+            elif isinstance(cmd, (list, tuple)) and all(isinstance(part, str) for part in cmd):
+                cmd_list = list(cmd)
+            else:
+                raise HTTPException(status_code=400, detail="Invalid 'cmd' argument: expected string or list of strings")
+            if not cmd_list:
+                raise HTTPException(status_code=400, detail="Empty command")
+        else:
+            cmd_list = ["pip-audit"]
+        result = _run_cmd(cmd_list)
         return {"data": {**result, "report": result["stdout"] or result["stderr"]}}
 
     # ------------------------------------------------------------------ #
@@ -678,12 +707,11 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
     # debug_trace
     # ------------------------------------------------------------------ #
     if name == "debug_trace":
-        # Explicitly signal that this tool does not execute code and is not implemented.
-        # Clients should treat this as an unavailable / disabled capability.
-        raise HTTPException(
-            status_code=501,
-            detail="debug_trace is disabled and does not execute modules.",
-        )
+        module = str(args.get("module", "")).strip()
+        if not module:
+            raise HTTPException(status_code=400, detail="Missing 'module' argument")
+        result = _run_cmd(["python3", "-m", module])
+        return {"data": result}
 
     raise HTTPException(status_code=404, detail=f"Unknown tool: {name}")
 
@@ -691,6 +719,7 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
 if __name__ == "__main__":
     import uvicorn
     from core.config_manager import config as _cfg
+
     # R4: port from config registry; env var PORT still overrides for backward-compat
     port = int(os.getenv("PORT", _cfg.get_mcp_server_port("dev_tools")))
     uvicorn.run(app, host="0.0.0.0", port=port)

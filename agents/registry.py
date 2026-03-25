@@ -18,8 +18,63 @@ Adapters defined here:
   handles smart file-path selection for generated code.
 * :class:`SandboxAdapter`  — wraps :class:`~agents.sandbox.SandboxAgent`
 """
+
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.types import AgentSpec
+
+# ---------------------------------------------------------------------------
+# Capability declarations
+# ---------------------------------------------------------------------------
+
+# Fallback capability list for agents that do not declare a native `capabilities`
+# class attribute. First entry is the PRIMARY capability used for sort tie-breaking.
+# Agents with a native `capabilities` attribute take precedence over this dict.
+FALLBACK_CAPABILITIES: dict[str, list[str]] = {
+    "ingest":              ["ingest", "context_gathering", "memory_hints"],
+    "plan":                ["planning", "decomposition", "design", "tree_of_thought", "strategy"],
+    "critique":            ["critique", "review", "adversarial", "quality_gate"],
+    "synthesize":          ["synthesis", "merge", "consolidation"],
+    "act":                 ["code_generation", "coding", "implement", "refactor"],
+    "sandbox":             ["sandbox", "execution", "isolated_run"],
+    "verify":              ["testing", "verification", "lint", "quality", "test_runner"],
+    "reflect":             ["reflection", "quality_analysis", "skill_update", "learning"],
+    "python_agent":        ["python", "code_generation", "coding", "pep8"],
+    "typescript_agent":    ["typescript", "javascript", "code_generation", "coding", "npm"],
+    "debugging":           ["debugging", "root_cause", "failure_analysis", "fix"],
+    "self_correction":     ["self_correction", "error_recovery", "retry"],
+    "monitoring":          ["monitoring", "observability", "health_check", "mcp_health"],
+    "notification":        ["notification", "alerting", "slack", "discord"],
+    "telemetry":           ["telemetry", "metrics", "tracing"],
+    "mcp_discovery":       ["mcp_discovery", "tool_discovery", "capability_discovery"],
+    "mcp_health":          ["mcp_health", "monitoring", "mcp_monitoring"],
+    "root_cause_analysis": ["root_cause", "rca", "failure_analysis", "debugging"],
+    "code_search":         ["code_search", "symbol_lookup", "rag", "retrieval"],
+    "investigation":       ["investigation", "research", "analysis"],
+    "external_llm":        ["routing", "proxy", "llm_proxy", "model_routing", "external_llm"],
+    "documentation":       ["doc_generation", "readme", "inline_docs", "commenting", "documentation"],
+}
+
+
+def _make_spec(name: str, agent: object) -> "AgentSpec":
+    """Build an AgentSpec, prioritising the agent's native ``capabilities`` attribute
+    over the :data:`FALLBACK_CAPABILITIES` dict, falling back to ``[name]`` if neither
+    is available.  The first capability in the list is treated as the *primary*
+    capability by :meth:`~core.mcp_agent_registry.TypedAgentRegistry.resolve_by_capability`.
+    """
+    from core.types import AgentSpec
+
+    native = getattr(agent, "capabilities", None)
+    capabilities: list[str] = list(native) if native else FALLBACK_CAPABILITIES.get(name, [name])
+    return AgentSpec(
+        name=name,
+        description=getattr(agent, "description", f"Local {name} agent"),
+        capabilities=capabilities,
+        source="local",
+    )
 
 from agents.ingest import IngestAgent
 from agents.verifier import VerifierAgent
@@ -255,7 +310,7 @@ class ActAdapter:
 
         if not candidates:
             for base in ["core", "agents", "memory"]:
-                entry_path = (project_root / base)
+                entry_path = project_root / base
                 if entry_path.is_dir():
                     for path in entry_path.rglob("*.py"):
                         if ".git" in path.parts or "__pycache__" in path.parts:
@@ -390,8 +445,7 @@ class SandboxAdapter:
         # Collect all new_code snippets to validate
         snippets = [c.get("new_code", "") for c in changes if c.get("new_code")]
         if not snippets:
-            return {"status": "skip", "passed": True,
-                    "summary": "no_code_to_sandbox", "details": {}}
+            return {"status": "skip", "passed": True, "summary": "no_code_to_sandbox", "details": {}}
 
         results = []
         for snippet in snippets:
@@ -401,8 +455,7 @@ class SandboxAdapter:
             results.append(res)
 
         if not results:
-            return {"status": "skip", "passed": True,
-                    "summary": "empty_snippets", "details": {}}
+            return {"status": "skip", "passed": True, "summary": "empty_snippets", "details": {}}
 
         # Aggregate: all must pass
         all_pass = all(r.passed for r in results)
@@ -472,7 +525,7 @@ def default_agents(brain, model, context_manager=None, skills=None, health_monit
     critic = CriticAdapter(CriticAgent(brain, model))
     act = ActAdapter(CoderAgent(brain, model))
     sandbox = SandboxAdapter(sandbox_agent)
-    
+
     agent_dict = {
         # Core pipeline agents
         "ingest": IngestAgent(brain, context_manager=context_manager),
@@ -491,7 +544,7 @@ def default_agents(brain, model, context_manager=None, skills=None, health_monit
         "notification": NotificationAgentAdapter(),
         "telemetry": TelemetryAgent(),
         "self_correction": SelfCorrectionAgent(brain=brain),
-        "code_search": CodeSearchAgent(vector_store=getattr(brain, 'vector_store', None) if brain else None),
+        "code_search": CodeSearchAgent(vector_store=getattr(brain, "vector_store", None) if brain else None),
         "investigation": InvestigationAgent(),
         "root_cause_analysis": RootCauseAnalysisAgent(),
         "mcp_discovery": MCPDiscoveryAgent(),
@@ -503,16 +556,10 @@ def default_agents(brain, model, context_manager=None, skills=None, health_monit
         brain=brain, model=model, config=(config or {}).get("autogen", {})
     )
 
-    # Register in typed registry
+    # Register in typed registry using rich multi-capability specs
     from core.mcp_agent_registry import agent_registry
-    from core.types import AgentSpec
+
     for name, agent in agent_dict.items():
-        spec = AgentSpec(
-            name=name,
-            description=getattr(agent, "description", f"Local {name} agent"),
-            capabilities=[name],
-            source="local"
-        )
-        agent_registry.register(spec, overwrite=True)
+        agent_registry.register(_make_spec(name, agent), overwrite=True)
 
     return agent_dict

@@ -7,6 +7,7 @@ Usage:
     app.run()          # blocking — starts live display
     app.render_once()  # print single snapshot (no live update)
 """
+
 from __future__ import annotations
 
 import sys
@@ -28,6 +29,7 @@ try:
     from rich.text import Text
     from rich.columns import Columns
     from rich import box
+
     _RICH_AVAILABLE = True
 except ImportError:
     _RICH_AVAILABLE = False
@@ -115,12 +117,12 @@ class AuraStudio:
             return
 
         orchestrator.attach_ui_callback(self)
-        
+
         while not self._stop_event.is_set():
             if not goal_queue.has_goals():
                 time.sleep(5)
                 continue
-            
+
             try:
                 goal = goal_queue.next()
                 if goal is None:
@@ -129,7 +131,7 @@ class AuraStudio:
                 orchestrator.run_loop(self._current_goal, max_cycles=5)
             except Exception as e:
                 log_json("ERROR", "tui_worker_error", details={"error": str(e)})
-            
+
             self._current_goal = ""
             self._phases_status = {}
 
@@ -204,6 +206,7 @@ class AuraStudio:
         goal_queue = self.runtime.get("goal_queue")
         goal_archive = self.runtime.get("goal_archive")
         brain = self.runtime.get("brain")
+        memory_store = self.runtime.get("memory_store")
         orchestrator = self.runtime.get("orchestrator")
         snapshot = build_operator_runtime_snapshot(
             goal_queue=goal_queue,
@@ -212,6 +215,7 @@ class AuraStudio:
             last_cycle=getattr(orchestrator, "last_cycle_summary", None) if orchestrator else None,
             active_goal=self._current_goal or (getattr(orchestrator, "current_goal", None) if orchestrator else None),
             beads_runtime=build_beads_runtime_metadata(orchestrator),
+            memory_store=memory_store,
         )
         cycle_log = self._cycle_log
 
@@ -228,12 +232,25 @@ class AuraStudio:
         layout["ascm"].update(build_ascm_panel(bundle=self._last_context_bundle))
         layout["queue"].update(build_queue_panel(queue_summary=snapshot["queue"]))
         layout["memory"].update(build_memory_panel(brain=brain))
-        layout["metrics"].update(build_metrics_panel(cycle_log=cycle_log))
+        layout["metrics"].update(build_metrics_panel(cycle_log=cycle_log, run_tool_audit=snapshot.get("run_tool_audit")))
 
         return layout
 
     def _render_plain(self) -> None:
         """Fallback plain-text render when rich is unavailable."""
+        goal_queue = self.runtime.get("goal_queue")
+        goal_archive = self.runtime.get("goal_archive")
+        memory_store = self.runtime.get("memory_store")
+        orchestrator = self.runtime.get("orchestrator")
+        snapshot = build_operator_runtime_snapshot(
+            goal_queue=goal_queue,
+            goal_archive=goal_archive,
+            active_cycle=getattr(orchestrator, "active_cycle_summary", None) if orchestrator else None,
+            last_cycle=getattr(orchestrator, "last_cycle_summary", None) if orchestrator else None,
+            active_goal=self._current_goal or (getattr(orchestrator, "current_goal", None) if orchestrator else None),
+            beads_runtime=build_beads_runtime_metadata(orchestrator),
+            memory_store=memory_store,
+        )
         print("=== AURA Studio ===")
         print(f"Current goal: {self._current_goal or '(none)'}")
         print(f"Current phase: {self._current_phase or '(none)'}")
@@ -241,3 +258,15 @@ class AuraStudio:
             for phase, status in self._phases_status.items():
                 print(f"  {status} {phase}")
         print(f"Cycles completed: {len(self._cycle_log)}")
+        run_tool_audit = snapshot.get("run_tool_audit")
+        if isinstance(run_tool_audit, dict):
+            print("Run tool audit:")
+            print(f"  Tracked: {run_tool_audit.get('count', 0)}")
+            print(f"  Last command: {run_tool_audit.get('last_command') or 'n/a'}")
+            print(
+                "  Outcomes: "
+                f"{run_tool_audit.get('success_count', 0)} ok, "
+                f"{run_tool_audit.get('error_count', 0)} err, "
+                f"{run_tool_audit.get('timeout_count', 0)} timeout, "
+                f"{run_tool_audit.get('truncated_count', 0)} trunc"
+            )

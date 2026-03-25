@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import secrets
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -22,6 +23,7 @@ from core.mcp_contracts import (
 from core.mcp_registry import get_registered_service, list_registered_services
 from core.ai_environment_registry import list_ai_environments
 from core.mcp_architecture import default_routing_profile
+from core.operator_runtime import build_run_tool_audit_summary
 
 # Project root for environment listing
 PROJECT_ROOT = Path.cwd()
@@ -141,6 +143,7 @@ def _runtime_metrics_snapshot() -> Dict[str, Any]:
         "total_calls": len(entries),
         "registered_services": len(list_registered_services()),
         "environment_count": len(list_ai_environments(PROJECT_ROOT)),
+        "run_tool_audit": build_run_tool_audit_summary(memory_store),
     }
 
 
@@ -166,6 +169,36 @@ def _is_denylisted_command(command: str) -> str | None:
 
 def _log_run_tool_event(event: str, *, command: str, **details: Any) -> None:
     log_json("INFO", event, details={"command": command[:512], **details})
+
+
+def _persist_run_tool_audit(
+    *,
+    command: str,
+    pid: int | None,
+    code: int | None,
+    timed_out: bool,
+    truncated: bool,
+    duration_s: float,
+    output_bytes: int,
+) -> None:
+    if memory_store is None or not hasattr(memory_store, "append_log"):
+        return
+
+    entry = {
+        "type": "server_run_tool",
+        "timestamp": time.time(),
+        "command": command[:512],
+        "pid": pid,
+        "code": code,
+        "timed_out": timed_out,
+        "truncated": truncated,
+        "duration_s": duration_s,
+        "output_bytes": output_bytes,
+    }
+    try:
+        memory_store.append_log(entry)
+    except Exception as exc:
+        log_json("WARN", "aura_server_run_tool_audit_persist_failed", details={"error": str(exc)})
 
 
 def _sse_event(payload: Dict[str, Any]) -> str:
@@ -197,6 +230,16 @@ async def _terminate_process(process: asyncio.subprocess.Process) -> int:
             process.kill()
             await process.wait()
     return int(process.returncode or 0)
+
+
+def _close_process_transport(process: asyncio.subprocess.Process) -> None:
+    transport = getattr(process, "_transport", None)
+    if transport is None:
+        return
+    try:
+        transport.close()
+    except Exception:
+        pass
 
 
 async def _execute_ask(req: ExecuteRequest):
@@ -267,6 +310,15 @@ async def _execute_run(req: ExecuteRequest):
                         duration_s=duration_s,
                         output_bytes=total_output,
                     )
+                    _persist_run_tool_audit(
+                        command=command,
+                        pid=process.pid,
+                        code=code,
+                        timed_out=True,
+                        truncated=False,
+                        duration_s=duration_s,
+                        output_bytes=total_output,
+                    )
                     yield _sse_event({"type": "error", "error": "Command timed out", "timeout_s": timeout_s})
                     yield _sse_event({"type": "exit", "code": code, "timed_out": True})
                     return
@@ -278,6 +330,15 @@ async def _execute_run(req: ExecuteRequest):
                     duration_s = round(asyncio.get_running_loop().time() - started_at, 4)
                     _log_run_tool_event(
                         "aura_server_run_tool_finished",
+                        command=command,
+                        pid=process.pid,
+                        code=code,
+                        timed_out=True,
+                        truncated=False,
+                        duration_s=duration_s,
+                        output_bytes=total_output,
+                    )
+                    _persist_run_tool_audit(
                         command=command,
                         pid=process.pid,
                         code=code,
@@ -299,6 +360,15 @@ async def _execute_run(req: ExecuteRequest):
                     duration_s = round(asyncio.get_running_loop().time() - started_at, 4)
                     _log_run_tool_event(
                         "aura_server_run_tool_finished",
+                        command=command,
+                        pid=process.pid,
+                        code=code,
+                        timed_out=False,
+                        truncated=True,
+                        duration_s=duration_s,
+                        output_bytes=total_output,
+                    )
+                    _persist_run_tool_audit(
                         command=command,
                         pid=process.pid,
                         code=code,
@@ -330,6 +400,15 @@ async def _execute_run(req: ExecuteRequest):
                         duration_s=duration_s,
                         output_bytes=total_output,
                     )
+                    _persist_run_tool_audit(
+                        command=command,
+                        pid=process.pid,
+                        code=code,
+                        timed_out=False,
+                        truncated=True,
+                        duration_s=duration_s,
+                        output_bytes=total_output,
+                    )
                     yield _sse_event({"type": "truncated", "limit_bytes": output_limit})
                     yield _sse_event({"type": "exit", "code": code, "truncated": True})
                     return
@@ -340,6 +419,15 @@ async def _execute_run(req: ExecuteRequest):
                 duration_s = round(asyncio.get_running_loop().time() - started_at, 4)
                 _log_run_tool_event(
                     "aura_server_run_tool_finished",
+                    command=command,
+                    pid=process.pid,
+                    code=int(code or 0),
+                    timed_out=False,
+                    truncated=False,
+                    duration_s=duration_s,
+                    output_bytes=total_output,
+                )
+                _persist_run_tool_audit(
                     command=command,
                     pid=process.pid,
                     code=int(code or 0),
@@ -362,6 +450,15 @@ async def _execute_run(req: ExecuteRequest):
                     duration_s=duration_s,
                     output_bytes=total_output,
                 )
+                _persist_run_tool_audit(
+                    command=command,
+                    pid=process.pid,
+                    code=code,
+                    timed_out=True,
+                    truncated=False,
+                    duration_s=duration_s,
+                    output_bytes=total_output,
+                )
                 yield _sse_event({"type": "error", "error": "Command timed out", "timeout_s": timeout_s})
                 yield _sse_event({"type": "exit", "code": code, "timed_out": True})
         finally:
@@ -369,6 +466,7 @@ async def _execute_run(req: ExecuteRequest):
                 if not reader.done():
                     reader.cancel()
             await asyncio.gather(*readers, return_exceptions=True)
+            _close_process_transport(process)
 
     return StreamingResponse(run_generator(), media_type="text/event-stream")
 

@@ -261,6 +261,72 @@ def build_beads_runtime_metadata(orchestrator: Any = None) -> Dict[str, Any] | N
     return metadata or None
 
 
+def build_run_tool_audit_summary(memory_store: Any = None, *, limit: int = 10) -> Dict[str, Any] | None:
+    if memory_store is None or not hasattr(memory_store, "read_log"):
+        return None
+
+    try:
+        entries = list(memory_store.read_log(limit=200) or [])
+    except Exception:
+        return None
+
+    run_entries = [
+        entry
+        for entry in entries
+        if isinstance(entry, dict)
+        and entry.get("type") == "server_run_tool"
+        and (
+            entry.get("event") == "aura_server_run_tool_finished"
+            or any(key in entry for key in ("code", "timed_out", "truncated", "duration_s", "output_bytes"))
+        )
+    ]
+    if not run_entries:
+        return None
+
+    recent_entries = run_entries[-limit:]
+    recent = []
+    timeout_count = 0
+    truncated_count = 0
+    error_count = 0
+    success_count = 0
+    for entry in recent_entries:
+        timed_out = bool(entry.get("timed_out"))
+        truncated = bool(entry.get("truncated"))
+        code = entry.get("code")
+        if timed_out:
+            timeout_count += 1
+        if truncated:
+            truncated_count += 1
+        if code in (None, 0) and not timed_out:
+            success_count += 1
+        elif code not in (None, 0) or timed_out:
+            error_count += 1
+        recent.append(
+            {
+                "command": entry.get("command"),
+                "code": code,
+                "timed_out": timed_out,
+                "truncated": truncated,
+                "duration_s": entry.get("duration_s"),
+                "output_bytes": entry.get("output_bytes"),
+                "timestamp": entry.get("timestamp"),
+            }
+        )
+
+    last_entry = recent_entries[-1]
+    return {
+        "count": len(run_entries),
+        "recent_count": len(recent_entries),
+        "success_count": success_count,
+        "error_count": error_count,
+        "timeout_count": timeout_count,
+        "truncated_count": truncated_count,
+        "last_command": last_entry.get("command"),
+        "last_timestamp": last_entry.get("timestamp"),
+        "recent": recent,
+    }
+
+
 def build_operator_runtime_snapshot(
     goal_queue: Any = None,
     goal_archive: Any = None,
@@ -270,6 +336,7 @@ def build_operator_runtime_snapshot(
     active_goal: str | None = None,
     updated_at: float | None = None,
     beads_runtime: Dict[str, Any] | None = None,
+    memory_store: Any = None,
 ) -> Dict[str, Any]:
     if active_goal is None and isinstance(active_cycle, dict):
         active_goal = active_cycle.get("goal")
@@ -284,4 +351,5 @@ def build_operator_runtime_snapshot(
         "active_cycle": active_cycle,
         "last_cycle": last_cycle,
         "beads_runtime": beads_runtime,
+        "run_tool_audit": build_run_tool_audit_summary(memory_store),
     }

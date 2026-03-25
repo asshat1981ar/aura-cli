@@ -9,6 +9,7 @@ from core.operator_runtime import (
     build_cycle_summary,
     build_operator_runtime_snapshot,
     build_queue_summary,
+    build_run_tool_audit_summary,
 )
 from core.orchestrator import LoopOrchestrator
 from memory.store import MemoryStore
@@ -191,6 +192,45 @@ def test_build_operator_runtime_snapshot_composes_queue_and_cycle_summaries():
     assert snapshot["active_cycle"]["cycle_id"] == "cycle_123"
     assert snapshot["last_cycle"] is None
     assert snapshot["beads_runtime"]["scope"] == "goal_run"
+
+
+def test_build_operator_runtime_snapshot_includes_recent_run_tool_audit_summary(tmp_path: Path):
+    memory_store = MemoryStore(tmp_path / "mem")
+    memory_store.append_log(
+        {
+            "type": "server_run_tool",
+            "event": "aura_server_run_tool_finished",
+            "command": "python3 -c print('ok')",
+            "code": 0,
+            "timed_out": False,
+            "truncated": False,
+            "duration_s": 0.125,
+            "output_bytes": 3,
+            "timestamp": 11.0,
+        }
+    )
+
+    summary = build_run_tool_audit_summary(memory_store, limit=5)
+    snapshot = build_operator_runtime_snapshot(
+        SimpleNamespace(queue=[]),
+        SimpleNamespace(completed=[]),
+        active_cycle=None,
+        last_cycle=None,
+        memory_store=memory_store,
+    )
+
+    assert summary is not None
+    assert summary["count"] == 1
+    assert summary["recent_count"] == 1
+    assert summary["success_count"] == 1
+    assert summary["error_count"] == 0
+    assert summary["timeout_count"] == 0
+    assert summary["truncated_count"] == 0
+    assert summary["last_command"] == "python3 -c print('ok')"
+    assert len(summary["recent"]) == 1
+    assert summary["recent"][0]["command"] == "python3 -c print('ok')"
+    assert summary["recent"][0]["code"] == 0
+    assert snapshot["run_tool_audit"] == summary
 
 
 def test_build_beads_runtime_metadata_reads_orchestrator_contract():

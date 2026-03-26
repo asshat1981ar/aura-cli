@@ -1,0 +1,12 @@
+# Quick Story Template — for fast ideation capture
+# Use: python3 scripts/new_story.py --quick --title "My idea"
+# Full template: .aura_forge/templates/story.md
+
+id: "AF-STORY-XXXX"
+title: ""
+type: "feature"          # feature | bug | improvement | self_evolution
+lane: "inbox"
+trigger: ""              # one sentence: what prompted this idea
+hypothesis: ""           # one sentence: what we expect to gain
+contract_impact: "none"  # does this change CLI contracts?
+safety_impact: "none"    # does this affect autonomous apply?

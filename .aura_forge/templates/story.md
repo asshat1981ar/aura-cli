@@ -28,7 +28,21 @@
 ---
 
 ## Design Passes Applied
+
+<!-- List which passes have been run. Typical batch: all passes in one session before promoting. -->
 {{design_passes}}
+
+<!-- design_pass_notes: add a `design_pass_notes` mapping below once passes are complete.
+     Each key matches a pass name (reverse_engineering, reverse_decomposition, scamper,
+     autotriz, six_hats). See .aura_forge/schemas/story.schema.yaml for the full shape.
+     Example:
+       design_pass_notes:
+         reverse_engineering:
+           gap_identified: "X is missing Y"
+           observed_rules: [...]
+         scamper:
+           top_3_design_options: {...}
+-->
 
 ---
 

@@ -1,0 +1,38 @@
+id: AF-STORY-0009
+title: "Lightweight story template for quick ideation"
+lane: self_evolution
+status: ready
+repo_areas:
+  - .aura_forge/templates
+goal:
+  user_goal: "Rapid idea capture without full template overhead"
+  system_goal: "Lower barrier to entry for new stories"
+context:
+  sensed:
+    - S000 friction: template verbosity
+    - Full template may discourage quick ideation
+  retrieved:
+    - .aura_forge/templates/srag_work_item.yaml
+    - .aura_forge/templates/story.md
+design_passes:
+  - reverse_decomposition
+  - scamper
+constraints:
+  - must promote to full template for ready status
+  - essential fields only: id, title, status, goal
+  - no safety/contract impact required at inbox stage
+contract_impact: "none — template only"
+safety_impact: "none"
+acceptance_criteria:
+  - "templates/story_quick.yaml exists with ≤10 required fields"
+  - "scripts/new_story.py --quick creates inbox entry"
+risks:
+  - may skip important fields
+  - stories may stay in lightweight form too long
+rollback:
+  - use full template only
+outputs:
+  - story_quick.yaml template
+  - example workflow
+sprint_link: S001_queue_ready_intelligence
+plans_link: "plans/story-quick-template.md"

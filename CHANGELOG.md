@@ -5,6 +5,42 @@ All notable changes to AURA CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — Sprint S002: Goal Reliability + Forge Quality
+
+### Added
+
+- **`goal resume` command** (`core/in_flight_tracker.py`): recovers goals silently lost when the
+  AURA loop is interrupted between queue dequeue and archive. Writes `memory/in_flight_goal.json`
+  atomically after each dequeue; `goal resume` re-prepends the goal and optionally runs it.
+  Closes #301.
+- **`goal run --resume` flag**: automatically re-queues any interrupted in-flight goal before
+  running the queue. `goal run` (no flag) prints a stderr warning if an in-flight file is detected.
+- **`scripts/link_story_plans.py`**: validates that `plans_link` fields in ready-stage Forge stories
+  point to existing plan files. Exits 1 on broken links. Integrates with the forge lint pipeline.
+- **`scripts/new_story.py`**: scaffolds new Forge stories into `inbox/`. Supports `--quick` mode
+  (8-field lightweight template) and full-template mode. Auto-increments story ID.
+- **`.aura_forge/templates/story_quick.yaml`**: 8-field quick-ideation template for fast inbox
+  capture without forcing early design commitment.
+- **`scripts/lint_forge_index.py`**: backlog index drift detector (5 rule classes). Catches stories
+  indexed but absent on disk, stories on disk but not indexed, phantom done entries, duplicate IDs
+  across lanes, and broken plans_link references.
+
+### Fixed
+
+- `tests/test_orchestrator_hub.py`: added `pytest.importorskip("orchestrator_hub")` guard to
+  prevent collection ERROR when the now-deleted `orchestrator_hub` package is absent.
+
+### Changed
+
+- `.aura_forge/backlog/ready/`: promoted AF-STORY-0006 (story-plan linker), AF-STORY-0008
+  (follow-up status conventions), AF-STORY-0009 (quick ideation template) from refined to ready
+  with full `contract_impact`, `safety_impact`, and `acceptance_criteria` declarations.
+- `.aura_forge/schemas/story.schema.yaml`: added `design_pass_notes` typed section (6 pass types)
+  and `plans_link` field.
+- `docs/CLI_REFERENCE.md`: regenerated to include `goal resume` and `goal run --resume`.
+
+---
+
 ## [0.1.0] — 2026-03-24
 
 First stable release of AURA CLI — an autonomous, multi-agent software

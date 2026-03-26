@@ -1,7 +1,7 @@
 id: AF-STORY-0005
 title: "Queue-candidate artifact format"
 lane: capability
-status: ready
+status: done
 repo_areas:
   - .aura_forge/templates
   - task_queue

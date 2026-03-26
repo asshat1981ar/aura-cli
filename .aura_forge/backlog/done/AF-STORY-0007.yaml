@@ -1,7 +1,7 @@
 id: AF-STORY-0007
 title: "Link validated heuristics to memory/"
 lane: self_evolution
-status: refined
+status: done
 repo_areas:
   - .aura_forge/indexes
   - memory

@@ -14,6 +14,9 @@ Recommended update steps:
 - `python3 -m pytest -q tests/test_cli_docs_generator.py tests/test_cli_help_snapshots.py tests/test_cli_error_snapshots.py tests/test_cli_main_dispatch.py -k snapshot`
 - If output changes intentionally, update `tests/snapshots/*` in the same change.
 
+Pre-merge validation (run before opening a PR):
+- `python3 scripts/pre_merge_check.py` — validates CLI reference, help snapshots, and sweep artifact tests are all current. Exits non-zero with coloured ✓/✗ output if any check fails.
+
 ## JSON Output Contracts
 
 ### `cli_errors`
@@ -73,6 +76,7 @@ Known record codes:
   - [`aura goal run`](#aura-goal-run)
   - [`aura goal status`](#aura-goal-status)
   - [`aura goal once`](#aura-goal-once)
+  - [`aura goal resume`](#aura-goal-resume)
 - [`workflow`](#workflow)
   - [`aura workflow run`](#aura-workflow-run)
 - [`mcp`](#mcp)
@@ -304,6 +308,18 @@ Legacy flags:
 Examples:
 - `python3 main.py goal once "Summarize repo"`
 - `python3 main.py goal once "Refactor core" --max-cycles 3`
+
+### `aura goal resume`
+
+Resume an interrupted goal
+
+Re-queue a goal that was interrupted mid-execution due to a crash or process kill. Reads memory/in_flight_goal.json written by the goal run loop. Use --run to immediately execute the re-queued goal.
+
+`action`: `goal_resume` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py goal resume`
+- `python3 main.py goal resume --run`
 
 ## `workflow`
 

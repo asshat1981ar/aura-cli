@@ -93,7 +93,7 @@ _call_errors: Dict[str, int] = {}
 # Auth
 # ---------------------------------------------------------------------------
 
-async def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
+def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
     if not _TOKEN:
         return
     if not authorization or not authorization.startswith("Bearer "):

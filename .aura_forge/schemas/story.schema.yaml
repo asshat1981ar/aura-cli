@@ -105,3 +105,138 @@ outputs:
 sprint_link:
   type: string
   pattern: "^S[0-9]{3}_.*$"
+
+plans_link:
+  type: string
+  description: "Relative path to the implementation plan in plans/ (set at ready stage)"
+
+design_pass_notes:
+  type: object
+  description: >
+    Inline notes from each design pass, keyed by pass name. Added during refinement.
+    All sub-keys are optional — include only the passes that were run.
+  properties:
+    reverse_engineering:
+      type: object
+      properties:
+        story:
+          type: string
+        date:
+          type: string
+          format: date
+        surfaces_inspected:
+          type: object
+          description: "Map of file/surface name → free-text observation"
+        observed_rules:
+          type: array
+          items:
+            type: string
+        implicit_contracts:
+          type: array
+          items:
+            type: string
+        gap_identified:
+          type: string
+          description: "One-sentence statement of the key gap or problem surface this pass uncovered"
+        extension_opportunities:
+          type: array
+          items:
+            type: string
+    reverse_decomposition:
+      type: object
+      properties:
+        story:
+          type: string
+        date:
+          type: string
+          format: date
+        desired_end_state:
+          type: string
+        atomic_capabilities:
+          type: object
+          description: "Map of numbered capability index → capability descriptor"
+        required_tests:
+          type: array
+          items:
+            type: string
+        required_docs:
+          type: array
+          items:
+            type: string
+        required_contracts:
+          type: array
+          items:
+            type: string
+        required_safety_checks:
+          type: array
+          items:
+            type: string
+    scamper:
+      type: object
+      properties:
+        story:
+          type: string
+        date:
+          type: string
+          format: date
+        substitute:
+          type: string
+        combine:
+          type: string
+        adapt:
+          type: string
+        modify:
+          type: string
+        put_to_another_use:
+          type: string
+        eliminate:
+          type: string
+        reverse:
+          type: string
+        top_3_design_options:
+          type: object
+    autotriz:
+      type: object
+      properties:
+        story:
+          type: string
+        date:
+          type: string
+          format: date
+        contradictions:
+          type: object
+          description: "Map of numbered contradiction index → {conflict, resolution, inventive_principle}"
+        final_design_direction:
+          type: string
+    six_hats:
+      type: object
+      properties:
+        story:
+          type: string
+        date:
+          type: string
+          format: date
+        white_hat:
+          type: object
+        red_hat:
+          type: object
+        black_hat:
+          type: object
+        yellow_hat:
+          type: object
+        green_hat:
+          type: object
+        blue_hat:
+          type: object
+        synthesis:
+          type: string
+    self_ideation:
+      type: object
+      properties:
+        story:
+          type: string
+        date:
+          type: string
+          format: date
+        notes:
+          type: string

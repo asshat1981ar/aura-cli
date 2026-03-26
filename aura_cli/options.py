@@ -148,6 +148,19 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         legacy_flags=("--goal",),
     ),
     CommandSpec(
+        path=("goal", "resume"),
+        summary="Resume an interrupted goal",
+        description=(
+            "Re-queue a goal that was interrupted mid-execution due to a crash or "
+            "process kill. Reads memory/in_flight_goal.json written by the goal run "
+            "loop. Use --run to immediately execute the re-queued goal."
+        ),
+        examples=(
+            "python3 main.py goal resume",
+            "python3 main.py goal resume --run",
+        ),
+    ),
+    CommandSpec(
         path=("workflow",),
         summary="Workflow operations",
         description="Run orchestrated workflow goals with explicit cycle limits.",
@@ -333,6 +346,7 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     ),
     CLIActionSpec("goal_once", True, ("goal", "once"), legacy_primary_flags=("goal",)),
     CLIActionSpec("goal_run", True, ("goal", "run"), legacy_primary_flags=("run_goals",)),
+    CLIActionSpec("goal_resume", False, ("goal", "resume")),
     CLIActionSpec("queue_list", True, ("queue", "list")),
     CLIActionSpec("queue_clear", True, ("queue", "clear")),
     CLIActionSpec("memory_search", True, ("memory", "search")),
@@ -429,6 +443,7 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("goal", "status"): "goal_status",
     ("goal", "once"): "goal_once",
     ("goal", "run"): "goal_run",
+    ("goal", "resume"): "goal_resume",
     ("queue", "list"): "queue_list",
     ("queue", "clear"): "queue_clear",
     ("memory", "search"): "memory_search",

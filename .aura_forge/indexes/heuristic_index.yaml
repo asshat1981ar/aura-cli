@@ -12,8 +12,13 @@ draft:
 
 validated: []
 
-promoted_to_memory: []
+promoted_to_memory:
+  - id: AURA-H-0001
+    pattern: "Forge stories link to plans/, they don't replace plans/"
+    file: "memory/heuristics/forge_integration.yaml"
+    date: "2026-03-25"
 
 notes:
   - "Heuristics stay in draft until validated across multiple stories"
   - "Only promote to memory/ after repetition and review"
+  - "Promotion guide available at memory/heuristics/PROMOTION_GUIDE.md"

@@ -76,6 +76,7 @@ Known record codes:
   - [`aura goal run`](#aura-goal-run)
   - [`aura goal status`](#aura-goal-status)
   - [`aura goal once`](#aura-goal-once)
+  - [`aura goal resume`](#aura-goal-resume)
 - [`workflow`](#workflow)
   - [`aura workflow run`](#aura-workflow-run)
 - [`mcp`](#mcp)
@@ -307,6 +308,16 @@ Legacy flags:
 Examples:
 - `python3 main.py goal once "Summarize repo"`
 - `python3 main.py goal once "Refactor core" --max-cycles 3`
+
+### `aura goal resume`
+
+Resume an interrupted goal
+
+Re-queue a goal that was interrupted mid-execution due to a crash or process kill. Reads memory/in_flight_goal.json written by the goal run loop. Use --run to immediately execute the re-queued goal.
+
+Examples:
+- `python3 main.py goal resume`
+- `python3 main.py goal resume --run`
 
 ## `workflow`
 

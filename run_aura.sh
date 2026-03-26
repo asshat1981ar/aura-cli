@@ -84,6 +84,10 @@ case "$1" in
     shift
     exec_main_checked goal once "$@"
     ;;
+  resume)
+    shift
+    exec_main goal resume "$@"
+    ;;
   run)
     shift
     exec_main_checked goal run "$@"

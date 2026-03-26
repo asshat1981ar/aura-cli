@@ -2,6 +2,9 @@
 import time
 import unittest
 
+import pytest
+pytest.importorskip("orchestrator_hub")
+
 from orchestrator_hub.registry import AgentInfo, AgentRegistryHub, ServerInfo
 from orchestrator_hub.lifecycle import ServerLifecycle, _listening
 from orchestrator_hub.router import TaskRouter

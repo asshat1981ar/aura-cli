@@ -254,6 +254,12 @@ def _customize_goal_add(parser: argparse.ArgumentParser) -> None:
 
 def _customize_goal_run(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(run_goals=True)
+    parser.add_argument(
+        "--resume",
+        dest="resume",
+        action="store_true",
+        help="Re-queue any interrupted in-flight goal before running.",
+    )
 
 
 def _customize_goal_status(parser: argparse.ArgumentParser) -> None:

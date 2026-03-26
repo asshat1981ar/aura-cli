@@ -7,11 +7,11 @@ by_status:
     - AF-DELTA-0002
     - AF-DELTA-0003
   refined:
+    - AF-STORY-0010
+  ready:
     - AF-STORY-0006
     - AF-STORY-0008
     - AF-STORY-0009
-    - AF-STORY-0010
-  ready:
     - AF-STORY-0011
   in_progress: []
   review: []
@@ -42,6 +42,8 @@ by_lane:
   refactor: []
 
 recent_changes:
+  - date: 2026-03-27
+    action: "AF-STORY-0006, AF-STORY-0008, AF-STORY-0009 promoted from refined to ready"
   - date: 2026-03-26
     action: "AF-STORY-0011 created and promoted to ready via full Forge pipeline"
   - date: 2026-03-25

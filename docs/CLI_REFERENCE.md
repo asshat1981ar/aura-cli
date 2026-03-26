@@ -315,6 +315,8 @@ Resume an interrupted goal
 
 Re-queue a goal that was interrupted mid-execution due to a crash or process kill. Reads memory/in_flight_goal.json written by the goal run loop. Use --run to immediately execute the re-queued goal.
 
+`action`: `goal_resume` `requires_runtime`: `false`
+
 Examples:
 - `python3 main.py goal resume`
 - `python3 main.py goal resume --run`

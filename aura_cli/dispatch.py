@@ -616,6 +616,27 @@ def _handle_goal_once_dispatch(ctx: DispatchContext) -> int:
 
 
 def _handle_goal_run_dispatch(ctx: DispatchContext) -> int:
+    from core.in_flight_tracker import InFlightTracker
+
+    tracker = InFlightTracker()
+    if getattr(ctx.args, "resume", False) and tracker.exists():
+        record = tracker.read()
+        if record:
+            goal_text = record.get("goal", "")
+            print(f'↺  Resuming interrupted goal: "{goal_text}"')
+            runtime = ctx.runtime or ctx.runtime_factory(ctx.project_root)
+            runtime["goal_queue"].prepend_batch([goal_text])
+            tracker.clear()
+    elif tracker.exists():
+        record = tracker.read()
+        if record:
+            goal_text = record.get("goal", "?")
+            print(
+                f'⚠  Interrupted goal detected: "{goal_text}"'
+                " — run 'goal run --resume' to recover",
+                file=__import__("sys").stderr,
+            )
+
     args = ctx.args
     runtime = ctx.runtime
     run_goals_loop(

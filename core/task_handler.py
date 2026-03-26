@@ -4,6 +4,7 @@ import re
 import time
 from pathlib import Path
 
+from core.in_flight_tracker import InFlightTracker
 from core.logging_utils import log_json
 from core.task_manager import TaskManager, Task
 
@@ -371,6 +372,9 @@ def run_goals_loop(args, goal_queue, orchestrator, debugger_instance, planner_in
         goal = goal_queue.next()
         log_json("INFO", "processing_goal", goal=goal)
 
+        tracker = InFlightTracker()
+        tracker.write(goal, cycle_limit)
+
         if decompose and planner_instance:
             root_task = task_manager.decompose_goal(goal, planner_instance)
             tasks_to_process = root_task.subtasks
@@ -386,13 +390,16 @@ def run_goals_loop(args, goal_queue, orchestrator, debugger_instance, planner_in
             task.status = "in_progress"
             task_manager.save()
 
-            # Execute the goal using the modern orchestrator
-            result = orchestrator.run_loop(
-                task.title, 
-                max_cycles=cycle_limit, 
-                dry_run=getattr(args, "dry_run", False)
-            )
-            
+            try:
+                # Execute the goal using the modern orchestrator
+                result = orchestrator.run_loop(
+                    task.title,
+                    max_cycles=cycle_limit,
+                    dry_run=getattr(args, "dry_run", False)
+                )
+            finally:
+                tracker.clear()
+
             history = result.get("history", [])
 
             # Update task status based on orchestrator result
@@ -405,15 +412,15 @@ def run_goals_loop(args, goal_queue, orchestrator, debugger_instance, planner_in
             else:
                 task.status = "failed"
                 task.result = result.get("stop_reason", "unknown_failure")
-            
+
             task_manager.save()
-            
+
             # Record outcome in archive
             final_score = 0.0 # Modern orchestrator doesn't have a single score yet
             if history:
                 # We could derive a score from verification or use legacy if available
                 final_score = 1.0 if result.get("stop_reason") == "PASS" else 0.0
-            
+
             goal_archive.record(task.title, final_score)
 
             if task.status == "failed":

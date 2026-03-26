@@ -8,39 +8,44 @@ by_status:
     - AF-DELTA-0003
   refined:
     - AF-STORY-0006
-    - AF-STORY-0007
     - AF-STORY-0008
     - AF-STORY-0009
+    - AF-STORY-0010
   ready:
-    - AF-STORY-0004
-    - AF-STORY-0005
+    - AF-STORY-0011
   in_progress: []
   review: []
   done:
-    - AF-STORY-0001
-    - AF-STORY-0002
-    - AF-STORY-0003
+    - AF-STORY-0004
+    - AF-STORY-0005
+    - AF-STORY-0007
+  # Note: AF-STORY-0001, AF-STORY-0002, AF-STORY-0003 are foundational examples stored in
+  # .aura_forge/examples/ (not backlog/done/) — tracked separately as reference artifacts.
+  # AURA-SWARM-001 was an external reference with no artifact on disk; removed.
 
 by_lane:
   self_evolution:
-    - AF-STORY-0001
     - AF-STORY-0007
     - AF-STORY-0009
     - AF-DELTA-0001
     - AF-DELTA-0002
     - AF-DELTA-0003
   reliability:
-    - AF-STORY-0002
-    - AF-STORY-0003
+    - AF-STORY-0006
   capability:
     - AF-STORY-0004
     - AF-STORY-0005
+    - AF-STORY-0010
+    - AF-STORY-0011
   docs:
-    - AF-STORY-0006
     - AF-STORY-0008
   refactor: []
 
 recent_changes:
+  - date: 2026-03-26
+    action: "AF-STORY-0011 created and promoted to ready via full Forge pipeline"
+  - date: 2026-03-25
+    action: "AF-STORY-0004 and AF-STORY-0005 completed"
   - date: 2026-03-18
     action: "S001 planned with 6 new stories"
   - date: 2026-03-18

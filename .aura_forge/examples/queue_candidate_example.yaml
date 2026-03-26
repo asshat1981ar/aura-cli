@@ -1,0 +1,24 @@
+# Example Queue-Candidate
+# For AF-DELTA-0001: Add capability-gap index generation
+
+id: AF-QC-0001
+delta_link: AF-DELTA-0001
+title: "Implement generate_capability_index.py script"
+description: "Create a Python script to parse sprint retros and update the capability gap index automatically while preserving manual updates."
+
+validation_criteria:
+  - "Script exists in scripts/generate_capability_index.py"
+  - "Script correctly parses ## Capability Deltas Proposed from retro markdown"
+  - "Script is idempotent and does not duplicate existing entries in the index"
+  - "Unit tests pass in tests/test_generate_capability_index.py"
+
+safety_impact:
+  autonomous_apply: "Low. Script only writes to .aura_forge/indexes/ and is not called by the core loop."
+  security_boundaries: "No new external API or bash tool use."
+  rollback_plan: "Delete the script and revert .aura_forge/indexes/capability_gap_index.yaml manually."
+
+ready_for_queue: true
+
+priority: medium
+max_cycles: 1
+tags: ["capability", "automation", "forge"]

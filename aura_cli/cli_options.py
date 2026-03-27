@@ -254,6 +254,12 @@ def _customize_goal_add(parser: argparse.ArgumentParser) -> None:
 
 def _customize_goal_run(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(run_goals=True)
+    parser.add_argument(
+        "--resume",
+        dest="resume",
+        action="store_true",
+        help="Re-queue any interrupted in-flight goal before running.",
+    )
 
 
 def _customize_goal_status(parser: argparse.ArgumentParser) -> None:
@@ -381,6 +387,16 @@ def _customize_sadd_status(parser: argparse.ArgumentParser) -> None:
 
 def _customize_sadd_resume(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--session-id", dest="session_id", required=True, help="Session ID to resume.")
+    parser.add_argument(
+        "--run",
+        dest="run",
+        action="store_true",
+        help="Execute remaining workstreams. Without this flag the command only prints a summary.",
+    )
+
+
+def _customize_goal_resume(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--run", dest="run", action="store_true", help="Run the re-queued goal immediately.")
 
 
 _PARSER_CUSTOMIZERS.update(
@@ -409,6 +425,7 @@ _PARSER_CUSTOMIZERS.update(
         ("sadd", "run"): _customize_sadd_run,
         ("sadd", "status"): _customize_sadd_status,
         ("sadd", "resume"): _customize_sadd_resume,
+        ("goal", "resume"): _customize_goal_resume,
     }
 )
 

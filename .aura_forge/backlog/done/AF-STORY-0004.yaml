@@ -1,7 +1,7 @@
 id: AF-STORY-0004
 title: "Capability delta index generation"
 lane: capability
-status: ready
+status: done
 repo_areas:
   - .aura_forge/indexes
   - docs

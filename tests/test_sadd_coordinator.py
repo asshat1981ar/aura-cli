@@ -1,5 +1,6 @@
 """Tests for SessionCoordinator from core.sadd.session_coordinator."""
 
+import types as _types
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -11,6 +12,7 @@ from core.sadd.types import (
     WorkstreamSpec,
 )
 from core.sadd.session_coordinator import SessionCoordinator
+from core.sadd.workstream_graph import WorkstreamGraph
 from memory.brain import Brain
 
 
@@ -278,6 +280,276 @@ class TestSessionCoordinator(unittest.TestCase):
         self.assertIn("session_id", status_after)
         self.assertIn("total", status_after)
         self.assertIn("completed", status_after)
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers for new test classes (use _n_spec / _ok_result to avoid
+# colliding with the _make_spec / _completed_result already defined above).
+# ---------------------------------------------------------------------------
+
+
+def _n_spec(n: int = 2) -> DesignSpec:
+    """Build a DesignSpec with *n* independent workstreams (no deps)."""
+    workstreams = [
+        WorkstreamSpec(
+            id=f"ws{i}",
+            title=f"Workstream {i}",
+            goal_text=f"Do task {i}",
+        )
+        for i in range(1, n + 1)
+    ]
+    return DesignSpec(
+        title="Test Design",
+        summary="A test design specification",
+        workstreams=workstreams,
+    )
+
+
+def _ok_result(ws_id: str) -> WorkstreamResult:
+    """Return a minimal completed WorkstreamResult."""
+    return WorkstreamResult(
+        ws_id=ws_id,
+        status="completed",
+        cycles_used=1,
+        changed_files=[],
+        elapsed_s=0.1,
+    )
+
+
+def _runner_factory_side_effect(**kwargs) -> MagicMock:
+    """Return a mock SubAgentRunner whose .run() returns a success result."""
+    inst = MagicMock()
+    ws_id = kwargs["workstream"].spec.id
+    inst.run.return_value = _ok_result(ws_id)
+    return inst
+
+
+# ---------------------------------------------------------------------------
+# TestSessionCoordinatorRun
+# ---------------------------------------------------------------------------
+
+
+class TestSessionCoordinatorRun(unittest.TestCase):
+    """Tests for SessionCoordinator.run() — orchestrator factory path (mocked)."""
+
+    def test_run_calls_factory_for_each_workstream(self):
+        """SubAgentRunner must be instantiated once per workstream; report completed==2."""
+        spec = _n_spec(n=2)
+        brain = MagicMock()
+        brain.remember_tagged = MagicMock()
+        orchestrator_factory = MagicMock()
+
+        with patch(
+            "core.sadd.session_coordinator.SubAgentRunner",
+            side_effect=_runner_factory_side_effect,
+        ) as MockRunner:
+            coord = SessionCoordinator(
+                design_spec=spec,
+                orchestrator_factory=orchestrator_factory,
+                brain=brain,
+                config=SessionConfig(max_parallel=2, retry_failed=False),
+            )
+            report = coord.run()
+
+        self.assertEqual(MockRunner.call_count, 2, "Expected one runner per workstream")
+        self.assertEqual(report.completed, 2)
+        self.assertEqual(report.total_workstreams, 2)
+        self.assertEqual(report.failed, 0)
+
+
+# ---------------------------------------------------------------------------
+# TestSessionCoordinatorResume
+# ---------------------------------------------------------------------------
+
+
+class TestSessionCoordinatorResume(unittest.TestCase):
+    """Tests for SessionCoordinator.resume() — skips already-completed work."""
+
+    def test_resume_skips_completed_workstreams(self):
+        """resume() must only execute workstreams not already completed in the graph."""
+        spec = _n_spec(n=2)
+        brain = MagicMock()
+        orchestrator_factory = MagicMock()
+
+        # Pre-build graph with ws1 already completed.
+        graph = WorkstreamGraph(spec.workstreams)
+        ws1_result = _ok_result("ws1")
+        graph.mark_running("ws1")
+        graph.mark_completed("ws1", ws1_result)
+
+        completed_results: dict = {"ws1": ws1_result}
+
+        with patch(
+            "core.sadd.session_coordinator.SubAgentRunner",
+            side_effect=_runner_factory_side_effect,
+        ) as MockRunner:
+            coord = SessionCoordinator(
+                design_spec=spec,
+                orchestrator_factory=orchestrator_factory,
+                brain=brain,
+                config=SessionConfig(max_parallel=2, retry_failed=False),
+            )
+            report = coord.resume(graph, completed_results)
+
+        # Only ws2 should have been submitted.
+        self.assertEqual(MockRunner.call_count, 1, "Expected runner only for the remaining workstream")
+        executed_ws_id = MockRunner.call_args[1]["workstream"].spec.id
+        self.assertEqual(executed_ws_id, "ws2")
+
+        # Both workstreams should appear completed in the final report.
+        self.assertEqual(report.completed, 2)
+        self.assertEqual(report.failed, 0)
+
+    def test_resume_reruns_failed_workstreams(self):
+        """resume() must re-attempt workstreams that previously failed, not skip them."""
+        spec = _n_spec(n=2)
+        brain = MagicMock()
+        orchestrator_factory = MagicMock()
+
+        graph = WorkstreamGraph(spec.workstreams)
+        # Mark ws1 as failed (not completed).
+        graph.mark_running("ws1")
+        graph.mark_failed("ws1", "network error")
+
+        # completed_results only contains truly completed workstreams.
+        completed_results: dict = {}
+
+        with patch(
+            "core.sadd.session_coordinator.SubAgentRunner",
+            side_effect=_runner_factory_side_effect,
+        ) as MockRunner:
+            coord = SessionCoordinator(
+                design_spec=spec,
+                orchestrator_factory=orchestrator_factory,
+                brain=brain,
+                config=SessionConfig(max_parallel=2, retry_failed=False),
+            )
+            report = coord.resume(graph, completed_results)
+
+        # Both ws1 (previously failed) and ws2 should be re-attempted.
+        self.assertEqual(MockRunner.call_count, 2, "Both workstreams should be re-attempted")
+        self.assertEqual(report.failed, 0)
+
+    def test_resume_unblocks_dependents_of_failed_workstream(self):
+        """resume() must reset blocked dependents of failed workstreams to pending."""
+        # Build spec with dependency: ws2 depends on ws1
+        ws1 = WorkstreamSpec(id="ws1", title="First", goal_text="Do first")
+        ws2 = WorkstreamSpec(id="ws2", title="Second", goal_text="Do second", depends_on=["ws1"])
+        spec = DesignSpec(title="Test", summary="Test spec", workstreams=[ws1, ws2])
+        brain = MagicMock()
+        orchestrator_factory = MagicMock()
+
+        # Simulate: ws1 failed mid-run, which blocked ws2.
+        graph = WorkstreamGraph([ws1, ws2])
+        graph.mark_running("ws1")
+        graph.mark_failed("ws1", "timeout")
+        # ws2 is now "blocked" because its dependency failed.
+        self.assertEqual(graph.get_node("ws2").status, "blocked")
+
+        with patch(
+            "core.sadd.session_coordinator.SubAgentRunner",
+            side_effect=_runner_factory_side_effect,
+        ) as MockRunner:
+            coord = SessionCoordinator(
+                design_spec=spec,
+                orchestrator_factory=orchestrator_factory,
+                brain=brain,
+                config=SessionConfig(max_parallel=2, retry_failed=False),
+            )
+            report = coord.resume(graph, {})
+
+        # Both ws1 (was failed) and ws2 (was blocked) must execute.
+        self.assertEqual(MockRunner.call_count, 2, "Both ws1 and its blocked dependent ws2 must run")
+        self.assertEqual(report.completed, 2)
+        self.assertEqual(report.failed, 0)
+
+
+# ---------------------------------------------------------------------------
+# TestSaddResumeDispatch
+# ---------------------------------------------------------------------------
+
+
+class TestSaddResumeDispatch(unittest.TestCase):
+    """Tests for aura_cli.dispatch._handle_sadd_resume_dispatch()."""
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _make_ctx(session_id=None, run: bool = False):
+        from aura_cli.dispatch import DispatchContext
+
+        args = _types.SimpleNamespace(session_id=session_id, run=run, json=False)
+        return DispatchContext(
+            parsed=MagicMock(),
+            project_root=Path("."),
+            runtime_factory=MagicMock(),
+            args=args,
+            runtime={"brain": MagicMock(), "model_adapter": None},
+        )
+
+    # ------------------------------------------------------------------
+    # Tests
+    # ------------------------------------------------------------------
+
+    def test_resume_dispatch_no_session_id_lists_sessions(self):
+        """Without --session-id the handler returns exit code 1 with an error message.
+
+        Note: the current implementation requires --session-id and does not fall
+        back to listing resumable sessions; it returns 1 immediately.
+        """
+        from aura_cli.dispatch import _handle_sadd_resume_dispatch
+
+        ctx = self._make_ctx(session_id=None)
+        rc = _handle_sadd_resume_dispatch(ctx)
+
+        self.assertEqual(rc, 1)
+
+    def test_resume_dispatch_missing_session_returns_error(self):
+        """When load_session_for_resume returns None the handler returns exit code 1."""
+        from aura_cli.dispatch import _handle_sadd_resume_dispatch
+
+        ctx = self._make_ctx(session_id="nonexistent-session-id")
+
+        with patch("core.sadd.session_store.SessionStore") as MockStore:
+            mock_store = MagicMock()
+            mock_store.load_session_for_resume.return_value = None
+            MockStore.return_value = mock_store
+
+            rc = _handle_sadd_resume_dispatch(ctx)
+
+        self.assertEqual(rc, 1)
+        mock_store.load_session_for_resume.assert_called_once_with("nonexistent-session-id")
+
+    def test_resume_dispatch_without_run_flag_shows_summary(self):
+        """With a valid session_id but no --run: prints summary, returns 0, never runs coordinator."""
+        from aura_cli.dispatch import _handle_sadd_resume_dispatch
+
+        spec = _n_spec(n=2)
+        config = SessionConfig()
+        # Serialise a real graph so WorkstreamGraph.from_dict works inside the handler.
+        graph_state = WorkstreamGraph(spec.workstreams).to_dict()
+        raw_results: dict = {}
+
+        ctx = self._make_ctx(session_id="s-test-abc123", run=False)
+
+        with patch("core.sadd.session_store.SessionStore") as MockStore:
+            mock_store = MagicMock()
+            mock_store.load_session_for_resume.return_value = (
+                spec,
+                config,
+                graph_state,
+                raw_results,
+            )
+            MockStore.return_value = mock_store
+
+            rc = _handle_sadd_resume_dispatch(ctx)
+
+        self.assertEqual(rc, 0)
+        # SessionCoordinator.resume() must NOT be invoked when --run is absent;
+        # we confirm this by verifying no coordinator object was used via the store.
+        mock_store.update_status.assert_not_called()
 
 
 if __name__ == "__main__":

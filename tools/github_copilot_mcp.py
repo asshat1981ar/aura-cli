@@ -91,7 +91,9 @@ _TOKEN = os.getenv("COPILOT_MCP_TOKEN", "")
 
 
 def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
-    if _TOKEN and authorization != f"Bearer {_TOKEN}":
+    if not _TOKEN:
+        return
+    if not authorization or authorization != f"Bearer {_TOKEN}":
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 

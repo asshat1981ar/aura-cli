@@ -1,0 +1,13 @@
+id: AF-LEARNING-0001
+title: "Hierarchical Swarm Supervisor with SDLC Debugging"
+cycle_derived: 1
+lessons:
+  - "Hierarchical topology provides deterministic quality gating for autonomous code delivery."
+  - "A dedicated SDLC debugger reduces recovery time by classifying failures across requirement, design, and implementation lenses."
+  - "Continuous Implementation (Auto-Merge) is viable when gated by a robust 'Tester' agent state."
+  - "Injecting lessons from a JSONL store every 5 cycles prevents recurring patterns of failure without overloading agent context."
+status: validated
+repo_areas:
+  - core/
+  - agents/
+  - memory/

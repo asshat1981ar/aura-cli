@@ -5,7 +5,42 @@ All notable changes to AURA CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — Sprint S002: Goal Reliability + Forge Quality
+## [Unreleased] — Sprint S003: SADD Workflow Completion
+
+### Added
+
+- **`sadd resume --run`**: fully implements SADD session resume. Restores
+  `WorkstreamGraph` from `SessionStore`, resets previously-failed and blocked
+  workstreams to pending for retry, then drives the remaining workstreams to
+  completion via `SessionCoordinator.resume()`. Without `--run`, prints a safe
+  summary (total/completed/remaining) and exits 0.
+- **`SessionCoordinator.resume(graph, completed_results)`**: new method that
+  accepts a pre-restored graph and dict of completed results, then executes only
+  the remaining workstreams. Resets `failed` and `blocked` nodes to `pending`
+  before execution so dependency chains are correctly retried.
+- **Live progress output** in `SessionCoordinator`: per-workstream start/complete/fail
+  lines printed to stdout during live `sadd run` and `sadd resume` execution so
+  users can see real-time progress.
+- **`MCPToolBridge` auto-wiring**: `SessionCoordinator` now accepts an optional
+  `mcp_bridge` parameter (passed through to `SubAgentRunner`). Both `sadd run`
+  and `sadd resume` dispatch handlers auto-create `MCPToolBridge()` with
+  `(ImportError, OSError)` fallback to `None`.
+- **`tests/test_sadd_coordinator.py`**: 19 tests covering live coordinator
+  execution, resume skipping completed workstreams, resume retrying failed
+  workstreams, and unblocking dependents of failed workstreams.
+
+### Fixed
+
+- `sadd resume` dispatch handler was a stub ("not yet implemented"); it now
+  executes the full resume path via `SessionCoordinator.resume()`.
+- `_handle_sadd_resume_dispatch`: failed workstreams in raw results were
+  incorrectly passed to `graph.mark_completed()`; fixed to call `mark_failed()`
+  for failed results and only pass truly-completed results to `coordinator.resume()`.
+- `SessionCoordinator.resume()`: blocked dependents of failed workstreams were
+  not reset to pending, preventing them from executing after the failed dependency
+  was retried; now resets both `failed` and `blocked` nodes before the execution loop.
+- MCP bridge `except Exception` narrowed to `except (ImportError, OSError)` to
+  avoid swallowing unexpected runtime errors.
 
 ### Added
 

@@ -740,12 +740,18 @@ def _handle_sadd_run_dispatch(ctx: DispatchContext) -> int:
                 brain=_brain, project_root=ctx.project_root, model_adapter=_model,
             )
             store = SessionStore()
+            try:
+                from core.sadd.mcp_tool_bridge import MCPToolBridge
+                mcp_bridge = MCPToolBridge()
+            except (ImportError, OSError):
+                mcp_bridge = None
             coordinator = SessionCoordinator(
                 design_spec=design_spec,
                 orchestrator_factory=factory,
                 brain=_brain,
                 config=config,
                 session_store=store,
+                mcp_bridge=mcp_bridge,
             )
             report = coordinator.run()
             if as_json:
@@ -802,6 +808,8 @@ def _handle_sadd_status_dispatch(ctx: DispatchContext) -> int:
 
 def _handle_sadd_resume_dispatch(ctx: DispatchContext) -> int:
     from core.sadd.session_store import SessionStore
+    from core.sadd.workstream_graph import WorkstreamGraph
+    from core.sadd.types import WorkstreamResult
 
     args = ctx.args
     session_id = getattr(args, "session_id", None)
@@ -815,14 +823,84 @@ def _handle_sadd_resume_dispatch(ctx: DispatchContext) -> int:
         print(f"Error: session not found or not resumable: {session_id}", file=sys.stderr)
         return 1
 
-    spec, config, graph_state, results = loaded
-    print(f"Resume session: {spec.title} ({session_id[:8]}...)")
-    print(f"  Workstreams: {len(spec.workstreams)}")
+    spec, config, graph_state, raw_results = loaded
+
+    # Reconstruct the graph (restores node statuses from checkpoint).
     if graph_state:
+        graph = WorkstreamGraph.from_dict(graph_state)
         nodes = graph_state.get("nodes", {})
-        completed = sum(1 for n in nodes.values() if n.get("status") == "completed")
-        print(f"  Already completed: {completed}/{len(nodes)}")
-    print("  Note: Full resume execution not yet implemented (R2 preview)")
+        completed_count = sum(1 for n in nodes.values() if n.get("status") == "completed")
+        total_count = len(nodes)
+    else:
+        graph = WorkstreamGraph(spec.workstreams)
+        completed_count = 0
+        total_count = len(spec.workstreams)
+
+    # Deserialize all prior results (raw_results maps ws_id -> dict).
+    all_results: dict[str, WorkstreamResult] = {}
+    for ws_id, result_data in raw_results.items():
+        if isinstance(result_data, dict):
+            all_results[ws_id] = WorkstreamResult.from_dict(result_data)
+        else:
+            # Already a WorkstreamResult (shouldn't happen but guard anyway).
+            all_results[ws_id] = result_data  # type: ignore[assignment]
+
+    # Restore graph state for each prior result — completed stay completed,
+    # failed stay failed so they are re-attempted on resume.
+    for ws_id, result in all_results.items():
+        node = graph._nodes.get(ws_id)  # noqa: SLF001
+        if node is None:
+            continue
+        if result.status == "completed" and node.status != "completed":
+            graph.mark_completed(ws_id, result)
+        elif result.status == "failed" and node.status != "failed":
+            graph.mark_failed(ws_id, result.error or "unknown")
+
+    print(f"Resume session: {spec.title} ({session_id[:8]}...)")
+    print(f"  Workstreams:      {total_count}")
+    print(f"  Already completed: {completed_count}/{total_count}")
+    remaining = total_count - completed_count
+    print(f"  Remaining:        {remaining}")
+
+    do_run = getattr(args, "run", False)
+    if not do_run:
+        print()
+        print("  (pass --run to execute the remaining workstreams)")
+        return 0
+
+    # --- Execute remaining workstreams ---
+    from core.sadd.session_coordinator import SessionCoordinator, create_orchestrator_factory
+    from core.brain import Brain
+
+    runtime = ctx.runtime
+    _brain = runtime.get("brain") or Brain()
+    _model = runtime.get("model_adapter")
+
+    factory = create_orchestrator_factory(
+        brain=_brain,
+        project_root=ctx.project_root,
+        model_adapter=_model,
+    )
+
+    try:
+        from core.sadd.mcp_tool_bridge import MCPToolBridge
+        mcp_bridge = MCPToolBridge()
+    except (ImportError, OSError):
+        mcp_bridge = None
+    coordinator = SessionCoordinator(
+        design_spec=spec,
+        orchestrator_factory=factory,
+        brain=_brain,
+        config=config,
+        session_store=store,
+        mcp_bridge=mcp_bridge,
+    )
+    # Restore the original session_id so all persistence uses the right key.
+    coordinator._session_id = session_id  # noqa: SLF001
+
+    completed_results = {ws_id: r for ws_id, r in all_results.items() if r.status == "completed"}
+    report = coordinator.resume(graph, completed_results)
+    print(report.summary())
     return 0
 
 

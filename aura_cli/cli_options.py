@@ -387,6 +387,12 @@ def _customize_sadd_status(parser: argparse.ArgumentParser) -> None:
 
 def _customize_sadd_resume(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--session-id", dest="session_id", required=True, help="Session ID to resume.")
+    parser.add_argument(
+        "--run",
+        dest="run",
+        action="store_true",
+        help="Execute remaining workstreams. Without this flag the command only prints a summary.",
+    )
 
 
 def _customize_goal_resume(parser: argparse.ArgumentParser) -> None:

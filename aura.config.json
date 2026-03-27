@@ -56,7 +56,9 @@
         "notification": 8015,
         "monitoring": 8016,
         "weaviate": 8017,
-    "sadd": 8020
+    "sadd": 8020,
+    "discovery": 8025,
+    "swarm": 8050
     },
     "semantic_memory": {
         "top_k": 9,

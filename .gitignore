@@ -124,3 +124,11 @@ cli/__pycache__/
 .venv/
 .coverage
 .mcp.json
+
+gha-creds-*.json
+
+# ── Binary archives ──────────────────────────────────────────────────
+*.tar.gz
+
+# ── Agent ephemeral memory ───────────────────────────────────────────
+.agentMemory/

@@ -222,6 +222,9 @@ class LoopOrchestrator:
         self._consecutive_fails: int = 0
         self._ui_callbacks: list = []
 
+        # Swarm integration — set by install_swarm_runtime when AURA_ENABLE_SWARM=1
+        self.lesson_store: Any = None
+
     def _get_beads_skill(self):
         """Return the BEADS skill only when runtime BEADS integration is enabled."""
         if not self.beads_enabled:

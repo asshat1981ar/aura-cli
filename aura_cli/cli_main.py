@@ -2,42 +2,35 @@ import os
 import sys
 import json
 import io
-import copy
-import urllib.request
-import urllib.error
 from contextlib import redirect_stdout
 from dataclasses import dataclass
 from pathlib import Path
-from types import SimpleNamespace
+from typing import Any
 
 try:
     import readline
 except ImportError:
     readline = None
 
-from core.config_manager import ConfigManager, DEFAULT_CONFIG, config
-from core.goal_queue import GoalQueue
-from core.goal_archive import GoalArchive
 from memory.brain import Brain
+from memory.store import MemoryStore
+from agents.debugger import DebuggerAgent
+from agents.planner import PlannerAgent
+from agents.registry import default_agents
+from agents.router import RouterAgent
+from core.beads_bridge import BeadsBridge
+from core.config_manager import ConfigManager, DEFAULT_CONFIG, config
+from core.git_tools import GitTools
+from core.goal_archive import GoalArchive
+from core.goal_queue import GoalQueue
+from core.logging_utils import log_json
 from core.model_adapter import ModelAdapter
 from core.orchestrator import LoopOrchestrator
 from core.policy import Policy
-from memory.store import MemoryStore
-from agents.registry import default_agents
-from core.git_tools import GitTools
-from core.logging_utils import log_json
-from agents.debugger import DebuggerAgent
-from agents.planner import PlannerAgent
-from agents.router import RouterAgent
+from core.runtime_auth import resolve_config_api_key, runtime_provider_status, runtime_provider_summary
+from core.runtime_paths import resolve_project_path
 from agents.scaffolder import ScaffolderAgent
 from core.vector_store import VectorStore
-from core.beads_bridge import BeadsBridge
-from core.runtime_paths import resolve_project_path
-from core.runtime_auth import (
-    resolve_config_api_key,
-    runtime_provider_status,
-    runtime_provider_summary,
-)
 
 from core.task_handler import _check_project_writability, run_goals_loop
 from aura_cli.commands import _handle_add, _handle_run, _handle_status, _handle_exit, _handle_help, _handle_doctor, _handle_readiness, _handle_clear
@@ -51,1319 +44,173 @@ from aura_cli.cli_options import (
 )
 from aura_cli.options import action_runtime_required
 
-
-def _mcp_headers():
-    """Return auth headers for MCP requests, if MCP_API_TOKEN is set."""
-    token = os.getenv("MCP_API_TOKEN")
-    return {"Authorization": f"Bearer {token}"} if token else {}
-
-
-def _mcp_base_url():
-    """Base URL for MCP server (default http://localhost:8001)."""
-    return os.getenv("MCP_SERVER_URL", "http://localhost:8001")
-
-
-def _mcp_request(method: str, path: str, data: dict | None = None):
-    """Small HTTP helper for MCP server; returns (status, json/dict)."""
-    url = f"{_mcp_base_url()}{path}"
-    headers = {"Content-Type": "application/json", **_mcp_headers()}
-    body = json.dumps(data).encode() if data is not None else None
-    req = urllib.request.Request(url, data=body, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            return resp.status, json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        try:
-            return e.code, json.loads(e.read().decode())
-        except Exception:
-            return e.code, {"error": str(e)}
-    except Exception as e:
-        return 500, {"error": str(e)}
-
-
-def cmd_mcp_tools():
-    """List MCP tools via HTTP client."""
-    status, data = _mcp_request("GET", "/tools")
-    print(json.dumps({"status": status, "data": data}, indent=2))
-
-
-def cmd_mcp_call(tool: str, args_json: str | None):
-    """Call an MCP tool by name with JSON args."""
-    try:
-        args_obj = json.loads(args_json) if args_json else {}
-    except json.JSONDecodeError as exc:
-        print(f"Invalid args JSON: {exc}")
-        return
-    payload = {"tool_name": tool, "args": args_obj}
-    status, data = _mcp_request("POST", "/call", payload)
-    print(json.dumps({"status": status, "data": data}, indent=2))
-
-
-def cmd_diag():
-    """Fetch MCP health/metrics/limits/log tail and linter capabilities."""
-    health = _mcp_request("GET", "/health")
-    metrics = _mcp_request("GET", "/metrics")
-    limits = _mcp_request("POST", "/call", {"tool_name": "limits", "args": {}})
-    lcap = _mcp_request("POST", "/call", {"tool_name": "linter_capabilities", "args": {}})
-    tail = _mcp_request("POST", "/call", {"tool_name": "tail_logs", "args": {"lines": 50}})
-    print(
-        json.dumps(
-            {
-                "health": {"status": health[0], "data": health[1]},
-                "metrics": {"status": metrics[0], "data": metrics[1]},
-                "limits": {"status": limits[0], "data": limits[1]},
-                "linter_capabilities": {"status": lcap[0], "data": lcap[1]},
-                "tail_logs": {"status": tail[0], "data": tail[1]},
-            },
-            indent=2,
-        )
-    )
+from aura_cli.dispatch import (
+    COMMAND_DISPATCH_REGISTRY,
+    DispatchContext,
+    DispatchRule,
+    _dispatch_rule,
+    _handle_bootstrap_dispatch,
+    _handle_contract_report_dispatch,
+    _handle_diag_dispatch,
+    _handle_doctor_dispatch,
+    _handle_evolve_dispatch,
+    _handle_goal_add_dispatch,
+    _handle_goal_add_run_dispatch,
+    _handle_goal_once_dispatch,
+    _handle_goal_run_dispatch,
+    _handle_goal_status_dispatch,
+    _handle_help_dispatch,
+    _handle_json_help_dispatch,
+    _handle_logs_dispatch,
+    _handle_memory_reindex_dispatch,
+    _handle_memory_search_dispatch,
+    _handle_metrics_show_dispatch,
+    _handle_mcp_call_dispatch,
+    _handle_mcp_tools_dispatch,
+    _handle_queue_clear_dispatch,
+    _handle_queue_list_dispatch,
+    _handle_readiness_dispatch,
+    _handle_sadd_resume_dispatch,
+    _handle_sadd_run_dispatch,
+    _handle_sadd_status_dispatch,
+    _handle_scaffold_dispatch,
+    _handle_show_config_dispatch,
+    _handle_watch_dispatch,
+    _handle_workflow_run_dispatch,
+    _maybe_add_goal,
+    _prepare_runtime_context,
+    _print_json_payload,
+    _resolve_beads_runtime_override,
+    _resolve_dispatch_action,
+    _resolve_runtime_mode,
+    _run_json_printing_callable_with_warnings,
+    dispatch_command,
+)
+from aura_cli.interactive_shell import cli_interaction_loop as _cli_interaction_loop
+from aura_cli.mcp_client import cmd_diag, cmd_mcp_call, cmd_mcp_tools
+import aura_cli.entrypoint as _entrypoint_mod
+import aura_cli.runtime_factory as _runtime_factory_mod
+from aura_cli.runtime_factory import (
+    _attach_advanced_loops as _attach_advanced_loops_impl,
+    _build_runtime_config as _build_runtime_config_impl,
+    _init_memory_and_brain as _init_memory_and_brain_impl,
+    _resolve_runtime_paths as _resolve_runtime_paths_impl,
+    _start_background_sync as _start_background_sync_impl,
+    create_runtime as _create_runtime_impl,
+)
+from aura_cli.entrypoint import main as _entrypoint_main_impl
 
 
-def cli_interaction_loop(args, runtime):
-    def _get_runtime_part(key):
-        return runtime.get(key)
-
-    project_root = runtime["project_root"]
-
-    while True:
-        try:
-            command_line = input("\nCommand (add/run/exit/status/help) > ").strip()
-            command_parts = command_line.split(maxsplit=1)
-            if not command_parts:
-                continue
-            cmd_name = command_parts[0]
-
-            if cmd_name == "add":
-                _handle_add(runtime["goal_queue"], command_line)
-            elif cmd_name == "run":
-                # Upgrade runtime if it's currently a queue-only runtime
-                orchestrator = runtime.get("orchestrator")
-                if isinstance(orchestrator, SimpleNamespace):
-                    print("Initializing full AURA runtime for execution...")
-                    full_runtime = create_runtime(project_root, overrides={"runtime_mode": "full"})
-                    runtime.update(full_runtime)
-
-                orchestrator = runtime.get("orchestrator")
-                _handle_run(args, runtime["goal_queue"], runtime["goal_archive"], orchestrator, runtime["debugger"], runtime["planner"], project_root)
-            elif cmd_name == "status":
-                _handle_status(
-                    runtime["goal_queue"],
-                    runtime["goal_archive"],
-                    runtime.get("orchestrator"),
-                    project_root=project_root,
-                    memory_persistence_path=runtime.get("memory_persistence_path"),
-                    memory_store=runtime.get("memory_store"),
-                )
-            elif cmd_name == "doctor":
-                _handle_doctor(project_root)
-            elif cmd_name == "clear":
-                _handle_clear()
-            elif cmd_name == "help":
-                _handle_help()
-            elif cmd_name == "exit":
-                _handle_exit()
-                break
-            else:
-                log_json("WARN", "invalid_cli_command", details={"command": cmd_name})
-        except EOFError:
-            log_json("INFO", "aura_cli_eof_received", details={"message": "End of input received, exiting."})
-            break
-
-
-# ── Thin adapter classes for improvement loops ────────────────────────────────
-
-
-class _WeaknessRemediatorLoop:
-    """Runs WeaknessRemediator every N cycles via on_cycle_complete interface."""
-
-    EVERY_N = 5
-
-    def __init__(self, remediator, brain, goal_queue):
-        self._r, self._brain, self._queue, self._n = remediator, brain, goal_queue, 0
-
-    def on_cycle_complete(self, _entry):
-        self._n += 1
-        if self._n % self.EVERY_N == 0:
-            self._r.run(self._brain, self._queue, limit=3)
-
-
-class _ConvergenceEscapeLoop:
-    """Checks convergence escape after every cycle via on_cycle_complete interface."""
-
-    def __init__(self, escape_loop):
-        self._escape = escape_loop
-
-    def on_cycle_complete(self, entry):
-        goal = str(entry.get("phase_outputs", {}).get("context", {}).get("goal", ""))
-        if not goal:
-            # fallback: try to find goal string anywhere in phase_outputs
-            goal = str(entry.get("phase_outputs", {}).get("plan", {}).get("goal", ""))
-        if goal:
-            self._escape.check_and_escape(goal, entry)
+def _sync_runtime_factory_compat() -> None:
+    for name in (
+        "Brain",
+        "MemoryStore",
+        "DebuggerAgent",
+        "PlannerAgent",
+        "default_agents",
+        "RouterAgent",
+        "BeadsBridge",
+        "ConfigManager",
+        "DEFAULT_CONFIG",
+        "config",
+        "GitTools",
+        "GoalArchive",
+        "GoalQueue",
+        "log_json",
+        "ModelAdapter",
+        "LoopOrchestrator",
+        "Policy",
+        "resolve_config_api_key",
+        "runtime_provider_status",
+        "runtime_provider_summary",
+        "resolve_project_path",
+        "VectorStore",
+        "_build_runtime_config",
+        "_resolve_runtime_paths",
+        "_init_memory_and_brain",
+        "_start_background_sync",
+        "_attach_advanced_loops",
+    ):
+        setattr(_runtime_factory_mod, name, globals()[name])
 
 
 def _build_runtime_config(overrides: dict | None = None) -> dict:
-    """Build a runtime-local effective config without mutating global config state."""
-    base_config = ConfigManager(config_file=config.config_file).show_config()
-    merged = copy.deepcopy(base_config)
-    runtime_overrides = dict(overrides or {})
-
-    for nested_key in (
-        "beads",
-        "model_routing",
-        "semantic_memory",
-        "local_model_profiles",
-        "local_model_routing",
-    ):
-        nested_value = runtime_overrides.pop(nested_key, None)
-        if isinstance(nested_value, dict):
-            merged.setdefault(nested_key, {})
-            merged[nested_key].update(nested_value)
-
-    merged.update(runtime_overrides)
-    return merged
+    _sync_runtime_factory_compat()
+    return _build_runtime_config_impl(overrides)
 
 
 def _resolve_runtime_paths(project_root: Path, runtime_config: dict | None = None) -> dict:
-    """Resolve all required storage paths against the project root."""
-    runtime_config = runtime_config or config.show_config()
-    paths = {}
-    for key in ["goal_queue_path", "goal_archive_path", "brain_db_path", "memory_store_path", "memory_persistence_path"]:
-        paths[key] = resolve_project_path(project_root, runtime_config.get(key, DEFAULT_CONFIG[key]), DEFAULT_CONFIG[key])
-    return paths
+    _sync_runtime_factory_compat()
+    return _resolve_runtime_paths_impl(project_root, runtime_config=runtime_config)
 
 
 def _init_memory_and_brain(brain_db_path: Path):
-    """Initialize the brain instance and cache adapter."""
-    try:
-        from memory.cache_adapter_factory import create_cache_adapter
-        from memory.momento_brain import MomentoBrain
-
-        _momento = create_cache_adapter()
-        brain_instance = MomentoBrain(_momento, db_path=str(brain_db_path))
-        log_json("INFO", "runtime_cache_adapter_active", details={"adapter": type(_momento).__name__})
-        return brain_instance, _momento
-    except Exception as _exc:
-        log_json("WARN", "cache_adapter_init_failed", details={"error": str(_exc)})
-        return Brain(db_path=str(brain_db_path)), None
+    _sync_runtime_factory_compat()
+    return _init_memory_and_brain_impl(brain_db_path)
 
 
 def _start_background_sync(project_root: Path, vector_store, context_graph):
-    """Start the project knowledge syncer in a background thread."""
-    from core.project_syncer import ProjectKnowledgeSyncer
-    import threading
-    import atexit
-
-    syncer = ProjectKnowledgeSyncer(vector_store=vector_store, context_graph=context_graph, project_root=project_root)
-    _stop_event = threading.Event()
-
-    def _bg_sync():
-        try:
-            syncer.sync_all()
-        except Exception as e:
-            log_json("WARN", "background_sync_failed", details={"error": str(e)})
-
-    _sync_thread = threading.Thread(target=_bg_sync, daemon=True, name="aura-bg-sync")
-    _sync_thread.start()
-
-    def _on_exit():
-        _stop_event.set()
-        _sync_thread.join(timeout=5)
-
-    atexit.register(_on_exit)
-    log_json("INFO", "background_sync_started")
+    _sync_runtime_factory_compat()
+    return _start_background_sync_impl(project_root, vector_store, context_graph)
 
 
 def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal_queue, momento, project_root):
-    """Attach improvement loops and CASPA-W workflow to the orchestrator."""
-    if runtime_mode in ("lean", "queue"):
-        return
-
-    # 1. Improvement Loops
-    try:
-        from core.reflection_loop import DeepReflectionLoop
-        from core.health_monitor import HealthMonitor
-        from core.weakness_remediator import WeaknessRemediator
-        from core.skill_weight_adapter import SkillWeightAdapter
-        from core.convergence_escape import ConvergenceEscapeLoop
-        from core.memory_compaction import MemoryCompactionLoop
-
-        _reflection = DeepReflectionLoop(memory_store, brain)
-        _health = HealthMonitor(orchestrator.skills, goal_queue, memory_store, project_root)
-        _remediator = _WeaknessRemediatorLoop(WeaknessRemediator(), brain, goal_queue)
-        _skill_adapt = SkillWeightAdapter(memory_root=str(memory_store.root.parent), momento=momento)
-        _conv_escape = _ConvergenceEscapeLoop(ConvergenceEscapeLoop(memory_store, goal_queue))
-        _compaction = MemoryCompactionLoop(memory_store)
-
-        orchestrator.attach_improvement_loops(_reflection, _health, _remediator, _skill_adapt, _conv_escape, _compaction)
-
-        # 1.1 Beads Sync Loop
-        if getattr(orchestrator, "beads_enabled", False) and "beads_skill" in orchestrator.skills:
-            from core.orchestrator import BeadsSyncLoop
-
-            _beads_sync = BeadsSyncLoop(orchestrator.skills["beads_skill"])
-            orchestrator.attach_improvement_loops(_beads_sync)
-    except Exception as _exc:
-        log_json("WARN", "improvement_loops_setup_failed", details={"error": str(_exc)})
-
-    # 2. CASPA-W
-    try:
-        from core.context_graph import ContextGraph
-        from core.adaptive_pipeline import AdaptivePipeline
-        from core.propagation_engine import PropagationEngine
-        from core.autonomous_discovery import AutonomousDiscovery
-        from core.evolution_loop import EvolutionLoop
-        from agents.mutator import MutatorAgent
-
-        _context_graph = ContextGraph()
-        _adaptive_pipeline = AdaptivePipeline(
-            context_graph=_context_graph,
-            skill_weight_adapter=_skill_adapt if "_skill_adapt" in locals() else None,
-            memory_store=memory_store,
-            brain=brain,
-        )
-        _propagation = PropagationEngine(goal_queue, _context_graph, memory_store)
-        _discovery = AutonomousDiscovery(goal_queue, memory_store, project_root=str(project_root))
-
-        # Evolution Loop
-        from core.recursive_improvement import RecursiveImprovementService
-
-        _ri_service = RecursiveImprovementService()
-        # EvolutionLoop expects the raw agents, not the orchestrator's adapters
-        _coder_adapter = orchestrator.agents.get("act")
-        _critic_adapter = orchestrator.agents.get("critique")
-        _planner_adapter = orchestrator.agents.get("plan")
-        _coder = getattr(_coder_adapter, "agent", _coder_adapter)
-        _critic = getattr(_critic_adapter, "agent", _critic_adapter)
-        _planner = getattr(_planner_adapter, "agent", _planner_adapter)
-        _git = GitTools(repo_path=str(project_root))
-        _mutator = MutatorAgent(project_root)
-        _evo = EvolutionLoop(
-            _planner,
-            _coder,
-            _critic,
-            brain,
-            getattr(brain, "vector_store", None),
-            _git,
-            _mutator,
-            improvement_service=_ri_service,
-            goal_queue=goal_queue,
-            orchestrator=orchestrator,
-            project_root=project_root,
-            skills=orchestrator.skills,
-            auto_execute_queued=False,
-        )
-
-        orchestrator.attach_caspa(
-            adaptive_pipeline=_adaptive_pipeline,
-            propagation_engine=_propagation,
-            context_graph=_context_graph,
-        )
-        orchestrator.attach_improvement_loops(_discovery, _evo)
-    except Exception as _exc:
-        log_json("WARN", "caspa_setup_failed", details={"error": str(_exc)})
+    _sync_runtime_factory_compat()
+    return _attach_advanced_loops_impl(orchestrator, runtime_mode, brain, memory_store, goal_queue, momento, project_root)
 
 
 def create_runtime(project_root: Path, overrides: dict | None = None):
-    """
-    Library-friendly initializer that sets up shared AURA runtime objects
-    without user input loops or forced chdir. Used by the HTTP server.
-    """
-    if str(project_root) not in sys.path:
-        sys.path.insert(0, str(project_root))
-
-    runtime_overrides = dict(overrides or {})
-    runtime_mode = runtime_overrides.pop("runtime_mode", "full")
-    beads_cli_override = runtime_overrides.pop("beads_cli_override", None)
-    runtime_config = _build_runtime_config(runtime_overrides)
-
-    paths = _resolve_runtime_paths(project_root, runtime_config=runtime_config)
-    goal_queue = GoalQueue(str(paths["goal_queue_path"]))
-    goal_archive = GoalArchive(str(paths["goal_archive_path"]))
-
-    config_api_key = resolve_config_api_key(runtime_config.get("api_key", ""))
-    provider_status = runtime_provider_status(config_api_key=config_api_key)
-
-    if not provider_status["chat_ready"]:
-        log_json("WARN", "aura_api_key_missing", details={"providers": runtime_provider_summary(provider_status)})
-        print("⚠️  AURA: No chat provider configured.", file=sys.stderr)
-
-    if runtime_mode == "queue":
-        return {
-            "goal_queue": goal_queue,
-            "goal_archive": goal_archive,
-            "orchestrator": SimpleNamespace(),
-            "beads_bridge": None,
-            "debugger": None,
-            "planner": None,
-            "loop": None,
-            "git_tools": None,
-            "project_root": project_root,
-            "model_adapter": None,
-            "memory_store": None,
-            "brain": None,
-            "vector_store": None,
-            "router": None,
-            "config_api_key": config_api_key,
-            "provider_status": provider_status,
-            "memory_persistence_path": paths["memory_persistence_path"],
-            "beads_cli_override": beads_cli_override,
-        }
-
-    brain_instance, _momento = _init_memory_and_brain(paths["brain_db_path"])
-    model_adapter = ModelAdapter()
-    model_adapter.enable_cache(brain_instance.db, ttl_seconds=3600, momento=_momento)
-
-    vector_store = VectorStore(model_adapter, brain_instance)
-    brain_instance.set_vector_store(vector_store)
-
-    router = RouterAgent(brain_instance, model_adapter)
-    model_adapter.set_router(router)
-
-    debugger_instance = DebuggerAgent(brain_instance, model_adapter)
-    planner_instance = PlannerAgent(brain_instance, model_adapter)
-
-    # Context Manager
-    try:
-        from core.context_manager import ContextManager
-
-        context_manager = ContextManager(vector_store=vector_store, project_root=project_root)
-        if runtime_mode != "lean":
-            _start_background_sync(project_root, vector_store, None)
-    except Exception as _exc:
-        log_json("WARN", "context_manager_init_failed", details={"error": str(_exc)})
-        context_manager = None
-
-    memory_store = _get_momento_store(paths["memory_store_path"], _momento) if _momento else MemoryStore(paths["memory_store_path"])
-    from memory.controller import memory_controller
-
-    memory_controller.set_store(memory_store)
-
-    beads_config = runtime_config.get("beads", DEFAULT_CONFIG["beads"]) or {}
-    bridge_command = beads_config.get("bridge_command")
-    beads_bridge = BeadsBridge.from_defaults(
-        project_root,
-        command=bridge_command,
-        timeout_seconds=float(beads_config.get("timeout_seconds", 20)),
-        enabled=bool(beads_config.get("enabled", True)),
-        required=bool(beads_config.get("required", True)),
-        persist_artifacts=bool(beads_config.get("persist_artifacts", True)),
-        scope=str(beads_config.get("scope", "goal_run")),
-    )
-
-    agents = default_agents(brain_instance, model_adapter, context_manager=context_manager)
-    telemetry_agent = agents.get("telemetry")
-    if telemetry_agent:
-        model_adapter.set_telemetry_agent(telemetry_agent)
-
-    orchestrator = LoopOrchestrator(
-        agents=agents,
-        memory_store=memory_store,
-        policy=Policy.from_config(copy.deepcopy(runtime_config)),
-        project_root=project_root,
-        strict_schema=bool(runtime_config.get("strict_schema", False)),
-        debugger=debugger_instance,
-        goal_queue=goal_queue,
-        goal_archive=goal_archive,
-        brain=brain_instance,
-        model=model_adapter,
-        runtime_mode=runtime_mode,
-        beads_bridge=beads_bridge,
-        beads_enabled=bool(beads_config.get("enabled", True)),
-        beads_required=bool(beads_config.get("required", True)),
-        beads_scope=str(beads_config.get("scope", "goal_run")),
-    )
-    orchestrator.beads_runtime_override = beads_cli_override
-
-    _attach_advanced_loops(orchestrator, runtime_mode, brain_instance, memory_store, goal_queue, _momento, project_root)
-
-    return {
-        "goal_queue": goal_queue,
-        "goal_archive": goal_archive,
-        "orchestrator": orchestrator,
-        "beads_bridge": beads_bridge,
-        "debugger": debugger_instance,
-        "planner": planner_instance,
-        "git_tools": GitTools(repo_path=str(project_root)),
-        "project_root": project_root,
-        "model_adapter": model_adapter,
-        "memory_store": memory_store,
-        "brain": brain_instance,
-        "vector_store": vector_store,
-        "router": router,
-        "config_api_key": config_api_key,
-        "provider_status": provider_status,
-        "memory_persistence_path": paths["memory_persistence_path"],
-        "beads_cli_override": beads_cli_override,
-    }
-
-
-def _get_momento_store(root, momento):
-    try:
-        from memory.momento_memory_store import MomentoMemoryStore
-
-        return MomentoMemoryStore(root, momento)
-    except Exception as e:
-        log_json("WARN", "memory_store_init_failed", details={"error": str(e)})
-        return MemoryStore(root)
-
-
-@dataclass
-class DispatchContext:
-    parsed: object
-    project_root: Path
-    runtime_factory: object
-    args: object
-    runtime: dict | None = None
-
-
-@dataclass(frozen=True)
-class DispatchRule:
-    action: str
-    requires_runtime: bool
-    handler: object
-
-
-def _resolve_dispatch_action(parsed) -> str:
-    action = getattr(parsed, "action", None)
-    if action:
-        return action
-    return "interactive"
-
-
-def _resolve_beads_runtime_override(args) -> tuple[dict[str, object] | None, dict[str, object] | None]:
-    beads_config = dict(config.get("beads", DEFAULT_CONFIG["beads"]) or {})
-    beads_override_requested = False
-
-    for arg_name, updates in (
-        ("beads", {"enabled": True}),
-        ("no_beads", {"enabled": False}),
-        ("beads_required", {"enabled": True, "required": True}),
-        ("beads_optional", {"enabled": True, "required": False}),
-    ):
-        if getattr(args, arg_name, False):
-            beads_config.update(updates)
-            beads_override_requested = True
-
-    if not beads_override_requested:
-        return None, None
-
-    beads_cli_override = {
-        "source": "cli",
-        "enabled": bool(beads_config.get("enabled", True)),
-        "required": bool(beads_config.get("required", True)),
-    }
-    return beads_config, beads_cli_override
-
-
-def _resolve_runtime_mode(action: str, args) -> str | None:
-    if action in {"goal_status", "goal_add", "interactive"}:
-        return "queue"
-    if action == "goal_once" and getattr(args, "dry_run", False):
-        return "lean"
-    return None
-
-
-def _prepare_runtime_context(ctx: DispatchContext) -> int | None:
-    if ctx.runtime is not None:
-        return None
-
-    args = ctx.args
-    action = _resolve_dispatch_action(ctx.parsed)
-    overrides: dict[str, object] = {}
-    if getattr(args, "dry_run", False):
-        overrides["dry_run"] = True
-    if getattr(args, "decompose", False):
-        overrides["decompose"] = True
-    if getattr(args, "model", None):
-        overrides["model_name"] = args.model
-    if getattr(args, "anthropic_api_key", None):
-        overrides["anthropic_api_key"] = args.anthropic_api_key
-
-    beads_config, beads_cli_override = _resolve_beads_runtime_override(args)
-    if beads_config is not None:
-        overrides["beads"] = beads_config
-        overrides["beads_cli_override"] = beads_cli_override
-
-    runtime_mode = _resolve_runtime_mode(action, args)
-    if runtime_mode is not None:
-        overrides["runtime_mode"] = runtime_mode
-
-    ctx.runtime = ctx.runtime_factory(ctx.project_root, overrides=overrides or None)
-    log_json("INFO", "aura_cli_online", details={"dry_run_mode": getattr(args, "dry_run", False)})
-
-    if not _check_project_writability(ctx.project_root):
-        log_json("CRITICAL", "aura_cli_startup_aborted_not_writable")
-        return 1
-    return None
-
-
-def _handle_help_dispatch(ctx: DispatchContext) -> int:
-    try:
-        print(render_help(getattr(ctx.args, "help_topics", None)))
-    except ValueError as exc:
-        if getattr(ctx.args, "json", False):
-            print(json.dumps(attach_cli_warnings(unknown_command_help_topic_payload(str(exc)), ctx.parsed)))
-        else:
-            print(f"Error: {exc}", file=sys.stderr)
-        return 2
-    return 0
-
-
-def _handle_json_help_dispatch(_ctx: DispatchContext) -> int:
-    print(render_help(format="json"))
-    return 0
-
-
-def _handle_doctor_dispatch(ctx: DispatchContext) -> int:
-    _handle_doctor(ctx.project_root)
-    return 0
-
-
-def _handle_readiness_dispatch(ctx: DispatchContext) -> int:
-    _handle_readiness()
-    return 0
-
-
-def _handle_bootstrap_dispatch(ctx: DispatchContext) -> int:
-
-    config.interactive_bootstrap()
-    return 0
-
-
-def _handle_show_config_dispatch(_ctx: DispatchContext) -> int:
-    """Print the resolved effective configuration as JSON."""
-    print(json.dumps(config.show_config(), indent=2, default=str))
-    return 0
-
-
-def _handle_contract_report_dispatch(ctx: DispatchContext) -> int:
-    from aura_cli.contract_report import (
-        build_cli_contract_report,
-        cli_contract_report_exit_code,
-        cli_contract_report_failure_message,
-        render_cli_contract_report,
-    )
-
-    report = build_cli_contract_report(
-        include_dispatch=not getattr(ctx.args, "no_dispatch", False),
-        dispatch_registry=COMMAND_DISPATCH_REGISTRY,
-    )
-    print(render_cli_contract_report(report, compact=getattr(ctx.args, "compact", False)), end="")
-
-    exit_code = cli_contract_report_exit_code(report, check=getattr(ctx.args, "check", False))
-    if exit_code:
-        print(cli_contract_report_failure_message(report), file=sys.stderr)
-    return exit_code
-
-
-def _print_json_payload(payload: dict, *, parsed=None, **json_kwargs) -> None:
-    print(json.dumps(attach_cli_warnings(payload, parsed), **json_kwargs))
-
-
-def _run_json_printing_callable_with_warnings(ctx: DispatchContext, func, *args, **kwargs) -> None:
-    warning_records = getattr(ctx.parsed, "warning_records", None) or []
-    if not warning_records:
-        func(*args, **kwargs)
-        return
-
-    buf = io.StringIO()
-    with redirect_stdout(buf):
-        func(*args, **kwargs)
-    raw = buf.getvalue()
-    if raw == "":
-        return
-
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError:
-        print(raw, end="")
-        return
-
-    _print_json_payload(payload, parsed=ctx.parsed, indent=2)
-
-
-def _handle_mcp_tools_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_tools)
-    return 0
-
-
-def _handle_mcp_call_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_call, ctx.args.mcp_call, ctx.args.mcp_args)
-    return 0
-
-
-def _handle_diag_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_diag)
-    return 0
-
-
-def _handle_logs_dispatch(ctx: DispatchContext) -> int:
-    from aura_cli.tui.log_streamer import LogStreamer
-
-    streamer = LogStreamer(level_filter=getattr(ctx.args, "level", "info"))
-    if getattr(ctx.args, "file", None):
-        streamer.stream_file(Path(ctx.args.file), tail=getattr(ctx.args, "tail", None), follow=getattr(ctx.args, "follow", False))
-    else:
-        streamer.stream_stdin(tail=getattr(ctx.args, "tail", None))
-    return 0
-
-
-def _handle_watch_dispatch(ctx: DispatchContext) -> int:
-    from aura_cli.tui.app import AuraStudio
-
-    studio = AuraStudio(runtime=ctx.runtime or {})
-    orchestrator = ctx.runtime.get("orchestrator")
-    if orchestrator:
-        orchestrator.attach_ui_callback(studio)
-
-    studio.run(autonomous=getattr(ctx.args, "autonomous", False))
-    return 0
-
-
-def _handle_queue_list_dispatch(ctx: DispatchContext) -> int:
-    goal_queue = ctx.runtime["goal_queue"]
-    if getattr(ctx.args, "json", False):
-        _print_json_payload({"queue": list(goal_queue.queue), "count": len(goal_queue.queue)}, parsed=ctx.parsed, indent=2)
-        return 0
-
-    if not goal_queue.queue:
-        print("Goal queue is empty.")
-        return 0
-
-    print(f"Goal Queue ({len(goal_queue.queue)} goals):")
-    for i, goal in enumerate(goal_queue.queue, 1):
-        print(f"  {i}. {goal}")
-    return 0
-
-
-def _handle_queue_clear_dispatch(ctx: DispatchContext) -> int:
-    goal_queue = ctx.runtime["goal_queue"]
-    count = len(goal_queue.queue)
-    goal_queue.clear()
-    if getattr(ctx.args, "json", False):
-        _print_json_payload({"cleared_count": count}, parsed=ctx.parsed, indent=2)
-    else:
-        print(f"Cleared {count} goals from the queue.")
-    return 0
-
-
-def _handle_memory_search_dispatch(ctx: DispatchContext) -> int:
-    from core.memory_types import RetrievalQuery
-
-    vector_store = ctx.runtime["vector_store"]
-    query = RetrievalQuery(query_text=ctx.args.query, k=ctx.args.limit)
-    hits = vector_store.search(query)
-
-    if getattr(ctx.args, "json", False):
-        payload = {"query": ctx.args.query, "hits": [{"score": hit.score, "source_ref": hit.source_ref, "content_preview": hit.content[:200] + "..." if len(hit.content) > 200 else hit.content} for hit in hits]}
-        _print_json_payload(payload, parsed=ctx.parsed, indent=2)
-        return 0
-
-    if not hits:
-        print(f"No results found for '{ctx.args.query}'")
-        return 0
-
-    print(f"Memory Search Results for '{ctx.args.query}':\n")
-    for i, hit in enumerate(hits, 1):
-        print(f"[{i}] Score: {hit.score:.3f} | Source: {hit.source_ref}")
-        print(f"Content: {hit.content[:200]}...")
-        print("-" * 40)
-    return 0
-
-
-def _handle_memory_reindex_dispatch(ctx: DispatchContext) -> int:
-    from core.project_syncer import ProjectKnowledgeSyncer
-
-    runtime = ctx.runtime
-    vector_store = runtime["vector_store"]
-    model_adapter = runtime["model_adapter"]
-
-    rebuild_stats = vector_store.rebuild(
-        {
-            "exclude_source_types": ["file"],
-            "drop_existing_embeddings": True,
-        }
-    )
-    syncer = ProjectKnowledgeSyncer(vector_store, None, project_root=str(ctx.project_root))
-    sync_stats = syncer.sync_all(force=True)
-
-    payload = {
-        "status": "ok" if "error" not in rebuild_stats else "error",
-        "embedding_model": model_adapter.model_id(),
-        "embedding_dims": model_adapter.dimensions(),
-        "rebuild": rebuild_stats,
-        "project_sync": sync_stats,
-    }
-
-    if getattr(ctx.args, "json", False):
-        _print_json_payload(payload, parsed=ctx.parsed, indent=2)
-        return 0 if payload["status"] == "ok" else 1
-
-    print("Semantic memory reindex complete.")
-    print(f"Embedding model: {payload['embedding_model']} ({payload['embedding_dims']} dims)")
-    print(f"Non-file records rebuilt: {rebuild_stats.get('embeddings_written', 0)}/{rebuild_stats.get('records_seen', 0)}")
-    print(f"Project sync: {sync_stats.get('files_processed', 0)} files processed, {sync_stats.get('chunks_created', 0)} chunks created, {sync_stats.get('files_skipped', 0)} skipped")
-    if payload["status"] != "ok":
-        print(f"Error: {rebuild_stats.get('error')}", file=sys.stderr)
-        return 1
-    return 0
-
-
-def _handle_metrics_show_dispatch(ctx: DispatchContext) -> int:
-    memory_store = ctx.runtime["memory_store"]
-    log_entries = memory_store.read_log(limit=100)
-
-    recent_data = []
-    successes = 0
-    skipped = 0
-    fails = 0
-    total_time = 0.0
-
-    # 1. Try structured summaries from decision log
-    summaries = [e["cycle_summary"] for e in log_entries if "cycle_summary" in e]
-    if summaries:
-        for s in summaries[-10:]:
-            outcome = s.get("outcome", "FAILED")
-            duration = s.get("duration_s", 0.0)
-
-            if outcome == "SUCCESS":
-                successes += 1
-            elif outcome == "SKIPPED":
-                skipped += 1
-            else:
-                fails += 1
-
-            total_time += duration
-            recent_data.append({"cycle_id": s.get("cycle_id"), "status": outcome, "duration": duration, "goal": s.get("goal")})
-
-    # 2. Fallback to legacy outcome strings in brain
-    if not recent_data:
-        brain = ctx.runtime["brain"]
-        outcomes = [e for e in brain.recall_recent(limit=100) if "outcome:" in e]
-        for raw in outcomes[:10]:
-            try:
-                # Format: outcome:id -> json
-                data = json.loads(raw.split("->", 1)[1])
-                status = "SUCCESS" if data.get("success") else "FAILED"
-                duration = data.get("completed_at", 0) - data.get("started_at", 0)
-
-                if data.get("success"):
-                    successes += 1
-                else:
-                    fails += 1
-
-                total_time += duration
-                recent_data.append({"cycle_id": data.get("cycle_id"), "status": status, "duration": duration, "goal": data.get("goal")})
-            except Exception:
-                continue
-
-    count = len(recent_data)
-    avg_time = total_time / count if count else 0
-    win_rate = (successes / count * 100) if count else 0
-
-    if getattr(ctx.args, "json", False):
-        payload = {"recent_cycles": recent_data, "summary": {"win_rate": win_rate, "avg_duration": avg_time, "count": count, "successes": successes, "skipped": skipped, "fails": fails}}
-        for i, s in enumerate(summaries[-10:]):
-            recent_data[i]["stop_reason"] = s.get("stop_reason")
-        _print_json_payload(payload, parsed=ctx.parsed, indent=2)
-        return 0
-
-    if not recent_data:
-        print("No metrics recorded yet.")
-        return 0
-
-    print("Recent Cycle Metrics (last 10 cycles):\n")
-    print(f"{'Cycle ID':<10} | {'Status':<8} | {'Dur':<6} | {'Stop Reason':<15} | {'Goal'}")
-    print("-" * 85)
-
-    for i, item in enumerate(recent_data):
-        cid = (item["cycle_id"] or "unknown")[:8]
-        stop = (summaries[-len(recent_data) :][i].get("stop_reason") or "N/A") if summaries else "N/A"
-        print(f"{cid:<10} | {item['status']:<8} | {item['duration']:>5.1f}s | {stop:<15} | {item['goal'][:30]}...")
-
-    print("-" * 85)
-    print(f"Summary: {win_rate:.1f}% success rate | {successes} pass, {skipped} skip, {fails} fail")
-    print(f"Avg duration: {avg_time:.1f}s")
-    return 0
-
-
-def _handle_workflow_run_dispatch(ctx: DispatchContext) -> int:
-    from core.operator_runtime import build_beads_runtime_metadata
-
-    args = ctx.args
-    orchestrator = ctx.runtime["orchestrator"]
-    result = orchestrator.run_loop(
-        args.workflow_goal,
-        max_cycles=args.workflow_max_cycles or args.max_cycles or config.get("policy_max_cycles", config.get("max_cycles", 5)),
-        dry_run=args.dry_run,
-    )
-    _print_json_payload(
-        {
-            "goal": args.workflow_goal,
-            "stop_reason": result.get("stop_reason"),
-            "cycles": len(result.get("history", [])),
-            "beads_runtime": build_beads_runtime_metadata(orchestrator),
-        },
-        parsed=ctx.parsed,
-        indent=2,
-    )
-    return 0
-
-
-def _handle_scaffold_dispatch(ctx: DispatchContext) -> int:
-    args = ctx.args
-    runtime = ctx.runtime
-
-    scaffolder = ScaffolderAgent(runtime.get("brain", None) or Brain(), runtime["model_adapter"])
-    result = scaffolder.scaffold_project(args.scaffold, args.scaffold_desc)
-
-    if getattr(args, "json", False):
-        _print_json_payload({"result": result, "project_name": args.scaffold}, parsed=ctx.parsed, indent=2)
-    else:
-        print(result)
-    return 0
-
-
-def _handle_evolve_dispatch(ctx: DispatchContext) -> int:
-    from core.evolution_loop import EvolutionLoop
-    from agents.mutator import MutatorAgent
-
-    args = ctx.args
-    runtime = ctx.runtime
-
-    _brain = runtime.get("brain") or Brain()
-    _model = runtime["model_adapter"]
-    _orchestrator = runtime.get("orchestrator")
-    _agents = getattr(_orchestrator, "agents", None) or default_agents(_brain, _model)
-    _coder_adapter = _agents.get("act")
-    _critic_adapter = _agents.get("critique")
-    _planner_adapter = _agents.get("plan")
-    _coder = getattr(_coder_adapter, "agent", _coder_adapter)
-    _critic = getattr(_critic_adapter, "agent", _critic_adapter)
-    _planner = getattr(_planner_adapter, "agent", _planner_adapter)
-    _git = GitTools(repo_path=str(ctx.project_root))
-    _mutator = MutatorAgent(ctx.project_root)
-    _vec = VectorStore(_model, _brain)
-    from core.recursive_improvement import RecursiveImprovementService
-
-    _ri_service = RecursiveImprovementService()
-    evo = EvolutionLoop(
-        _planner,
-        _coder,
-        _critic,
-        _brain,
-        _vec,
-        _git,
-        _mutator,
-        improvement_service=_ri_service,
-        goal_queue=runtime.get("goal_queue"),
-        orchestrator=_orchestrator,
-        project_root=ctx.project_root,
-        skills=getattr(_orchestrator, "skills", {}),
-        auto_execute_queued=True,
-    )
-    goal = args.goal or args.workflow_goal or "evolve and improve the AURA system"
-    execute_queued = None
-    if getattr(args, "queue_only", False):
-        execute_queued = False
-    elif getattr(args, "execute_queued", False):
-        execute_queued = True
-
-    run_kwargs = {}
-    if execute_queued is not None:
-        run_kwargs["execute_queued"] = execute_queued
-    if getattr(args, "dry_run", False):
-        run_kwargs["dry_run"] = True
-    if getattr(args, "proposal_limit", None):
-        run_kwargs["proposal_limit"] = args.proposal_limit
-    if getattr(args, "focus", None) and args.focus != "capability":
-        run_kwargs["focus"] = args.focus
-
-    result = evo.run(goal, **run_kwargs)
-    _print_json_payload(result, parsed=ctx.parsed, indent=2, default=str)
-    return 0
-
-
-def _handle_goal_status_dispatch(ctx: DispatchContext) -> int:
-    runtime = ctx.runtime
-    if ctx.args.json:
-        _run_json_printing_callable_with_warnings(
-            ctx,
-            _handle_status,
-            runtime["goal_queue"],
-            runtime["goal_archive"],
-            runtime["orchestrator"],
-            as_json=True,
-            project_root=ctx.project_root,
-            memory_persistence_path=runtime.get("memory_persistence_path"),
-            memory_store=runtime.get("memory_store"),
-        )
-    else:
-        _handle_status(
-            runtime["goal_queue"],
-            runtime["goal_archive"],
-            runtime["orchestrator"],
-            as_json=False,
-            project_root=ctx.project_root,
-            memory_persistence_path=runtime.get("memory_persistence_path"),
-            memory_store=runtime.get("memory_store"),
-        )
-    return 0
-
-
-def _maybe_add_goal(ctx: DispatchContext) -> None:
-    if not getattr(ctx.args, "add_goal", None):
-        return
-    goal_queue = ctx.runtime["goal_queue"]
-    goal_queue.add(ctx.args.add_goal)
-    log_json("INFO", "goal_added_from_cli", goal=ctx.args.add_goal)
-    if not getattr(ctx.args, "json", False):
-        print(f"Added goal: {ctx.args.add_goal}")
-        print(f"Queue length: {len(goal_queue.queue)}")
-
-
-def _handle_goal_once_dispatch(ctx: DispatchContext) -> int:
-    from core.explain import format_decision_log
-    from core.operator_runtime import build_beads_runtime_metadata
-
-    args = ctx.args
-    orchestrator = ctx.runtime["orchestrator"]
-    result = orchestrator.run_loop(
-        args.goal,
-        max_cycles=args.max_cycles or config.get("policy_max_cycles", config.get("max_cycles", 5)),
-        dry_run=args.dry_run,
-    )
-    history = result.get("history", [])
-    if args.explain:
-        print(format_decision_log(history))
-
-    if getattr(args, "json", False):
-        _print_json_payload(
-            {
-                "goal": args.goal,
-                "stop_reason": result.get("stop_reason"),
-                "cycles": len(history),
-                "dry_run": args.dry_run,
-                "beads_runtime": build_beads_runtime_metadata(orchestrator),
-            },
-            parsed=ctx.parsed,
-            indent=2,
-        )
-    else:
-        print("\n--- Goal Result Summary ---")
-        print(f"Goal: {args.goal}")
-        print(f"Stop Reason: {result.get('stop_reason')}")
-        print(f"Cycles Completed: {len(history)}")
-        if args.dry_run:
-            print("Mode: Dry-run (read-only)")
-        print("---------------------------\n")
-    return 0
-
-
-def _handle_goal_run_dispatch(ctx: DispatchContext) -> int:
-    args = ctx.args
-    runtime = ctx.runtime
-    run_goals_loop(
+    _sync_runtime_factory_compat()
+    runtime = _create_runtime_impl(project_root, overrides=overrides)
+    if os.environ.get("AURA_ENABLE_SWARM", "0") == "1":
+        try:
+            from core.swarm_supervisor import install_swarm_runtime
+            orchestrator = runtime.get("orchestrator")
+            registry = runtime.get("agents", {})
+            if orchestrator is not None:
+                install_swarm_runtime(orchestrator=orchestrator, registry=registry)
+                log_json("INFO", "swarm_runtime_activated", details={"project_root": str(project_root)})
+        except Exception as _swarm_err:
+            log_json("WARN", "swarm_runtime_activation_failed", details={"error": str(_swarm_err)})
+    return runtime
+
+
+def cli_interaction_loop(args, runtime):
+    return _cli_interaction_loop(
         args,
-        runtime["goal_queue"],
-        runtime["orchestrator"],
-        runtime["debugger"],
-        runtime["planner"],
-        runtime["goal_archive"],
-        ctx.project_root,
-        decompose=args.decompose,
+        runtime,
+        create_runtime,
+        input_func=input,
+        handle_add=_handle_add,
+        handle_run=_handle_run,
+        handle_status=_handle_status,
+        handle_doctor=_handle_doctor,
+        handle_clear=_handle_clear,
+        handle_help=_handle_help,
+        handle_exit=_handle_exit,
+        log_json_func=log_json,
     )
-    return 0
 
 
-def _handle_goal_add_dispatch(ctx: DispatchContext) -> int:
-    _maybe_add_goal(ctx)
-    return 0
-
-
-def _handle_goal_add_run_dispatch(ctx: DispatchContext) -> int:
-    _maybe_add_goal(ctx)
-    return _handle_goal_run_dispatch(ctx)
-
-
-def _handle_interactive_dispatch(ctx: DispatchContext) -> int:
-    runtime = ctx.runtime
-    cli_interaction_loop(ctx.args, runtime)
-    return 0
-
-
-def _handle_sadd_run_dispatch(ctx: DispatchContext) -> int:
-    from core.sadd.design_spec_parser import DesignSpecParser
-    from core.sadd.workstream_graph import WorkstreamGraph
-    from core.sadd.types import validate_spec
-
-    args = ctx.args
-    spec_path = Path(getattr(args, "spec", None) or "")
-    if not spec_path.is_file():
-        print(f"Error: spec file not found: {spec_path}", file=sys.stderr)
-        return 1
-
-    dry_run = getattr(args, "dry_run", True)
-    as_json = getattr(args, "json", False)
-
-    parser = DesignSpecParser()
-    design_spec = parser.parse_file(spec_path)
-
-    errors = validate_spec(design_spec)
-    if errors:
-        print("Validation errors:", file=sys.stderr)
-        for e in errors:
-            print(f"  - {e}", file=sys.stderr)
-        return 1
-
-    graph = WorkstreamGraph(design_spec.workstreams)
-    waves = graph.execution_waves()
-
-    if as_json:
-        result = {
-            "title": design_spec.title,
-            "parse_confidence": design_spec.parse_confidence,
-            "workstreams": len(design_spec.workstreams),
-            "waves": [[ws_id for ws_id in wave] for wave in waves],
-            "dry_run": dry_run,
-            "graph": graph.to_dict(),
-        }
-        print(json.dumps(result, indent=2))
-    else:
-        print(f"SADD Session: {design_spec.title}")
-        print(f"  Parse confidence: {design_spec.parse_confidence:.0%}")
-        print(f"  Workstreams: {len(design_spec.workstreams)}")
-        print(f"  Execution waves: {len(waves)}")
-        print()
-        for i, wave in enumerate(waves, 1):
-            print(f"  Wave {i}:")
-            for ws_id in wave:
-                node = graph.get_node(ws_id)
-                deps = node.spec.depends_on
-                dep_str = f" (depends on: {', '.join(deps)})" if deps else ""
-                print(f"    - {node.spec.title} [{ws_id}]{dep_str}")
-        print()
-        if dry_run:
-            print("  Mode: dry-run (no execution)")
-        else:
-            from core.sadd.session_coordinator import SessionCoordinator, create_orchestrator_factory
-            from core.sadd.session_store import SessionStore
-            from core.sadd.types import SessionConfig
-
-            runtime = ctx.runtime
-            _brain = runtime.get("brain") or Brain()
-            _model = runtime.get("model_adapter")
-
-            config = SessionConfig(
-                max_parallel=getattr(args, "max_parallel", 3),
-                max_cycles_per_workstream=getattr(args, "max_cycles", 5),
-                dry_run=False,
-                fail_fast=getattr(args, "fail_fast", False),
-            )
-            factory = create_orchestrator_factory(
-                brain=_brain, project_root=ctx.project_root, model_adapter=_model,
-            )
-            store = SessionStore()
-            coordinator = SessionCoordinator(
-                design_spec=design_spec,
-                orchestrator_factory=factory,
-                brain=_brain,
-                config=config,
-                session_store=store,
-            )
-            report = coordinator.run()
-            if as_json:
-                print(json.dumps(report.to_dict(), indent=2))
-            else:
-                print(report.summary())
-
-    return 0
-
-
-def _handle_sadd_status_dispatch(ctx: DispatchContext) -> int:
-    from core.sadd.session_store import SessionStore
-    import datetime
-
-    args = ctx.args
-    as_json = getattr(args, "json", False)
-    session_id = getattr(args, "session_id", None)
-    store = SessionStore()
-
-    if session_id:
-        session = store.get_session(session_id)
-        if not session:
-            print(f"Error: session not found: {session_id}", file=sys.stderr)
-            return 1
-        events = store.get_events(session_id, limit=20)
-        checkpoints = store.list_checkpoints(session_id)
-        if as_json:
-            print(json.dumps({"session": dict(session), "events": len(events), "checkpoints": len(checkpoints)}, indent=2, default=str))
-        else:
-            ts = datetime.datetime.fromtimestamp(session["created_at"]).strftime("%Y-%m-%d %H:%M")
-            print(f"Session: {session['id']}")
-            print(f"  Title: {session['title']}")
-            print(f"  Status: {session['status']}")
-            print(f"  Created: {ts}")
-            print(f"  Checkpoints: {len(checkpoints)}")
-            print(f"  Events: {len(events)}")
-            if session.get("report_json"):
-                report = json.loads(session["report_json"])
-                print(f"  Completed: {report.get('completed', 0)}, Failed: {report.get('failed', 0)}, Skipped: {report.get('skipped', 0)}")
-    else:
-        sessions = store.list_sessions()
-        if as_json:
-            print(json.dumps(sessions, indent=2, default=str))
-        else:
-            if not sessions:
-                print("No SADD sessions found.")
-            else:
-                print("Recent SADD sessions:")
-                for s in sessions:
-                    ts = datetime.datetime.fromtimestamp(s["created_at"]).strftime("%Y-%m-%d %H:%M")
-                    print(f"  [{s['status']}] {s['title']} ({s['id'][:8]}...) — {ts}")
-    return 0
-
-
-def _handle_sadd_resume_dispatch(ctx: DispatchContext) -> int:
-    from core.sadd.session_store import SessionStore
-
-    args = ctx.args
-    session_id = getattr(args, "session_id", None)
-    if not session_id:
-        print("Error: --session-id is required", file=sys.stderr)
-        return 1
-
-    store = SessionStore()
-    loaded = store.load_session_for_resume(session_id)
-    if not loaded:
-        print(f"Error: session not found or not resumable: {session_id}", file=sys.stderr)
-        return 1
-
-    spec, config, graph_state, results = loaded
-    print(f"Resume session: {spec.title} ({session_id[:8]}...)")
-    print(f"  Workstreams: {len(spec.workstreams)}")
-    if graph_state:
-        nodes = graph_state.get("nodes", {})
-        completed = sum(1 for n in nodes.values() if n.get("status") == "completed")
-        print(f"  Already completed: {completed}/{len(nodes)}")
-    print("  Note: Full resume execution not yet implemented (R2 preview)")
-    return 0
-
-
-def _dispatch_rule(action: str, handler) -> DispatchRule:
-    return DispatchRule(action, action_runtime_required(action), handler)
-
-
-COMMAND_DISPATCH_REGISTRY = {
-    "json_help": _dispatch_rule("json_help", _handle_json_help_dispatch),
-    "help": _dispatch_rule("help", _handle_help_dispatch),
-    "doctor": _dispatch_rule("doctor", _handle_doctor_dispatch),
-    "readiness": _dispatch_rule("readiness", _handle_readiness_dispatch),
-    "bootstrap": _dispatch_rule("bootstrap", _handle_bootstrap_dispatch),
-    "show_config": _dispatch_rule("show_config", _handle_show_config_dispatch),
-    "contract_report": _dispatch_rule("contract_report", _handle_contract_report_dispatch),
-    "mcp_tools": _dispatch_rule("mcp_tools", _handle_mcp_tools_dispatch),
-    "mcp_call": _dispatch_rule("mcp_call", _handle_mcp_call_dispatch),
-    "diag": _dispatch_rule("diag", _handle_diag_dispatch),
-    "logs": _dispatch_rule("logs", _handle_logs_dispatch),
-    "watch": _dispatch_rule("watch", _handle_watch_dispatch),
-    "studio": _dispatch_rule("studio", _handle_watch_dispatch),
-    "queue_list": _dispatch_rule("queue_list", _handle_queue_list_dispatch),
-    "queue_clear": _dispatch_rule("queue_clear", _handle_queue_clear_dispatch),
-    "memory_search": _dispatch_rule("memory_search", _handle_memory_search_dispatch),
-    "memory_reindex": _dispatch_rule("memory_reindex", _handle_memory_reindex_dispatch),
-    "metrics_show": _dispatch_rule("metrics_show", _handle_metrics_show_dispatch),
-    "workflow_run": _dispatch_rule("workflow_run", _handle_workflow_run_dispatch),
-    "scaffold": _dispatch_rule("scaffold", _handle_scaffold_dispatch),
-    "evolve": _dispatch_rule("evolve", _handle_evolve_dispatch),
-    "goal_status": _dispatch_rule("goal_status", _handle_goal_status_dispatch),
-    "goal_add": _dispatch_rule("goal_add", _handle_goal_add_dispatch),
-    "goal_add_run": _dispatch_rule("goal_add_run", _handle_goal_add_run_dispatch),
-    "goal_once": _dispatch_rule("goal_once", _handle_goal_once_dispatch),
-    "goal_run": _dispatch_rule("goal_run", _handle_goal_run_dispatch),
-    "sadd_run": _dispatch_rule("sadd_run", _handle_sadd_run_dispatch),
-    "sadd_status": _dispatch_rule("sadd_status", _handle_sadd_status_dispatch),
-    "sadd_resume": _dispatch_rule("sadd_resume", _handle_sadd_resume_dispatch),
-    "interactive": _dispatch_rule("interactive", _handle_interactive_dispatch),
-}
-
-
-def dispatch_command(parsed, *, project_root: Path, runtime_factory=create_runtime):
-    ctx = DispatchContext(parsed=parsed, project_root=project_root, runtime_factory=runtime_factory, args=parsed.namespace)
-
-    warning_records = getattr(parsed, "warning_records", None) or []
-    if warning_records:
-        for warning in warning_records:
-            print(f"Warning: {warning.message}", file=sys.stderr)
-    else:
-        for warning in parsed.warnings:
-            print(f"Warning: {warning}", file=sys.stderr)
-
-    action = _resolve_dispatch_action(parsed)
-    rule = COMMAND_DISPATCH_REGISTRY.get(action)
-    if rule is None:
-        print(f"Error: No dispatch rule registered for action '{action}'", file=sys.stderr)
-        return 1
-
-    if rule.requires_runtime:
-        prep_rc = _prepare_runtime_context(ctx)
-        if prep_rc is not None:
-            return prep_rc
-
-    return rule.handler(ctx)
+def _sync_entrypoint_compat() -> None:
+    for name in (
+        "CLIParseError",
+        "attach_cli_warnings",
+        "cli_parse_error_payload",
+        "dispatch_command",
+        "json",
+        "os",
+        "parse_cli_args",
+        "Path",
+        "readline",
+        "sys",
+    ):
+        setattr(_entrypoint_mod, name, globals()[name])
 
 
 def main(project_root_override=None, argv=None):
-    # Resolve project root
-    if project_root_override:
-        project_root = Path(project_root_override)
-    else:
-        # Since this file is now in aura_cli/cli_main.py, parent is aura_cli/, parent.parent is project root
-        project_root = Path(__file__).resolve().parent.parent
-
-        # If we are in a test environment, prefer the current working directory
-        if os.getenv("AURA_SKIP_CHDIR") == "1":
-            project_root = Path.cwd()
-        else:
-            # Change directory to the project root for consistency in real-world usage
-            os.chdir(project_root)
-
-    # Ensure project root is on path for module imports
-    if str(project_root) not in sys.path:
-        sys.path.insert(0, str(project_root))
-
-    # Setup readline history
-    if readline:
-        history_file = project_root / "memory" / ".aura_history"
-        try:
-            if history_file.exists():
-                readline.read_history_file(str(history_file))
-            readline.set_history_length(1000)
-        except Exception:
-            pass  # Silent fail if history loading fails
-
-    raw_argv = list(sys.argv[1:] if argv is None else argv)
-    try:
-        parsed = parse_cli_args(raw_argv)
-    except CLIParseError as exc:
-        if "--json" in raw_argv:
-            print(json.dumps(attach_cli_warnings(cli_parse_error_payload(exc))))
-        else:
-            print(f"Error: {exc}", file=sys.stderr)
-            if exc.usage:
-                print(exc.usage, file=sys.stderr)
-        return exc.code
-
-    try:
-        return dispatch_command(parsed, project_root=project_root)
-    finally:
-        if readline:
-            try:
-                readline.write_history_file(str(project_root / "memory" / ".aura_history"))
-            except Exception:
-                pass
+    _sync_entrypoint_compat()
+    return _entrypoint_main_impl(project_root_override=project_root_override, argv=argv)
 
 
 if __name__ == "__main__":

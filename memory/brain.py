@@ -1,4 +1,6 @@
 import sqlite3
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 import json  # Added this line
 import time
@@ -42,11 +44,18 @@ class Brain:
         self._db_path = db_file_path
         self.db = sqlite3.connect(str(db_file_path), check_same_thread=False)
         self.db.row_factory = sqlite3.Row
+        self._lock = threading.Lock()
         self._graph = None  # lazy — created on first relate() call
         self._recall_cache: dict = {}  # {query_key: (result, timestamp)}
         self._cache_ttl: float = 5.0  # seconds — invalidated on remember()
         self._init_db()
         self._migrate()
+
+    @contextmanager
+    def _db_lock(self):
+        """Context manager that serialises database operations across threads."""
+        with self._lock:
+            yield
 
     @property
     def graph(self):
@@ -57,44 +66,45 @@ class Brain:
 
     def _init_db(self):
         # WAL mode: concurrent reads don't block writes; NORMAL sync is safe and ~3x faster
-        self.db.execute("PRAGMA journal_mode=WAL")
-        self.db.execute("PRAGMA synchronous=NORMAL")
-        self.db.execute("PRAGMA cache_size=10000")
-        self.db.execute("""
-        CREATE TABLE IF NOT EXISTS schema_version(
-            version INTEGER PRIMARY KEY
-        )
-        """)
-        self.db.execute("""
-        CREATE TABLE IF NOT EXISTS memory(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            content TEXT
-        )
-        """)
-        self.db.execute("""
-        CREATE TABLE IF NOT EXISTS weaknesses(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            description TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
-        self.db.execute("""
-        CREATE TABLE IF NOT EXISTS vector_store_data(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            content TEXT,
-            embedding BLOB
-        )
-        """)
-        self.db.execute("""
-        CREATE TABLE IF NOT EXISTS kv_store(
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-        """)
-        # Index on memory.id enables fast ORDER BY id DESC LIMIT N queries (200x speedup
-        # vs full-table scan on 30k+ row databases)
-        self.db.execute("CREATE INDEX IF NOT EXISTS idx_memory_id ON memory(id)")
-        self.db.commit()
+        with self._lock:
+            self.db.execute("PRAGMA journal_mode=WAL")
+            self.db.execute("PRAGMA synchronous=NORMAL")
+            self.db.execute("PRAGMA cache_size=10000")
+            self.db.execute("""
+            CREATE TABLE IF NOT EXISTS schema_version(
+                version INTEGER PRIMARY KEY
+            )
+            """)
+            self.db.execute("""
+            CREATE TABLE IF NOT EXISTS memory(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                content TEXT
+            )
+            """)
+            self.db.execute("""
+            CREATE TABLE IF NOT EXISTS weaknesses(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                description TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            self.db.execute("""
+            CREATE TABLE IF NOT EXISTS vector_store_data(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                content TEXT,
+                embedding BLOB
+            )
+            """)
+            self.db.execute("""
+            CREATE TABLE IF NOT EXISTS kv_store(
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+            """)
+            # Index on memory.id enables fast ORDER BY id DESC LIMIT N queries (200x speedup
+            # vs full-table scan on 30k+ row databases)
+            self.db.execute("CREATE INDEX IF NOT EXISTS idx_memory_id ON memory(id)")
+            self.db.commit()
 
     def _get_schema_version(self) -> int:
         """Return stored schema version, or 0 if none recorded."""
@@ -105,9 +115,10 @@ class Brain:
             return 0
 
     def _set_schema_version(self, version: int) -> None:
-        self.db.execute("DELETE FROM schema_version")
-        self.db.execute("INSERT INTO schema_version(version) VALUES (?)", (version,))
-        self.db.commit()
+        with self._lock:
+            self.db.execute("DELETE FROM schema_version")
+            self.db.execute("INSERT INTO schema_version(version) VALUES (?)", (version,))
+            self.db.commit()
 
     def _migrate(self) -> None:
         """Apply any pending schema migrations idempotently.
@@ -138,25 +149,27 @@ class Brain:
 
         # v2 → v3: create kv_store table
         if current < 3:
-            self.db.execute("""
-            CREATE TABLE IF NOT EXISTS kv_store(
-                key TEXT PRIMARY KEY,
-                value TEXT
-            )
-            """)
-            self.db.commit()
+            with self._lock:
+                self.db.execute("""
+                CREATE TABLE IF NOT EXISTS kv_store(
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+                """)
+                self.db.commit()
             self._set_schema_version(3)
             log_json("INFO", "brain_migration", details={"from": 2, "to": 3})
             current = 3
 
         # v3 → v4: add tag column to memory table for SADD session-scoped context
         if current < 4:
-            try:
-                self.db.execute("ALTER TABLE memory ADD COLUMN tag TEXT DEFAULT NULL")
-            except sqlite3.OperationalError:
-                pass  # Column already exists
-            self.db.execute("CREATE INDEX IF NOT EXISTS idx_memory_tag ON memory(tag)")
-            self.db.commit()
+            with self._lock:
+                try:
+                    self.db.execute("ALTER TABLE memory ADD COLUMN tag TEXT DEFAULT NULL")
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
+                self.db.execute("CREATE INDEX IF NOT EXISTS idx_memory_tag ON memory(tag)")
+                self.db.commit()
             self._set_schema_version(4)
             log_json("INFO", "brain_migration", details={"from": 3, "to": 4})
 
@@ -166,14 +179,15 @@ class Brain:
             legacy = sqlite3.connect(str(legacy_path), check_same_thread=False)
             # memory rows
             rows = legacy.execute("SELECT content FROM memory").fetchall()
-            existing = {r[0] for r in self.db.execute("SELECT content FROM memory").fetchall()}
-            new_rows = [r for r in rows if r[0] not in existing]
-            if new_rows:
-                self.db.executemany("INSERT INTO memory(content) VALUES (?)", new_rows)
-            # weaknesses rows
-            wrows = legacy.execute("SELECT description, timestamp FROM weaknesses").fetchall()
-            self.db.executemany("INSERT OR IGNORE INTO weaknesses(description, timestamp) VALUES (?, ?)", wrows)
-            self.db.commit()
+            with self._lock:
+                existing = {r[0] for r in self.db.execute("SELECT content FROM memory").fetchall()}
+                new_rows = [r for r in rows if r[0] not in existing]
+                if new_rows:
+                    self.db.executemany("INSERT INTO memory(content) VALUES (?)", new_rows)
+                # weaknesses rows
+                wrows = legacy.execute("SELECT description, timestamp FROM weaknesses").fetchall()
+                self.db.executemany("INSERT OR IGNORE INTO weaknesses(description, timestamp) VALUES (?, ?)", wrows)
+                self.db.commit()
             legacy.close()
             log_json("INFO", "brain_legacy_absorbed", details={"path": str(legacy_path), "memory_rows": len(new_rows), "weakness_rows": len(wrows)})
         except Exception as exc:
@@ -191,8 +205,9 @@ class Brain:
             content_to_store = str(data)
 
         # Store in textual memory
-        self.db.execute("INSERT INTO memory(content) VALUES (?)", (content_to_store,))
-        self.db.commit()
+        with self._lock:
+            self.db.execute("INSERT INTO memory(content) VALUES (?)", (content_to_store,))
+            self.db.commit()
         # Invalidate recall cache on write
         self._recall_cache.clear()
 
@@ -200,11 +215,12 @@ class Brain:
         """Store a tagged memory entry for session-scoped context (e.g. SADD)."""
         content = str(text)
         try:
-            self.db.execute(
-                "INSERT INTO memory(content, tag) VALUES (?, ?)",
-                (content, tag),
-            )
-            self.db.commit()
+            with self._lock:
+                self.db.execute(
+                    "INSERT INTO memory(content, tag) VALUES (?, ?)",
+                    (content, tag),
+                )
+                self.db.commit()
             self._recall_cache.clear()
         except sqlite3.OperationalError:
             # tag column may not exist yet; fall back to untagged
@@ -224,8 +240,9 @@ class Brain:
     def forget_tagged(self, tag: str) -> int:
         """Delete all memories with the given tag. Returns count deleted."""
         try:
-            cursor = self.db.execute("DELETE FROM memory WHERE tag = ?", (tag,))
-            self.db.commit()
+            with self._lock:
+                cursor = self.db.execute("DELETE FROM memory WHERE tag = ?", (tag,))
+                self.db.commit()
             self._recall_cache.clear()
             return cursor.rowcount
         except sqlite3.OperationalError:
@@ -235,8 +252,9 @@ class Brain:
         """Set a persistent key-value pair. value will be JSON serialized."""
         if not isinstance(value, str):
             value = json.dumps(value)
-        self.db.execute("INSERT OR REPLACE INTO kv_store(key, value) VALUES (?, ?)", (key, value))
-        self.db.commit()
+        with self._lock:
+            self.db.execute("INSERT OR REPLACE INTO kv_store(key, value) VALUES (?, ?)", (key, value))
+            self.db.commit()
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a persistent key-value pair. Attempts to JSON deserialize the result."""
@@ -319,8 +337,9 @@ class Brain:
         return row[0] if row else 0
 
     def add_weakness(self, weakness_description: str):
-        self.db.execute("INSERT INTO weaknesses(description) VALUES (?)", (weakness_description,))
-        self.db.commit()
+        with self._lock:
+            self.db.execute("INSERT INTO weaknesses(description) VALUES (?)", (weakness_description,))
+            self.db.commit()
 
     def recall_weaknesses(self) -> list[str]:
         rows = self.db.execute("SELECT description FROM weaknesses ORDER BY timestamp DESC").fetchall()
@@ -364,22 +383,24 @@ class Brain:
     # ── Weakness queue tracking ──────────────────────────────────────────────
 
     def _ensure_weakness_queue_table(self):
-        self.db.execute("""
-        CREATE TABLE IF NOT EXISTS weakness_queued(
-            hash TEXT PRIMARY KEY,
-            queued_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
-        self.db.commit()
+        with self._lock:
+            self.db.execute("""
+            CREATE TABLE IF NOT EXISTS weakness_queued(
+                hash TEXT PRIMARY KEY,
+                queued_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            self.db.commit()
 
     def mark_weakness_queued(self, weakness_hash: str) -> None:
         """Record that a weakness has been turned into a goal (prevents re-queuing)."""
         self._ensure_weakness_queue_table()
-        self.db.execute(
-            "INSERT OR IGNORE INTO weakness_queued(hash) VALUES (?)",
-            (weakness_hash,),
-        )
-        self.db.commit()
+        with self._lock:
+            self.db.execute(
+                "INSERT OR IGNORE INTO weakness_queued(hash) VALUES (?)",
+                (weakness_hash,),
+            )
+            self.db.commit()
 
     def recall_queued_weakness_hashes(self) -> list[str]:
         """Return all weakness hashes that have already been queued as goals."""

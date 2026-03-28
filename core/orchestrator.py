@@ -55,6 +55,7 @@ from core.types import TaskRequest, TaskResult, ExecutionContext
 from core.mcp_agent_registry import agent_registry
 from core.mcp_client import MCPAsyncClient
 from memory.controller import memory_controller, MemoryTier
+from core.failure_router import FailureAction, FailureRouter
 
 MAX_SANDBOX_RETRIES = 3
 
@@ -224,6 +225,9 @@ class LoopOrchestrator:
 
         # Swarm integration — set by install_swarm_runtime when AURA_ENABLE_SWARM=1
         self.lesson_store: Any = None
+
+        # Failure routing — delegates to dedicated FailureRouter module
+        self._failure_router = FailureRouter(max_act_retries=MAX_SANDBOX_RETRIES)
 
     def _get_beads_skill(self):
         """Return the BEADS skill only when runtime BEADS integration is enabled."""
@@ -697,9 +701,9 @@ class LoopOrchestrator:
     def _route_failure(self, verification: Dict) -> str:
         """Classify a verification failure and return the recommended re-entry point.
 
-        Inspects the ``"failures"`` list and ``"logs"`` string in *verification*
-        for well-known signal words to determine how the orchestrator should
-        respond.
+        Delegates to :class:`~core.failure_router.FailureRouter` and maps the
+        returned :class:`~core.failure_router.FailureAction` back to the legacy
+        string literals expected by the rest of the orchestrator loop.
 
         Args:
             verification: The dict returned by the ``"verify"`` phase.  The
@@ -716,33 +720,23 @@ class LoopOrchestrator:
         """
         failures = " ".join(str(f) for f in verification.get("failures", []))
         logs = str(verification.get("logs", ""))
-        combined = (failures + " " + logs).lower()
+        error = (failures + " " + logs).strip()
+        verification_output = logs or None
 
-        structural_signals = [
-            "architecture",
-            "circular",
-            "api_breaking",
-            "breaking_change",
-            "design",
-            "interface",
-            "contract",
-        ]
-        external_signals = [
-            "dependency",
-            "network",
-            "env",
-            "environment",
-            "permission",
-            "not found",
-            "no module",
-            "import error",
-        ]
+        action = self._failure_router.route_failure(
+            phase="verify",
+            attempt=1,
+            error=error,
+            verification_output=verification_output,
+        )
 
-        if any(s in combined for s in structural_signals):
-            return "plan"
-        if any(s in combined for s in external_signals):
-            return "skip"
-        return "act"  # default: code-level fix is worth retrying
+        _action_to_route = {
+            FailureAction.RETRY_ACT: "act",
+            FailureAction.REPLAN: "plan",
+            FailureAction.SKIP: "skip",
+            FailureAction.ABORT: "skip",
+        }
+        return _action_to_route.get(action, "act")
 
     def _normalize_verification_result(self, verification: Dict) -> Dict:
         """Accept both legacy ``passed`` and canonical ``status`` verification payloads."""

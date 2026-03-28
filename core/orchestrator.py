@@ -55,7 +55,7 @@ from core.types import TaskRequest, TaskResult, ExecutionContext
 from core.mcp_agent_registry import agent_registry
 from core.mcp_client import MCPAsyncClient
 from memory.controller import memory_controller, MemoryTier
-from core.failure_router import FailureAction, FailureRouter
+from core.phase_dispatcher import PhaseDispatcher
 
 MAX_SANDBOX_RETRIES = 3
 
@@ -201,6 +201,13 @@ class LoopOrchestrator:
         # ── Innovation modules ──
         # Hook engine: guaranteed-execution lifecycle hooks at phase boundaries
         self.hook_engine = HookEngine(self._load_config_file())
+        # Phase dispatcher: thin delegation layer for phase → agent mapping + hooks
+        self._phase_dispatcher = PhaseDispatcher(
+            agents=self.agents,
+            hook_engine=self.hook_engine,
+            config=self.config,
+            project_root=str(self.project_root),
+        )
         # Confidence router: data-driven phase routing based on confidence scores
         self.confidence_router = ConfidenceRouter()
         # Quality trend analyzer: cross-cycle regression detection
@@ -222,12 +229,6 @@ class LoopOrchestrator:
         self.context_graph = None  # ContextGraph
         self._consecutive_fails: int = 0
         self._ui_callbacks: list = []
-
-        # Swarm integration — set by install_swarm_runtime when AURA_ENABLE_SWARM=1
-        self.lesson_store: Any = None
-
-        # Failure routing — delegates to dedicated FailureRouter module
-        self._failure_router = FailureRouter(max_act_retries=MAX_SANDBOX_RETRIES)
 
     def _get_beads_skill(self):
         """Return the BEADS skill only when runtime BEADS integration is enabled."""
@@ -442,8 +443,10 @@ class LoopOrchestrator:
     def _run_phase(self, name: str, input_data: Dict) -> Dict:
         """Dispatch a single pipeline phase to its registered agent.
 
-        Wraps execution with guaranteed-execution pre/post hooks and
-        records confidence scores for routing decisions.
+        Delegates to :attr:`_phase_dispatcher` which handles hook wrapping,
+        canary routing, and agent lookup.  Shadow-mode comparison is still
+        performed here because it requires access to :meth:`_dispatch_task`
+        and :meth:`_run_shadow_check` which live on the orchestrator.
 
         Args:
             name: The phase identifier (e.g. ``"plan"``, ``"act"``, ``"verify"``).
@@ -453,54 +456,12 @@ class LoopOrchestrator:
             The dict returned by ``agent.run()``, or an empty dict ``{}`` when
             no agent is registered for *name*.
         """
-        # Emergency bypass (M5 rollback)
-        if self.config.get("force_legacy_orchestrator"):
-            agent = self.agents.get(name)
-            return agent.run(input_data) if agent else {}
+        result = self._phase_dispatcher.dispatch(name, input_data)
 
-        # Pre-phase hooks (guaranteed execution — cannot be bypassed by model)
-        should_proceed, input_data = self.hook_engine.run_pre_hooks(name, input_data)
-        if not should_proceed:
-            log_json("WARN", "phase_blocked_by_hook", details={"phase": name})
-            return {"_blocked_by_hook": True, "phase": name}
-
-        # M5-002, M5-003: Canary Waves - Route low-risk and core tooling to async path
-        canary_phases = ["mcp_discovery", "mcp_health", "code_search", "investigation"]
-        if name in canary_phases and self.config.get("enable_new_orchestrator"):
-            log_json("INFO", "orchestrator_canary_routing", details={"phase": name})
-            try:
-                import anyio
-                import asyncio
-
-                req = TaskRequest(task_id=f"canary_{uuid.uuid4().hex[:8]}", agent_name=name, input_data=input_data, context=ExecutionContext(project_root=str(self.project_root)))
-
-                async def call_dispatch():
-                    return await self._dispatch_task(req)
-
-                try:
-                    asyncio.get_running_loop()
-                    task_res = anyio.from_thread.run(call_dispatch)
-                except RuntimeError:
-                    task_res = anyio.run(call_dispatch)
-
-                if task_res.status == "success":
-                    return task_res.output
-                log_json("ERROR", "orchestrator_canary_failed", details={"phase": name, "error": task_res.error})
-            except Exception as e:
-                log_json("ERROR", "orchestrator_canary_exception", details={"phase": name, "error": str(e)})
-
-        agent = self.agents.get(name)
-        if not agent:
-            return {}
-
-        result = agent.run(input_data)
-
-        # Shadow mode comparison (M4-005, M5-005)
-        if self.config.get("new_orchestrator_shadow_mode"):
+        # Shadow mode comparison (M4-005, M5-005) — kept here as it needs
+        # access to _dispatch_task which is an orchestrator-level concern.
+        if self.config.get("new_orchestrator_shadow_mode") and isinstance(result, dict) and not result.get("_blocked_by_hook"):
             self._run_shadow_check(name, input_data, result)
-
-        # Post-phase hooks (observational)
-        self.hook_engine.run_post_hooks(name, result if isinstance(result, dict) else {})
 
         return result
 
@@ -701,9 +662,9 @@ class LoopOrchestrator:
     def _route_failure(self, verification: Dict) -> str:
         """Classify a verification failure and return the recommended re-entry point.
 
-        Delegates to :class:`~core.failure_router.FailureRouter` and maps the
-        returned :class:`~core.failure_router.FailureAction` back to the legacy
-        string literals expected by the rest of the orchestrator loop.
+        Inspects the ``"failures"`` list and ``"logs"`` string in *verification*
+        for well-known signal words to determine how the orchestrator should
+        respond.
 
         Args:
             verification: The dict returned by the ``"verify"`` phase.  The
@@ -720,23 +681,33 @@ class LoopOrchestrator:
         """
         failures = " ".join(str(f) for f in verification.get("failures", []))
         logs = str(verification.get("logs", ""))
-        error = (failures + " " + logs).strip()
-        verification_output = logs or None
+        combined = (failures + " " + logs).lower()
 
-        action = self._failure_router.route_failure(
-            phase="verify",
-            attempt=1,
-            error=error,
-            verification_output=verification_output,
-        )
+        structural_signals = [
+            "architecture",
+            "circular",
+            "api_breaking",
+            "breaking_change",
+            "design",
+            "interface",
+            "contract",
+        ]
+        external_signals = [
+            "dependency",
+            "network",
+            "env",
+            "environment",
+            "permission",
+            "not found",
+            "no module",
+            "import error",
+        ]
 
-        _action_to_route = {
-            FailureAction.RETRY_ACT: "act",
-            FailureAction.REPLAN: "plan",
-            FailureAction.SKIP: "skip",
-            FailureAction.ABORT: "skip",
-        }
-        return _action_to_route.get(action, "act")
+        if any(s in combined for s in structural_signals):
+            return "plan"
+        if any(s in combined for s in external_signals):
+            return "skip"
+        return "act"  # default: code-level fix is worth retrying
 
     def _normalize_verification_result(self, verification: Dict) -> Dict:
         """Accept both legacy ``passed`` and canonical ``status`` verification payloads."""

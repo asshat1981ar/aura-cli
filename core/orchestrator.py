@@ -164,6 +164,12 @@ class LoopOrchestrator:
         self.config = config
         self.debugger = debugger  # Optional DebuggerAgent for auto-recovery
         self.human_gate = HumanGate()
+        self.lesson_store = None
+        try:
+            from memory.lesson_store import LessonStore
+            self.lesson_store = LessonStore()
+        except Exception:
+            pass
         self.auto_add_capabilities = auto_add_capabilities
         self.auto_queue_missing_capabilities = auto_queue_missing_capabilities
         self.auto_provision_mcp = auto_provision_mcp
@@ -1633,6 +1639,15 @@ class LoopOrchestrator:
         pipeline_cfg = self._configure_pipeline(goal, goal_type, phase_outputs)
         self._handle_capabilities(goal, pipeline_cfg, phase_outputs, dry_run)
 
+        # Inject lessons from previous cycles into planner context
+        if self.lesson_store:
+            try:
+                lessons = self.lesson_store.injectable_lessons()
+                if lessons:
+                    phase_outputs["injected_lessons"] = lessons
+            except Exception:
+                pass
+
         context = self._run_ingest_phase(goal, cycle_id, phase_outputs)
         if self.strict_schema and validate_phase_output("context", context):
             return self._build_early_stop_entry(
@@ -1727,7 +1742,16 @@ class LoopOrchestrator:
         phase_outputs["cycle_confidence"] = self.confidence_router.get_cycle_confidence()
 
         phase_outputs.pop("_failure_context", None)
-        return self._record_cycle_outcome(cycle_id, goal, goal_type, phase_outputs, started_at)
+        result = self._record_cycle_outcome(cycle_id, goal, goal_type, phase_outputs, started_at)
+
+        # Record lesson from this cycle
+        if self.lesson_store:
+            try:
+                self.lesson_store.record_cycle(result)
+            except Exception:
+                pass
+
+        return result
 
     def _estimate_confidence(self, output: Dict, phase: str) -> float:
         """Heuristically estimate confidence for a phase output.

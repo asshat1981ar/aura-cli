@@ -845,6 +845,45 @@ class LoopOrchestrator:
             pass
         return "act"
 
+    def _enrich_act_context(self, task_bundle: Dict) -> Dict:
+        """Inject quality-gate critique from n8n P3 Pipeline Coordinator into task_bundle.
+
+        P3 pre-fetches Dev Suite review results and injects them via
+        WebhookGoalRequest.metadata["quality_gate_critique"] into the cycle
+        context before the act phase.  This method reads from that context
+        field and prepends the critique to the task bundle so the CoderAgent
+        sees it as part of the prompt — no blocking HTTP call.
+
+        If quality_gate is not enabled or no critique is available, returns
+        task_bundle unchanged.
+        """
+        try:
+            config = self._load_config_file()
+            n8n_cfg = config.get("n8n_connector", {})
+            if not n8n_cfg.get("quality_gate_enabled", False):
+                return task_bundle
+
+            critique = (
+                getattr(self, "_cycle_context", {}).get("quality_gate_critique")
+                or (task_bundle.get("_cycle_context") or {}).get("quality_gate_critique")
+                or task_bundle.get("quality_gate_critique")
+            )
+            if not critique:
+                return task_bundle
+
+            task_bundle = dict(task_bundle) if isinstance(task_bundle, dict) else {}
+            existing = task_bundle.get("critique", "") or ""
+            task_bundle["critique"] = (
+                f"[Dev Suite Quality Gate Review]\n{critique}\n\n{existing}".strip()
+            )
+            log_json("INFO", "aura_act_context_enriched", details={
+                "critique_len": len(critique),
+                "quality_gate_enabled": True,
+            })
+        except Exception as exc:
+            log_json("WARN", "aura_act_context_enrich_failed", details={"error": str(exc)})
+        return task_bundle
+
     def _execute_act_verify_attempt(self, goal: str, plan: Dict, task_bundle: Dict, cycle_id: str, phase_outputs: Dict, dry_run: bool):
         """Execute one attempt of act -> sandbox -> apply -> verify.
 
@@ -873,6 +912,11 @@ class LoopOrchestrator:
                 task_bundle["rag_anti_patterns"] = rag_context.anti_patterns[:3]
         except Exception:
             pass
+
+        # Pipeline quality gate: inject critique from P3 Pipeline Coordinator.
+        # P3 pre-fetches Dev Suite review and injects it via WebhookGoalRequest.metadata
+        # into the cycle_context before this phase runs.  No blocking HTTP call here.
+        task_bundle = self._enrich_act_context(task_bundle)
 
         if n_best > 1 and self.model and not dry_run:
             # N-Best code generation with critic tournament

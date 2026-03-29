@@ -68,6 +68,8 @@ __pycache__/
 dist/
 build/
 .eggs/
+.botpress/
+.adk/bot/node_modules/
 
 # ── Database / runtime state (auto-generated) ─────────────────────────────
 memory/capability_status.json

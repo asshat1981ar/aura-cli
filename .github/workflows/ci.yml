@@ -71,7 +71,7 @@ jobs:
         pip install bandit[toml] pip-audit
         pip install -e ".[dev]"
     - name: Bandit security scan (HIGH severity blocking)
-      run: bandit -c .bandit.yml -r aura_cli/ core/ agents/ memory/ tools/ -f screen -l -i
+      run: bandit -c .bandit.yml -r aura_cli/ core/ agents/ memory/ tools/ -f screen -lll -ii
     - name: Secrets scan
       run: python3 scripts/scan_secrets.py .
     - name: Dependency audit

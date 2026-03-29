@@ -1,160 +1,192 @@
 {
-    "model_name": "google/gemini-2.0-flash-exp:free",
-    "api_key": null,
-    "openai_api_key": null,
-    "local_model_profiles": {
-        "android_coder": {
-            "provider": "openai_compatible",
-            "base_url": "http://127.0.0.1:8080/v1",
-            "model": "qwen2.5-coder-3b-instruct-q4",
-            "temperature": 0.1,
-            "max_tokens": 2048
-        },
-        "android_planner": {
-            "provider": "openai_compatible",
-            "base_url": "http://127.0.0.1:8081/v1",
-            "model": "phi-4-mini-instruct-q4",
-            "temperature": 0.2,
-            "max_tokens": 1536
-        },
-        "android_embeddings": {
-            "provider": "openai_compatible",
-            "base_url": "http://127.0.0.1:8082/v1",
-            "embedding_model": "bge-small-en-v1.5-q8_0",
-            "embedding_dims": 384
-        }
+  "model_name": "google/gemini-2.0-flash-exp:free",
+  "api_key": null,
+  "openai_api_key": null,
+  "local_model_profiles": {
+    "android_coder": {
+      "provider": "openai_compatible",
+      "base_url": "http://127.0.0.1:8080/v1",
+      "model": "qwen2.5-coder-3b-instruct-q4",
+      "temperature": 0.1,
+      "max_tokens": 2048
     },
-    "local_model_routing": {
-        "planning": "android_planner",
-        "analysis": "android_planner",
-        "critique": "android_planner",
-        "code_generation": "android_coder",
-        "embedding": "android_embeddings",
-        "quality": "android_planner",
-        "fast": "android_coder"
+    "android_planner": {
+      "provider": "openai_compatible",
+      "base_url": "http://127.0.0.1:8081/v1",
+      "model": "phi-4-mini-instruct-q4",
+      "temperature": 0.2,
+      "max_tokens": 1536
     },
-    "model_routing": {
-        "code_generation": "google/gemini-2.0-flash-exp:free",
-        "planning": "google/gemini-2.0-flash-exp:free",
-        "analysis": "google/gemini-2.0-flash-exp:free",
-        "critique": "google/gemini-2.0-flash-exp:free",
-        "fast": "google/gemini-2.0-flash-exp:free",
-        "quality": "google/gemini-2.5-pro"
-    },
-    "mcp_servers": {
-        "dev_tools": 8001,
-        "skills": 8002,
-        "control": 8003,
-        "thinking": 8004,
-        "agentic_loop": 8006,
-        "copilot": 8007,
-        "hub": 8010,
-        "docker": 8011,
-        "kubernetes": 8012,
-        "neo4j": 8013,
-        "redis": 8014,
-        "notification": 8015,
-        "monitoring": 8016,
-        "weaviate": 8017,
+    "android_embeddings": {
+      "provider": "openai_compatible",
+      "base_url": "http://127.0.0.1:8082/v1",
+      "embedding_model": "bge-small-en-v1.5-q8_0",
+      "embedding_dims": 384
+    }
+  },
+  "local_model_routing": {
+    "planning": "android_planner",
+    "analysis": "android_planner",
+    "critique": "android_planner",
+    "code_generation": "android_coder",
+    "embedding": "android_embeddings",
+    "quality": "android_planner",
+    "fast": "android_coder"
+  },
+  "model_routing": {
+    "code_generation": "google/gemini-2.0-flash-exp:free",
+    "planning": "google/gemini-2.0-flash-exp:free",
+    "analysis": "google/gemini-2.0-flash-exp:free",
+    "critique": "google/gemini-2.0-flash-exp:free",
+    "fast": "google/gemini-2.0-flash-exp:free",
+    "quality": "google/gemini-2.5-pro"
+  },
+  "mcp_servers": {
+    "dev_tools": 8001,
+    "skills": 8002,
+    "control": 8003,
+    "thinking": 8004,
+    "agentic_loop": 8006,
+    "copilot": 8007,
+    "hub": 8010,
+    "docker": 8011,
+    "kubernetes": 8012,
+    "neo4j": 8013,
+    "redis": 8014,
+    "notification": 8015,
+    "monitoring": 8016,
+    "weaviate": 8017,
     "sadd": 8020,
     "discovery": 8025,
     "swarm": 8050
+  },
+  "semantic_memory": {
+    "top_k": 9,
+    "embedding_model": "local_profile:android_embeddings"
+  },
+  "n_best_candidates": 1,
+  "n_best_temperature_spread": [
+    0.2,
+    0.5,
+    0.8
+  ],
+  "tree_of_thought_candidates": 1,
+  "code_rag_enabled": true,
+  "skill_correlation_enabled": true,
+  "hooks": {},
+  "a2a": {
+    "enabled": true,
+    "port": 8018
+  },
+  "environments": {
+    "gemini": {
+      "cli_type": "gemini-cli",
+      "port_range": [
+        8020,
+        8029
+      ]
     },
-    "semantic_memory": {
-        "top_k": 9,
-        "embedding_model": "local_profile:android_embeddings"
+    "claude": {
+      "cli_type": "claude-code",
+      "port_range": [
+        8030,
+        8039
+      ]
     },
-    "n_best_candidates": 1,
-    "n_best_temperature_spread": [0.2, 0.5, 0.8],
-    "tree_of_thought_candidates": 1,
-    "code_rag_enabled": true,
-    "skill_correlation_enabled": true,
-    "hooks": {},
-    "a2a": {
-        "enabled": true,
-        "port": 8018
-    },
-    "environments": {
-        "gemini": {
-            "cli_type": "gemini-cli",
-            "port_range": [8020, 8029]
-        },
-        "claude": {
-            "cli_type": "claude-code",
-            "port_range": [8030, 8039]
-        },
-        "codex": {
-            "cli_type": "codex-cli",
-            "port_range": [8040, 8049]
-        }
-    },
-    "experiment_tracking": {
-        "enabled": true,
-        "experiments_path": "memory/experiments.jsonl"
-    },
-    "memory_consolidation": {
-        "enabled": true,
-        "retention_threshold": 0.2,
-        "summarize_after_days": 7,
-        "max_memories": 10000
-    },
-    "openai_connector": {
-        "enabled": true,
-        "project_id": "proj_rIOqUaBNgcX5WrshqGtP76Sy",
-        "workflow_id": "wf_69c15cfbfebc8190bc011c463217ae48073852aff389ce81",
-        "webhook_url": "https://aura-webhooks.codeevo.dev/api/openai/events",
-        "webhook_events": [
-            "batch.completed",
-            "batch.failed",
-            "response.completed",
-            "response.failed",
-            "eval.run.succeeded",
-            "eval.run.failed"
-        ],
-        "agent_mapping": {
-            "code_architecture": "agents/coder.py",
-            "code_review": "agents/critic.py",
-            "devops": "agents/scaffolder.py",
-            "testing": "agents/tester.py",
-            "planning": "agents/planner.py",
-            "security_audit": "agents/verifier.py"
-        },
-        "sync_on_events": [
-            "response.completed",
-            "eval.run.succeeded"
-        ],
-        "auto_dispatch": true
-    },
-    "github_connector": {
-        "enabled": true,
-        "repo": "asshat1981ar/aura-cli",
-        "branch": "main",
-        "auto_pr": true,
-        "ci_workflows": [
-            "ci.yml",
-            "release.yml",
-            "claude-code-review.yml",
-            "coder-automation.yml"
-        ],
-        "webhook_bridge": {
-            "enabled": true,
-            "endpoint": "/api/github/events",
-            "events": [
-                "push",
-                "pull_request",
-                "workflow_run",
-                "issues"
-            ]
-        }
-    },
-    "autogen": {
-        "enabled": true,
-        "agents": [
-            {"name": "ideator", "system_message": "Generate creative solutions"},
-            {"name": "critic", "system_message": "Find risks and flaws"},
-            {"name": "synthesizer", "system_message": "Merge ideas into actionable plan"}
-        ],
-        "max_turns": 6,
-        "llm_config": {}
+    "codex": {
+      "cli_type": "codex-cli",
+      "port_range": [
+        8040,
+        8049
+      ]
     }
+  },
+  "experiment_tracking": {
+    "enabled": true,
+    "experiments_path": "memory/experiments.jsonl"
+  },
+  "memory_consolidation": {
+    "enabled": true,
+    "retention_threshold": 0.2,
+    "summarize_after_days": 7,
+    "max_memories": 10000
+  },
+  "openai_connector": {
+    "enabled": true,
+    "project_id": "proj_rIOqUaBNgcX5WrshqGtP76Sy",
+    "workflow_id": "wf_69c15cfbfebc8190bc011c463217ae48073852aff389ce81",
+    "webhook_url": "https://aura-webhooks.codeevo.dev/api/openai/events",
+    "webhook_events": [
+      "batch.completed",
+      "batch.failed",
+      "response.completed",
+      "response.failed",
+      "eval.run.succeeded",
+      "eval.run.failed"
+    ],
+    "agent_mapping": {
+      "code_architecture": "agents/coder.py",
+      "code_review": "agents/critic.py",
+      "devops": "agents/scaffolder.py",
+      "testing": "agents/tester.py",
+      "planning": "agents/planner.py",
+      "security_audit": "agents/verifier.py"
+    },
+    "sync_on_events": [
+      "response.completed",
+      "eval.run.succeeded"
+    ],
+    "auto_dispatch": true
+  },
+  "github_connector": {
+    "enabled": true,
+    "repo": "asshat1981ar/aura-cli",
+    "branch": "main",
+    "auto_pr": true,
+    "ci_workflows": [
+      "ci.yml",
+      "release.yml",
+      "claude-code-review.yml",
+      "coder-automation.yml"
+    ],
+    "webhook_bridge": {
+      "enabled": true,
+      "endpoint": "/api/github/events",
+      "events": [
+        "push",
+        "pull_request",
+        "workflow_run",
+        "issues"
+      ]
+    }
+  },
+  "autogen": {
+    "enabled": true,
+    "agents": [
+      {
+        "name": "ideator",
+        "system_message": "Generate creative solutions"
+      },
+      {
+        "name": "critic",
+        "system_message": "Find risks and flaws"
+      },
+      {
+        "name": "synthesizer",
+        "system_message": "Merge ideas into actionable plan"
+      }
+    ],
+    "max_turns": 6,
+    "llm_config": {}
+  },
+  "n8n_connector": {
+    "base_url": "http://localhost:5678",
+    "enabled": true,
+    "notification_webhook": "http://localhost:5678/webhook/aura-notify",
+    "quality_gate_enabled": false,
+    "quality_gate_webhook": "http://localhost:5678/webhook/plan-review",
+    "feedback_loop_webhook": "http://localhost:5678/webhook/aura-reflect",
+    "pipeline_coordinator_webhook": "http://localhost:5678/webhook/pipeline-coordinate",
+    "circuit_breaker_enabled": true
+  }
 }

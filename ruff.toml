@@ -43,6 +43,9 @@ ignore = [
 # TUI uses conditional try/except imports for optional rich library
 "aura_cli/tui/app.py" = ["F401", "E402"]
 "aura_cli/tui/panels/cycle_panel.py" = ["F401"]
+# cli_main.py is a backward-compat re-export hub; all its imports are
+# intentionally surfaced as module attributes for external consumers and tests.
+"aura_cli/cli_main.py" = ["F401"]
 # Scripts are utility runners, relaxed rules
 "scripts/*" = ["F401", "F841", "E402"]
 # Tests often import for side effects or future use

@@ -1,14 +1,93 @@
+import io
+import json
 import os
+import sys
+from contextlib import redirect_stdout
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 try:
     import readline
 except ImportError:
     readline = None
 
+# Re-exported for backward compatibility — tests and external code access these
+# as attributes of this module. Do not remove these imports.
+from memory.brain import Brain
+from memory.store import MemoryStore
+from agents.debugger import DebuggerAgent
+from agents.planner import PlannerAgent
+from agents.registry import default_agents
+from agents.router import RouterAgent
+from core.beads_bridge import BeadsBridge
+from core.config_manager import ConfigManager, DEFAULT_CONFIG, config
+from core.git_tools import GitTools
+from core.goal_archive import GoalArchive
+from core.goal_queue import GoalQueue
 from core.logging_utils import log_json
+from core.model_adapter import ModelAdapter
+from core.orchestrator import LoopOrchestrator
+from core.policy import Policy
+from core.runtime_auth import resolve_config_api_key, runtime_provider_status, runtime_provider_summary
+from core.runtime_paths import resolve_project_path
+from core.task_handler import _check_project_writability, run_goals_loop
+from core.vector_store import VectorStore
+from agents.scaffolder import ScaffolderAgent
 
-from aura_cli.commands import _handle_add, _handle_run, _handle_status, _handle_exit, _handle_help, _handle_doctor, _handle_clear
+from aura_cli.cli_options import (
+    CLIParseError,
+    attach_cli_warnings,
+    cli_parse_error_payload,
+    parse_cli_args,
+    render_help,
+    unknown_command_help_topic_payload,
+)
+from aura_cli.options import action_runtime_required
+from aura_cli.dispatch import (
+    COMMAND_DISPATCH_REGISTRY,
+    DispatchContext,
+    DispatchRule,
+    _dispatch_rule,
+    _handle_bootstrap_dispatch,
+    _handle_contract_report_dispatch,
+    _handle_diag_dispatch,
+    _handle_doctor_dispatch,
+    _handle_evolve_dispatch,
+    _handle_goal_add_dispatch,
+    _handle_goal_add_run_dispatch,
+    _handle_goal_once_dispatch,
+    _handle_goal_run_dispatch,
+    _handle_goal_status_dispatch,
+    _handle_help_dispatch,
+    _handle_json_help_dispatch,
+    _handle_logs_dispatch,
+    _handle_memory_reindex_dispatch,
+    _handle_memory_search_dispatch,
+    _handle_metrics_show_dispatch,
+    _handle_mcp_call_dispatch,
+    _handle_mcp_tools_dispatch,
+    _handle_queue_clear_dispatch,
+    _handle_queue_list_dispatch,
+    _handle_readiness_dispatch,
+    _handle_sadd_resume_dispatch,
+    _handle_sadd_run_dispatch,
+    _handle_sadd_status_dispatch,
+    _handle_scaffold_dispatch,
+    _handle_show_config_dispatch,
+    _handle_watch_dispatch,
+    _handle_workflow_run_dispatch,
+    _maybe_add_goal,
+    _prepare_runtime_context,
+    _print_json_payload,
+    _resolve_beads_runtime_override,
+    _resolve_dispatch_action,
+    _resolve_runtime_mode,
+    _run_json_printing_callable_with_warnings,
+    dispatch_command,
+)
+from aura_cli.mcp_client import cmd_diag, cmd_mcp_call, cmd_mcp_tools
+from aura_cli.commands import _handle_add, _handle_run, _handle_status, _handle_exit, _handle_help, _handle_doctor, _handle_clear, _handle_readiness
 
 from aura_cli.interactive_shell import cli_interaction_loop as _cli_interaction_loop
 import aura_cli.entrypoint as _entrypoint_mod

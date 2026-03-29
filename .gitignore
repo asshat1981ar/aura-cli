@@ -134,3 +134,16 @@ gha-creds-*.json
 
 # ── Agent ephemeral memory ───────────────────────────────────────────
 .agentMemory/
+
+# ── sdlc-orchestrator (Botpress ADK scaffold) ────────────────────────
+sdlc-orchestrator/node_modules/
+sdlc-orchestrator/.adk/bot/node_modules/
+sdlc-orchestrator/.adk/bot/dist/
+sdlc-orchestrator/.adk/bot/bp_modules/
+sdlc-orchestrator/.adk/bot/.botpress/
+sdlc-orchestrator/.adk/bot/traces/
+sdlc-orchestrator/.adk/logs/
+
+# ── swarm-mcp-server ─────────────────────────────────────────────────
+swarm-mcp-server/node_modules/
+swarm-mcp-server/dist/

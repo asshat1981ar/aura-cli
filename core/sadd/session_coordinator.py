@@ -13,7 +13,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from core.sadd.sub_agent_runner import SubAgentRunner
 from core.sadd.types import (
@@ -24,6 +24,9 @@ from core.sadd.types import (
     WorkstreamResult,
 )
 from core.sadd.workstream_graph import WorkstreamGraph
+
+if TYPE_CHECKING:
+    from core.sadd.mcp_tool_bridge import MCPToolBridge
 
 
 def create_orchestrator_factory(

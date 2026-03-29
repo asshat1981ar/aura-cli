@@ -9,8 +9,6 @@ that is iteratively critiqued and refined until it meets a quality threshold.
 """
 from __future__ import annotations
 
-import json
-import os
 import time
 from typing import Any, Dict, List, Optional
 
@@ -73,7 +71,7 @@ def _heuristic_evaluate(report: str, raw_data: Dict[str, Any]) -> Dict[str, Any]
     accuracy_checks = []
     sec = raw_data.get("Security Scanner", {}).get("result", {})
     cov = raw_data.get("Test Coverage Analyzer", {}).get("result", {})
-    cplx = raw_data.get("Complexity Scorer", {}).get("result", {})
+    _cplx = raw_data.get("Complexity Scorer", {}).get("result", {})
     arch = raw_data.get("Architecture Validator", {}).get("result", {})
 
     for val, label in [
@@ -220,7 +218,7 @@ def _generate_report(raw_data: Dict[str, Any], iteration: int, critique: Optiona
     for item in items:
         severity_badge = {"critical": "🔴", "high": "🟠", "medium": "🟡"}.get(item["severity"], "⚪")
         lines += [
-            f"",
+            "",
             f"### {item['rank']}. {severity_badge} [{item['domain'].upper()}] {item['finding']}",
             f"**Action**: {item['action']}",
         ]

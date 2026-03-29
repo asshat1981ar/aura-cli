@@ -7,10 +7,9 @@ and provides semantic search using Jaccard similarity and keyword overlap.
 import os
 import json
 import logging
-import asyncio
 import requests
-from typing import List, Dict, Any, Optional
-from fastapi import FastAPI, HTTPException, Header
+from typing import List, Dict, Any
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 # Setup logging

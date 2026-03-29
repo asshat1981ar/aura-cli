@@ -27,6 +27,10 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.types import AgentSpec
+    from agents.planner import PlannerAgent
+    from agents.critic import CriticAgent
+    from agents.coder import CoderAgent
+    from agents.sandbox import SandboxAgent
 
 # ---------------------------------------------------------------------------
 # Capability declarations

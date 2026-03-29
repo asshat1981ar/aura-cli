@@ -99,7 +99,8 @@ class TestVectorStoreSearchAppliesLimit(unittest.TestCase):
             dims = 4
             embedding_blob = np.ones(dims, dtype=np.float32).tobytes()
             now = 1_700_000_000.0
-            import uuid, hashlib
+            import uuid
+            import hashlib
 
             # Insert SEARCH_LIMIT + 50 rows directly so we exceed the cap
             rows = []

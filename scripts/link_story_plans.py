@@ -8,7 +8,8 @@ Exit codes:
 Usage:
     python3 scripts/link_story_plans.py [--verbose]
 """
-import argparse, sys
+import argparse
+import sys
 from pathlib import Path
 
 try:

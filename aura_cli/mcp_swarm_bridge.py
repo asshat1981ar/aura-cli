@@ -19,7 +19,6 @@ import json
 import logging
 import os
 import subprocess
-import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any

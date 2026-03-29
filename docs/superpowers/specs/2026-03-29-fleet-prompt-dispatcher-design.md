@@ -146,7 +146,7 @@ Each handler runs a **AURA Skills fan-out** via parallel HTTP calls to the AURA 
 4. **Commit & Push** — after AURA run completes, commit the changes to the fleet branch:
    ```
    POST http://localhost:8001/execute
-   {"tool_name": "run", "args": ["git -C /repo checkout fleet/{{issue_type}}/{{issue_number}} && git add -A && git commit -m 'fleet(#{{issue_number}}): {{title}}' && git push origin fleet/{{issue_type}}/{{issue_number}}"]}
+   {"tool_name": "run", "args": ["git -C {{AURA_REPO_PATH}} checkout fleet/{{issue_type}}/{{issue_number}} && git add -A && git commit -m 'fleet(#{{issue_number}}): {{title}}' && git push origin fleet/{{issue_type}}/{{issue_number}}"]}
    ```
    This step requires `AGENT_API_ENABLE_RUN=1` on the AURA server. Scope this env flag to the AURA host only; do not set it in the n8n environment.
 5. **Quality Gate** — calls `generation_quality_checker` skill; score must be ≥ 70
@@ -179,17 +179,31 @@ The `generation_quality_checker` skill scores generated code on a 0–100 scale 
 
 **Threshold:** score ≥ 70 required before PR push.
 
-**Quality gate input:** extract `generated_code` from the AURA goal result returned at step 3:
-```json
-{
-  "tool_name": "generation_quality_checker",
-  "args": {
-    "task": "{{rendered goal prompt}}",
-    "generated_code": "{{result.cycle_summary.generated_code}}"
-  }
-}
-```
-If `generated_code` is absent from the AURA result (no code block produced), treat as score = 0 and escalate immediately without consuming a quality retry.
+**Quality gate input:** `cycle_summary` does not expose raw code. Use `applied_files` from the AURA result to get the changed content:
+
+1. Extract the list of changed files from the status response:
+   `$json.result.history[-1].cycle_summary.applied_files`
+   (array of file paths AURA wrote during the cycle)
+
+2. Read the primary changed file from the AURA host via:
+   ```json
+   POST http://localhost:8001/execute
+   {"tool_name": "run", "args": ["cat {{applied_files[0]}}"]}
+   ```
+   (Reuses `AGENT_API_ENABLE_RUN=1` already required for Node 4.)
+
+3. Call the quality gate with that content:
+   ```json
+   {
+     "tool_name": "generation_quality_checker",
+     "args": {
+       "task": "{{rendered goal prompt}}",
+       "generated_code": "{{file_content}}"
+     }
+   }
+   ```
+
+If `applied_files` is empty or the file read fails, treat as score = 0 and escalate immediately without consuming a quality retry.
 
 **Quality retry:** if score < 70, re-run AURA loop dispatch with richer context (include full skill output detail). Max **2 quality retries** before escalation.
 
@@ -245,7 +259,7 @@ PR title format: `fleet(#{issue}): {issue_title}`
 
 ```
 GitHub Webhook → WF-0 (classify) → WF-N (skills fan-out)
-    → WF-6 (AURA /run) → quality gate → PR create
+    → WF-6 (AURA goal dispatch) → quality gate → PR create
     → CI wait → auto-merge → fleet:done
 ```
 
@@ -289,12 +303,13 @@ Environment variables required on the n8n host:
 | `AURA_API_URL` | Default: `http://localhost:8001` |
 | `AURA_SKILLS_URL` | Default: `http://localhost:8002` |
 | `AURA_FLEET_POLL_TIMEOUT` | Goal status poll timeout in seconds (default: 1200 / 20 min) |
+| `AURA_REPO_PATH` | Absolute path to the repo checkout on the AURA host (used in git commit/push step) |
 
 ---
 
 ## Testing
 
-- **Unit:** mock AURA `/run` and Skills API; assert correct skill fan-out per issue type
+- **Unit:** mock AURA `/webhook/goal` and Skills API; assert correct skill fan-out per issue type
 - **Integration:** create a test issue with `fleet:trigger`, verify full flow against a sandbox repo
 - **Quality gate test:** inject a low-quality code response; verify escalation fires before PR push
 - **Retry test:** simulate CI failure 3 times; verify `fleet:blocked` is applied

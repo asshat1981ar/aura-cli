@@ -845,6 +845,57 @@ class LoopOrchestrator:
             pass
         return "act"
 
+    def _notify_n8n_feedback(self, goal: str, cycle_id: str, passed: bool, phase_outputs: Dict) -> None:
+        """POST cycle reflection + skill summary to n8n P4 Feedback Loop webhook.
+
+        Fires non-blocking after the reflect phase completes.  Gated by
+        ``n8n_connector.enabled`` in config.  Failures are swallowed and
+        logged — never allowed to interrupt cycle completion.
+        """
+        try:
+            config = self._load_config_file()
+            n8n_cfg = config.get("n8n_connector", {})
+            if not n8n_cfg.get("enabled", False):
+                return
+
+            webhook_url = n8n_cfg.get("feedback_loop_webhook", "")
+            if not webhook_url:
+                return
+
+            reflection: Dict = phase_outputs.get("reflection", {})
+            payload = {
+                "pipeline_run_id": getattr(self, "_cycle_context", {}).get("pipeline_run_id", cycle_id),
+                "cycle_id": cycle_id,
+                "goal": goal,
+                "passed": passed,
+                "verification_status": phase_outputs.get("verification", {}).get("status", "skip"),
+                "learnings": reflection.get("learnings", []),
+                "summary": reflection.get("summary", ""),
+                "skill_summary": reflection.get("skill_summary", {}),
+                "act_confidence": phase_outputs.get("act_confidence"),
+                "plan_confidence": phase_outputs.get("plan_confidence"),
+                "retry_count": phase_outputs.get("retry_count", 0),
+                "quality": phase_outputs.get("quality", {}),
+            }
+
+            import urllib.request
+            data = json.dumps(payload).encode()
+            req = urllib.request.Request(
+                webhook_url,
+                data=data,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=5) as resp:
+                log_json("INFO", "n8n_feedback_sent", details={
+                    "cycle_id": cycle_id,
+                    "passed": passed,
+                    "learnings": len(payload["learnings"]),
+                    "status_code": resp.status,
+                })
+        except Exception as exc:
+            log_json("WARN", "n8n_feedback_notify_failed", details={"error": str(exc)})
+
     def _enrich_act_context(self, task_bundle: Dict) -> Dict:
         """Inject quality-gate critique from n8n P3 Pipeline Coordinator into task_bundle.
 
@@ -1435,7 +1486,12 @@ class LoopOrchestrator:
         """Section 7: REFLECT."""
         self._notify_ui("on_phase_start", "reflect")
         t0 = time.time()
-        reflection = self._run_phase("reflect", {"verification": verification, "skill_context": skill_context, "goal_type": goal_type})
+        reflection = self._run_phase("reflect", {
+            "verification": verification,
+            "skill_context": skill_context,
+            "goal_type": goal_type,
+            "pipeline_run_id": getattr(self, "_cycle_context", {}).get("pipeline_run_id"),
+        })
         self._notify_ui("on_phase_complete", "reflect", (time.time() - t0) * 1000)
         errors = validate_phase_output("reflection", reflection)
         if errors:
@@ -1546,6 +1602,12 @@ class LoopOrchestrator:
                 log_json("WARN", "brain_outcome_storage_failed", details={"error": str(exc)})
 
         self._notify_ui("on_phase_complete", "learn", (time.time() - t0_learn) * 1000)
+
+        # ── P4 Feedback Loop: POST reflection + skill summary to n8n ──
+        try:
+            self._notify_n8n_feedback(goal, cycle_id, passed, phase_outputs)
+        except Exception as exc:
+            log_json("WARN", "n8n_feedback_notify_failed", details={"error": str(exc)})
 
         if self.context_graph is not None:
             try:

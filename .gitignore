@@ -139,7 +139,6 @@ gha-creds-*.json
 sdlc-orchestrator/node_modules/
 sdlc-orchestrator/.adk/bot/node_modules/
 sdlc-orchestrator/.adk/bot/dist/
-sdlc-orchestrator/.adk/bot/bp_modules/
 sdlc-orchestrator/.adk/bot/.botpress/
 sdlc-orchestrator/.adk/bot/traces/
 sdlc-orchestrator/.adk/logs/

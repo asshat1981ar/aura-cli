@@ -103,11 +103,30 @@ export const SwarmTerminateSchema = z.object({
 }).strict();
 
 // ─── swarm_agent_memory ────────────────────────────────────────
-export const AgentMemorySchema = z.object({
+const AgentMemoryBaseSchema = z.object({
   swarmId: z.string().describe("ID of the swarm"),
   agentId: z.string().describe("ID of the agent"),
-  action: z.enum(["get", "set", "delete", "list"])
-    .describe("Memory operation to perform"),
-  key: z.string().optional().describe("Memory slot key (required for get/set/delete)"),
-  value: z.unknown().optional().describe("Value to store (required for set)"),
-}).strict();
+});
+
+export const AgentMemorySchema = z.discriminatedUnion("action", [
+  AgentMemoryBaseSchema.extend({
+    action: z.literal("get"),
+    key: z.string().describe("Memory slot key to read"),
+    value: z.unknown().optional(),
+  }),
+  AgentMemoryBaseSchema.extend({
+    action: z.literal("set"),
+    key: z.string().describe("Memory slot key to write"),
+    value: z.unknown().describe("Value to store"),
+  }),
+  AgentMemoryBaseSchema.extend({
+    action: z.literal("delete"),
+    key: z.string().describe("Memory slot key to delete"),
+    value: z.unknown().optional(),
+  }),
+  AgentMemoryBaseSchema.extend({
+    action: z.literal("list"),
+    key: z.string().optional(),
+    value: z.unknown().optional(),
+  }),
+]);

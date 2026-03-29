@@ -69,6 +69,7 @@ The `.adk/` directory contains auto-generated runtime wiring. The user-defined s
 ## Notes
 
 - All files inside `.adk/` are auto-generated — do not edit them directly
-- The `node_modules/`, `.adk/bot/dist/`, `.adk/bot/node_modules/`, `.adk/bot/bp_modules/`, `.adk/bot/.botpress/`, and `.adk/logs/` directories are gitignored
+- The `node_modules/`, `.adk/bot/dist/`, `.adk/bot/node_modules/`, `.adk/bot/.botpress/`, and `.adk/logs/` directories are gitignored
+- `.adk/bot/bp_modules/` contains generated integration/interface type bindings that **are** committed to the repository so the scaffold builds without a separate `bp build` step
 - ADK version: 1.16.7
 - Integrations: webchat (0.3.0), chat (0.7.6)

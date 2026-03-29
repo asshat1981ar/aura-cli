@@ -879,20 +879,32 @@ class LoopOrchestrator:
             }
 
             import urllib.request
+
+            def _post(url: str, body: bytes) -> int:
+                req = urllib.request.Request(
+                    url, data=body,
+                    headers={"Content-Type": "application/json"}, method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    return resp.status
+
             data = json.dumps(payload).encode()
-            req = urllib.request.Request(
-                webhook_url,
-                data=data,
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-            with urllib.request.urlopen(req, timeout=5) as resp:
-                log_json("INFO", "n8n_feedback_sent", details={
-                    "cycle_id": cycle_id,
-                    "passed": passed,
-                    "learnings": len(payload["learnings"]),
-                    "status_code": resp.status,
-                })
+            status = _post(webhook_url, data)
+            log_json("INFO", "n8n_feedback_sent", details={
+                "cycle_id": cycle_id,
+                "passed": passed,
+                "learnings": len(payload["learnings"]),
+                "status_code": status,
+            })
+
+            # Fan-out to P5 Observability Collector (best-effort)
+            obs_url = n8n_cfg.get("observability_webhook", "")
+            if obs_url:
+                try:
+                    _post(obs_url, data)
+                except Exception as obs_exc:
+                    log_json("WARN", "n8n_observability_send_failed", details={"error": str(obs_exc)})
+
         except Exception as exc:
             log_json("WARN", "n8n_feedback_notify_failed", details={"error": str(exc)})
 

@@ -187,6 +187,7 @@
     "quality_gate_webhook": "http://localhost:5678/webhook/plan-review",
     "feedback_loop_webhook": "http://localhost:5678/webhook/aura-reflect",
     "pipeline_coordinator_webhook": "http://localhost:5678/webhook/pipeline-coordinate",
-    "circuit_breaker_enabled": true
+    "circuit_breaker_enabled": true,
+    "observability_webhook": "http://localhost:5678/webhook/pipeline-trace"
   }
 }

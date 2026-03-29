@@ -1,0 +1,774 @@
+{
+  "name": "Fleet Dispatcher - WF-6 Code Gen and PR Push",
+  "nodes": [
+    {
+      "id": "wf6-input-trigger-001",
+      "name": "Input Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [250, 400],
+      "parameters": {}
+    },
+    {
+      "id": "wf6-get-main-sha-001",
+      "name": "Get Main Branch SHA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 400],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/git/ref/heads/main",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GITHUB_TOKEN }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "wf6-create-fleet-branch-001",
+      "name": "Create Fleet Branch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/git/refs",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GITHUB_TOKEN }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ref: 'refs/heads/fleet/' + $node[\"Input Trigger\"].json.issue_type + '/' + $node[\"Input Trigger\"].json.issue_number, sha: $json.object.sha}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "wf6-render-goal-prompt-001",
+      "name": "Render Goal Prompt",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [850, 400],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "wf6-assign-goal-prompt",
+              "name": "goal_prompt",
+              "value": "={{ $node[\"Input Trigger\"].json.issue_type + ' fix for issue #' + $node[\"Input Trigger\"].json.issue_number + ': ' + $node[\"Input Trigger\"].json.title + '\\n\\nContext from static analysis:\\n' + $node[\"Input Trigger\"].json.skills_output_summary + '\\n\\nOriginal issue description:\\n' + $node[\"Input Trigger\"].json.body }}",
+              "type": "string"
+            },
+            {
+              "id": "wf6-assign-quality-retry-count",
+              "name": "quality_retry_count",
+              "value": 0,
+              "type": "number"
+            },
+            {
+              "id": "wf6-assign-ci-retry-count",
+              "name": "ci_retry_count",
+              "value": 0,
+              "type": "number"
+            }
+          ]
+        },
+        "include": "all",
+        "options": {}
+      }
+    },
+    {
+      "id": "wf6-dispatch-aura-goal-001",
+      "name": "Dispatch AURA Goal",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1050, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AURA_API_URL }}/webhook/goal",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.AURA_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({goal: $json.goal_prompt, priority: 5, metadata: {issue_number: $node[\"Input Trigger\"].json.issue_number, issue_type: $node[\"Input Trigger\"].json.issue_type, fleet_run: true}}) }}",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "wf6-wait-before-polling-001",
+      "name": "Wait 30s Before Polling",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1,
+      "position": [1250, 400],
+      "webhookId": "wf6-wait-before-polling",
+      "parameters": {
+        "resume": "afterTimeInterval",
+        "resumeInterval": {
+          "magnitude": 30,
+          "unit": "seconds"
+        }
+      }
+    },
+    {
+      "id": "wf6-poll-goal-status-001",
+      "name": "Poll Goal Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1450, 400],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.AURA_API_URL }}/webhook/status/{{ $node[\"Dispatch AURA Goal\"].json.goal_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.AURA_API_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "wf6-check-status-001",
+      "name": "Check Status",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 2,
+      "position": [1650, 400],
+      "parameters": {
+        "rules": {
+          "rules": [
+            {
+              "value": "done",
+              "output": 0
+            },
+            {
+              "value": "failed",
+              "output": 1
+            },
+            {
+              "value": "running",
+              "output": 2
+            },
+            {
+              "value": "queued",
+              "output": 2
+            }
+          ]
+        },
+        "dataType": "string",
+        "value1": "={{ $json.status }}",
+        "fallbackOutput": 2
+      }
+    },
+    {
+      "id": "wf6-commit-push-fleet-branch-001",
+      "name": "Commit and Push to Fleet Branch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1850, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AURA_API_URL }}/execute",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.AURA_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({tool_name: 'run', args: ['git -C ' + $env.AURA_REPO_PATH + ' checkout fleet/' + $node[\"Input Trigger\"].json.issue_type + '/' + $node[\"Input Trigger\"].json.issue_number + ' && git add -A && git commit -m \"fleet(#' + $node[\"Input Trigger\"].json.issue_number + '): ' + $node[\"Input Trigger\"].json.title + '\" && git push origin fleet/' + $node[\"Input Trigger\"].json.issue_type + '/' + $node[\"Input Trigger\"].json.issue_number]}) }}",
+        "options": {
+          "timeout": 120000
+        }
+      }
+    },
+    {
+      "id": "wf6-read-applied-file-001",
+      "name": "Read Applied File",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2050, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AURA_API_URL }}/execute",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.AURA_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({tool_name: 'run', args: ['cat ' + $node[\"Poll Goal Status\"].json.result.history[$node[\"Poll Goal Status\"].json.result.history.length - 1].cycle_summary.applied_files[0]]}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "wf6-quality-gate-001",
+      "name": "Quality Gate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2250, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AURA_SKILLS_URL }}/call",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.MCP_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({tool_name: 'generation_quality_checker', args: {task: $node[\"Render Goal Prompt\"].json.goal_prompt, generated_code: $json.output}}) }}",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "wf6-quality-gate-check-001",
+      "name": "Quality Gate Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [2450, 300],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "wf6-quality-threshold-condition",
+              "leftValue": "={{ $json.quality_score }}",
+              "rightValue": "70",
+              "operator": {
+                "type": "number",
+                "operation": "gte"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "wf6-create-pr-001",
+      "name": "Create PR",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2650, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/pulls",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GITHUB_TOKEN }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({title: 'fleet(#' + $node[\"Input Trigger\"].json.issue_number + '): ' + $node[\"Input Trigger\"].json.title, head: 'fleet/' + $node[\"Input Trigger\"].json.issue_type + '/' + $node[\"Input Trigger\"].json.issue_number, base: 'main', body: 'Closes #' + $node[\"Input Trigger\"].json.issue_number + '\\n\\n**Fleet dispatcher automated PR**\\n\\nIssue type: ' + $node[\"Input Trigger\"].json.issue_type + '\\nQuality score: ' + $json.quality_score + '/100'}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "wf6-auto-merge-pr-001",
+      "name": "Auto-merge PR",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2850, 300],
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/pulls/{{ $json.number }}/merge",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GITHUB_TOKEN }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({merge_method: 'squash', commit_title: 'fleet(#' + $node[\"Input Trigger\"].json.issue_number + '): ' + $node[\"Input Trigger\"].json.title}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "wf6-add-fleet-done-label-001",
+      "name": "Add Fleet Done Label",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3050, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/issues/{{ $node[\"Input Trigger\"].json.issue_number }}/labels",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GITHUB_TOKEN }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"labels\": [\"fleet:done\"]}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "wf6-close-issue-001",
+      "name": "Close Issue",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [3250, 300],
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/issues/{{ $node[\"Input Trigger\"].json.issue_number }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GITHUB_TOKEN }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"state\": \"closed\", \"state_reason\": \"completed\"}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "wf6-post-escalation-comment-001",
+      "name": "Post Escalation Comment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1850, 550],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/issues/{{ $node[\"Input Trigger\"].json.issue_number }}/comments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GITHUB_TOKEN }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({body: '## [BLOCKER] Fleet Dispatcher - Escalation Required\\n\\n**Issue:** #' + $node[\"Input Trigger\"].json.issue_number + ' - ' + $node[\"Input Trigger\"].json.title + '\\n\\n**Reason:** The automated code-generation pipeline could not produce a solution that meets the quality threshold (score >= 70/100), or the AURA agent reported a failure status.\\n\\n**Pipeline details:**\\n- Issue type: `' + $node[\"Input Trigger\"].json.issue_type + '`\\n- Stage reached: quality gate / AURA goal execution\\n- Analyst context: ' + $node[\"Input Trigger\"].json.analyst_context + '\\n\\n**Next steps for human reviewer:**\\n1. Review the static-analysis context attached to this issue\\n2. Check AURA logs for goal-execution details\\n3. Manually implement the fix, or re-trigger with a refined context payload\\n\\n> This issue has been labelled `fleet:blocked` and removed from `fleet:in-progress`.'}) }}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "wf6-add-fleet-blocked-label-001",
+      "name": "Add Fleet Blocked Label",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2050, 550],
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/issues/{{ $node[\"Input Trigger\"].json.issue_number }}/labels",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GITHUB_TOKEN }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"labels\": [\"fleet:blocked\"]}",
+        "options": {
+          "timeout": 30000
+        }
+      }
+    },
+    {
+      "id": "wf6-remove-in-progress-label-001",
+      "name": "Remove Fleet In-Progress Label",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2250, 550],
+      "parameters": {
+        "method": "DELETE",
+        "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/issues/{{ $node[\"Input Trigger\"].json.issue_number }}/labels/fleet%3Ain-progress",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.GITHUB_TOKEN }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Input Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Main Branch SHA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Main Branch SHA": {
+      "main": [
+        [
+          {
+            "node": "Create Fleet Branch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Fleet Branch": {
+      "main": [
+        [
+          {
+            "node": "Render Goal Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render Goal Prompt": {
+      "main": [
+        [
+          {
+            "node": "Dispatch AURA Goal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dispatch AURA Goal": {
+      "main": [
+        [
+          {
+            "node": "Wait 30s Before Polling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 30s Before Polling": {
+      "main": [
+        [
+          {
+            "node": "Poll Goal Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Goal Status": {
+      "main": [
+        [
+          {
+            "node": "Check Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Status": {
+      "main": [
+        [
+          {
+            "node": "Commit and Push to Fleet Branch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post Escalation Comment",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait 30s Before Polling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Commit and Push to Fleet Branch": {
+      "main": [
+        [
+          {
+            "node": "Read Applied File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Applied File": {
+      "main": [
+        [
+          {
+            "node": "Quality Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quality Gate": {
+      "main": [
+        [
+          {
+            "node": "Quality Gate Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quality Gate Check": {
+      "main": [
+        [
+          {
+            "node": "Create PR",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Post Escalation Comment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create PR": {
+      "main": [
+        [
+          {
+            "node": "Auto-merge PR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto-merge PR": {
+      "main": [
+        [
+          {
+            "node": "Add Fleet Done Label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Fleet Done Label": {
+      "main": [
+        [
+          {
+            "node": "Close Issue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Escalation Comment": {
+      "main": [
+        [
+          {
+            "node": "Add Fleet Blocked Label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Fleet Blocked Label": {
+      "main": [
+        [
+          {
+            "node": "Remove Fleet In-Progress Label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "fleet-dispatcher",
+    "description": "WF-6: Code Gen and PR Push — full pipeline: branch creation from main HEAD, AURA goal dispatch with 30s polling loop, quality gate (score >= 70), PR creation, squash auto-merge, fleet:done labelling, issue close, and three-step escalation path (comment + fleet:blocked + remove fleet:in-progress)"
+  }
+}

@@ -1,0 +1,17 @@
+# Fires when fleet:trigger label is applied; POSTs to n8n fleet webhook
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    if: github.event.label.name == 'fleet:trigger'
+    steps:
+      - name: POST event to n8n fleet webhook
+        run: |
+          curl -X POST \
+            -H "Content-Type: application/json" \
+            -d '${{ toJson(github.event) }}' \
+            "${{ secrets.N8N_FLEET_WEBHOOK_URL }}"

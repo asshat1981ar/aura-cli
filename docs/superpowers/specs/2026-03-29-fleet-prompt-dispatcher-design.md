@@ -1,7 +1,7 @@
 # Design Spec: Fleet Prompt Dispatcher
 
 **Date:** 2026-03-29
-**Status:** Draft
+**Status:** Approved
 **Scope:** n8n workflows (7 new), GitHub Issues, AURA CLI API, `agents/skills/`, GitHub Actions
 **Goal:** Fully autonomous GitHub Issue → code change → PR → merge loop, dispatched via n8n, evaluated by AURA Skills, and executed by AURA Loop.
 

@@ -30,7 +30,7 @@ class TestGoalQueue(unittest.TestCase):
         # Verify in JSON file
         with open(self.test_queue_path, 'r') as f:
             content = json.load(f)
-        self.assertEqual(content, ["Implement feature A"])
+        self.assertEqual(content["queue"], ["Implement feature A"])
 
     def test_next_goal(self):
         self.goal_queue.add("Implement feature A")
@@ -44,7 +44,7 @@ class TestGoalQueue(unittest.TestCase):
         # Verify in JSON file
         with open(self.test_queue_path, 'r') as f:
             content = json.load(f)
-        self.assertEqual(content, ["Fix bug B"])
+        self.assertEqual(content["queue"], ["Fix bug B"])
 
 
     def test_next_with_empty_queue(self):
@@ -82,7 +82,7 @@ class TestGoalQueue(unittest.TestCase):
 
         with open(self.test_queue_path, 'r') as f:
             content = json.load(f)
-        self.assertEqual(content, ["First priority", "Second priority", "Existing goal"])
+        self.assertEqual(content["queue"], ["First priority", "Second priority", "Existing goal"])
 
 if __name__ == '__main__':
     unittest.main()

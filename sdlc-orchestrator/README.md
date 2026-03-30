@@ -73,3 +73,26 @@ The `.adk/` directory contains auto-generated runtime wiring. The user-defined s
 - `.adk/bot/bp_modules/` contains generated integration/interface type bindings that **are** committed to the repository so the scaffold builds without a separate `bp build` step
 - ADK version: 1.16.7
 - Integrations: webchat (0.3.0), chat (0.7.6)
+# SDLC Orchestrator — Botpress ADK Scaffold
+
+Botpress Agent Development Kit (ADK) scaffold for the AURA SDLC orchestrator agent.
+
+## Status
+
+**Scaffold** — generated during Sprint S005 swarm run. Needs review and integration testing before production use.
+
+## Structure
+
+- `.adk/` — ADK type definitions and bot runtime
+- `package.json` / `package-lock.json` — Node.js dependencies
+
+## Setup
+
+```bash
+cd sdlc-orchestrator
+npm install
+```
+
+## Integration
+
+This scaffold is designed to be wired into the AURA CLI command dispatch system. See `aura_cli/cli_main.py` for the dispatch registry.

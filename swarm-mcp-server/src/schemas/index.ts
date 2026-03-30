@@ -130,3 +130,11 @@ export const AgentMemorySchema = z.discriminatedUnion("action", [
     value: z.unknown().optional(),
   }),
 ]);
+export const AgentMemorySchema = z.object({
+  swarmId: z.string().describe("ID of the swarm"),
+  agentId: z.string().describe("ID of the agent"),
+  action: z.enum(["get", "set", "delete", "list"])
+    .describe("Memory operation to perform"),
+  key: z.string().optional().describe("Memory slot key (required for get/set/delete)"),
+  value: z.unknown().optional().describe("Value to store (required for set)"),
+}).strict();

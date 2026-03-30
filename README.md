@@ -18,6 +18,13 @@ Developer entry points:
 - Developer shim: `main.py` (lightweight wrapper that delegates to `aura_cli.cli_main.main()`)
 - Shell wrapper: `run_aura.sh`
 
+Product boundary for the current release:
+
+- shipped surface: CLI (`aura`)
+- development-only shim: `main.py`
+- convenience wrapper: `run_aura.sh`
+- experimental / non-shipped: `vscode-extension`, `orchestrator_hub`, transport-mode/editor integration work
+
 ## Sweep Artifact Generator
 
 `scripts/generate_active_sweep_artifacts.py` can populate or check the live sweep docs for the current branch.
@@ -67,6 +74,10 @@ When changing CLI commands, help text, parsing, or JSON output contracts:
    - `python3 scripts/generate_cli_reference.py --check`
 
 CI enforces the generated CLI docs and snapshot contracts via `.github/workflows/ci.yml`.
+
+## Experimental Editor Integration
+
+The VS Code/editor integration work is currently experimental and not part of the shipped product contract. In particular, the repo does not currently ship a supported `transport` backend for editor runtime integration. Treat editor/transport work as incubation until it is explicitly completed and reintroduced.
 
 ## GitHub Copilot CLI in this repo
 

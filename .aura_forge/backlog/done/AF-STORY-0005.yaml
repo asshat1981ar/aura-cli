@@ -1,0 +1,46 @@
+id: AF-STORY-0005
+title: "Queue-candidate artifact format"
+lane: capability
+status: done
+repo_areas:
+  - .aura_forge/templates
+  - task_queue
+goal:
+  user_goal: "Convert lessons into reviewable follow-up work"
+  system_goal: "Create structured format for task_queue candidates that maintains safety boundaries"
+context:
+  sensed:
+    - task_queue/ exists for self-development goals
+    - Need bridge between retros and queue
+  retrieved:
+    - task_queue/
+    - .aura_forge/templates/capability_delta.yaml
+design_passes:
+  - reverse_engineering
+  - six_hats
+constraints:
+  - no automatic enqueueing
+  - include validation criteria
+  - include safety impact section
+contract_impact:
+  cli_contract_affected: false
+  changes: []
+  snapshot_updates_needed: false
+safety_impact:
+  autonomous_apply_affected: false
+  overwrite_behavior_affected: false
+  safety_notes: "Template must emphasize manual review before queue insertion"
+acceptance:
+  - queue_candidate.yaml template exists
+  - includes validation criteria section
+  - includes safety impact section
+  - includes explicit "ready_for_queue" boolean (default false)
+risks:
+  - template may be ignored, leading to unsafe enqueueing
+rollback:
+  - remove template
+  - use capability_delta.yaml instead
+outputs:
+  - queue_candidate.yaml template
+  - example queue candidate
+sprint_link: S001_queue_ready_intelligence

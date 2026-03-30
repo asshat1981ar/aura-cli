@@ -2,20 +2,6 @@
 # Tracks proposed and validated capability improvements
 
 proposed:
-  - id: AF-DELTA-0001
-    title: "Add capability-gap index generation"
-    source: "S000 retro"
-    target_areas:
-      - .aura_forge/indexes
-      - docs
-
-  - id: AF-DELTA-0002
-    title: "Add queue-candidate review template"
-    source: "S000 retro"
-    target_areas:
-      - .aura_forge/templates
-      - task_queue
-
   - id: AF-DELTA-0003
     title: "Add lightweight story template for quick ideas"
     source: "S000 retro"
@@ -24,7 +10,22 @@ proposed:
 
 under_review: []
 approved: []
-implemented: []
+implemented:
+  - id: AF-DELTA-0001
+    title: "Add capability-gap index generation"
+    source: "S000 retro"
+    target_areas:
+      - .aura_forge/indexes
+      - docs
+    notes: "Implemented via scripts/generate_capability_index.py"
+
+  - id: AF-DELTA-0002
+    title: "Add queue-candidate review template"
+    source: "S000 retro"
+    target_areas:
+      - .aura_forge/templates
+      - task_queue
+    notes: "Implemented via .aura_forge/templates/queue_candidate.yaml"
 
 patterns:
   - "Capability gaps should produce file-based proposals, not auto-enqueue"

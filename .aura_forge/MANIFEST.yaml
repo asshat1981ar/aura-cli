@@ -26,6 +26,10 @@ artifact_types:
     schema: schemas/capability_delta.schema.yaml
     template: templates/capability_delta.yaml
     
+  - name: queue_candidate
+    description: Reviewable work item for the task_queue
+    template: templates/queue_candidate.yaml
+    
   - name: design_pass
     description: Structured design thinking output
     schema: schemas/design_pass.schema.yaml

@@ -292,6 +292,27 @@
       "summary": "Run a one-off goal"
     },
     {
+      "action": "goal_resume",
+      "description": "Re-queue a goal that was interrupted mid-execution due to a crash or process kill. Reads memory/in_flight_goal.json written by the goal run loop. Use --run to immediately execute the re-queued goal.",
+      "examples": [
+        "python3 main.py goal resume",
+        "python3 main.py goal resume --run"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "goal",
+        "resume"
+      ],
+      "requires_runtime": false,
+      "summary": "Resume an interrupted goal"
+    },
+    {
       "action": null,
       "description": "Run orchestrated workflow goals with explicit cycle limits.",
       "examples": [

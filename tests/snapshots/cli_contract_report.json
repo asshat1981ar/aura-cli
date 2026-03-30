@@ -8,6 +8,7 @@
     "goal_add",
     "goal_add_run",
     "goal_once",
+    "goal_resume",
     "goal_run",
     "goal_status",
     "help",
@@ -55,6 +56,10 @@
     [
       "goal",
       "once"
+    ],
+    [
+      "goal",
+      "resume"
     ],
     [
       "goal",
@@ -133,6 +138,7 @@
     "goal_add",
     "goal_add_run",
     "goal_once",
+    "goal_resume",
     "goal_run",
     "goal_status",
     "help",
@@ -169,6 +175,7 @@
     "evolve",
     "goal_add",
     "goal_once",
+    "goal_resume",
     "goal_run",
     "goal_status",
     "help",
@@ -220,6 +227,10 @@
     [
       "goal",
       "once"
+    ],
+    [
+      "goal",
+      "resume"
     ],
     [
       "goal",
@@ -332,6 +343,10 @@
     [
       "goal",
       "once"
+    ],
+    [
+      "goal",
+      "resume"
     ],
     [
       "goal",
@@ -458,6 +473,10 @@
     [
       "goal",
       "once"
+    ],
+    [
+      "goal",
+      "resume"
     ],
     [
       "goal",
@@ -596,6 +615,10 @@
     [
       "goal",
       "once"
+    ],
+    [
+      "goal",
+      "resume"
     ],
     [
       "goal",

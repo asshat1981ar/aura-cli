@@ -83,6 +83,21 @@ def mismatch_overwrite_block_log_details(error: object, file_path: str) -> dict:
         "policy": MISMATCH_OVERWRITE_BLOCK_POLICY,
     }
 
+def _validate_file_path(file_path: str, project_root: Optional[Path] = None) -> None:
+    """Validate a file path for security issues."""
+    if "\x00" in file_path:
+        raise FileToolsError("Invalid file path: contains null bytes")
+    path = Path(file_path)
+    if ".." in path.parts:
+        raise FileToolsError("Path traversal blocked")
+    if project_root is not None:
+        resolved = (project_root / path).resolve() if not path.is_absolute() else path.resolve()
+        try:
+            resolved.relative_to(project_root.resolve())
+        except ValueError:
+            raise FileToolsError("Path outside project root")
+
+
 def find_historical_match(old_code: str, file_path: str, project_root: Path) -> Optional[str]:
     """Search the last 10 git commits for a version of *file_path* containing *old_code*.
 
@@ -129,7 +144,7 @@ def find_historical_match(old_code: str, file_path: str, project_root: Path) -> 
         if best_ratio > 0.8:
             return best_content
         return None
-    except Exception:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return None
 
 
@@ -146,16 +161,22 @@ def replace_code(file_path: str, old_code: str, new_code: str, dry_run: bool = F
     """Replace a block of code inside a file, or overwrite the entire file.
     Enforces path jailing if project_root is provided.
     """
+    _validate_file_path(file_path, project_root)
     from core.sanitizer import sanitize_path
     path = Path(file_path)
     if project_root:
         path = sanitize_path(file_path, project_root)
-    
+
     if not path.is_file():
-        raise FileNotFoundError(f"File not found at '{path}'")
+        raise FileToolsError(f"File not found: {path}")
 
     try:
-        current_content = path.read_text()
+        try:
+            current_content = path.read_text()
+        except FileNotFoundError:
+            raise FileToolsError(f"File not found: {path}")
+        except PermissionError:
+            raise FileToolsError(f"Permission denied: {path}")
         new_content = ""
 
         if overwrite_file:

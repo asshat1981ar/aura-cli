@@ -321,12 +321,13 @@ class ModelAdapter:
         else:
             raise ValueError("Local command profile requires `command` as a string or string list.")
 
+        sanitized_prompt = shlex.quote(prompt) if prompt else ""
         use_stdin = True
         rendered_parts: list[str] = []
         for part in command_parts:
             if "{prompt}" in part:
                 use_stdin = False
-                rendered_parts.append(part.replace("{prompt}", prompt))
+                rendered_parts.append(part.replace("{prompt}", sanitized_prompt))
             else:
                 rendered_parts.append(part)
 

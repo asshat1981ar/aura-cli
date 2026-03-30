@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 import tempfile
 import io
 
-from aura_cli.cli_main import _handle_metrics_show_dispatch, DispatchContext
+from aura_cli.dispatch import _handle_metrics_show_dispatch, DispatchContext
 from memory.store import MemoryStore
 
 class TestMetricsReliability(unittest.TestCase):

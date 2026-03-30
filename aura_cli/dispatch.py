@@ -10,13 +10,8 @@ from agents.registry import default_agents
 from agents.scaffolder import ScaffolderAgent
 from aura_cli.cli_options import attach_cli_warnings, render_help, unknown_command_help_topic_payload
 from aura_cli.commands import (
-    _handle_add,
-    _handle_clear,
     _handle_doctor,
-    _handle_exit,
-    _handle_help,
     _handle_readiness,
-    _handle_run,
     _handle_status,
 )
 from aura_cli.mcp_client import cmd_diag, cmd_mcp_call, cmd_mcp_tools
@@ -663,8 +658,9 @@ def _handle_goal_add_run_dispatch(ctx: DispatchContext) -> int:
 
 
 def _handle_interactive_dispatch(ctx: DispatchContext) -> int:
+    from aura_cli.cli_main import cli_interaction_loop as _cli_loop
     runtime = ctx.runtime
-    cli_interaction_loop(ctx.args, runtime)
+    _cli_loop(ctx.args, runtime)
     return 0
 
 
@@ -906,7 +902,6 @@ def _handle_sadd_resume_dispatch(ctx: DispatchContext) -> int:
 
 def _handle_goal_resume_dispatch(ctx: DispatchContext) -> int:
     from core.in_flight_tracker import InFlightTracker
-    from core.goal_queue import GoalQueue
 
     tracker = InFlightTracker()
     record = tracker.read()
@@ -928,7 +923,7 @@ def _handle_goal_resume_dispatch(ctx: DispatchContext) -> int:
     goal_queue = runtime["goal_queue"]
     goal_queue.prepend_batch([goal])
     tracker.clear()
-    print(f"Re-queued at front of queue.")
+    print("Re-queued at front of queue.")
 
     if getattr(ctx.args, "run", False):
         print("Running now...")

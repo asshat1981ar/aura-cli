@@ -50,6 +50,7 @@ def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
     from agents.skills.evolution_skill import EvolutionSkill
     from agents.skills.skill_generator import SkillGeneratorSkill
     from agents.skills.ast_analyzer import ASTAnalyzerSkill
+    from agents.skills.eval_optimizer import EvalOptimizerSkill
 
     return {
         "beads_skill": BeadsSkill(brain=brain, model=model),
@@ -86,4 +87,5 @@ def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
         "evolution_skill": EvolutionSkill(brain=brain, model=model),
         "skill_generator": SkillGeneratorSkill(brain=brain, model=model),
         "ast_analyzer": ASTAnalyzerSkill(brain=brain, model=model),
+        "eval_optimizer": EvalOptimizerSkill(brain=brain, model=model),
     }

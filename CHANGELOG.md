@@ -5,6 +5,27 @@ All notable changes to AURA CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Sprint S004] - 2026-03-27
+
+### Added
+- `core/swarm_models.py`: Pydantic dataclasses for hierarchical swarm workflow (SwarmTask, TaskResult, CycleLesson, CycleReport, PRGateDecision, SupervisorConfig, SDLCFinding)
+- `agents/hierarchical_coordinator.py`: Architect→Coder→Tester async pipeline with lesson injection every N cycles
+- `agents/sdlc_debugger.py`: 10-lens SDLC failure classifier (requirements, design, implementation, integration, testing, security, performance, operations, DX, delivery)
+- `core/swarm_supervisor.py`: `install_swarm_runtime()` single-call wiring entry point
+- `memory/learning_loop.py`: `LessonStore` JSONL persistence for cycle lessons
+- `aura_cli/runtime_factory.py`: `RuntimeFactory` with `_WeaknessRemediatorLoop` (every 5 cycles) and `_ConvergenceEscapeLoop` (per cycle)
+- Feature flag: `AURA_ENABLE_SWARM=1` activates hierarchical coordinator in `create_runtime()`
+- 27 net-new tests across `test_swarm_supervisor.py`, `test_swarm_models.py`, `test_runtime_factory.py`
+
+### Changed
+- `aura_cli/cli_main.py`: `create_runtime()` now wires `install_swarm_runtime()` when `AURA_ENABLE_SWARM=1`
+- `agents/hierarchical_coordinator.py`: `_perform_github_delivery` gated behind `SupervisorConfig.github_delivery_enabled` (default `False`)
+- All bare `print()` calls replaced with `log_json()` in coordinator and debugger
+
+### Safety
+- `github_delivery_enabled: bool = False` in `SupervisorConfig` — no GitHub API calls without opt-in
+- `AURA_SWARM_PR_GATE=1` required to enable PR automation
+
 ## [Unreleased] — Sprint S003: SADD Workflow Completion
 
 ### Added

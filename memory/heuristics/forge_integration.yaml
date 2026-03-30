@@ -1,0 +1,7 @@
+id: AURA-H-0001
+pattern: "Forge stories link to plans/, they don't replace plans/"
+rationale: "Implementation planning stays in plans/; Forge handles upstream shaping and design passes."
+usage: "When creating a new Forge story, ensure it includes a 'linked_implementation_plan' field pointing to a file in plans/ if the story involves code changes."
+origin: "S000 Retro"
+status: promoted
+date_promoted: "2026-03-25"

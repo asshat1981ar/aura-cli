@@ -4,7 +4,10 @@
 Usage:
     python3 scripts/new_story.py --title "My idea" [--quick] [--type feature]
 """
-import argparse, datetime, re, sys
+import argparse
+import datetime
+import re
+import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).parent.parent

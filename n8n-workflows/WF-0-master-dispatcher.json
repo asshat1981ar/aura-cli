@@ -1,0 +1,440 @@
+{
+  "name": "Fleet Dispatcher - WF-0 Master Dispatcher",
+  "nodes": [
+    {
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "Webhook: Fleet Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {
+        "path": "fleet",
+        "httpMethod": "POST",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+
+    {
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "name": "Filter: Skip Terminal Issues",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.action }}",
+              "operation": "regex",
+              "value2": "^(opened|labeled)$"
+            },
+            {
+              "value1": "={{ ($json.body.issue.labels || []).map(l => l.name).join(',') }}",
+              "operation": "contains",
+              "value2": "fleet:trigger"
+            },
+            {
+              "value1": "={{ ($json.body.issue.labels || []).map(l => l.name).join(',') }}",
+              "operation": "notContains",
+              "value2": "fleet:done"
+            },
+            {
+              "value1": "={{ ($json.body.issue.labels || []).map(l => l.name).join(',') }}",
+              "operation": "notContains",
+              "value2": "fleet:blocked"
+            }
+          ]
+        },
+        "combineOperation": "all"
+      }
+    },
+
+    {
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "name": "Respond 200 Immediately",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [650, 200],
+      "parameters": {
+        "responseCode": 200,
+        "responseBody": "{\"status\":\"accepted\"}"
+      }
+    },
+
+    {
+      "id": "d4e5f6a7-b8c9-0123-defa-234567890123",
+      "name": "Extract Issue Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [650, 400],
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "issue_number",
+              "value": "={{ $json.body.issue.number }}"
+            },
+            {
+              "name": "title",
+              "value": "={{ $json.body.issue.title }}"
+            },
+            {
+              "name": "body",
+              "value": "={{ $json.body.issue.body }}"
+            },
+            {
+              "name": "body_excerpt",
+              "value": "={{ ($json.body.issue.body || '').slice(0, 500) }}"
+            },
+            {
+              "name": "repo_full_name",
+              "value": "={{ $json.body.repository.full_name }}"
+            }
+          ]
+        },
+        "options": {
+          "keepOnlySet": false
+        }
+      }
+    },
+
+    {
+      "id": "e5f6a7b8-c9d0-1234-efab-345678901234",
+      "name": "LLM Classifier",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [850, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.OPENAI_API_URL || 'https://api.openai.com/v1/chat/completions' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.LLM_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({ model: 'gpt-4o-mini', messages: [{ role: 'system', content: 'You are an issue classifier for a Python CLI project. Classify the following GitHub issue into exactly one category: bug, feature, refactor, security, docs. Respond with a single word from the list above.' }, { role: 'user', content: 'Issue title: ' + $json.title + '\\nIssue body (first 500 chars): ' + $json.body_excerpt }], max_tokens: 10 }) }}"
+      }
+    },
+
+    {
+      "id": "f6a7b8c9-d0e1-2345-fabc-456789012345",
+      "name": "Extract Issue Type",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1050, 400],
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "issue_type",
+              "value": "={{ ['bug','feature','refactor','security','docs'].includes($json.choices[0].message.content.trim().toLowerCase()) ? $json.choices[0].message.content.trim().toLowerCase() : 'feature' }}"
+            },
+            {
+              "name": "issue_number",
+              "value": "={{ $('Extract Issue Fields').item.json.issue_number }}"
+            },
+            {
+              "name": "title",
+              "value": "={{ $('Extract Issue Fields').item.json.title }}"
+            },
+            {
+              "name": "body",
+              "value": "={{ $('Extract Issue Fields').item.json.body }}"
+            },
+            {
+              "name": "body_excerpt",
+              "value": "={{ $('Extract Issue Fields').item.json.body_excerpt }}"
+            },
+            {
+              "name": "repo_full_name",
+              "value": "={{ $('Extract Issue Fields').item.json.repo_full_name }}"
+            },
+            {
+              "name": "skills_output_summary",
+              "value": ""
+            }
+          ]
+        },
+        "options": {
+          "keepOnlySet": true
+        }
+      }
+    },
+
+    {
+      "id": "a7b8c9d0-e1f2-3456-abcd-567890123456",
+      "name": "Apply fleet:in-progress Label",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1250, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ `https://api.github.com/repos/${$json.repo_full_name}/issues/${$json.issue_number}/labels` }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.GITHUB_TOKEN }}"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github+json"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "{\"labels\":[\"fleet:in-progress\"]}"
+      }
+    },
+
+    {
+      "id": "b8c9d0e1-f2a3-4567-bcde-678901234567",
+      "name": "Restore Issue Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [1350, 400],
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "issue_type",
+              "value": "={{ $('Extract Issue Type').item.json.issue_type }}"
+            },
+            {
+              "name": "issue_number",
+              "value": "={{ $('Extract Issue Type').item.json.issue_number }}"
+            },
+            {
+              "name": "title",
+              "value": "={{ $('Extract Issue Type').item.json.title }}"
+            },
+            {
+              "name": "body",
+              "value": "={{ $('Extract Issue Type').item.json.body }}"
+            },
+            {
+              "name": "body_excerpt",
+              "value": "={{ $('Extract Issue Type').item.json.body_excerpt }}"
+            },
+            {
+              "name": "repo_full_name",
+              "value": "={{ $('Extract Issue Type').item.json.repo_full_name }}"
+            },
+            {
+              "name": "skills_output_summary",
+              "value": "={{ $('Extract Issue Type').item.json.skills_output_summary }}"
+            }
+          ]
+        },
+        "options": {
+          "keepOnlySet": true
+        }
+      }
+    },
+
+    {
+      "id": "c9d0e1f2-a3b4-5678-cdef-789012345678",
+      "name": "Switch on Issue Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [1450, 400],
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.issue_type }}",
+        "rules": {
+          "rules": [
+            { "value2": "bug" },
+            { "value2": "feature" },
+            { "value2": "refactor" },
+            { "value2": "security" },
+            { "value2": "docs" }
+          ]
+        },
+        "fallbackOutput": 1
+      }
+    },
+
+    {
+      "id": "d0e1f2a3-b4c5-6789-defa-890123456789",
+      "name": "Execute WF-1: Bug Fix Handler",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1650, 200],
+      "parameters": {
+        "source": "database",
+        "workflowId": "WF-1-bug-fix-handler",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+
+    {
+      "id": "e1f2a3b4-c5d6-7890-efab-901234567890",
+      "name": "Execute WF-2: Feature Handler",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1650, 300],
+      "parameters": {
+        "source": "database",
+        "workflowId": "WF-2-feature-handler",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+
+    {
+      "id": "f2a3b4c5-d6e7-8901-fabc-012345678901",
+      "name": "Execute WF-3: Refactor Handler",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1650, 400],
+      "parameters": {
+        "source": "database",
+        "workflowId": "WF-3-refactor-handler",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+
+    {
+      "id": "a3b4c5d6-e7f8-9012-abcd-123456789012",
+      "name": "Execute WF-4: Security Handler",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1650, 500],
+      "parameters": {
+        "source": "database",
+        "workflowId": "WF-4-security-handler",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+
+    {
+      "id": "b4c5d6e7-f8a9-0123-bcde-234567890123",
+      "name": "Execute WF-5: Docs Handler",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [1650, 600],
+      "parameters": {
+        "source": "database",
+        "workflowId": "WF-5-docs-handler",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    },
+
+    {
+      "id": "c5d6e7f8-a9b0-1234-cdef-345678901234",
+      "name": "Stop: Filtered Issue",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [450, 500],
+      "parameters": {}
+    }
+  ],
+
+  "connections": {
+    "Webhook: Fleet Trigger": {
+      "main": [
+        [
+          { "node": "Filter: Skip Terminal Issues", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+
+    "Filter: Skip Terminal Issues": {
+      "main": [
+        [
+          { "node": "Respond 200 Immediately",  "type": "main", "index": 0 },
+          { "node": "Extract Issue Fields",     "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Stop: Filtered Issue",     "type": "main", "index": 0 }
+        ]
+      ]
+    },
+
+    "Extract Issue Fields": {
+      "main": [
+        [
+          { "node": "LLM Classifier", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+
+    "LLM Classifier": {
+      "main": [
+        [
+          { "node": "Extract Issue Type", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+
+    "Extract Issue Type": {
+      "main": [
+        [
+          { "node": "Apply fleet:in-progress Label", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+
+    "Apply fleet:in-progress Label": {
+      "main": [
+        [
+          { "node": "Restore Issue Data", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+
+    "Restore Issue Data": {
+      "main": [
+        [
+          { "node": "Switch on Issue Type", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+
+    "Switch on Issue Type": {
+      "main": [
+        [ { "node": "Execute WF-1: Bug Fix Handler",  "type": "main", "index": 0 } ],
+        [ { "node": "Execute WF-2: Feature Handler",  "type": "main", "index": 0 } ],
+        [ { "node": "Execute WF-3: Refactor Handler", "type": "main", "index": 0 } ],
+        [ { "node": "Execute WF-4: Security Handler", "type": "main", "index": 0 } ],
+        [ { "node": "Execute WF-5: Docs Handler",     "type": "main", "index": 0 } ]
+      ]
+    }
+  },
+
+  "settings": {
+    "executionOrder": "v1"
+  },
+
+  "meta": {
+    "instanceId": "fleet-dispatcher"
+  }
+}

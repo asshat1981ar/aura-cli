@@ -62,6 +62,34 @@ RUN_TIMEOUT_SECONDS: int = int(os.getenv("MCP_RUN_TIMEOUT_SECONDS", "30"))
 #: Rate-limit ceiling (calls per minute, per token).  0 = disabled.
 RATE_LIMIT_PER_MIN: int = int(os.getenv("MCP_RATE_LIMIT_PER_MIN", "0"))
 
+#: Allowed environment variable names returned by ``env_snapshot`` when no
+#: explicit key list is provided.  Prevents disclosure of secrets/tokens.
+ENV_WHITELIST: frozenset = frozenset({
+    "PYTHONPATH",
+    "PATH",
+    "HOME",
+    "USER",
+    "AURA_SKIP_CHDIR",
+    "AURA_ENABLE_SWARM",
+})
+
+
+def _env_snapshot(args: dict) -> dict:
+    """Return a safe environment snapshot.
+
+    When *args* contains a ``keys`` list the caller-specified keys are
+    returned verbatim (existing behaviour for explicit requests).  When no
+    keys are requested only whitelisted variables are included so that API
+    keys, tokens, and other secrets are never inadvertently disclosed.
+    """
+    keys = args.get("keys", None)
+    if keys:
+        snapshot = {k: os.environ.get(k, "") for k in keys}
+    else:
+        snapshot = {k: os.environ.get(k, "") for k in ENV_WHITELIST}
+    return {"data": {"env": snapshot}}
+
+
 # ---------------------------------------------------------------------------
 # Rate-limit state (in-process, per-token sliding window)
 # ---------------------------------------------------------------------------
@@ -595,9 +623,7 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
     # env_snapshot
     # ------------------------------------------------------------------ #
     if name == "env_snapshot":
-        keys = args.get("keys", None)
-        snapshot = {k: os.environ.get(k, "") for k in keys} if keys else dict(os.environ)
-        return {"data": {"env": snapshot}}
+        return _env_snapshot(args)
 
     # ------------------------------------------------------------------ #
     # package_scripts

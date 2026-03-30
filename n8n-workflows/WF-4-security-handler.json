@@ -1,0 +1,161 @@
+{
+  "name": "Fleet Dispatcher - WF-4 SecurityHandler",
+  "nodes": [
+    {
+      "id": "wf4-input-001",
+      "name": "Input",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "parameters": {}
+    },
+    {
+      "id": "wf4-security-scanner-001",
+      "name": "Security Scanner",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AURA_SKILLS_URL }}/call",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.MCP_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"tool_name\": \"security_scanner\", \"args\": {\"project_root\": \".\"}}",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "wf4-type-checker-001",
+      "name": "Type Checker",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [500, 400],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.AURA_SKILLS_URL }}/call",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.MCP_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\"tool_name\": \"type_checker\", \"args\": {\"project_root\": \".\"}}",
+        "options": {
+          "timeout": 60000
+        }
+      }
+    },
+    {
+      "id": "wf4-merge-001",
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [750, 300],
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      }
+    },
+    {
+      "id": "wf4-set-001",
+      "name": "Build Context",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1000, 300],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "wf4-assign-skills-output",
+              "name": "skills_output",
+              "value": "={{ JSON.stringify($json) }}",
+              "type": "string"
+            },
+            {
+              "id": "wf4-assign-analyst-context",
+              "name": "analyst_context",
+              "value": "={{ JSON.stringify({issue_number: $node[\"Input\"].json.issue_number, issue_type: $node[\"Input\"].json.issue_type, title: $node[\"Input\"].json.title, body: $node[\"Input\"].json.body, skills_output: $json}) }}",
+              "type": "string"
+            }
+          ]
+        },
+        "include": "all",
+        "options": {}
+      }
+    },
+    {
+      "id": "wf4-execute-wf6-001",
+      "name": "Execute WF-6",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [1250, 300],
+      "parameters": {
+        "workflowId": "WF-6-code-gen-pr-push",
+        "options": {
+          "waitForSubWorkflow": true
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Input": {
+      "main": [
+        [
+          {"node": "Security Scanner", "type": "main", "index": 0},
+          {"node": "Type Checker", "type": "main", "index": 0}
+        ]
+      ]
+    },
+    "Security Scanner": {
+      "main": [
+        [{"node": "Merge", "type": "main", "index": 0}]
+      ]
+    },
+    "Type Checker": {
+      "main": [
+        [{"node": "Merge", "type": "main", "index": 1}]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [{"node": "Build Context", "type": "main", "index": 0}]
+      ]
+    },
+    "Build Context": {
+      "main": [
+        [{"node": "Execute WF-6", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "fleet-dispatcher"
+  }
+}

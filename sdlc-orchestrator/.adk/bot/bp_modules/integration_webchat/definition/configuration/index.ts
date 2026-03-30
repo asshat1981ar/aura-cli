@@ -95,5 +95,5 @@ export const configuration = {
       conversationHistory: z.optional(z.boolean()),
       _debug: z.optional(z.boolean()),
     })
-    .catchall(z.any()),
+    .catchall(z.never()),
 };

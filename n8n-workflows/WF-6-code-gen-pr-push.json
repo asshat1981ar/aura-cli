@@ -6,7 +6,10 @@
       "name": "Input Trigger",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1,
-      "position": [250, 400],
+      "position": [
+        250,
+        400
+      ],
       "parameters": {}
     },
     {
@@ -14,7 +17,10 @@
       "name": "Get Main Branch SHA",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [450, 400],
+      "position": [
+        450,
+        400
+      ],
       "parameters": {
         "method": "GET",
         "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/git/ref/heads/main",
@@ -41,7 +47,10 @@
       "name": "Create Fleet Branch",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [650, 400],
+      "position": [
+        650,
+        400
+      ],
       "parameters": {
         "method": "POST",
         "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/git/refs",
@@ -75,7 +84,10 @@
       "name": "Render Goal Prompt",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [850, 400],
+      "position": [
+        850,
+        400
+      ],
       "parameters": {
         "assignments": {
           "assignments": [
@@ -108,7 +120,10 @@
       "name": "Dispatch AURA Goal",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1050, 400],
+      "position": [
+        1050,
+        400
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.AURA_API_URL }}/webhook/goal",
@@ -138,7 +153,10 @@
       "name": "Wait 30s Before Polling",
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
-      "position": [1250, 400],
+      "position": [
+        1250,
+        400
+      ],
       "webhookId": "wf6-wait-before-polling",
       "parameters": {
         "resume": "afterTimeInterval",
@@ -153,7 +171,10 @@
       "name": "Poll Goal Status",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1450, 400],
+      "position": [
+        1450,
+        400
+      ],
       "parameters": {
         "method": "GET",
         "url": "={{ $env.AURA_API_URL }}/webhook/status/{{ $node[\"Dispatch AURA Goal\"].json.goal_id }}",
@@ -176,7 +197,10 @@
       "name": "Check Status",
       "type": "n8n-nodes-base.switch",
       "typeVersion": 2,
-      "position": [1650, 400],
+      "position": [
+        1650,
+        400
+      ],
       "parameters": {
         "rules": {
           "rules": [
@@ -208,7 +232,10 @@
       "name": "Commit and Push to Fleet Branch",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1850, 300],
+      "position": [
+        1850,
+        300
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.AURA_API_URL }}/execute",
@@ -238,7 +265,10 @@
       "name": "Read Applied File",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2050, 300],
+      "position": [
+        2050,
+        300
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.AURA_API_URL }}/execute",
@@ -268,7 +298,10 @@
       "name": "Quality Gate",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2250, 300],
+      "position": [
+        2250,
+        300
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.AURA_SKILLS_URL }}/call",
@@ -298,7 +331,10 @@
       "name": "Quality Gate Check",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [2450, 300],
+      "position": [
+        2450,
+        300
+      ],
       "parameters": {
         "conditions": {
           "options": {
@@ -327,7 +363,10 @@
       "name": "Create PR",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2650, 300],
+      "position": [
+        2650,
+        300
+      ],
       "parameters": {
         "method": "POST",
         "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/pulls",
@@ -361,7 +400,10 @@
       "name": "Auto-merge PR",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2850, 300],
+      "position": [
+        2850,
+        300
+      ],
       "parameters": {
         "method": "PUT",
         "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/pulls/{{ $json.number }}/merge",
@@ -395,7 +437,10 @@
       "name": "Add Fleet Done Label",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3050, 300],
+      "position": [
+        3050,
+        300
+      ],
       "parameters": {
         "method": "POST",
         "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/issues/{{ $node[\"Input Trigger\"].json.issue_number }}/labels",
@@ -429,7 +474,10 @@
       "name": "Close Issue",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [3250, 300],
+      "position": [
+        3250,
+        300
+      ],
       "parameters": {
         "method": "PATCH",
         "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/issues/{{ $node[\"Input Trigger\"].json.issue_number }}",
@@ -463,7 +511,10 @@
       "name": "Post Escalation Comment",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1850, 550],
+      "position": [
+        1850,
+        550
+      ],
       "parameters": {
         "method": "POST",
         "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/issues/{{ $node[\"Input Trigger\"].json.issue_number }}/comments",
@@ -497,7 +548,10 @@
       "name": "Add Fleet Blocked Label",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2050, 550],
+      "position": [
+        2050,
+        550
+      ],
       "parameters": {
         "method": "POST",
         "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/issues/{{ $node[\"Input Trigger\"].json.issue_number }}/labels",
@@ -531,7 +585,10 @@
       "name": "Remove Fleet In-Progress Label",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2250, 550],
+      "position": [
+        2250,
+        550
+      ],
       "parameters": {
         "method": "DELETE",
         "url": "=https://api.github.com/repos/{{ $node[\"Input Trigger\"].json.repo_full_name }}/issues/{{ $node[\"Input Trigger\"].json.issue_number }}/labels/fleet%3Ain-progress",
@@ -769,6 +826,7 @@
   },
   "meta": {
     "instanceId": "fleet-dispatcher",
-    "description": "WF-6: Code Gen and PR Push — full pipeline: branch creation from main HEAD, AURA goal dispatch with 30s polling loop, quality gate (score >= 70), PR creation, squash auto-merge, fleet:done labelling, issue close, and three-step escalation path (comment + fleet:blocked + remove fleet:in-progress)"
-  }
+    "description": "WF-6: Code Gen and PR Push \u2014 full pipeline: branch creation from main HEAD, AURA goal dispatch with 30s polling loop, quality gate (score >= 70), PR creation, squash auto-merge, fleet:done labelling, issue close, and three-step escalation path (comment + fleet:blocked + remove fleet:in-progress)"
+  },
+  "id": "a73e5695-d190-4e91-9868-efdced1fece7"
 }

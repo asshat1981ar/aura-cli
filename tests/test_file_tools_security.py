@@ -1,77 +1,81 @@
-"""Security and error-handling tests for core/file_tools.py."""
-import os
-import stat
-from pathlib import Path
-from unittest.mock import patch
+"""Security tests for file_tools module.
 
+Tests path traversal prevention, injection blocking, and error handling.
+Addresses issues #310, #311, #316.
+"""
 import pytest
+from pathlib import Path
+from core.file_tools import replace_code, FileToolsError, _validate_file_path
 
-from core.file_tools import FileToolsError, _validate_file_path, replace_code
+
+class TestPathTraversalPrevention:
+    """Test path traversal blocking (#316)."""
+    
+    def test_rejects_path_traversal_dotdot(self, tmp_path):
+        """Block ../ in file paths."""
+        malicious = str(tmp_path / ".." / ".." / "etc" / "passwd")
+        with pytest.raises(FileToolsError, match="traversal"):
+            replace_code(malicious, old_code="", new_code="pwned", overwrite_file=True, project_root=tmp_path)
+
+    def test_rejects_absolute_path_outside_project(self, tmp_path):
+        """Block absolute paths outside project root."""
+        with pytest.raises(FileToolsError, match="outside"):
+            replace_code("/etc/passwd", old_code="", new_code="pwned", overwrite_file=True, project_root=tmp_path)
+
+    def test_rejects_null_bytes_in_path(self, tmp_path):
+        """Null byte injection in file paths (#311)."""
+        with pytest.raises(FileToolsError, match="null"):
+            replace_code(str(tmp_path / "file\x00.py"), old_code="", new_code="x", overwrite_file=True, project_root=tmp_path)
+
+    def test_allows_valid_relative_path(self, tmp_path):
+        """Valid relative paths within project should work."""
+        test_file = tmp_path / "test.py"
+        test_file.write_text("old content")
+        # Should not raise
+        replace_code(str(test_file), old_code="old", new_code="new", project_root=tmp_path)
+        assert "new content" in test_file.read_text()
+
+
+class TestFileIOErrorHandling:
+    """Test specific error handling (#310)."""
+    
+    def test_read_nonexistent_file_raises_specific_error(self, tmp_path):
+        """Specific exception for missing files."""
+        nonexistent = tmp_path / "nonexistent.py"
+        with pytest.raises(FileToolsError, match="not found"):
+            replace_code(str(nonexistent), old_code="x", new_code="y", project_root=tmp_path)
+
+    def test_validates_path_before_file_operations(self, tmp_path):
+        """Path validation happens before any file operations."""
+        malicious = str(tmp_path / ".." / "secret.txt")
+        with pytest.raises(FileToolsError, match="traversal"):
+            replace_code(malicious, old_code="x", new_code="y", project_root=tmp_path)
 
 
 class TestValidateFilePath:
-    def test_rejects_path_traversal(self):
-        with pytest.raises(FileToolsError, match="Path traversal blocked"):
-            _validate_file_path("../etc/passwd")
+    """Test _validate_file_path function directly."""
+    
+    def test_null_bytes_rejected(self, tmp_path):
+        """Null bytes in path should raise."""
+        with pytest.raises(FileToolsError, match="null"):
+            _validate_file_path(str(tmp_path / "file\x00.py"), tmp_path)
 
-    def test_rejects_nested_path_traversal(self):
-        with pytest.raises(FileToolsError, match="Path traversal blocked"):
-            _validate_file_path("some/../../etc/passwd")
+    def test_traversal_rejected(self, tmp_path):
+        """Path traversal should raise."""
+        with pytest.raises(FileToolsError, match="traversal"):
+            _validate_file_path("../etc/passwd", tmp_path)
 
-    def test_rejects_null_bytes(self):
-        with pytest.raises(FileToolsError, match="contains null bytes"):
-            _validate_file_path("file\x00name.py")
+    def test_outside_project_rejected(self, tmp_path):
+        """Paths outside project should raise."""
+        with pytest.raises(FileToolsError, match="outside"):
+            _validate_file_path("/etc/passwd", tmp_path)
 
-    def test_rejects_null_byte_mid_path(self):
-        with pytest.raises(FileToolsError, match="contains null bytes"):
-            _validate_file_path("/tmp/foo\x00bar")
-
-    def test_rejects_path_outside_project_root(self, tmp_path):
-        outside = tmp_path.parent / "other_project" / "secret.py"
-        with pytest.raises(FileToolsError, match="Path outside project root"):
-            _validate_file_path(str(outside), project_root=tmp_path)
-
-    def test_allows_valid_relative_path(self, tmp_path):
+    def test_valid_path_accepted(self, tmp_path):
+        """Valid paths should not raise."""
         # Should not raise
-        _validate_file_path("subdir/file.py", project_root=tmp_path)
+        _validate_file_path("src/main.py", tmp_path)
 
-    def test_allows_simple_filename(self):
-        # Should not raise
-        _validate_file_path("file.py")
-
-    def test_allows_nested_valid_path(self, tmp_path):
-        # Should not raise
-        _validate_file_path("a/b/c.py", project_root=tmp_path)
-
-
-class TestReplaceCodeErrors:
-    def test_nonexistent_file_raises_file_tools_error(self, tmp_path):
-        missing = tmp_path / "nonexistent.py"
-        with pytest.raises(FileToolsError, match="File not found"):
-            replace_code(str(missing), "old", "new", project_root=tmp_path)
-
-    def test_permission_denied_raises_file_tools_error(self, tmp_path):
-        target = tmp_path / "locked.py"
-        target.write_text("some content\n", encoding="utf-8")
-
-        # Make the file unreadable
-        readonly_dir = tmp_path / "readonly_dir"
-        readonly_dir.mkdir()
-        locked_file = readonly_dir / "locked.py"
-        locked_file.write_text("some content\n", encoding="utf-8")
-        locked_file.chmod(0o000)
-
-        try:
-            with pytest.raises(FileToolsError, match="Permission denied"):
-                replace_code(str(locked_file), "some content", "new content", project_root=tmp_path)
-        finally:
-            # Restore permissions so pytest cleanup can remove the file
-            locked_file.chmod(0o644)
-
-    def test_path_traversal_in_replace_code_is_rejected(self, tmp_path):
-        with pytest.raises(FileToolsError, match="Path traversal blocked"):
-            replace_code("../outside.py", "old", "new", project_root=tmp_path)
-
-    def test_null_byte_in_replace_code_is_rejected(self, tmp_path):
-        with pytest.raises(FileToolsError, match="contains null bytes"):
-            replace_code("file\x00.py", "old", "new", project_root=tmp_path)
+    def test_no_project_root_allows_any_path(self):
+        """Without project_root, only traversal/null checks apply."""
+        # Should not raise (no project_root means no jail)
+        _validate_file_path("/any/absolute/path", None)

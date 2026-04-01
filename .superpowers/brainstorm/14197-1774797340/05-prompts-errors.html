@@ -1,0 +1,151 @@
+<style>
+  h2 { color: #e2e8f0; margin-bottom: 4px; font-size: 1.1rem; }
+  .subtitle { color: #64748b; font-size: .8rem; margin-bottom: 14px; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .full { grid-column: 1/-1; }
+  .section-title { font-size: .8rem; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 10px; border-bottom: 1px solid #1e293b; padding-bottom: 6px; }
+  .prompt { background: #0f172a; border: 1.5px solid #334155; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; }
+  .prompt-name { font-size: .72rem; font-weight: 700; color: #818cf8; margin-bottom: 6px; font-family: monospace; }
+  .prompt-body { font-size: .7rem; color: #94a3b8; line-height: 1.6; font-family: monospace; background: #060d18; border-radius: 5px; padding: 8px 10px; white-space: pre-wrap; }
+  .prompt-out { font-size: .68rem; color: #34d399; margin-top: 6px; }
+  .error-flow { background: #0f172a; border: 1.5px solid #334155; border-radius: 8px; padding: 14px; }
+  .step { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 10px; }
+  .step-num { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .7rem; font-weight: 700; flex-shrink: 0; }
+  .s1 { background: #1e3a5f; color: #93c5fd; }
+  .s2 { background: #1a3320; color: #86efac; }
+  .s3 { background: #3d1515; color: #fca5a5; }
+  .s4 { background: #2d1b00; color: #fcd34d; }
+  .step-content { font-size: .74rem; color: #94a3b8; line-height: 1.5; }
+  .step-content strong { color: #e2e8f0; }
+  .step-content code { background: #1e293b; padding: 1px 4px; border-radius: 3px; font-size: .68rem; color: #7dd3fc; }
+  .label-box { display: inline-block; font-size: .65rem; font-weight: 700; border-radius: 3px; padding: 1px 6px; margin: 1px 2px; }
+  .lb-proc { background: #1e3a5f; color: #93c5fd; }
+  .lb-block { background: #3d1515; color: #fca5a5; }
+  .lb-done { background: #1a3320; color: #86efac; }
+  .io-table { width: 100%; border-collapse: collapse; font-size: .72rem; }
+  .io-table th { background: #1e293b; color: #94a3b8; padding: 6px 10px; text-align: left; font-weight: 600; }
+  .io-table td { padding: 6px 10px; border-bottom: 1px solid #1e293b; color: #cbd5e1; vertical-align: top; }
+  .io-table td code { color: #7dd3fc; font-size: .67rem; }
+</style>
+
+<h2>Prompt Chains + Error Handling</h2>
+<p class="subtitle">Sections 3 & 4 of the fleet prompt design</p>
+
+<div class="two-col">
+
+  <!-- PROMPT CHAINS -->
+  <div>
+    <div class="section-title">§3 — LLM Prompt Templates</div>
+
+    <div class="prompt">
+      <div class="prompt-name">classify-issue-v1</div>
+      <div class="prompt-body">You are a GitHub issue classifier for an autonomous dev fleet.
+Given the issue title and body, return JSON:
+{
+  "type": "bug|feature|refactor|security|docs",
+  "confidence": 0.0-1.0,
+  "summary": "one sentence",
+  "key_files": ["path/hint"],
+  "complexity": "low|medium|high"
+}
+Only return valid JSON. No explanation.</div>
+      <div class="prompt-out">→ routes WF-0 Switch node</div>
+    </div>
+
+    <div class="prompt">
+      <div class="prompt-name">bug-analyst-v1</div>
+      <div class="prompt-body">You are a senior engineer doing root cause analysis.
+Context: {aura_skills_output}
+Issue: {issue_body}
+
+Return a patch strategy:
+- root_cause: what went wrong and why
+- affected_files: list with line ranges
+- fix_approach: step-by-step
+- regression_test: what to add</div>
+      <div class="prompt-out">→ injected as context into AURA /run goal</div>
+    </div>
+
+    <div class="prompt">
+      <div class="prompt-name">feature-planner-v1 / refactor-planner-v1</div>
+      <div class="prompt-body">You are an architect. Given the AURA skills analysis
+and the issue spec, produce an implementation plan:
+- components_to_create: []
+- components_to_modify: []
+- interfaces: API contracts
+- test_strategy: unit + integration coverage
+- risks: []</div>
+      <div class="prompt-out">→ injected as context into AURA /run goal</div>
+    </div>
+
+    <div class="prompt">
+      <div class="prompt-name">security-analyst-v1</div>
+      <div class="prompt-body">You are a security engineer. Given the scanner output:
+{security_scanner_findings}
+
+Triage each finding:
+- severity: critical|high|medium|low
+- cve_id: if known
+- patch: minimal safe fix
+- verify_with: what SAST check confirms the fix
+Priority: fix critical/high only. Flag medium/low.</div>
+      <div class="prompt-out">→ injected as context into AURA /run goal</div>
+    </div>
+
+  </div>
+
+  <!-- ERROR HANDLING -->
+  <div>
+    <div class="section-title">§4 — Retry + Escalation Logic</div>
+    <div class="error-flow">
+
+      <div class="step">
+        <div class="step-num s1">1</div>
+        <div class="step-content">
+          <strong>Quality gate check</strong> — before PR creation, <code>generation_quality_checker</code> scores the output. Score &lt;70 triggers an immediate retry without counting against the 3-attempt budget (quality retries are free, up to 2).
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num s2">2</div>
+        <div class="step-content">
+          <strong>CI failure retry</strong> — if CI checks fail after PR push, the sub-flow re-runs with the CI error injected as additional context into the LLM analyst prompt. <code>retryCount++</code> on each attempt.
+          <br><br>
+          Retry enrichment: <code>previous_attempt_error</code> field added to all prompts so the LLM knows what failed.
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num s3">3</div>
+        <div class="step-content">
+          <strong>Max retries reached</strong> (retryCount = 3) — fleet posts a structured blocker comment to the issue:
+          <br><br>
+          <code>🚫 Fleet blocked after 3 attempts.<br>Last error: {ci_error}<br>Skills report: {link}<br>Attempted branches: {list}<br>Label: fleet:blocked</code>
+          <br><br>
+          Labels applied: <span class="label-box lb-block">fleet:blocked</span> replaces <span class="label-box lb-proc">fleet:processing</span>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-num s4">4</div>
+        <div class="step-content">
+          <strong>Success close</strong> — on merge: removes <span class="label-box lb-proc">fleet:processing</span>, adds <span class="label-box lb-done">fleet:done</span>, posts summary comment with PR link + quality score, closes issue.
+        </div>
+      </div>
+
+    </div>
+
+    <div style="margin-top: 14px;">
+    <div class="section-title">GitHub Label Protocol</div>
+    <table class="io-table">
+      <tr><th>Label</th><th>Meaning</th></tr>
+      <tr><td><code>fleet:trigger</code></td><td>Opt-in: apply to any issue to fire the fleet</td></tr>
+      <tr><td><code>fleet:processing</code></td><td>Fleet is actively working</td></tr>
+      <tr><td><code>fleet:blocked</code></td><td>Needs human intervention</td></tr>
+      <tr><td><code>fleet:done</code></td><td>Merged and closed by fleet</td></tr>
+      <tr><td><code>fleet:skip</code></td><td>Exclude from fleet processing</td></tr>
+    </table>
+    </div>
+  </div>
+
+</div>

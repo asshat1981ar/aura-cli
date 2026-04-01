@@ -68,8 +68,6 @@ __pycache__/
 dist/
 build/
 .eggs/
-.botpress/
-.adk/bot/node_modules/
 
 # ── Database / runtime state (auto-generated) ─────────────────────────────
 memory/capability_status.json
@@ -139,6 +137,7 @@ gha-creds-*.json
 sdlc-orchestrator/node_modules/
 sdlc-orchestrator/.adk/bot/node_modules/
 sdlc-orchestrator/.adk/bot/dist/
+sdlc-orchestrator/.adk/bot/bp_modules/
 sdlc-orchestrator/.adk/bot/.botpress/
 sdlc-orchestrator/.adk/bot/traces/
 sdlc-orchestrator/.adk/logs/

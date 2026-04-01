@@ -2,6 +2,7 @@
   "name": "swarm-mcp-server",
   "version": "1.0.0",
   "description": "MCP server for multi-agent swarm orchestration with hierarchical topologies, specialized agents, and task delegation",
+  "type": "module",
   "main": "dist/index.js",
   "bin": {
     "swarm-mcp-server": "dist/index.js"

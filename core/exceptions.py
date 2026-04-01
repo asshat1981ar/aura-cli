@@ -52,6 +52,21 @@ class MCPProtocolError(MCPError):
     pass
 
 
+class MCPServerUnavailableError(MCPError):
+    """MCP server unavailable."""
+    pass
+
+
+class MCPInvalidResponseError(MCPError):
+    """MCP invalid response."""
+    pass
+
+
+class MCPRetryExhaustedError(MCPError):
+    """MCP retry exhausted."""
+    pass
+
+
 # Agent Exceptions
 class AgentError(AURAError):
     """Base exception for agent errors."""
@@ -145,6 +160,10 @@ class ConfigNotFoundError(ConfigError):
 class ConfigValidationError(ConfigError):
     """Configuration validation failed."""
     pass
+
+
+# Alias for backward compatibility
+ConfigurationError = ConfigError
 
 
 # Validation Exceptions

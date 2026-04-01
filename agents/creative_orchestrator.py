@@ -336,7 +336,7 @@ t    techniques to provide end-to-end problem solving:
                 if similar:
                     # Boost confidence for proven patterns
                     idea.confidence = min(1.0, idea.confidence + 0.1)
-            except Exception:
+            except (OSError, TypeError, AttributeError):
                 pass
         
         # Return highest confidence

@@ -56,7 +56,7 @@ def _profile_snippet(code: str, max_rows: int = 10) -> List[Dict]:
         pr.enable()
         exec(compile(code, "<profiled>", "exec"), {})  # noqa: S102
     except (OSError, IOError, ValueError):
-        pass
+        pass  # Profiling disabled - execution context unavailable
     finally:
         pr.disable()
     stream = io.StringIO()
@@ -95,7 +95,7 @@ class PerformanceProfilerSkill(SkillBase):
                             complexity_hints.append("O(n²) – nested loops detected")
                             break
         except SyntaxError:
-            pass
+            pass  # Invalid code - skip complexity analysis
 
         estimated = "O(n²)" if any("nested" in a["type"] for a in antipatterns) else "O(n) or better"
 

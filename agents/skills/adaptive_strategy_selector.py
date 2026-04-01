@@ -24,7 +24,7 @@ def _load_stats(path: Path) -> List[Dict]:
         if path.exists():
             return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, IOError, ValueError):
-        pass
+        pass  # Stats file unwritable - continue without persisting  # Stats file unreadable - start fresh
     return []
 
 

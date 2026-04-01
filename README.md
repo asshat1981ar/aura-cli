@@ -3,6 +3,7 @@
 Developer entry points:
 
 - CLI reference (generated): `docs/CLI_REFERENCE.md`
+- **Innovation Catalyst guide**: `docs/INNOVATION_CATALYST.md` (structured brainstorming)
 - Integration map: `docs/INTEGRATION_MAP.md`
 - Development automation guide: `docs/DEVELOPMENT_AUTOMATION_GUIDE.md`
 - Operator prompt: `docs/AURA_OPERATOR_PROMPT.md`
@@ -60,6 +61,28 @@ Optional config file:
 - `./run_aura.sh once "Summarize repo" --max-cycles 1` forwards to `python3 main.py goal once ...`.
 - `./run_aura.sh goal status` passes canonical commands through unchanged.
 - `./run_aura.sh --help` shows wrapper-specific usage and alias help.
+
+## Innovation Catalyst
+
+Structured brainstorming with 8 proven techniques:
+
+```bash
+# Quick start - generate ideas for any problem
+python3 main.py innovate start "How to improve user onboarding?" --execute-phase divergence
+
+# List all sessions with progress
+python3 main.py innovate list
+
+# Export results to markdown
+python3 main.py innovate export <session_id> --format markdown
+
+# View available techniques
+python3 main.py innovate techniques
+```
+
+The Innovation Catalyst runs a 5-phase process (immersion → divergence → convergence → incubation → transformation) using techniques like SCAMPER, Six Thinking Hats, Mind Mapping, and more.
+
+See `docs/INNOVATION_CATALYST.md` for the full guide.
 
 ## CLI Maintenance
 

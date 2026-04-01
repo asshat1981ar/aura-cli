@@ -177,7 +177,7 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
             if orchestrator is not None:
                 install_swarm_runtime(orchestrator=orchestrator, registry=registry)
                 log_json("INFO", "swarm_runtime_activated", details={"project_root": str(project_root)})
-        except Exception as _swarm_err:
+        except (ImportError, OSError, RuntimeError) as _swarm_err:
             log_json("WARN", "swarm_runtime_activation_failed", details={"error": str(_swarm_err)})
     return runtime
 

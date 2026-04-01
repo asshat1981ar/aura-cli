@@ -25,6 +25,8 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -114,15 +116,17 @@ def _check_rate_limit(token: str) -> None:
 # ---------------------------------------------------------------------------
 # FastAPI application
 # ---------------------------------------------------------------------------
-app = FastAPI(title="AURA MCP Server", version="0.2.0")
 
 
-# Fail closed at startup if auth is not configured
-@app.on_event("startup")
-async def _startup_auth_guard() -> None:
+@asynccontextmanager
+async def _lifespan(application: FastAPI):
     token = os.getenv("MCP_API_TOKEN", "").strip()
     if not token:
         raise RuntimeError("MCP_API_TOKEN must be set before starting the MCP server")
+    yield
+
+
+app = FastAPI(title="AURA MCP Server", version="0.2.0", lifespan=_lifespan)
 
 
 # ---------------------------------------------------------------------------

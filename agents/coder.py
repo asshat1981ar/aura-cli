@@ -1,14 +1,24 @@
 import inspect
 import re
+import json
 from core.logging_utils import log_json
+from core.file_tools import _aura_safe_loads
+from pydantic import ValidationError
+
+try:
+    from agents.schemas import CoderOutput
+    from agents.prompt_manager import render_prompt, get_cached_prompt_stats
+    SCHEMAS_AVAILABLE = True
+except ImportError:
+    SCHEMAS_AVAILABLE = False
 
 
 class CoderAgent:
     """
-    The CoderAgent is responsible for autonomously generating and refining code
-    based on a given task, previous memory, and feedback from a TesterAgent.
-    It operates in an iterative loop, attempting to produce working Python code
-    that adheres to specified requirements and conventions.
+    The CoderAgent generates code with Chain-of-Thought reasoning
+    and structured outputs for better reliability and maintainability.
+    
+    Uses role-based system prompts (Expert Python Developer) and prompt caching.
     """
 
     capabilities = ["code_generation", "coding", "implement", "refactor"]
@@ -21,6 +31,7 @@ class CoderAgent:
         self.brain = brain
         self.model = model
         self.tester = tester
+        self.use_structured = SCHEMAS_AVAILABLE
 
     def _respond(self, prompt: str) -> str:
         try:
@@ -33,102 +44,198 @@ class CoderAgent:
         return self.model.respond(prompt)
 
     def implement(self, task):
-        """
-        Generates and refines Python code based on a given task, iteratively improving
-        it with feedback from a TesterAgent if available.
-
-        The method constructs a detailed prompt for the LLM, including the task,
-        relevant memory, current code, tests, and sandbox feedback. It extracts
-        the generated code and, if a TesterAgent is provided, uses it to generate
-        and evaluate tests. The process continues for MAX_ITERATIONS or until
-        the code is deemed successful by the TesterAgent.
-
-        Args:
-            task (str): The specific task or problem the CoderAgent needs to implement.
-
-        Returns:
-            str: The final generated Python code after refinement, or the initial
-                 generated code if no TesterAgent is provided.
-        """
-        import json as _json
-
+        """Generates code with CoT reasoning and structured output."""
         code = ""
         tests = ""
         feedback = ""
+        best_output = None
 
         for i in range(self.MAX_ITERATIONS):
             memory_text = "\n".join(self.brain.recall_with_budget(max_tokens=2000))
-            code_section = "Current code:\n```python\n" + code + "\n```" if code else ""
-            tests_section = "Tests:\n```python\n" + tests + "\n```" if tests else ""
-            feedback_section = "Sandbox feedback:\n" + feedback if feedback else ""
-            prompt = f"""
-You are an autonomous coding agent inside AURA.
+            code_section = f"Current code:\n```python\n{code}\n```" if code else ""
+            tests_section = f"Tests:\n```python\n{tests}\n```" if tests else ""
+            feedback_section = f"Sandbox feedback:\n{feedback}" if feedback else ""
+
+            if self.use_structured:
+                result = self._implement_structured(
+                    task, memory_text, code_section, tests_section, feedback_section
+                )
+            else:
+                result = self._implement_legacy(
+                    task, memory_text, code_section, tests_section, feedback_section
+                )
+
+            if result.get("error"):
+                log_json("ERROR", "coder_iteration_error", details={
+                    "iteration": i + 1, "error": result["error"]
+                })
+                if i == 0:
+                    return f"# Error: {result['error']}"
+                break
+
+            code = result.get("code", "")
+            best_output = result
+
+            if self.tester:
+                tests = self.tester.generate_tests(code, task)
+                evaluation = self.tester.evaluate_code(code, tests)
+                feedback = evaluation.get("summary", "")
+
+                if "likely pass" in feedback.lower():
+                    log_json("INFO", "coder_iteration_pass", details={
+                        "iteration": i + 1,
+                        "confidence": result.get("confidence", 0),
+                        "target": result.get("aura_target", "unknown")
+                    })
+                    self._remember_output(task, result, tests)
+                    return self._format_final_code(result)
+                else:
+                    log_json("WARN", "coder_iteration_feedback", details={
+                        "iteration": i + 1, "feedback": feedback[:100]
+                    })
+            else:
+                self._remember_output(task, result, tests)
+                return self._format_final_code(result)
+
+        log_json("ERROR", "coder_max_iterations", details={"max_iterations": self.MAX_ITERATIONS})
+        if best_output:
+            return self._format_final_code(best_output)
+        return "# Error: Max iterations reached without valid code"
+
+    def _implement_structured(self, task, memory, code_section, tests_section, feedback_section):
+        """Generate code using structured output with CoT and role-based prompt."""
+        prompt = render_prompt(
+            template_name="coder",
+            role="coder",
+            params={
+                "task": task,
+                "memory": memory,
+                "code_section": code_section,
+                "tests_section": tests_section,
+                "feedback_section": feedback_section
+            }
+        )
+
+        response = self._respond(prompt)
+
+        try:
+            parsed = _aura_safe_loads(response, "coder_structured_response")
+            coder_output = CoderOutput(**parsed)
+
+            log_json("INFO", "coder_cot_reasoning", details={
+                "problem_analysis": coder_output.problem_analysis[:100],
+                "approach": coder_output.approach_selection[:100],
+                "confidence": coder_output.confidence,
+                "target": coder_output.aura_target
+            })
+
+            return {
+                "structured_output": coder_output.dict(),
+                "aura_target": coder_output.aura_target,
+                "code": coder_output.code,
+                "explanation": coder_output.explanation,
+                "dependencies": coder_output.dependencies,
+                "edge_cases": coder_output.edge_cases_handled,
+                "confidence": coder_output.confidence,
+                "reasoning": {
+                    "problem_analysis": coder_output.problem_analysis,
+                    "approach_selection": coder_output.approach_selection,
+                    "design_considerations": coder_output.design_considerations,
+                    "testing_strategy": coder_output.testing_strategy
+                },
+                "error": None
+            }
+
+        except (json.JSONDecodeError, ValidationError) as e:
+            log_json("WARN", "coder_structured_parse_failed", details={"error": str(e)})
+            return self._implement_legacy(task, memory, code_section, tests_section, feedback_section)
+        except Exception as e:
+            log_json("ERROR", "coder_structured_error", details={"error": str(e)})
+            return {"error": str(e)}
+
+    def _implement_legacy(self, task, memory, code_section, tests_section, feedback_section):
+        """Fallback legacy implementation."""
+        prompt = f"""You are an autonomous coding agent.
 
 Task:
 {task}
 
 Previous memory:
-{memory_text}
+{memory}
 
 {code_section}
 {tests_section}
 {feedback_section}
 
-IMPORTANT: Respond with a single JSON object on one line (no markdown), like:
-{{"aura_target": "path/to/file.py", "code": "<full python code>"}}
+Respond with JSON: {{"aura_target": "path/to/file.py", "code": "<python code>"}}"""
 
-Choose a path under agents/, core/, or memory/ that reflects the task.
-The "code" value must be a valid Python string (escape newlines as \\n).
-"""
-            raw_response = self._respond(prompt)
+        response = self._respond(prompt)
 
-            # Try structured JSON first (preferred)
-            parsed_target = None
-            parsed_code = None
-            stripped = raw_response.strip()
-            # Find the first '{' to tolerate any leading whitespace/text
+        try:
+            stripped = response.strip()
             brace_idx = stripped.find("{")
             if brace_idx != -1:
-                try:
-                    obj = _json.loads(stripped[brace_idx : stripped.rfind("}") + 1])
-                    if "aura_target" in obj and "code" in obj:
-                        parsed_target = obj["aura_target"]
-                        parsed_code = obj["code"]
-                except (ValueError, KeyError):
-                    pass
+                obj = json.loads(stripped[brace_idx:stripped.rfind("}") + 1])
+                if "aura_target" in obj and "code" in obj:
+                    return {
+                        "aura_target": obj["aura_target"],
+                        "code": obj["code"],
+                        "explanation": "",
+                        "dependencies": [],
+                        "confidence": 0.5,
+                        "structured_output": None,
+                        "error": None
+                    }
+        except Exception as e:
+            log_json("WARN", "coder_legacy_parse_failed", details={"error": str(e)})
 
-            # Legacy fallback: # AURA_TARGET: directive + code block
-            if parsed_code is None:
-                for line in stripped.splitlines():
-                    if line.startswith(self.AURA_TARGET_DIRECTIVE):
-                        parsed_target = line[len(self.AURA_TARGET_DIRECTIVE) :].strip()
-                        break
-                code_match = self.CODE_BLOCK_RE.search(stripped)
-                parsed_code = code_match.group(1).strip() if code_match else stripped
+        # Last resort: extract from markdown
+        target = None
+        for line in response.splitlines():
+            if line.startswith(self.AURA_TARGET_DIRECTIVE):
+                target = line[len(self.AURA_TARGET_DIRECTIVE):].strip()
+                break
 
-            code = parsed_code or ""
-            if parsed_target:
-                # Embed target into code as a comment so ActAdapter can extract it
-                if not code.startswith(self.AURA_TARGET_DIRECTIVE):
-                    code = f"{self.AURA_TARGET_DIRECTIVE}{parsed_target}\n{code}"
+        code_match = self.CODE_BLOCK_RE.search(response)
+        code = code_match.group(1).strip() if code_match else response
 
-            if self.tester:
-                tests = self.tester.generate_tests(code, task)
-                evaluation = self.tester.evaluate_code(code, tests)
-                feedback = evaluation["summary"]
+        if target and not code.startswith(self.AURA_TARGET_DIRECTIVE):
+            code = f"{self.AURA_TARGET_DIRECTIVE}{target}\n{code}"
 
-                if "likely pass" in feedback.lower():
-                    log_json("INFO", "coder_iteration_pass", goal=task, details={"iteration": i + 1, "status": "Tests likely pass. Code accepted."})
-                    self.brain.remember(f"Code for '{task}': {code}")
-                    self.brain.remember(f"Tests for '{task}': {tests}")
-                    return code
-                else:
-                    log_json("WARN", "coder_iteration_feedback", goal=task, details={"iteration": i + 1, "status": "Tests likely fail or need improvement. Applying feedback..."})
-                    self.brain.remember(f"Attempt {i + 1} for '{task}': {code} -> Feedback: {feedback}")
-            else:
-                self.brain.remember(f"Code for '{task}': {code}")
-                return code
+        return {
+            "aura_target": target or "unknown.py",
+            "code": code,
+            "explanation": "Extracted from legacy format",
+            "confidence": 0.3,
+            "structured_output": None,
+            "error": None
+        }
 
-        log_json("ERROR", "coder_max_iterations_reached", goal=task, details={"max_iterations": self.MAX_ITERATIONS})
-        self.brain.remember(f"Final code after max iterations for '{task}': {code}")
+    def _format_final_code(self, result):
+        """Format the final code output."""
+        code = result.get("code", "")
+        target = result.get("aura_target", "")
+
+        if target and not code.startswith(self.AURA_TARGET_DIRECTIVE):
+            code = f"{self.AURA_TARGET_DIRECTIVE}{target}\n{code}"
+
         return code
+
+    def _remember_output(self, task, result, tests):
+        """Store successful output in memory."""
+        self.brain.remember(f"Code for '{task[:50]}...': {result.get('code', '')[:100]}...")
+        if tests:
+            self.brain.remember(f"Tests: {tests[:100]}...")
+
+    def get_structured_info(self):
+        """Get info about structured output availability."""
+        return {
+            "structured_output_available": self.use_structured,
+            "schema_version": "1.0.0" if SCHEMAS_AVAILABLE else None
+        }
+
+    def get_cache_stats(self) -> dict:
+        """Get prompt cache statistics."""
+        if SCHEMAS_AVAILABLE:
+            return get_cached_prompt_stats()
+        return {"error": "Prompt manager not available"}

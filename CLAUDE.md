@@ -2,6 +2,12 @@
 
 This file documents the codebase structure, conventions, and workflows for AI assistants working in this repository.
 
+> 🧠 **Memory System Active**: Hot cache (this file) + Deep storage (`memory/` directory)
+> - Decode shorthand: `memory/glossary.md`
+> - People/aliases: `memory/people/`
+> - Projects: `memory/projects/`
+> - Tools/context: `memory/context/`
+
 ---
 
 ## What Is AURA CLI?
@@ -397,6 +403,134 @@ CI enforces:
 
 ---
 
+## Agent Structured Outputs (CoT)
+
+Agents now use **Chain-of-Thought reasoning** with **Pydantic-structured outputs**:
+
+| Agent | Schema | CoT Sections | Returns |
+|-------|--------|--------------|---------|
+| `PlannerAgent` | `PlannerOutput` | Analysis → Gaps → Approach → Risks | Plan + confidence + complexity |
+| `CriticAgent` | `CriticOutput` | Initial → Completeness → Feasibility → Risks | Assessment + issues + recommendations |
+| `CoderAgent` | `CoderOutput` | Problem → Approach → Design → Testing | Code + explanation + edge cases |
+| `InnovationSwarm` | `InnovationOutput` | Problem → Techniques → Convergence | Ideas + novelty + diversity metrics |
+
+**Key Features:**
+- **Observability**: CoT reasoning logged for debugging
+- **Type Safety**: Pydantic validation of LLM outputs
+- **Fallback**: Legacy parsing if structured output fails
+- **Backward Compatible**: Returns work with existing orchestrator
+
+**Files:**
+- `agents/schemas.py` — Pydantic models and prompt templates
+- `agents/planner.py` — Structured planning with `plan()` returning dict with `steps`, `confidence`, `reasoning`
+- `agents/critic.py` — Structured critique with severity levels
+- `agents/coder.py` — Structured code generation with approach explanation
+- `agents/innovation_swarm.py` — Multi-technique brainstorming with metrics
+
+## Prompt Manager with Role-Based System Prompts
+
+**Role-Based Personas** (`agents/prompt_manager.py`):
+
+| Role | Persona | Key Expertise |
+|------|---------|---------------|
+| `planner` | Senior Software Architect | System design, risk assessment, task decomposition |
+| `critic` | Principal Engineer | Code review, security analysis, quality standards |
+| `coder` | Expert Python Developer | Clean code, TDD, type hints, edge case handling |
+
+**Prompt Caching:**
+- LRU cache with TTL (default 1 hour, max 100 entries)
+- Reduces token rendering cost for repeated similar prompts
+- Access stats via `agent.get_cache_stats()`
+
+```python
+from agents.prompt_manager import render_prompt, get_cached_prompt_stats
+
+# Render with role-based system prompt + caching
+prompt = render_prompt(
+    template_name="planner",  # or "critic", "coder"
+    role="planner",           # determines system prompt
+    params={"goal": "...", "memory": "..."}
+)
+
+# Check cache performance
+stats = get_cached_prompt_stats()
+# {"hits": 45, "misses": 12, "hit_rate": 0.79, "size": 57}
+```
+
+---
+
+## Innovation Catalyst System
+
+**Multi-Agent Brainstorming** (`agents/innovation_swarm.py`, `agents/meta_conductor.py`):
+
+AURA now supports structured innovation sessions with 8 brainstorming techniques:
+
+### Quick Start
+
+```python
+from agents.meta_conductor import MetaConductor, InnovationPhase
+
+conductor = MetaConductor()
+
+# Start innovation session
+session = conductor.start_session(
+    problem_statement="How might we improve code review?",
+    techniques=["scamper", "six_hats", "mind_map"]
+)
+
+# Execute divergence phase (generate ideas)
+result = conductor.execute_phase(session.session_id, InnovationPhase.DIVERGENCE)
+# Returns: 50-100+ ideas from 3 techniques
+
+# Execute convergence phase (select best)
+result = conductor.execute_phase(session.session_id, InnovationPhase.CONVERGENCE)
+# Returns: Top 10-20 ideas with novelty > 0.7
+```
+
+### 8 Brainstorming Techniques
+
+| Technique | Bot | Best For |
+|-----------|-----|----------|
+| **SCAMPER** | `SCAMPERBot` | Structured transformation |
+| **Six Thinking Hats** | `SixThinkingHatsBot` | Multi-perspective analysis |
+| **Mind Mapping** | `MindMappingBot` | Visual exploration |
+| **Reverse Brainstorming** | `ReverseBrainstormingBot` | Problem inversion |
+| **Worst Idea** | `WorstIdeaBot` | Constraint removal |
+| **Lotus Blossom** | `LotusBlossomBot` | Systematic expansion |
+| **Star Brainstorming** | `StarBrainstormingBot` | Structured radiating |
+| **Bisociative Association** | `BIABot` | Cross-domain inspiration |
+
+### Innovation Metrics
+
+| Metric | Good | Description |
+|--------|------|-------------|
+| Diversity Score | >0.7 | Variety across techniques (0-1) |
+| Novelty Score | >0.7 | Uniqueness of ideas (0-1) |
+| Feasibility Score | >0.6 | Implementation ease (0-1) |
+| Convergence Rate | 10-20% | Selection percentage |
+
+### 5-Phase Innovation Process
+
+```
+IMMERSION → DIVERGENCE → CONVERGENCE → INCUBATION → TRANSFORMATION
+   (1)         (2)          (3)           (4)           (5)
+```
+
+1. **Immersion**: Deep problem understanding
+2. **Divergence**: Generate 50-150 ideas via InnovationSwarm
+3. **Convergence**: Select top 10-20 ideas by composite score
+4. **Incubation**: Let ideas develop (simulated)
+5. **Transformation**: Convert to actionable tasks
+
+### Files
+
+- `agents/innovation_swarm.py` — Divergence/convergence with 8 techniques
+- `agents/meta_conductor.py` — 5-phase session orchestration
+- `agents/brainstorming_bots.py` — Individual technique implementations
+- `agents/schemas.py` — `InnovationOutput`, `Idea`, `InnovationSessionState`
+
+---
+
 ## Important Files to Know
 
 | File | Why It Matters |
@@ -406,6 +540,47 @@ CI enforces:
 | `aura_cli/options.py` | CLI contract definitions — snapshot-tested |
 | `aura_cli/cli_main.py` | Command dispatch registry |
 | `core/model_adapter.py` | All LLM calls go through here |
+| `agents/schemas.py` | Structured output schemas — CoT reasoning |
 | `tests/snapshots/` | Contract snapshots — update intentionally |
 | `docs/CLI_REFERENCE.md` | Generated — regenerate via script |
 | `aura.config.json` | Runtime config — no real secrets |
+
+---
+
+## Memory System (Two-Tier)
+
+AURA uses a two-tier memory system for workplace context:
+
+**Tier 1 — Hot Cache (CLAUDE.md)**
+- Top ~30 people, terms, projects
+- Active workstreams and current session
+- Quick-reference commands and patterns
+
+**Tier 2 — Deep Storage (`memory/` directory)**
+| File | Contents |
+|------|----------|
+| `memory/glossary.md` | Complete term decoder (SADD, MCP, WF-X, etc.) |
+| `memory/people/*.md` | Full profiles and preferences |
+| `memory/projects/*.md` | Project details and architecture |
+| `memory/context/*.md` | Tools, environment, external services |
+
+**Key Abbreviations (Quick Reference)**
+| Short | Full | Meaning |
+|-------|------|---------|
+| SADD | Sub-Agent Driven Development | Parallel workstream execution |
+| MCP | Model Context Protocol | External tool integration |
+| WF-X | Workflow Number | n8n workflow (WF-0 to WF-6) |
+| LoC | Lines of Code | Codebase size metric |
+| Swarm | Agent Swarm | Multi-agent coordination (AURA_ENABLE_SWARM=1) |
+| Fleet | Workflow Fleet | 7 n8n dispatcher workflows |
+| Wave | Execution Wave | Dependency-ordered phase |
+| CoT | Chain-of-Thought | Step-by-step LLM reasoning |
+
+**Current Context**
+- **Session**: `b00f7213-c107-4735-a16b-33498f0f3e1c`
+- **Status**: 8 workstreams executing in 4 waves
+- **Goals**: 206+ in queue
+- **Swarm**: Enabled (`AURA_ENABLE_SWARM=1`)
+- **n8n**: 🟢 Running at http://localhost:5678 (7 workflows **ACTIVE**)
+- **MCP**: 4 servers (GitHub ✅, Slack/Sentry/Supabase ⏳)
+- **Innovation Catalyst**: 🟢 Active with 8 brainstorming techniques

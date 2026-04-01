@@ -4,7 +4,7 @@
     "llm_timeout": 120,
     "primary_provider": "openrouter",
     "model_routing": {
-        "code_generation": "qwen/qwen3-coder",
+        "code_generation": "anthropic/claude-3.5-sonnet",
         "planning": "deepseek/deepseek-chat",
         "analysis": "google/gemini-2.5-flash",
         "critique": "deepseek/deepseek-r1-0528",
@@ -18,7 +18,7 @@
         "fallback": "meta-llama/llama-3.3-70b-instruct:free"
     },
     "model_routing_notes": {
-        "code_generation": "Qwen3 Coder — 262K ctx, purpose-built for code, $0.22/M",
+        "code_generation": "Claude 3.5 Sonnet — best code quality, 200K ctx, $3.00/M",
         "planning": "DeepSeek V3.1 — strong reasoning for plan decomposition, $0.15/M",
         "analysis": "Gemini 2.5 Flash — 1M ctx for large codebase analysis, $0.30/M",
         "critique": "DeepSeek R1 — deep reasoning for adversarial review, $0.45/M",

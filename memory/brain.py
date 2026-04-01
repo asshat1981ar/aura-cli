@@ -36,7 +36,7 @@ def _ensure_nx():
 
 class Brain:
     # Current schema version. Bump when adding columns / tables.
-    SCHEMA_VERSION = 4
+    SCHEMA_VERSION = 5
 
     def __init__(self, db_path: Optional[str] = None):
         # Construct absolute path for the database file
@@ -101,6 +101,25 @@ class Brain:
                 value TEXT
             )
             """)
+            # Innovation sessions table for Innovation Catalyst
+            self.db.execute("""
+            CREATE TABLE IF NOT EXISTS innovation_sessions(
+                session_id TEXT PRIMARY KEY,
+                problem_statement TEXT NOT NULL,
+                status TEXT DEFAULT 'active',
+                current_phase TEXT DEFAULT 'immersion',
+                phases_completed TEXT,  -- JSON array
+                techniques TEXT,  -- JSON array
+                constraints TEXT,  -- JSON object
+                ideas_generated INTEGER DEFAULT 0,
+                ideas_selected INTEGER DEFAULT 0,
+                output_data TEXT,  -- JSON serialized InnovationOutput
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            self.db.execute("CREATE INDEX IF NOT EXISTS idx_innovation_sessions_status ON innovation_sessions(status)")
+            self.db.execute("CREATE INDEX IF NOT EXISTS idx_innovation_sessions_updated ON innovation_sessions(updated_at)")
             # Index on memory.id enables fast ORDER BY id DESC LIMIT N queries (200x speedup
             # vs full-table scan on 30k+ row databases)
             self.db.execute("CREATE INDEX IF NOT EXISTS idx_memory_id ON memory(id)")
@@ -172,6 +191,32 @@ class Brain:
                 self.db.commit()
             self._set_schema_version(4)
             log_json("INFO", "brain_migration", details={"from": 3, "to": 4})
+            current = 4
+
+        # v4 → v5: create innovation_sessions table
+        if current < 5:
+            with self._lock:
+                self.db.execute("""
+                CREATE TABLE IF NOT EXISTS innovation_sessions(
+                    session_id TEXT PRIMARY KEY,
+                    problem_statement TEXT NOT NULL,
+                    status TEXT DEFAULT 'active',
+                    current_phase TEXT DEFAULT 'immersion',
+                    phases_completed TEXT,
+                    techniques TEXT,
+                    constraints TEXT,
+                    ideas_generated INTEGER DEFAULT 0,
+                    ideas_selected INTEGER DEFAULT 0,
+                    output_data TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """)
+                self.db.execute("CREATE INDEX IF NOT EXISTS idx_innovation_sessions_status ON innovation_sessions(status)")
+                self.db.execute("CREATE INDEX IF NOT EXISTS idx_innovation_sessions_updated ON innovation_sessions(updated_at)")
+                self.db.commit()
+            self._set_schema_version(5)
+            log_json("INFO", "brain_migration", details={"from": 4, "to": 5})
 
     def _absorb_legacy_db(self, legacy_path: Path) -> None:
         """Copy rows from *legacy_path* into this DB, skipping duplicates."""
@@ -407,3 +452,151 @@ class Brain:
         self._ensure_weakness_queue_table()
         rows = self.db.execute("SELECT hash FROM weakness_queued").fetchall()
         return [r[0] for r in rows]
+
+    # ── Innovation Session Persistence ────────────────────────────────────────
+
+    def save_innovation_session(self, session) -> None:
+        """Save or update an innovation session.
+        
+        Args:
+            session: InnovationSessionState object or dict with session data
+        """
+        import json
+        from datetime import datetime
+        
+        # Handle both Pydantic v1/v2 models and dicts
+        if hasattr(session, 'model_dump'):
+            data = session.model_dump()
+        elif hasattr(session, 'dict'):
+            data = session.dict()
+        else:
+            data = session
+        
+        # Serialize complex fields
+        phases_completed = json.dumps([p.value if hasattr(p, 'value') else str(p) for p in data.get('phases_completed', [])])
+        techniques = json.dumps(data.get('techniques', []))
+        constraints = json.dumps(data.get('constraints', {}))
+        output_data = json.dumps(data.get('output', {}), default=str) if data.get('output') else None
+        
+        with self._lock:
+            self.db.execute(
+                """
+                INSERT OR REPLACE INTO innovation_sessions(
+                    session_id, problem_statement, status, current_phase,
+                    phases_completed, techniques, constraints, ideas_generated,
+                    ideas_selected, output_data, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    data.get('session_id'),
+                    data.get('problem_statement', ''),
+                    data.get('status', 'active'),
+                    data.get('current_phase', 'immersion'),
+                    phases_completed,
+                    techniques,
+                    constraints,
+                    data.get('ideas_generated', 0),
+                    data.get('ideas_selected', 0),
+                    output_data,
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+            self.db.commit()
+        log_json("INFO", "innovation_session_saved", details={"session_id": data.get('session_id')})
+
+    def get_innovation_session(self, session_id: str) -> Optional[dict]:
+        """Retrieve an innovation session by ID.
+        
+        Args:
+            session_id: The session identifier
+            
+        Returns:
+            Session data as dict, or None if not found
+        """
+        import json
+        
+        row = self.db.execute(
+            "SELECT * FROM innovation_sessions WHERE session_id = ?",
+            (session_id,)
+        ).fetchone()
+        
+        if not row:
+            return None
+        
+        return {
+            'session_id': row['session_id'],
+            'problem_statement': row['problem_statement'],
+            'status': row['status'],
+            'current_phase': row['current_phase'],
+            'phases_completed': json.loads(row['phases_completed']) if row['phases_completed'] else [],
+            'techniques': json.loads(row['techniques']) if row['techniques'] else [],
+            'constraints': json.loads(row['constraints']) if row['constraints'] else {},
+            'ideas_generated': row['ideas_generated'],
+            'ideas_selected': row['ideas_selected'],
+            'output_data': json.loads(row['output_data']) if row['output_data'] else None,
+            'created_at': row['created_at'],
+            'updated_at': row['updated_at'],
+        }
+
+    def list_innovation_sessions(self, status: Optional[str] = None, limit: int = 100) -> List[dict]:
+        """List innovation sessions, optionally filtered by status.
+        
+        Args:
+            status: Filter by status ('active', 'completed', 'paused')
+            limit: Maximum number of sessions to return
+            
+        Returns:
+            List of session data dicts
+        """
+        import json
+        
+        query = "SELECT * FROM innovation_sessions"
+        params = ()
+        
+        if status:
+            query += " WHERE status = ?"
+            params = (status,)
+        
+        query += " ORDER BY updated_at DESC LIMIT ?"
+        params += (limit,)
+        
+        rows = self.db.execute(query, params).fetchall()
+        
+        sessions = []
+        for row in rows:
+            sessions.append({
+                'session_id': row['session_id'],
+                'problem_statement': row['problem_statement'],
+                'status': row['status'],
+                'current_phase': row['current_phase'],
+                'phases_completed': json.loads(row['phases_completed']) if row['phases_completed'] else [],
+                'techniques': json.loads(row['techniques']) if row['techniques'] else [],
+                'ideas_generated': row['ideas_generated'],
+                'ideas_selected': row['ideas_selected'],
+                'created_at': row['created_at'],
+                'updated_at': row['updated_at'],
+            })
+        
+        return sessions
+
+    def delete_innovation_session(self, session_id: str) -> bool:
+        """Delete an innovation session.
+        
+        Args:
+            session_id: The session identifier
+            
+        Returns:
+            True if deleted, False if not found
+        """
+        with self._lock:
+            cursor = self.db.execute(
+                "DELETE FROM innovation_sessions WHERE session_id = ?",
+                (session_id,)
+            )
+            self.db.commit()
+        
+        deleted = cursor.rowcount > 0
+        if deleted:
+            log_json("INFO", "innovation_session_deleted", details={"session_id": session_id})
+        return deleted
+

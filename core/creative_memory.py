@@ -341,7 +341,7 @@ class CreativePatternMemory:
                         ),
                     )
             return None
-        except Exception:
+        except (OSError, TypeError, ValueError):
             return None
     
     def _calculate_analogy_relevance(

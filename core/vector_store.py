@@ -370,7 +370,7 @@ class VectorStore:
                         )
                         stats["embeddings_written"] += 1
                     self.brain.db.commit()
-                except Exception:
+                except (OSError, IOError, ValueError):
                     self.brain.db.rollback()
                     raise
 

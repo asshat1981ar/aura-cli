@@ -439,7 +439,7 @@ class ModelAdapter:
                 if vectors:
                     self._embedding_dims = int(vectors[0].shape[0])
                 return vectors
-        except Exception:
+        except (AttributeError, IndexError, ValueError):
             pass
 
         vectors: list[np.ndarray] = []
@@ -1045,7 +1045,7 @@ class ModelAdapter:
             # Simple check with a dummy embedding
             self.embed(["test"])
             return True
-        except Exception:
+        except (ConnectionError, TimeoutError, ValueError):
             return False
 
     def embed(self, texts: List[str]) -> List[np.ndarray]:

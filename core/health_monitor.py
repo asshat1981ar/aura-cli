@@ -141,7 +141,7 @@ class HealthMonitor:
                 breaches.append({"skill": skill_name, "value": value, "reason": breach_reason})
                 try:
                     goal_text = cfg["goal_template"].format(value=value)
-                except Exception:
+                except (OSError, IOError, ValueError):
                     goal_text = f"Health issue in {skill_name}: {value}"
                 self.queue.add(goal_text)
                 auto_goals.append(goal_text)

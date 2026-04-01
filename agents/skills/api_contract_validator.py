@@ -56,7 +56,7 @@ def _parse_endpoints(source: str, file_path: str) -> List[Dict]:
                             if kw.arg == "response_model":
                                 try:
                                     response_model = ast.unparse(kw.value)
-                                except Exception:
+                                except (OSError, IOError, ValueError):
                                     pass
                         endpoints.append({"path": path, "method": method, "function": node.name, "line": node.lineno, "file": file_path, "response_model": response_model, "params": [a.arg for a in node.args.args if a.arg != "self"]})
     return endpoints

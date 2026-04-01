@@ -133,5 +133,5 @@ class TypeScriptAgentAdapter:
             if hasattr(self.model, "generate"):
                 return self.model.generate(prompt)
             return ""
-        except Exception:
+        except (OSError, IOError, ValueError):
             return ""

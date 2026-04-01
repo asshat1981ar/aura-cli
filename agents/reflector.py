@@ -81,7 +81,7 @@ class ReflectorAgent(Agent):
             if skill_name in skill_context:
                 try:
                     summary[skill_name] = extractor(skill_context[skill_name])
-                except Exception:
+                except (OSError, IOError, ValueError):
                     pass
         return summary
 

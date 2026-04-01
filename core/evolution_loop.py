@@ -113,7 +113,7 @@ class EvolutionLoop:
             from agents.skills.registry import all_skills
 
             return list(all_skills(brain=self.brain, model=getattr(self.planner, "model", None)).keys())
-        except Exception:
+        except (OSError, IOError, ValueError):
             return []
 
     def _safe_skill_run(self, skill_name: str, inputs: Dict[str, Any]) -> Dict[str, Any]:
@@ -123,7 +123,7 @@ class EvolutionLoop:
                 from agents.skills.registry import all_skills
 
                 skill = all_skills(brain=self.brain, model=getattr(self.planner, "model", None)).get(skill_name)
-            except Exception:
+            except (OSError, IOError, ValueError):
                 skill = None
         if skill is None:
             return {"error": f"skill_unavailable:{skill_name}"}

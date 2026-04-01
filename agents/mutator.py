@@ -69,7 +69,7 @@ class MutatorAgent:
                 self._apply_json_mutations(parsed["mutations"])
                 log_json("INFO", "mutator_application_attempt_complete")
                 return
-        except Exception:
+        except (OSError, IOError, ValueError):
             pass
 
         # Fallback to block parsing

@@ -226,7 +226,7 @@ class PropagationEngine:
             pending = [g for g in self.queue._load_queue() if isinstance(g, str)]
             if any(goal_lower in g.lower() or g.lower() in goal_lower for g in pending):
                 return False
-        except Exception:
+        except (OSError, IOError, ValueError):
             pass
         return True
 

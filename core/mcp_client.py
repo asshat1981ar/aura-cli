@@ -68,7 +68,7 @@ class MCPAsyncClient:
                     res_json = response.json()
                     log_json("DEBUG", "mcp_client_request_success", details={"url": url, "method": method, "duration_ms": round(duration * 1000, 2), "attempts": attempt + 1})
                     return res_json
-                except Exception:
+                except (OSError, IOError, ValueError):
                     raise MCPInvalidResponseError(f"MCP server at {url} returned invalid JSON")
             except (httpx.TimeoutException, httpx.ConnectError) as e:
                 is_timeout = isinstance(e, httpx.TimeoutException)

@@ -43,14 +43,14 @@ def build_queue_summary(
     if goal_queue is not None:
         try:
             pending_goals = list(goal_queue.queue)
-        except Exception:
+        except (OSError, IOError, ValueError):
             pending_goals = []
 
     completed_goals = []
     if goal_archive is not None:
         try:
             completed_goals = [_normalize_completed_entry(item) for item in list(goal_archive.completed)]
-        except Exception:
+        except (OSError, IOError, ValueError):
             completed_goals = []
 
     return {
@@ -235,7 +235,7 @@ def build_beads_runtime_metadata(orchestrator: Any = None) -> Dict[str, Any] | N
     if bridge is not None and hasattr(bridge, "to_runtime_metadata"):
         try:
             maybe_metadata = bridge.to_runtime_metadata()
-        except Exception:
+        except (OSError, IOError, ValueError):
             maybe_metadata = None
         if isinstance(maybe_metadata, dict):
             metadata.update(maybe_metadata)
@@ -267,7 +267,7 @@ def build_run_tool_audit_summary(memory_store: Any = None, *, limit: int = 10) -
 
     try:
         entries = list(memory_store.read_log(limit=200) or [])
-    except Exception:
+    except (OSError, IOError, ValueError):
         return None
 
     run_entries = [

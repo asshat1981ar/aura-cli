@@ -169,7 +169,7 @@ class LoopOrchestrator:
         try:
             from memory.lesson_store import LessonStore
             self.lesson_store = LessonStore()
-        except Exception:
+        except (OSError, ImportError):
             pass
         self.auto_add_capabilities = auto_add_capabilities
         self.auto_queue_missing_capabilities = auto_queue_missing_capabilities
@@ -223,7 +223,7 @@ class LoopOrchestrator:
             from core.skill_correlation import SkillCorrelationMatrix
 
             self.skill_correlation = SkillCorrelationMatrix()
-        except Exception:
+        except (OSError, ImportError):
             self.skill_correlation = None
 
         # Self-improvement loops (all optional — never block the main loop)
@@ -253,7 +253,7 @@ class LoopOrchestrator:
             if method:
                 try:
                     method(*args, **kwargs)
-                except Exception:
+                except (TypeError, AttributeError):
                     pass
 
     def _analyze_error(self, error: str, context: Optional[dict] = None) -> Optional[str]:
@@ -329,7 +329,7 @@ class LoopOrchestrator:
             return []
         try:
             return list(self.memory_controller.read_log()[-limit:])
-        except Exception:
+        except (OSError, AttributeError):
             return []
 
     def attach_improvement_loops(self, *loops) -> None:
@@ -412,7 +412,7 @@ class LoopOrchestrator:
             return []
         try:
             summaries = self.memory_controller.persistent_store.query("cycle_summaries", limit=200)
-        except Exception:
+        except (OSError, AttributeError):
             return []
         if not summaries:
             return []
@@ -841,7 +841,7 @@ class LoopOrchestrator:
             spec = resolve_agent_for_goal(goal, model_adapter=model_adapter)
             if spec and spec.name in self.agents:
                 return spec.name
-        except Exception:
+        except (AttributeError, KeyError):
             pass
         return "act"
 
@@ -973,7 +973,7 @@ class LoopOrchestrator:
                 task_bundle = dict(task_bundle) if isinstance(task_bundle, dict) else {}
                 task_bundle["rag_examples"] = [e.get("content", "")[:300] for e in rag_context.examples[:3]]
                 task_bundle["rag_anti_patterns"] = rag_context.anti_patterns[:3]
-        except Exception:
+        except (AttributeError, TypeError):
             pass
 
         # Pipeline quality gate: inject critique from P3 Pipeline Coordinator.
@@ -1398,7 +1398,7 @@ class LoopOrchestrator:
                         if suggested_name in self.skills and suggested_name not in active_skills:
                             active_skills[suggested_name] = self.skills[suggested_name]
                             log_json("INFO", "skill_correlation_added", details={"skill": suggested_name, "correlation": round(corr_score, 3)})
-                except Exception:
+                except (TypeError, KeyError):
                     pass
 
             skill_context = dispatch_skills(goal_type, active_skills, str(self.project_root))
@@ -1731,7 +1731,7 @@ class LoopOrchestrator:
                 lessons = self.lesson_store.injectable_lessons()
                 if lessons:
                     phase_outputs["injected_lessons"] = lessons
-            except Exception:
+            except (OSError, TypeError):
                 pass
 
         context = self._run_ingest_phase(goal, cycle_id, phase_outputs)
@@ -1834,7 +1834,7 @@ class LoopOrchestrator:
         if self.lesson_store:
             try:
                 self.lesson_store.record_cycle(result)
-            except Exception:
+            except (OSError, AttributeError):
                 pass
 
         return result
@@ -1981,7 +1981,7 @@ class LoopOrchestrator:
 
             try:
                 anyio.run(self.shutdown)
-            except Exception:
+            except (RuntimeError, OSError):
                 pass
 
     async def shutdown(self):

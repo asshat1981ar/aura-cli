@@ -267,16 +267,16 @@ class SessionCoordinator:
         if hasattr(self._brain, "forget_tagged"):
             try:
                 self._brain.forget_tagged(tag)
-            except Exception:
-                self._logger.debug("Could not clean tagged memories for %s", tag)
+            except (OSError, IOError, AttributeError) as e:
+                self._logger.debug("Could not clean tagged memories for %s: %s", tag, e)
 
         report = self._build_report(started_at)
 
         if self._store:
             try:
                 self._store.save_report(self._session_id, report)
-            except Exception:
-                self._logger.debug("Could not save session report")
+            except (OSError, IOError) as e:
+                self._logger.debug("Could not save session report: %s", e)
 
         print(
             f"✅ SADD resume complete — {report.completed}/{report.total_workstreams} workstreams succeeded"

@@ -6,7 +6,10 @@
       "name": "Input",
       "type": "n8n-nodes-base.executeWorkflowTrigger",
       "typeVersion": 1,
-      "position": [250, 300],
+      "position": [
+        250,
+        300
+      ],
       "parameters": {}
     },
     {
@@ -14,7 +17,10 @@
       "name": "Complexity Scorer",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [500, 200],
+      "position": [
+        500,
+        200
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.AURA_SKILLS_URL }}/call",
@@ -44,7 +50,10 @@
       "name": "Error Pattern Matcher",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [500, 400],
+      "position": [
+        500,
+        400
+      ],
       "parameters": {
         "method": "POST",
         "url": "={{ $env.AURA_SKILLS_URL }}/call",
@@ -74,7 +83,10 @@
       "name": "Merge",
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
-      "position": [750, 300],
+      "position": [
+        750,
+        300
+      ],
       "parameters": {
         "mode": "combine",
         "combinationMode": "mergeByPosition",
@@ -86,7 +98,10 @@
       "name": "Build Context",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1000, 300],
+      "position": [
+        1000,
+        300
+      ],
       "parameters": {
         "assignments": {
           "assignments": [
@@ -113,7 +128,10 @@
       "name": "Execute WF-6",
       "type": "n8n-nodes-base.executeWorkflow",
       "typeVersion": 1.1,
-      "position": [1250, 300],
+      "position": [
+        1250,
+        300
+      ],
       "parameters": {
         "workflowId": "WF-6-code-gen-pr-push",
         "options": {
@@ -126,29 +144,61 @@
     "Input": {
       "main": [
         [
-          {"node": "Complexity Scorer", "type": "main", "index": 0},
-          {"node": "Error Pattern Matcher", "type": "main", "index": 0}
+          {
+            "node": "Complexity Scorer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Error Pattern Matcher",
+            "type": "main",
+            "index": 0
+          }
         ]
       ]
     },
     "Complexity Scorer": {
       "main": [
-        [{"node": "Merge", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Error Pattern Matcher": {
       "main": [
-        [{"node": "Merge", "type": "main", "index": 1}]
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
       ]
     },
     "Merge": {
       "main": [
-        [{"node": "Build Context", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Build Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Build Context": {
       "main": [
-        [{"node": "Execute WF-6", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Execute WF-6",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
@@ -157,5 +207,6 @@
   },
   "meta": {
     "instanceId": "fleet-dispatcher"
-  }
+  },
+  "id": "adc17a3a-0122-403c-bf3f-5b6f0bda5a88"
 }

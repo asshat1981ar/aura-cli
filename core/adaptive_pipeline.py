@@ -320,6 +320,6 @@ class AdaptivePipeline:
                 losses = stats.get("losses", 0)
                 total = wins + losses
                 return wins / total if total > 0 else 0.0
-        except Exception:
+        except (OSError, TypeError, AttributeError):
             pass
         return 0.0

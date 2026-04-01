@@ -68,8 +68,8 @@ class MCPToolBridge:
                     for cap in svc.get("capabilities", []):
                         tools.append({"name": cap, "server": svc.get("name", "unknown")})
                 return tools
-            except Exception:
-                logger.debug("MCP registry not available, using static tool list")
+            except (ImportError, AttributeError, ConnectionError) as e:
+                logger.debug("MCP registry not available, using static tool list: %s", e)
 
         # Static fallback: known tools from AURA's MCP servers
         return [

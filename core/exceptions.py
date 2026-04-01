@@ -1,79 +1,179 @@
-class AuraError(Exception):
-    """Base class for all exceptions in AURA."""
+"""Standardized exceptions for AURA CLI.
+
+Provides specific exception types for different error categories
+to enable precise error handling and reduce bare 'except Exception' usage.
+"""
+
+
+class AURAError(Exception):
+    """Base exception for all AURA errors."""
     pass
 
-class GitToolsError(AuraError):
-    """Base class for all Git-related errors."""
+
+# File/IO Exceptions
+class FileToolsError(AURAError):
+    """Base exception for file tool operations."""
     pass
 
-class GitRepoError(GitToolsError):
-    """Exception raised when the Git repository is invalid or not found."""
+
+class PathTraversalError(FileToolsError):
+    """Attempted path traversal attack detected."""
     pass
 
-class GitCommitError(GitToolsError):
-    """Exception raised for errors during Git commit operations."""
+
+class PathOutsideRootError(FileToolsError):
+    """Path is outside the allowed project root."""
     pass
 
-class GitRollbackError(GitToolsError):
-    """Exception raised for errors during Git rollback operations."""
+
+class NullByteInjectionError(FileToolsError):
+    """Null byte detected in path (injection attempt)."""
     pass
 
-class GitDiffError(GitToolsError):
-    """Exception raised for errors during Git diff operations."""
+
+# MCP/Network Exceptions
+class MCPError(AURAError):
+    """Base exception for MCP-related errors."""
     pass
 
-class GitBranchError(GitToolsError):
-    """Exception raised for errors during Git branch operations."""
+
+class MCPConnectionError(MCPError):
+    """Failed to connect to MCP server."""
     pass
 
-class GitStashError(GitToolsError):
-    """Exception raised for errors during Git stash operations."""
+
+class MCPTimeoutError(MCPError):
+    """MCP operation timed out."""
     pass
 
-class GitStashPopError(GitToolsError):
-    """Exception raised for errors during Git stash pop operations."""
+
+class MCPProtocolError(MCPError):
+    """MCP protocol error."""
     pass
 
-class GoalQueueError(AuraError):
-    """Raised when an error occurs in Goal Queue operations."""
+
+# Agent Exceptions
+class AgentError(AURAError):
+    """Base exception for agent errors."""
     pass
 
-class BrainError(AuraError):
-    """Raised when an error occurs in Brain operations."""
+
+class AgentInitializationError(AgentError):
+    """Failed to initialize agent."""
     pass
 
-class ModelAdapterError(AuraError):
-    """Raised when an error occurs in Model Adapter operations."""
+
+class AgentExecutionError(AgentError):
+    """Agent execution failed."""
     pass
 
-class LoopError(AuraError):
-    """Raised when an error occurs in the Hybrid Loop."""
+
+class AgentTimeoutError(AgentError):
+    """Agent execution timed out."""
     pass
 
-class ConfigurationError(AuraError):
-    """Raised when there is a configuration-related error."""
+
+# Orchestration Exceptions
+class OrchestrationError(AURAError):
+    """Base exception for orchestration errors."""
     pass
 
-class MCPError(AuraError):
-    """Base class for all MCP-related errors."""
+
+class PhaseExecutionError(OrchestrationError):
+    """Phase execution failed."""
     pass
 
-class MCPTransportError(MCPError):
-    """Raised for errors in the MCP transport layer (e.g., connection failure)."""
+
+class CycleExceededError(OrchestrationError):
+    """Maximum cycles exceeded."""
     pass
 
-class MCPTimeoutError(MCPTransportError):
-    """Raised when an MCP request times out."""
+
+class VerificationFailedError(OrchestrationError):
+    """Verification phase failed."""
     pass
 
-class MCPServerUnavailableError(MCPTransportError):
-    """Raised when an MCP server is unavailable or down."""
+
+# SADD Exceptions
+class SADDError(AURAError):
+    """Base exception for SADD-related errors."""
     pass
 
-class MCPInvalidResponseError(MCPTransportError):
-    """Raised when an MCP server returns a malformed response."""
+
+class WorkstreamError(SADDError):
+    """Workstream execution error."""
     pass
 
-class MCPRetryExhaustedError(MCPTransportError):
-    """Raised when all retries for an MCP request have failed."""
+
+class DependencyCycleError(SADDError):
+    """Circular dependency detected in workstreams."""
+    pass
+
+
+class SessionError(SADDError):
+    """SADD session error."""
+    pass
+
+
+# Memory Exceptions
+class MemoryError(AURAError):
+    """Base exception for memory-related errors."""
+    pass
+
+
+class RecallError(MemoryError):
+    """Failed to recall from memory."""
+    pass
+
+
+class StorageError(MemoryError):
+    """Failed to store to memory."""
+    pass
+
+
+# Configuration Exceptions
+class ConfigError(AURAError):
+    """Base exception for configuration errors."""
+    pass
+
+
+class ConfigNotFoundError(ConfigError):
+    """Configuration file not found."""
+    pass
+
+
+class ConfigValidationError(ConfigError):
+    """Configuration validation failed."""
+    pass
+
+
+# Validation Exceptions
+class ValidationError(AURAError):
+    """Base exception for validation errors."""
+    pass
+
+
+class SchemaValidationError(ValidationError):
+    """Schema validation failed."""
+    pass
+
+
+class OutputValidationError(ValidationError):
+    """Output validation failed."""
+    pass
+
+
+# Security Exceptions
+class SecurityError(AURAError):
+    """Base exception for security-related errors."""
+    pass
+
+
+class SecretDetectedError(SecurityError):
+    """Hardcoded secret detected."""
+    pass
+
+
+class InjectionDetectedError(SecurityError):
+    """Injection attack detected."""
     pass

@@ -161,8 +161,8 @@ class SessionCoordinator:
         if hasattr(self._brain, "forget_tagged"):
             try:
                 self._brain.forget_tagged(tag)
-            except Exception:
-                self._logger.debug("Could not clean tagged memories for %s", tag)
+            except (OSError, IOError) as e:
+                self._logger.debug("Could not clean tagged memories for %s: %s", tag, e)
 
         report = self._build_report(started_at)
 
@@ -170,8 +170,8 @@ class SessionCoordinator:
         if self._store:
             try:
                 self._store.save_report(self._session_id, report)
-            except Exception:
-                self._logger.debug("Could not save session report")
+            except (OSError, IOError) as e:
+                self._logger.debug("Could not save session report: %s", e)
 
         print(f"✅ SADD session complete — {report.completed}/{report.total_workstreams} workstreams succeeded")
         return report
@@ -223,8 +223,8 @@ class SessionCoordinator:
         if self._store:
             try:
                 self._store.update_status(self._session_id, "running")
-            except Exception:
-                self._logger.debug("Could not update session status for resume")
+            except (OSError, IOError) as e:
+                self._logger.debug("Could not update session status for resume: %s", e)
 
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self._config.max_parallel,
@@ -415,8 +415,8 @@ class SessionCoordinator:
                 for fp in result.changed_files:
                     self._store.record_artifact(self._session_id, ws_id, fp)
             self._store.log_event(self._session_id, ws_id, event_type, payload)
-        except Exception:
-            self._logger.debug("Checkpoint/log failed for %s", ws_id)
+        except (OSError, IOError) as e:
+            self._logger.debug("Checkpoint/log failed for %s: %s", ws_id, e)
 
     # ------------------------------------------------------------------
     # Internal — report building

@@ -1,118 +1,100 @@
-"""Failure routing logic extracted from the orchestrator.
+"""Failure routing logic extracted from orchestrator (#317).
 
-This module provides :class:`FailureRouter`, a dedicated component that
-decides how the orchestrator should respond to a failed phase — retry the
-act step, escalate to a full re-plan, skip (environmental issue), or abort.
+Provides type-safe failure classification and routing decisions
+for the AURA orchestration loop.
 """
-from __future__ import annotations
-
 from enum import Enum, auto
-from typing import Optional
+from typing import Dict, List, Optional
 
 
 class FailureAction(Enum):
-    """Recommended action after a phase failure."""
-
-    RETRY_ACT = auto()
-    """Recoverable code-level error — retry the act phase."""
-
-    REPLAN = auto()
-    """Structural or design error — re-plan from scratch."""
-
-    SKIP = auto()
-    """External / environmental issue that cannot be self-fixed."""
-
-    ABORT = auto()
-    """Fatal error — stop the current cycle entirely."""
+    """Action to take after a phase failure."""
+    RETRY_ACT = auto()   # Retry the act phase (code-level fix)
+    REPLAN = auto()      # Replan from scratch (structural/design issue)
+    SKIP = auto()        # Skip due to external/environmental issue
+    ABORT = auto()       # Abort the cycle (unrecoverable)
 
 
-# Signals that indicate an external / environmental cause rather than a
-# code-level bug that the agent can fix.
-_ENVIRONMENTAL_SIGNALS = (
+# Environmental/external failure keywords
+ENVIRONMENTAL_KEYWORDS: List[str] = [
+    "dependency",
     "network",
+    "env",
+    "environment",
+    "permission",
+    "not found",
+    "no module",
+    "import error",
     "connection",
     "timeout",
-    "timed out",
     "dns",
     "certificate",
-    "ssl",
-)
+]
 
-# Pattern that indicates some tests are still passing (used to distinguish
-# partial failures from total failures in the verify phase).
-_PASSING_TEST_PATTERN = "passed"
+# Structural/design failure keywords
+STRUCTURAL_KEYWORDS: List[str] = [
+    "architecture",
+    "circular",
+    "api_breaking",
+    "breaking_change",
+    "design",
+    "interface",
+    "contract",
+]
 
 
 class FailureRouter:
-    """Route a phase failure to the appropriate recovery action.
-
-    Args:
-        max_act_retries: Maximum number of act-phase retries before
-            escalating to a re-plan.  Defaults to 3.
+    """Routes phase failures to appropriate recovery actions.
+    
+    Extracted from LoopOrchestrator to reduce coupling and enable
+    independent testing.
     """
 
-    def __init__(self, max_act_retries: int = 3) -> None:
+    def __init__(self, max_act_retries: int = 3):
         self.max_act_retries = max_act_retries
 
     def route_failure(
         self,
-        phase: str,
-        attempt: int,
-        error: str,
-        verification_output: Optional[str] = None,
+        verification: Dict,
+        attempt: int = 1,
     ) -> FailureAction:
-        """Determine how the orchestrator should recover from a failure.
+        """Classify a verification failure and return the recommended action.
 
         Args:
-            phase: The pipeline phase that failed (e.g. ``"sandbox"``,
-                ``"verify"``).
-            attempt: Current attempt number (1-based).  When this reaches
-                *max_act_retries* the router escalates to REPLAN.
-            error: Error message or summary string from the failed phase.
-            verification_output: Optional output from the verify phase (e.g.
-                pytest stdout).  When this contains passing-test indicators
-                the failure is treated as a partial/recoverable failure.
+            verification: The dict returned by the verify phase.
+            attempt: Current retry attempt number (1-indexed).
 
         Returns:
-            A :class:`FailureAction` value.
+            FailureAction indicating how to proceed.
         """
-        error_lower = (error or "").lower()
+        failures = " ".join(str(f) for f in verification.get("failures", []))
+        logs = str(verification.get("logs", ""))
+        combined = (failures + " " + logs).lower()
 
-        # Environmental errors cannot be fixed by the agent — skip.
-        if any(signal in error_lower for signal in _ENVIRONMENTAL_SIGNALS):
+        # Check for external/environmental issues first
+        if any(kw in combined for kw in ENVIRONMENTAL_KEYWORDS):
             return FailureAction.SKIP
 
-        if phase == "sandbox":
-            if attempt < self.max_act_retries:
-                return FailureAction.RETRY_ACT
+        # Check for structural/design issues
+        if any(kw in combined for kw in STRUCTURAL_KEYWORDS):
             return FailureAction.REPLAN
 
-        if phase == "verify":
-            has_passing = (
-                verification_output is not None
-                and _PASSING_TEST_PATTERN in (verification_output or "").lower()
-                and self._has_some_passing(verification_output)
-            )
-            if has_passing:
-                if attempt < self.max_act_retries:
-                    return FailureAction.RETRY_ACT
-                return FailureAction.REPLAN
-            return FailureAction.REPLAN
+        # Default: retry act phase if under max retries
+        if attempt < self.max_act_retries:
+            return FailureAction.RETRY_ACT
+        return FailureAction.REPLAN
 
-        # Default for unknown phases — skip rather than loop forever.
-        return FailureAction.SKIP
-
-    # ── Helpers ──────────────────────────────────────────────────────────────
-
-    @staticmethod
-    def _has_some_passing(verification_output: str) -> bool:
-        """Return True when *verification_output* contains a non-zero passed count.
-
-        Handles common pytest-style summaries like ``"3 passed, 2 failed"``.
+    def route(self, verification: Dict) -> str:
+        """Legacy-compatible routing returning string literals.
+        
+        Returns:
+            One of: "act", "plan", "skip"
         """
-        import re
-
-        match = re.search(r"(\d+)\s+passed", verification_output, re.IGNORECASE)
-        if match:
-            return int(match.group(1)) > 0
-        return False
+        action = self.route_failure(verification, attempt=1)
+        mapping = {
+            FailureAction.RETRY_ACT: "act",
+            FailureAction.REPLAN: "plan",
+            FailureAction.SKIP: "skip",
+            FailureAction.ABORT: "skip",
+        }
+        return mapping.get(action, "act")

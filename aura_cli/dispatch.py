@@ -992,6 +992,34 @@ def _handle_innovate_insights_dispatch(ctx: DispatchContext) -> int:
     return 0
 
 
+def _handle_creative_solve_dispatch(ctx: DispatchContext) -> int:
+    """Handle creative solve command."""
+    from aura_cli.commands import _handle_creative_solve
+    _handle_creative_solve(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_creative_patterns_dispatch(ctx: DispatchContext) -> int:
+    """Handle creative patterns command."""
+    from aura_cli.commands import _handle_creative_patterns
+    _handle_creative_patterns(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_creative_cross_pollinate_dispatch(ctx: DispatchContext) -> int:
+    """Handle creative cross-pollinate command."""
+    from aura_cli.commands import _handle_creative_cross_pollinate
+    _handle_creative_cross_pollinate(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_creative_stats_dispatch(ctx: DispatchContext) -> int:
+    """Handle creative stats command."""
+    from aura_cli.commands import _handle_creative_stats
+    _handle_creative_stats(ctx.args, ctx.runtime)
+    return 0
+
+
 def _dispatch_rule(action: str, handler) -> DispatchRule:
     return DispatchRule(action, action_runtime_required(action), handler)
 
@@ -1036,6 +1064,11 @@ COMMAND_DISPATCH_REGISTRY = {
     "innovate_techniques": _dispatch_rule("innovate_techniques", _handle_innovate_techniques_dispatch),
     "innovate_to_goals": _dispatch_rule("innovate_to_goals", _handle_innovate_to_goals_dispatch),
     "innovate_insights": _dispatch_rule("innovate_insights", _handle_innovate_insights_dispatch),
+    # ── Creative-AURA Integration Dispatch Rules ───────────────────────────────
+    "creative_solve": _dispatch_rule("creative_solve", _handle_creative_solve_dispatch),
+    "creative_patterns": _dispatch_rule("creative_patterns", _handle_creative_patterns_dispatch),
+    "creative_cross_pollinate": _dispatch_rule("creative_cross_pollinate", _handle_creative_cross_pollinate_dispatch),
+    "creative_stats": _dispatch_rule("creative_stats", _handle_creative_stats_dispatch),
     "interactive": _dispatch_rule("interactive", _handle_interactive_dispatch),
 }
 

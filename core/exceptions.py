@@ -52,6 +52,21 @@ class MCPProtocolError(MCPError):
     pass
 
 
+class MCPServerUnavailableError(MCPError):
+    """MCP server unavailable."""
+    pass
+
+
+class MCPInvalidResponseError(MCPError):
+    """MCP invalid response."""
+    pass
+
+
+class MCPRetryExhaustedError(MCPError):
+    """MCP retry exhausted."""
+    pass
+
+
 # Agent Exceptions
 class AgentError(AURAError):
     """Base exception for agent errors."""
@@ -137,6 +152,11 @@ class ConfigError(AURAError):
     pass
 
 
+class ConfigurationError(ConfigError):
+    """Configuration error (alias for backward compatibility)."""
+    pass
+
+
 class ConfigNotFoundError(ConfigError):
     """Configuration file not found."""
     pass
@@ -160,6 +180,47 @@ class SchemaValidationError(ValidationError):
 
 class OutputValidationError(ValidationError):
     """Output validation failed."""
+    pass
+
+
+# Git Exceptions
+class GitToolsError(AURAError):
+    """Base exception for git tool errors."""
+    pass
+
+
+class GitRepoError(GitToolsError):
+    """Git repository error."""
+    pass
+
+
+class GitCommitError(GitToolsError):
+    """Git commit error."""
+    pass
+
+
+class GitRollbackError(GitToolsError):
+    """Git rollback error."""
+    pass
+
+
+class GitDiffError(GitToolsError):
+    """Git diff error."""
+    pass
+
+
+class GitBranchError(GitToolsError):
+    """Git branch error."""
+    pass
+
+
+class GitStashError(GitToolsError):
+    """Git stash error."""
+    pass
+
+
+class GitStashPopError(GitToolsError):
+    """Git stash pop error."""
     pass
 
 

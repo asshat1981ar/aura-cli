@@ -446,6 +446,27 @@ def _customize_innovate_insights(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
 
 
+def _customize_creative_solve(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("problem", nargs="+", help="Problem description to solve.")
+    parser.add_argument("--techniques", dest="techniques", default="SCAMPER,RPE", help="Comma-separated list of creative techniques (SCAMPER, RPE, SixHats, AutoTRIZ).")
+    parser.add_argument("--domain", dest="domain", default="general", help="Problem domain for context.")
+    parser.add_argument("--max-ideas", dest="max_ideas", type=int, default=10, help="Maximum ideas to generate per technique.")
+
+
+def _customize_creative_patterns(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--domain", dest="domain", help="Filter patterns by domain.")
+
+
+def _customize_creative_cross_pollinate(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--from", dest="from_domain", required=True, help="Source domain to draw patterns from.")
+    parser.add_argument("--to", dest="to_domain", required=True, help="Target domain to apply patterns to.")
+    parser.add_argument("--top-k", dest="top_k", type=int, default=5, help="Number of analogies to show.")
+
+
+def _customize_creative_stats(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
+
+
 _PARSER_CUSTOMIZERS.update(
     {
         ("help",): _customize_help,
@@ -481,6 +502,10 @@ _PARSER_CUSTOMIZERS.update(
         ("innovate", "techniques"): _customize_innovate_techniques,
         ("innovate", "to-goals"): _customize_innovate_to_goals,
         ("innovate", "insights"): _customize_innovate_insights,
+        ("creative", "solve"): _customize_creative_solve,
+        ("creative", "patterns"): _customize_creative_patterns,
+        ("creative", "cross-pollinate"): _customize_creative_cross_pollinate,
+        ("creative", "stats"): _customize_creative_stats,
     }
 )
 

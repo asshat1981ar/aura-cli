@@ -1189,3 +1189,265 @@ def _print_global_insights(insights):
 
 def _handle_exit():
     log_json("INFO", "aura_cli_exit")
+
+
+# ============================================================================
+# Creative-AURA Integration Commands
+# ============================================================================
+
+def _handle_creative_solve(args, runtime=None):
+    """Solve a problem using unified creative-aura approach.
+    
+    Usage: creative solve "problem description" --techniques SCAMPER,RPE
+    """
+    import asyncio
+    from agents.creative_orchestrator import create_unified_orchestrator
+    
+    problem = getattr(args, 'problem', None)
+    if not problem:
+        print("Error: Problem description required")
+        print("Usage: creative solve \"reduce API latency\" --techniques SCAMPER,RPE")
+        return
+    
+    techniques_str = getattr(args, 'techniques', 'SCAMPER,RPE')
+    techniques = [t.strip() for t in techniques_str.split(',')]
+    domain = getattr(args, 'domain', 'general')
+    
+    print(f"\n🎯 Solving: {problem}")
+    print(f"🛠️  Techniques: {', '.join(techniques)}")
+    print(f"📂 Domain: {domain}")
+    print("\n" + "="*60)
+    
+    try:
+        # Get orchestrator and brain from runtime
+        if runtime:
+            aura_orchestrator = runtime.get('orchestrator')
+            brain = runtime.get('brain')
+        else:
+            print("Error: Runtime not available")
+            return
+        
+        if not aura_orchestrator or not brain:
+            print("Error: Orchestrator or Brain not available in runtime")
+            return
+        
+        # Create unified orchestrator
+        creative_orch = create_unified_orchestrator(
+            aura_orchestrator=aura_orchestrator,
+            brain=brain,
+            enable_creative_phase=True,
+            enable_review_council=True,
+        )
+        
+        # Run the solve loop
+        result = asyncio.run(creative_orch.solve(
+            problem=problem,
+            techniques=techniques,
+            domain=domain,
+        ))
+        
+        # Display results
+        print("\n" + "="*60)
+        print("📊 RESULTS")
+        print("="*60)
+        
+        if result.success:
+            print("\n✅ SUCCESS!")
+        else:
+            print("\n❌ Implementation did not succeed")
+        
+        print(f"\n💡 Selected Technique: {result.selected_idea.technique if result.selected_idea else 'N/A'}")
+        print(f"⏱️  Total Time: {result.cycle_time_seconds:.2f}s")
+        
+        if result.implementation:
+            impl = result.implementation
+            print(f"\n📁 Files Changed: {len(impl.files_changed)}")
+            for f in impl.files_changed:
+                print(f"   - {f}")
+            print(f"🧪 Tests Passed: {'Yes' if impl.tests_passed else 'No'}")
+            print(f"🔄 AURA Cycles: {impl.cycles_used}")
+        
+        if result.ideas:
+            print(f"\n💭 Ideas Generated: {len(result.ideas)}")
+            for idea in result.ideas[:5]:  # Show top 5
+                print(f"   [{idea.technique}] {idea.content[:50]}... (conf: {idea.confidence:.2f})")
+        
+        if result.lessons_learned:
+            print(f"\n📚 Lessons Learned:")
+            for lesson in result.lessons_learned:
+                print(f"   - {lesson}")
+        
+        print()
+        
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def _handle_creative_patterns(args, runtime=None):
+    """List stored creative patterns.
+    
+    Usage: creative patterns [--domain api_design]
+    """
+    from core.creative_memory import create_creative_memory
+    
+    domain = getattr(args, 'domain', None)
+    
+    print("\n🎨 Creative Patterns")
+    print("="*60)
+    
+    try:
+        if runtime:
+            brain = runtime.get('brain')
+        else:
+            print("Error: Runtime not available")
+            return
+        
+        if not brain:
+            print("Error: Brain not available")
+            return
+        
+        memory = create_creative_memory(brain)
+        
+        if domain:
+            # Show stats for specific domain
+            stats = memory.get_domain_stats(domain)
+            print(f"\n📂 Domain: {domain}")
+            print(f"   Patterns: {stats.get('pattern_count', 0)}")
+            print(f"   Avg Success Rate: {stats.get('avg_success_rate', 0):.2%}")
+            print(f"   Total Usage: {stats.get('total_usage', 0)}")
+            if stats.get('techniques'):
+                print(f"   Techniques: {', '.join(stats['techniques'])}")
+        else:
+            # List all domains
+            domains = memory.list_domains()
+            if domains:
+                print(f"\n📂 Known Domains ({len(domains)}):")
+                for d in domains:
+                    stats = memory.get_domain_stats(d)
+                    print(f"   {d}: {stats.get('pattern_count', 0)} patterns")
+            else:
+                print("\n   No patterns stored yet.")
+                print("   Patterns are learned from successful creative solves.")
+        
+        print()
+        
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+
+
+def _handle_creative_cross_pollinate(args, runtime=None):
+    """Find cross-domain pattern analogies.
+    
+    Usage: creative cross-pollinate --from web --to mobile
+    """
+    from core.creative_memory import create_creative_memory
+    
+    source = getattr(args, 'from_domain', None)
+    target = getattr(args, 'to_domain', None)
+    
+    if not source or not target:
+        print("Error: Both --from and --to domains required")
+        print("Usage: creative cross-pollinate --from web --to mobile")
+        return
+    
+    print(f"\n🌉 Cross-Pollination: {source} → {target}")
+    print("="*60)
+    
+    try:
+        if runtime:
+            brain = runtime.get('brain')
+        else:
+            print("Error: Runtime not available")
+            return
+        
+        if not brain:
+            print("Error: Brain not available")
+            return
+        
+        memory = create_creative_memory(brain)
+        
+        analogies = memory.cross_pollinate(
+            source_domain=source,
+            target_domain=target,
+            top_k=5,
+        )
+        
+        if analogies:
+            print(f"\n🔍 Found {len(analogies)} analogies:\n")
+            for i, analogy in enumerate(analogies, 1):
+                pattern = analogy['pattern']
+                print(f"{i}. [{pattern.technique}] (relevance: {analogy['relevance']:.2f})")
+                print(f"   Pattern: {pattern.content[:60]}...")
+                print(f"   Success Rate: {pattern.success_rate:.2%}")
+                print(f"   Hint: {analogy['adaptation_hint']}")
+                print()
+        else:
+            print("\n   No analogies found.")
+            print(f"   Try generating patterns from {source} domain first.")
+        
+        print()
+        
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+
+
+def _handle_creative_stats(args, runtime=None):
+    """Show creative system statistics.
+    
+    Usage: creative stats
+    """
+    from core.creative_memory import create_creative_memory
+    from core.creative_bridge import CreativeImplementationBridge
+    
+    print("\n📈 Creative System Statistics")
+    print("="*60)
+    
+    try:
+        if runtime:
+            brain = runtime.get('brain')
+            orchestrator = runtime.get('orchestrator')
+        else:
+            print("Error: Runtime not available")
+            return
+        
+        if brain:
+            memory = create_creative_memory(brain)
+            domains = memory.list_domains()
+            
+            print(f"\n📚 Pattern Memory:")
+            print(f"   Domains: {len(domains)}")
+            if domains:
+                total_patterns = sum(
+                    memory.get_domain_stats(d).get('pattern_count', 0)
+                    for d in domains
+                )
+                print(f"   Total Patterns: {total_patterns}")
+        
+        if orchestrator:
+            bridge = CreativeImplementationBridge(orchestrator)
+            history = bridge.get_implementation_history()
+            
+            print(f"\n🔧 Implementation History:")
+            print(f"   Total Implementations: {len(history)}")
+            if history:
+                success_count = sum(1 for h in history if h.success)
+                print(f"   Success Rate: {success_count / len(history):.1%}")
+                
+                # By technique
+                techniques = set(h.idea.technique for h in history)
+                print(f"\n   By Technique:")
+                for tech in techniques:
+                    tech_rate = bridge.get_success_rate(technique=tech)
+                    print(f"      {tech}: {tech_rate:.1%}")
+        
+        print("\n✨ Available Techniques:")
+        print("   - RPE (Recursive Prompt Expansion)")
+        print("   - SCAMPER")
+        print("   - SixHats")
+        print("   - AutoTRIZ")
+        print()
+        
+    except Exception as e:
+        print(f"\n❌ Error: {e}")

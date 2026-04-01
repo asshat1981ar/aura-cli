@@ -400,6 +400,53 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
             "python3 main.py innovate insights --json",
         ),
     ),
+    CommandSpec(
+        path=("creative",),
+        summary="Creative-AURA unified problem solving",
+        description="Use creative techniques combined with AURA implementation for end-to-end problem solving.",
+        examples=(
+            'python3 main.py creative solve "Reduce API latency"',
+            'python3 main.py creative solve "Add caching" --techniques SCAMPER,RPE',
+            "python3 main.py creative patterns",
+            "python3 main.py creative cross-pollinate --from web --to mobile",
+        ),
+    ),
+    CommandSpec(
+        path=("creative", "solve"),
+        summary="Solve problem using creative + AURA approach",
+        description="Generate ideas using creative techniques and implement the best one with AURA.",
+        examples=(
+            'python3 main.py creative solve "Improve performance"',
+            'python3 main.py creative solve "Add feature X" --techniques SCAMPER,RPE,SixHats',
+            'python3 main.py creative solve "Refactor module" --domain architecture',
+        ),
+    ),
+    CommandSpec(
+        path=("creative", "patterns"),
+        summary="List stored creative patterns",
+        description="View stored patterns and their success rates.",
+        examples=(
+            "python3 main.py creative patterns",
+            "python3 main.py creative patterns --domain api_design",
+        ),
+    ),
+    CommandSpec(
+        path=("creative", "cross-pollinate"),
+        summary="Find cross-domain analogies",
+        description="Find patterns from one domain applicable to another.",
+        examples=(
+            "python3 main.py creative cross-pollinate --from web --to mobile",
+            "python3 main.py creative cross-pollinate --from backend --to frontend",
+        ),
+    ),
+    CommandSpec(
+        path=("creative", "stats"),
+        summary="Show creative system statistics",
+        description="Display statistics about the creative system including success rates and pattern counts.",
+        examples=(
+            "python3 main.py creative stats",
+        ),
+    ),
 )
 
 COMMAND_SPECS_BY_PATH: dict[tuple[str, ...], CommandSpec] = {spec.path: spec for spec in COMMAND_SPECS}
@@ -451,6 +498,10 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("innovate_techniques", False, ("innovate", "techniques")),
     CLIActionSpec("innovate_to_goals", True, ("innovate", "to-goals")),
     CLIActionSpec("innovate_insights", True, ("innovate", "insights")),
+    CLIActionSpec("creative_solve", True, ("creative", "solve")),
+    CLIActionSpec("creative_patterns", True, ("creative", "patterns")),
+    CLIActionSpec("creative_cross_pollinate", True, ("creative", "cross-pollinate")),
+    CLIActionSpec("creative_stats", True, ("creative", "stats")),
     CLIActionSpec("interactive", True, None),
 )
 

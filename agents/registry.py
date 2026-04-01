@@ -62,6 +62,8 @@ FALLBACK_CAPABILITIES: dict[str, list[str]] = {
     "investigation":       ["investigation", "research", "analysis"],
     "external_llm":        ["routing", "proxy", "llm_proxy", "model_routing", "external_llm"],
     "documentation":       ["doc_generation", "readme", "inline_docs", "commenting", "documentation"],
+    "innovation_swarm":    ["innovation", "brainstorming", "divergence", "convergence", "creativity", "ideation"],
+    "meta_conductor":      ["innovation", "orchestration", "facilitation", "design_thinking", "session_management"],
 }
 
 
@@ -107,6 +109,8 @@ _AGENT_MODULE_MAP: dict[str, tuple[str, str]] = {
     "root_cause_analysis": ("agents.root_cause_analysis", "RootCauseAnalysisAgent"),
     "mcp_discovery":       ("agents.mcp_discovery_agent", "MCPDiscoveryAgent"),
     "mcp_health":          ("agents.mcp_health_agent",    "MCPHealthAgent"),
+    "innovation_swarm":    ("agents.innovation_swarm",    "InnovationSwarm"),
+    "meta_conductor":      ("agents.meta_conductor",      "MetaConductor"),
 }
 
 
@@ -579,6 +583,8 @@ def default_agents(brain, model, context_manager=None, skills=None, health_monit
     RootCauseAnalysisAgent = _lazy_import("root_cause_analysis")
     MCPDiscoveryAgent = _lazy_import("mcp_discovery")
     MCPHealthAgent = _lazy_import("mcp_health")
+    InnovationSwarm = _lazy_import("innovation_swarm")
+    MetaConductor = _lazy_import("meta_conductor")
 
     sandbox_agent = SandboxAgent(brain, timeout=30)
     planner = PlannerAdapter(PlannerAgent(brain, model))
@@ -609,6 +615,8 @@ def default_agents(brain, model, context_manager=None, skills=None, health_monit
         "root_cause_analysis": RootCauseAnalysisAgent(),
         "mcp_discovery": MCPDiscoveryAgent(),
         "mcp_health": MCPHealthAgent(),
+        "innovation_swarm": InnovationSwarm(brain=brain, model=model),
+        "meta_conductor": MetaConductor(brain=brain, model=model),
     }
 
     from agents.autogen_agent import AutoGenGroupChatAgent

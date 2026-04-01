@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
 from core.logging_utils import log_json
+from core.schema import RoutingDecision, validate_phase_output
 from core.beads_bridge import build_beads_runtime_input
 from core.operator_runtime import build_cycle_summary
 from core.cycle_outcome import CycleOutcome
@@ -48,7 +49,6 @@ from core.file_tools import (
     apply_change_with_explicit_overwrite_policy,
     mismatch_overwrite_block_log_details,
 )
-from core.schema import validate_phase_output
 from core.skill_dispatcher import classify_goal, dispatch_skills
 from core.human_gate import HumanGate
 from core.types import TaskRequest, TaskResult, ExecutionContext
@@ -678,11 +678,11 @@ class LoopOrchestrator:
                 all other keys are ignored.
 
         Returns:
-            One of three string literals:
+            A :class:`~core.schema.RoutingDecision` value:
 
-            * ``"act"``  — recoverable code-level error; retry the act phase.
-            * ``"plan"`` — structural or design error; re-plan from scratch.
-            * ``"skip"`` — external / environment issue that cannot be
+            * :attr:`~core.schema.RoutingDecision.ACT`  — recoverable code-level error; retry the act phase.
+            * :attr:`~core.schema.RoutingDecision.PLAN` — structural or design error; re-plan from scratch.
+            * :attr:`~core.schema.RoutingDecision.SKIP` — external / environment issue that cannot be
               self-fixed (e.g. missing dependency, network error).
         """
         failures = " ".join(str(f) for f in verification.get("failures", []))
@@ -710,10 +710,10 @@ class LoopOrchestrator:
         ]
 
         if any(s in combined for s in structural_signals):
-            return "plan"
+            return RoutingDecision.PLAN
         if any(s in combined for s in external_signals):
-            return "skip"
-        return "act"  # default: code-level fix is worth retrying
+            return RoutingDecision.SKIP
+        return RoutingDecision.ACT  # default: code-level fix is worth retrying
 
     def _normalize_verification_result(self, verification: Dict) -> Dict:
         """Accept both legacy ``passed`` and canonical ``status`` verification payloads."""
@@ -784,7 +784,7 @@ class LoopOrchestrator:
                 goal=goal,
                 verification={"failures": [stderr_hint], "logs": stderr_hint},
                 context=failure_context,
-                route="act",
+                route=RoutingDecision.ACT.value,
                 analysis_suggestion=analysis_suggestion,
                 root_cause_analysis=root_cause_analysis,
             )
@@ -1134,12 +1134,12 @@ class LoopOrchestrator:
             if root_cause_analysis:
                 verification["root_cause_analysis"] = root_cause_analysis
 
-            if route == "plan" and plan_attempt < max_plan_retries:
+            if route == RoutingDecision.PLAN and plan_attempt < max_plan_retries:
                 phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
                 phase_outputs["_failure_context"] = {
                     "failures": verification.get("failures", []),
                     "logs": verification.get("logs", ""),
-                    "route": "plan",
+                    "route": RoutingDecision.PLAN.value,
                     "suggestion": analysis_suggestion,
                     "failure_investigation": failure_investigation,
                     "root_cause_analysis": root_cause_analysis,
@@ -1148,7 +1148,7 @@ class LoopOrchestrator:
                 }
                 replan_needed = True
                 break
-            elif route == "skip":
+            elif route == RoutingDecision.SKIP:
                 break
             task_bundle["fix_hints"] = fix_hints
 

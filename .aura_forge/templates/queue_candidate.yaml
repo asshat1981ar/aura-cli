@@ -1,0 +1,27 @@
+# Queue-Candidate Review Template
+# Used to convert validated capability deltas into task_queue entries
+# Must be manually reviewed before being moved to task_queue/
+
+id: AF-QC-0000
+delta_link: AF-DELTA-0000
+title: ""
+description: ""
+
+# Validation Criteria: What must be true to mark this task as "done"?
+validation_criteria:
+  - "Criterion 1"
+  - "Criterion 2"
+
+# Safety Impact: How does this change affect system stability or security?
+safety_impact:
+  autonomous_apply: "Describe if this affects core/file_tools.py or policy"
+  security_boundaries: "Describe any new external API or bash tool use"
+  rollback_plan: "How to revert if this causes regression"
+
+# Readiness: Set to true only after manual review
+ready_for_queue: false
+
+# Execution Parameters
+priority: medium
+max_cycles: 1
+tags: ["capability", "self-development"]

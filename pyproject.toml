@@ -34,6 +34,8 @@ dependencies = [
     "networkx",
     "typer>=0.12.0",
     "pyautogen>=0.2.0,<0.3",
+    "openapi_spec_validator>=0.7.0",
+    "jsonschema>=4.0.0",
 ]
 
 [project.optional-dependencies]
@@ -61,7 +63,7 @@ include = ["aura_cli*", "core*", "agents*", "memory*", "tools*", "task_queue*"]
 exclude = ["tests*", "scripts*", "archive*", "docs*", "plans*", "conductor*", "projects*"]
 
 [tool.pytest.ini_options]
-pythonpath = ["."]
+pythonpath = [".", "experimental"]
 testpaths = ["."]
 addopts = [
     "--strict-markers",

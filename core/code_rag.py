@@ -152,7 +152,7 @@ class CodeRAG:
                 for m in memories[:self.max_examples]:
                     if any(kw in m.lower() for kw in ["implement", "code", "function", "class"]):
                         results.append({"content": m, "source": "brain"})
-            except Exception:
+            except (OSError, IOError, ValueError):
                 pass
 
         return results
@@ -167,7 +167,7 @@ class CodeRAG:
                     for m in memories:
                         if f in m or any(kw in m.lower() for kw in ["pattern", "convention", "style"]):
                             patterns.append(m[:200])
-            except Exception:
+            except (OSError, IOError, ValueError):
                 pass
         return patterns[:5]
 
@@ -183,7 +183,7 @@ class CodeRAG:
                 similar = store.find_similar_failures(goal, limit=3)
                 for f in similar:
                     failures.append(f"Failed: {f['goal']} — Reason: {f['failure_reason']}")
-        except Exception:
+        except (OSError, IOError, ValueError):
             pass
         return failures
 

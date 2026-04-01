@@ -120,7 +120,7 @@ def _pip_list() -> Optional[List[Dict]]:
                     "unpinned": False,
                 })
         return packages
-    except Exception:
+    except (OSError, IOError, ValueError):
         return None
 
 

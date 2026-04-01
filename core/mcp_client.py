@@ -15,6 +15,10 @@ class MCPAsyncClient:
     """Async client for interacting with MCP-compatible HTTP services."""
 
     _client_pool: ClassVar[Dict[str, httpx.AsyncClient]] = {}
+    # Tracks the id() of the event loop that created each pooled client.
+    # If the running loop changes (e.g. between pytest-anyio test cases) the
+    # stale client is discarded and a fresh one is created for the new loop.
+    _client_pool_loops: ClassVar[Dict[str, int]] = {}
     _pool_lock: ClassVar[asyncio.Lock] = asyncio.Lock()
 
     def __init__(self, base_url: str, timeout: int = 30):
@@ -23,13 +27,21 @@ class MCPAsyncClient:
 
     @classmethod
     async def get_client(cls, timeout: int) -> httpx.AsyncClient:
-        """Get or create a pooled httpx.AsyncClient."""
+        """Get or create a pooled httpx.AsyncClient.
+
+        A new client is created whenever the current event loop differs from
+        the loop that created the cached client, preventing "Event loop is
+        closed" errors across test boundaries or server restarts.
+        """
         key = f"timeout_{timeout}"
+        current_loop_id = id(asyncio.get_running_loop())
         async with cls._pool_lock:
             client = cls._client_pool.get(key)
-            if client is None or client.is_closed:
+            stored_loop_id = cls._client_pool_loops.get(key)
+            if client is None or client.is_closed or stored_loop_id != current_loop_id:
                 client = httpx.AsyncClient(timeout=timeout)
                 cls._client_pool[key] = client
+                cls._client_pool_loops[key] = current_loop_id
         return client
 
     @classmethod
@@ -38,6 +50,7 @@ class MCPAsyncClient:
         for client in cls._client_pool.values():
             await client.aclose()
         cls._client_pool.clear()
+        cls._client_pool_loops.clear()
 
     async def _request(self, method: str, path: str, **kwargs) -> Dict[str, Any]:
         url = f"{self.base_url}/{path.lstrip('/')}"
@@ -55,7 +68,7 @@ class MCPAsyncClient:
                     res_json = response.json()
                     log_json("DEBUG", "mcp_client_request_success", details={"url": url, "method": method, "duration_ms": round(duration * 1000, 2), "attempts": attempt + 1})
                     return res_json
-                except Exception:
+                except (OSError, IOError, ValueError):
                     raise MCPInvalidResponseError(f"MCP server at {url} returned invalid JSON")
             except (httpx.TimeoutException, httpx.ConnectError) as e:
                 is_timeout = isinstance(e, httpx.TimeoutException)

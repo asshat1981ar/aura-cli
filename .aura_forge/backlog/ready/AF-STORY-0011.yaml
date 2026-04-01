@@ -1,0 +1,302 @@
+id: AF-STORY-0011
+title: "Add 'goal resume' command to recover interrupted sessions"
+lane: capability
+status: ready
+repo_areas:
+  - core
+  - cli
+  - aura_cli
+  - run_aura.sh
+  - tests
+  - docs
+goal:
+  user_goal: "Recover a goal that was interrupted mid-execution without losing it silently"
+  system_goal: "Persist the active in-flight goal to disk between dequeue and archive so a crash or interrupt can be recovered"
+context:
+  sensed:
+    - "GoalQueue.next() calls popleft() and saves the queue before execution begins, so a crash between dequeue and archive.record() silently destroys the goal"
+    - "run_goals_loop() in core/task_handler.py has no in-flight persistence — the goal lives only in a local variable during execution"
+    - "core/goal_archive.py only records completed goals via record(goal, score) — interrupted goals are never written anywhere"
+    - "Only the SADD subsystem has resume capability via core/sadd/session_store.py; regular goals have no equivalent recovery path"
+    - "No 'goal resume' command exists; current goal subcommands are add, run, once, and status"
+  retrieved:
+    - core/goal_queue.py
+    - core/task_handler.py
+    - core/goal_archive.py
+    - core/sadd/session_store.py
+    - aura_cli/options.py
+    - aura_cli/dispatch.py
+design_passes:
+  - reverse_engineering
+  - reverse_decomposition
+  - scamper
+  - autotriz
+  - six_hats
+constraints:
+  - "no changes to existing goal add/run/once/status behavior"
+  - "in-flight file must be cleared on both success and failure — not just on success"
+  - "no SQLite dependency — use a flat JSON file at memory/in_flight_goal.json, consistent with goal_queue.json"
+  - "double-execution must be prevented: check queue before prepending the recovered goal"
+  - "goal resume must never auto-run without an explicit --run flag"
+contract_impact:
+  cli_contract_affected: true
+  changes:
+    - "New subcommand: goal resume"
+    - "New subcommand: goal resume --run"
+    - "goal status output may gain 'interrupted' indicator (future — not in this story)"
+    - "run_aura.sh gains 'resume' alias alongside run/once/add/status"
+  snapshot_updates_needed: true
+safety_impact:
+  autonomous_apply_affected: false
+  overwrite_behavior_affected: false
+  safety_notes: >
+    In-flight file is cleared in a try/finally block in task_handler.py, guaranteeing cleanup on
+    both PASS and failure outcomes. Double-execution is prevented by clearing the in-flight record
+    before calling prepend_batch(), so the re-queued goal enters the queue exactly once.
+    The in-flight file is written atomically (write .tmp then os.replace) to prevent partial-write
+    corruption. No file apply paths or overwrite policies are affected.
+acceptance:
+  - "memory/in_flight_goal.json is created immediately after GoalQueue.next() is called, before orchestrator.run_loop() is entered"
+  - "memory/in_flight_goal.json is deleted when the goal reaches any terminal outcome: PASS, MAX_CYCLES, or ERROR"
+  - "python3 main.py goal resume prints the interrupted goal title and started_at timestamp, then re-queues it at the front of the queue"
+  - "python3 main.py goal resume with no in-flight file prints a clear 'No interrupted goal found.' message and exits 0"
+  - "python3 main.py goal resume --run re-queues the interrupted goal then immediately invokes the goal run loop"
+  - "CLI help snapshots and docs/CLI_REFERENCE.md include goal resume and pass CI checks"
+risks:
+  - "in-flight file left behind if machine loses power mid-cycle (hard crash, no finally block reached)"
+  - "double-entry in queue if user runs goal resume while the goal is still in the queue from a partial re-add"
+  - "no multi-instance guard: two AURA processes could race on the same in-flight file"
+  - "in-flight file could accumulate stale data if AURA version changes goal data shape between write and read"
+rollback:
+  - "remove memory/in_flight_goal.json and core/in_flight_tracker.py"
+  - "revert task_handler.py integration changes"
+  - "remove CommandSpec and CLIActionSpec entries from aura_cli/options.py"
+  - "remove _handle_goal_resume_dispatch from aura_cli/dispatch.py"
+  - "remove resume alias from run_aura.sh"
+  - "regenerate docs/CLI_REFERENCE.md and update snapshot files"
+outputs:
+  - core/in_flight_tracker.py
+  - tests/test_in_flight_tracker.py
+  - updated core/task_handler.py
+  - updated aura_cli/options.py
+  - updated aura_cli/dispatch.py
+  - updated aura_cli/cli_main.py
+  - updated run_aura.sh
+  - updated tests/snapshots/
+  - updated docs/CLI_REFERENCE.md
+sprint_link: S001_queue_ready_intelligence
+plans_link: plans/goal-resume-command.md
+
+design_pass_notes:
+  reverse_engineering:
+    story: AF-STORY-0011
+    date: "2026-03-26"
+    surfaces_inspected:
+      core/goal_queue.py: >
+        GoalQueue.next() (line 58) calls self.queue.popleft() then calls self._save() immediately.
+        There is no concept of an "in-flight" slot — the goal is removed from the queue atomically
+        before execution starts. prepend_batch() (line 52) exists and inserts goals at the front,
+        which is the natural re-entry point for recovery. No in-flight persistence exists.
+      core/task_handler.py: >
+        run_goals_loop() pops a goal via goal_queue.next() and immediately enters orchestrator.run_loop().
+        The gap between next() and goal_archive.record() (roughly lines 395–437 based on grep) is
+        entirely unprotected. A SIGKILL, OOM kill, or machine power loss in this window silently
+        discards the goal. The function uses a while loop over goal_queue.peek() so re-queueing
+        at the front is sufficient for recovery.
+      core/goal_archive.py: >
+        record(goal, score) appends a (goal, score) tuple to a JSONL or list structure.
+        It is called only on success. There is no failed-but-recorded path. Interrupted goals
+        are simply absent from the archive.
+      core/sadd/session_store.py: >
+        load_session_for_resume(session_id) returns (spec, config, graph_state, results).
+        Uses SQLite with explicit checkpoint rows. The per-session approach is too heavy for
+        the single-goal case, but the shape of the returned data (what was being worked on,
+        where we were) is instructive. We need only goal + started_at + cycle_limit + phase.
+      aura_cli/options.py: >
+        CommandSpec is a frozen dataclass with path, summary, description, examples, legacy_flags.
+        sadd resume is at path=("sadd","resume") with summary and a single example.
+        goal subcommands follow path=("goal","add"), ("goal","run"), ("goal","once"), ("goal","status").
+        CLIActionSpec wires action name → canonical path → runtime required flag.
+      aura_cli/dispatch.py: >
+        _handle_sadd_resume_dispatch reads session_id from args, delegates to SessionStore,
+        and prints a human-readable summary. Registered in COMMAND_DISPATCH_REGISTRY under
+        "sadd_resume". The pattern is: read arg → lookup in store → print → optional run.
+        _handle_goal_run_dispatch at line 618 is the natural target to chain after re-queuing.
+    observed_rules:
+      - "GoalQueue.next() is a destructive dequeue — the goal is gone once next() returns"
+      - "goal_archive.record() is only called after a known completion outcome"
+      - "SADD resume uses explicit SQLite checkpoints; regular goals have no checkpoint layer"
+    implicit_contracts:
+      - "in-flight file must be idempotent: writing it twice must not corrupt it"
+      - "in-flight file must be cleared even when the process exits via an unhandled exception"
+      - "dispatch handler must not require runtime arg if in-flight file read is all it does without --run"
+    extension_opportunities:
+      - "InFlightTracker.write() can store phase so future versions can skip already-completed phases"
+      - "goal status could display 'interrupted' indicator when in-flight file is present"
+      - "SIGTERM handler in cli_main.py could call tracker.clear() before re-queueing on graceful shutdown"
+
+  reverse_decomposition:
+    story: AF-STORY-0011
+    date: "2026-03-26"
+    desired_end_state: >
+      After any crash or SIGKILL between GoalQueue.next() and goal_archive.record(), the operator
+      can run `python3 main.py goal resume` to see the interrupted goal and re-queue it at the front
+      of the queue. `goal resume --run` immediately starts the goal loop after re-queuing.
+    atomic_capabilities:
+      1:
+        name: InFlightTracker class
+        file: core/in_flight_tracker.py
+        description: >
+          Thin wrapper around memory/in_flight_goal.json. Implements write(goal, cycle_limit),
+          read() -> dict|None, clear(), exists() -> bool. Uses atomic write (write to .tmp then rename)
+          to prevent partial-write corruption. Path is configurable for testing.
+      2:
+        name: task_handler.py integration
+        file: core/task_handler.py
+        description: >
+          After goal = goal_queue.next(), call tracker.write(goal, cycle_limit). Wrap the execution
+          block in try/finally so tracker.clear() is called on both success and failure. This closes
+          the silent-loss window without changing any other behavior.
+      3:
+        name: CLI CommandSpec + CLIActionSpec
+        file: aura_cli/options.py
+        description: >
+          Add CommandSpec(path=("goal","resume")) with summary, description, two examples.
+          Add CLIActionSpec("goal_resume", requires_runtime=True, canonical_path=("goal","resume")).
+          requires_runtime=True because --run needs the runtime objects.
+      4:
+        name: dispatch handler
+        file: aura_cli/dispatch.py
+        description: >
+          _handle_goal_resume_dispatch(ctx) reads InFlightTracker, prints interrupted goal info,
+          calls goal_queue.prepend_batch([goal]) after clearing the tracker, then optionally
+          calls _handle_goal_run_dispatch if --run is set. Register in COMMAND_DISPATCH_REGISTRY.
+      5:
+        name: run_aura.sh resume alias
+        file: run_aura.sh
+        description: >
+          Add `resume) shift; exec_main goal resume "$@" ;;` in the case block, and document
+          it in the wrapper aliases help block alongside run/once/add/status.
+    required_tests:
+      - "InFlightTracker.write() creates memory/in_flight_goal.json with correct shape"
+      - "InFlightTracker.read() returns None when file is absent"
+      - "InFlightTracker.clear() removes the file and read() returns None afterward"
+      - "InFlightTracker.exists() returns True/False correctly"
+      - "goal resume with no in-flight file exits 0 and prints 'No interrupted goal found'"
+      - "goal resume with in-flight file re-queues goal and clears the file"
+    required_docs:
+      - "docs/CLI_REFERENCE.md must include goal resume and goal resume --run"
+      - "run_aura.sh --help output must list resume alias"
+    required_contracts:
+      - "CLI snapshot tests must include goal resume in help output"
+      - "dispatch registry must have goal_resume entry"
+    required_safety_checks:
+      - "in-flight file cleared in finally block, not just in success path"
+      - "double-entry prevention: check queue length / goal presence before prepend"
+
+  scamper:
+    story: AF-STORY-0011
+    date: "2026-03-26"
+    substitute: >
+      Could substitute writing to a separate file with annotating goal_queue.json entries with a
+      status field (e.g., status: "in_flight"). This avoids a second file but complicates the
+      queue format and breaks the existing GoalQueue serialization contract. Rejected for v1:
+      too invasive to existing queue structure.
+    combine: >
+      Combine with goal status: show an "(interrupted)" indicator when in-flight file is present.
+      This gives operators a passive signal without running resume explicitly. Low cost, good UX.
+      Deferred to a follow-up story — scope risk in v1.
+    adapt: >
+      Adapt from SADD's checkpoint model: use a similar flat JSON structure (goal, started_at,
+      cycle_limit, phase). Much lighter than SQLite — no schema migration, no connection, portable
+      across machines. This is the chosen approach.
+    modify: >
+      Magnify: store full cycle context — phase completed, cycle count, last error string, agent
+      outputs. This would allow smarter resume (skip already-completed phases). The cost is
+      more coupling to orchestrator internals. Phase field included in v1; full context deferred.
+    put_to_another_use: >
+      Could serve as a "goal retry" mechanism for MAX_CYCLES failures too. After a goal exhausts
+      its cycle limit, write it to in-flight with status=max_cycles_exhausted. `goal resume`
+      could then offer a --extend-cycles flag. Marked as extension opportunity, out of scope for v1.
+    eliminate: >
+      Eliminate the separate resume command — auto-resume on next `goal run`. Rejected: silent
+      auto-resume is dangerous. The operator may not want to re-run an interrupted goal. Explicit
+      command is safer and more transparent.
+    reverse: >
+      Instead of user invoking resume, detect and prompt on startup: if in-flight file exists when
+      AURA starts, ask "Interrupted goal found: <goal>. Resume? [y/N]". This is ergonomic but
+      requires interactive prompt support in run_aura.sh and adds startup latency. Deferred to v2.
+    top_3_design_options:
+      1: "Flat JSON file (memory/in_flight_goal.json) + explicit goal resume command [CHOSEN]"
+      2: "Auto-resume on next goal run (simpler UX, but silent and potentially dangerous)"
+      3: "Status annotation in goal_queue.json entries (avoids second file, but complicates queue format)"
+
+  six_hats:
+    story: AF-STORY-0011
+    date: "2026-03-26"
+    white_hat:
+      facts:
+        - "GoalQueue.next() is destructive: goal is removed from queue before execution starts"
+        - "goal_archive.record() is only called on known completion (PASS, MAX_CYCLES, ERROR outcomes)"
+        - "SADD has SQLite-backed checkpoints; regular goals have no recovery path"
+        - "A SIGKILL between dequeue and archive silently discards the goal; no log entry, no archive entry"
+        - "GoalQueue already has prepend_batch() which would support re-insertion at the front"
+        - "The in-flight window in task_handler.py spans roughly 40 lines of orchestrator execution"
+    red_hat:
+      feelings:
+        - "Developer frustration: losing a long-running goal (e.g., 'Refactor auth module') with no trace is genuinely painful"
+        - "Risk aversion: adding a new state file (in_flight_goal.json) feels like complexity creep"
+        - "Confidence: the pattern is well-understood from SADD; this is a smaller, simpler variant"
+        - "Caution: 'resume' implies the system will pick up where it left off; we must not over-promise — it re-queues, it does not replay partial progress"
+    black_hat:
+      cautions:
+        - "In-flight file corruption if process is killed while writing the file (mitigated by atomic write: write .tmp then rename)"
+        - "Double-execution: if goal resume is run while the original run is still alive, the goal gets queued twice (mitigated by clear() before prepend)"
+        - "File left on disk after a successful run if clear() is not in a finally block (mitigated by try/finally wrapping)"
+        - "Stale in-flight file from a previous AURA version with a different goal data shape (mitigated by safe key access with .get())"
+    yellow_hat:
+      benefits:
+        - "No more silent goal loss — any interrupted goal is recoverable"
+        - "Trivially simple recovery UX: one command, no session IDs, no arguments required"
+        - "Aligns regular goals with SADD's reliability model without SADD's complexity"
+        - "Foundation for future features: goal retry, startup prompts, phase-aware resume"
+        - "In-flight file doubles as a liveness signal: if it exists, AURA may be running"
+    green_hat:
+      alternatives:
+        - "Write goal back to front of queue on SIGTERM handler in cli_main.py — graceful shutdown with automatic re-queue, no resume command needed"
+        - "Use memory/brain.db to record in-flight state alongside other memory — unified storage, but adds coupling to Brain"
+        - "Annotate queue entries with a 'running' status field instead of a separate file"
+    blue_hat:
+      process:
+        - "Keep it simple: one JSON file, one new command, no daemon, no SQLite"
+        - "Follow existing patterns: match goal_queue.json serialization style and dispatch handler shape"
+        - "Scope tightly: v1 re-queues and optionally runs; v2 can add startup prompts and phase-aware resume"
+        - "Must not break existing commands — all changes are additive"
+    synthesis: >
+      The explicit resume command with a flat JSON in-flight file is the right balance of simplicity,
+      safety, and transparency. It follows existing patterns (goal_queue.json, SADD checkpoint shape),
+      is fully reversible, and provides a foundation for future enhancements without over-committing.
+
+  autotriz:
+    story: AF-STORY-0011
+    date: "2026-03-26"
+    contradictions:
+      1:
+        conflict: "Reliability (persist in-flight state) vs. Simplicity (don't add persistent state to manage)"
+        resolution: >
+          Use a single flat JSON file at memory/in_flight_goal.json — the same pattern already used
+          by goal_queue.json and goal_archive.json. No new storage backend, no schema migration,
+          no daemon. The file is written atomically and cleared deterministically in a finally block.
+          This resolves the contradiction: we get persistence without added complexity.
+        inventive_principle: "Principle 10 (Preliminary Action) — write the in-flight record before entering the risky window"
+      2:
+        conflict: "User control (explicit resume command) vs. Safety (don't auto-resume silently on next run)"
+        resolution: >
+          Provide an explicit `goal resume` command that shows the interrupted goal and asks for
+          confirmation via the --run flag. Never auto-resume. This gives the operator full visibility
+          and control: they see what was interrupted before deciding to re-run. The --run flag
+          collapses the two-step (inspect, then run) into one when the operator is confident.
+        inventive_principle: "Principle 25 (Self-Service) — the system provides information; the operator decides"
+    final_design_direction: >
+      InFlightTracker as a thin JSON file wrapper. Integrated into task_handler.py with try/finally.
+      Explicit `goal resume` command with optional --run. No auto-resume, no SQLite, no daemon.

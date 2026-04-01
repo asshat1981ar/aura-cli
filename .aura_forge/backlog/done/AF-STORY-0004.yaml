@@ -1,0 +1,44 @@
+id: AF-STORY-0004
+title: "Capability delta index generation"
+lane: capability
+status: done
+repo_areas:
+  - .aura_forge/indexes
+  - docs
+goal:
+  user_goal: "Track proposed capabilities from retros in a discoverable way"
+  system_goal: "Make capability gaps visible without auto-enqueueing"
+context:
+  sensed:
+    - S000 retro proposed 3 capability deltas
+    - Manual index updates are error-prone
+  retrieved:
+    - .aura_forge/indexes/capability_gap_index.yaml
+    - .aura_forge/retros/S000_retro.md
+design_passes:
+  - reverse_engineering
+  - reverse_decomposition
+constraints:
+  - no automatic index updates
+  - keep generation file-based
+  - no CLI changes
+contract_impact:
+  cli_contract_affected: false
+  changes: []
+  snapshot_updates_needed: false
+safety_impact:
+  autonomous_apply_affected: false
+  overwrite_behavior_affected: false
+  safety_notes: ""
+acceptance:
+  - Script or template to generate index from retros
+  - Index includes status tracking (proposed/under_review/approved/implemented)
+  - Generation is idempotent
+risks:
+  - index may become stale if not maintained
+rollback:
+  - revert to manual index updates
+outputs:
+  - index generation template/script
+  - updated capability_gap_index.yaml
+sprint_link: S001_queue_ready_intelligence

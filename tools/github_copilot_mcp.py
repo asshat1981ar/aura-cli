@@ -91,7 +91,9 @@ _TOKEN = os.getenv("COPILOT_MCP_TOKEN", "")
 
 
 def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
-    if _TOKEN and authorization != f"Bearer {_TOKEN}":
+    if not _TOKEN:
+        return
+    if not authorization or authorization != f"Bearer {_TOKEN}":
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
@@ -238,8 +240,9 @@ def _tool_issue_analyze(args: Dict) -> Dict:
     labels = [l["name"] for l in issue.get("labels", [])]
     comments_data = gh._make_request("GET", f"{gh.BASE_URL}/repos/{repo}/issues/{issue_number}/comments")
     comments_text = "\n".join(
-        f"[{c.get('user', {}).get('login', 'user')}]: {c.get('body', '')[:300]}"
+        f"[{c.get('user', {}).get('login', 'user') if isinstance(c.get('user'), dict) else 'user'}]: {str(c.get('body') or '')[:300]}"
         for c in (comments_data if isinstance(comments_data, list) else [])[:5]
+        if isinstance(c, dict)
     )
 
     prompt = textwrap.dedent(f"""

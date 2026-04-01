@@ -321,12 +321,13 @@ class ModelAdapter:
         else:
             raise ValueError("Local command profile requires `command` as a string or string list.")
 
+        sanitized_prompt = shlex.quote(prompt) if prompt else ""
         use_stdin = True
         rendered_parts: list[str] = []
         for part in command_parts:
             if "{prompt}" in part:
                 use_stdin = False
-                rendered_parts.append(part.replace("{prompt}", prompt))
+                rendered_parts.append(part.replace("{prompt}", sanitized_prompt))
             else:
                 rendered_parts.append(part)
 
@@ -438,7 +439,7 @@ class ModelAdapter:
                 if vectors:
                     self._embedding_dims = int(vectors[0].shape[0])
                 return vectors
-        except Exception:
+        except (AttributeError, IndexError, ValueError):
             pass
 
         vectors: list[np.ndarray] = []
@@ -1044,7 +1045,7 @@ class ModelAdapter:
             # Simple check with a dummy embedding
             self.embed(["test"])
             return True
-        except Exception:
+        except (ConnectionError, TimeoutError, ValueError):
             return False
 
     def embed(self, texts: List[str]) -> List[np.ndarray]:

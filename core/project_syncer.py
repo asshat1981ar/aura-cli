@@ -40,7 +40,7 @@ class ProjectKnowledgeSyncer:
         try:
             if self._hash_map_path.exists():
                 return json.loads(self._hash_map_path.read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, IOError, ValueError):
             pass
         return {}
 
@@ -156,7 +156,7 @@ class ProjectKnowledgeSyncer:
                         try:
                             self.cg.add_edge(rel_path, target, "imports")
                             relations_count += 1
-                        except Exception: continue
+                        except (OSError, IOError, ValueError): continue
                 elif isinstance(node, ast.ImportFrom):
                     if node.module:
                         for alias in node.names:
@@ -166,7 +166,7 @@ class ProjectKnowledgeSyncer:
                             try:
                                 self.cg.add_edge(rel_path, node.module, "imports_from")
                                 relations_count += 1
-                            except Exception: continue
+                            except (OSError, IOError, ValueError): continue
 
             # Second pass: gather calls and link to imports
             for node in ast.walk(tree):
@@ -185,7 +185,7 @@ class ProjectKnowledgeSyncer:
                             # We interpret this as "depends on functionality from"
                             self.cg.add_edge(rel_path, target_module, "calls", weight=0.5)
                             relations_count += 1
-                        except Exception: continue
+                        except (OSError, IOError, ValueError): continue
 
         return {"chunks": len(chunks), "relations": relations_count}
 

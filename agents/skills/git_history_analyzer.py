@@ -16,7 +16,7 @@ def _run_git(args: List[str], cwd: Path) -> Optional[str]:
         if result.returncode == 0:
             return result.stdout
         return None
-    except Exception:
+    except (OSError, IOError, ValueError):
         return None
 
 

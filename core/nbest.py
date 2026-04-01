@@ -115,7 +115,7 @@ class NBestEngine:
             else:
                 scoring_response = model.respond(comparison_prompt)
             self._parse_scores(scoring_response, scoreable)
-        except Exception:
+        except (OSError, IOError, ValueError):
             # Fallback: prefer sandbox-passing candidates, then lowest temperature
             for c in scoreable:
                 c.total_score = (1.0 if c.sandbox_passed else 0.0) + (1.0 - c.temperature)

@@ -132,7 +132,7 @@ class MonitoringAgentAdapter:
                             "threshold": threshold,
                             "severity": "warning" if value < threshold * 1.5 else "critical",
                         })
-            except Exception:
+            except (OSError, IOError, ValueError):
                 pass
 
         return {

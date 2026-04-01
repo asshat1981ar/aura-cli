@@ -51,8 +51,14 @@ Forge improves decision quality before code changes, queue insertion, or orchest
 ### inbox → refined
 - Problem statement
 - Likely affected repo areas
-- At least one reverse engineering note
+- At least one reverse engineering note (including "Gap Identified" field)
 - At least one reverse decomposition note
+- **Note on batch refinement:** All design passes (reverse_engineering, reverse_decomposition,
+  SCAMPER, AutoTRIZ, Six Hats) are typically completed in a single session before the story
+  moves to `refined/`. The promotion rules list the *minimum* required — in practice, running
+  all applicable passes in one batch and promoting directly to `refined/` (or even `ready/`)
+  reduces intermediate state and review overhead. Iterative pass-by-pass promotion is valid
+  but uncommon.
 
 ### refined → ready
 - SCAMPER pass

@@ -13,7 +13,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Callable, Dict, List
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from core.sadd.sub_agent_runner import SubAgentRunner
 from core.sadd.types import (
@@ -24,6 +24,9 @@ from core.sadd.types import (
     WorkstreamResult,
 )
 from core.sadd.workstream_graph import WorkstreamGraph
+
+if TYPE_CHECKING:
+    from core.sadd.mcp_tool_bridge import MCPToolBridge
 
 
 def create_orchestrator_factory(
@@ -76,6 +79,7 @@ class SessionCoordinator:
         brain: Any,
         config: SessionConfig = SessionConfig(),
         session_store: Any = None,
+        mcp_bridge: Optional["MCPToolBridge"] = None,
     ) -> None:
         self._spec = design_spec
         self._orchestrator_factory = orchestrator_factory
@@ -88,6 +92,7 @@ class SessionCoordinator:
         self._logger = logging.getLogger(__name__)
         self._retried: set[str] = set()
         self._store = session_store
+        self._mcp_bridge = mcp_bridge
 
     # ------------------------------------------------------------------
     # Public API
@@ -104,6 +109,7 @@ class SessionCoordinator:
             len(self._spec.workstreams),
             self._spec.title,
         )
+        print(f"🚀 SADD session {self._session_id} starting — {len(self._spec.workstreams)} workstreams")
 
         # Persist session if store is available.
         if self._store:
@@ -155,8 +161,8 @@ class SessionCoordinator:
         if hasattr(self._brain, "forget_tagged"):
             try:
                 self._brain.forget_tagged(tag)
-            except Exception:
-                self._logger.debug("Could not clean tagged memories for %s", tag)
+            except (OSError, IOError) as e:
+                self._logger.debug("Could not clean tagged memories for %s: %s", tag, e)
 
         report = self._build_report(started_at)
 
@@ -164,9 +170,117 @@ class SessionCoordinator:
         if self._store:
             try:
                 self._store.save_report(self._session_id, report)
-            except Exception:
-                self._logger.debug("Could not save session report")
+            except (OSError, IOError) as e:
+                self._logger.debug("Could not save session report: %s", e)
 
+        print(f"✅ SADD session complete — {report.completed}/{report.total_workstreams} workstreams succeeded")
+        return report
+
+    def resume(
+        self,
+        graph: WorkstreamGraph,
+        completed_results: Dict[str, "WorkstreamResult"],
+    ) -> SessionReport:
+        """Resume an interrupted session from a pre-restored graph and results.
+
+        Unlike ``run()``, this method does not rebuild the graph or create a new
+        session record.  It restores the coordinator's internal state from the
+        supplied graph and completed results, then drives only the remaining
+        (non-completed) workstreams to completion.
+        """
+        started_at = time.time()
+
+        self._graph = graph
+        self._results = dict(completed_results)
+
+        # Reset previously-failed and blocked workstreams to pending so they are
+        # re-attempted. "failed" is not terminal from a resume perspective — the
+        # user explicitly chose to retry. "blocked" workstreams were blocked because
+        # their dependencies failed, so they must also be unblocked for retry.
+        for node in graph._nodes.values():  # noqa: SLF001
+            if node.status in ("failed", "blocked"):
+                node.status = "pending"
+                node.result = None
+
+        remaining = [
+            ws_id
+            for ws_id, node in graph._nodes.items()  # noqa: SLF001
+            if node.status != "completed"
+        ]
+        self._logger.info(
+            "SADD session %s resuming — %d workstreams, %d already completed, %d remaining",
+            self._session_id,
+            len(self._spec.workstreams),
+            len(completed_results),
+            len(remaining),
+        )
+        print(
+            f"▶️  SADD session {self._session_id[:8]}... resuming — "
+            f"{len(completed_results)} done, {len(remaining)} remaining"
+        )
+
+        # Mark session as running again if store is available (session already exists).
+        if self._store:
+            try:
+                self._store.update_status(self._session_id, "running")
+            except (OSError, IOError) as e:
+                self._logger.debug("Could not update session status for resume: %s", e)
+
+        with concurrent.futures.ThreadPoolExecutor(
+            max_workers=self._config.max_parallel,
+        ) as executor:
+            while not self._graph.is_complete():
+                ready = self._graph.ready_workstreams()
+
+                if not ready:
+                    self._logger.warning(
+                        "SADD session %s: no ready workstreams and graph not complete — possible deadlock, stopping",
+                        self._session_id,
+                    )
+                    break
+
+                futures: Dict[concurrent.futures.Future[WorkstreamResult], str] = {}
+                for ws_id in ready:
+                    with self._lock:
+                        self._graph.mark_running(ws_id)
+                    future = executor.submit(self._execute_workstream, ws_id)
+                    futures[future] = ws_id
+
+                for future in concurrent.futures.as_completed(futures):
+                    ws_id = futures[future]
+                    try:
+                        result = future.result()
+                    except Exception as exc:
+                        result = WorkstreamResult(
+                            ws_id=ws_id,
+                            status="failed",
+                            error=str(exc),
+                        )
+
+                    if result.status == "completed":
+                        self._on_workstream_complete(ws_id, result)
+                    else:
+                        self._handle_failure(ws_id, result, executor, futures)
+
+        # Clean up session-scoped memory tags.
+        tag = f"sadd:{self._session_id}"
+        if hasattr(self._brain, "forget_tagged"):
+            try:
+                self._brain.forget_tagged(tag)
+            except (OSError, IOError, AttributeError) as e:
+                self._logger.debug("Could not clean tagged memories for %s: %s", tag, e)
+
+        report = self._build_report(started_at)
+
+        if self._store:
+            try:
+                self._store.save_report(self._session_id, report)
+            except (OSError, IOError) as e:
+                self._logger.debug("Could not save session report: %s", e)
+
+        print(
+            f"✅ SADD resume complete — {report.completed}/{report.total_workstreams} workstreams succeeded"
+        )
         return report
 
     def status(self) -> Dict[str, Any]:
@@ -214,7 +328,9 @@ class SessionCoordinator:
             orchestrator_factory=self._orchestrator_factory,
             brain=self._brain,
             context_from_dependencies=context_from_dependencies,
+            mcp_bridge=self._mcp_bridge,
         )
+        print(f"⏳ [{ws_id}] Starting: {node.spec.title}")
 
         return runner.run(
             max_cycles=self._config.max_cycles_per_workstream,
@@ -237,6 +353,7 @@ class SessionCoordinator:
             result.cycles_used,
             result.elapsed_s,
         )
+        print(f"✅ [{ws_id}] Done: {self._graph.get_node(ws_id).spec.title} ({result.elapsed_s:.1f}s)")
         self._checkpoint_and_log(ws_id, "workstream_completed")
 
     def _handle_failure(
@@ -271,6 +388,7 @@ class SessionCoordinator:
             assert self._graph is not None
             self._graph.mark_failed(ws_id, result.error or "unknown error")
         self._logger.error("SADD workstream %s failed permanently: %s", ws_id, result.error)
+        print(f"❌ [{ws_id}] Failed: {result.error or 'unknown error'}")
 
         if self._config.fail_fast:
             # Cancel all pending futures that haven't started yet.
@@ -297,8 +415,8 @@ class SessionCoordinator:
                 for fp in result.changed_files:
                     self._store.record_artifact(self._session_id, ws_id, fp)
             self._store.log_event(self._session_id, ws_id, event_type, payload)
-        except Exception:
-            self._logger.debug("Checkpoint/log failed for %s", ws_id)
+        except (OSError, IOError) as e:
+            self._logger.debug("Checkpoint/log failed for %s: %s", ws_id, e)
 
     # ------------------------------------------------------------------
     # Internal — report building

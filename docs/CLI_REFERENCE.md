@@ -14,6 +14,9 @@ Recommended update steps:
 - `python3 -m pytest -q tests/test_cli_docs_generator.py tests/test_cli_help_snapshots.py tests/test_cli_error_snapshots.py tests/test_cli_main_dispatch.py -k snapshot`
 - If output changes intentionally, update `tests/snapshots/*` in the same change.
 
+Pre-merge validation (run before opening a PR):
+- `python3 scripts/pre_merge_check.py` — validates CLI reference, help snapshots, and sweep artifact tests are all current. Exits non-zero with coloured ✓/✗ output if any check fails.
+
 ## JSON Output Contracts
 
 ### `cli_errors`
@@ -73,6 +76,7 @@ Known record codes:
   - [`aura goal run`](#aura-goal-run)
   - [`aura goal status`](#aura-goal-status)
   - [`aura goal once`](#aura-goal-once)
+  - [`aura goal resume`](#aura-goal-resume)
 - [`workflow`](#workflow)
   - [`aura workflow run`](#aura-workflow-run)
 - [`mcp`](#mcp)
@@ -91,6 +95,15 @@ Known record codes:
   - [`aura sadd run`](#aura-sadd-run)
   - [`aura sadd status`](#aura-sadd-status)
   - [`aura sadd resume`](#aura-sadd-resume)
+- [`innovate`](#innovate)
+  - [`aura innovate start`](#aura-innovate-start)
+  - [`aura innovate list`](#aura-innovate-list)
+  - [`aura innovate show`](#aura-innovate-show)
+  - [`aura innovate resume`](#aura-innovate-resume)
+  - [`aura innovate export`](#aura-innovate-export)
+  - [`aura innovate techniques`](#aura-innovate-techniques)
+  - [`aura innovate to-goals`](#aura-innovate-to-goals)
+  - [`aura innovate insights`](#aura-innovate-insights)
 
 ## `help`
 
@@ -304,6 +317,18 @@ Legacy flags:
 Examples:
 - `python3 main.py goal once "Summarize repo"`
 - `python3 main.py goal once "Refactor core" --max-cycles 3`
+
+### `aura goal resume`
+
+Resume an interrupted goal
+
+Re-queue a goal that was interrupted mid-execution due to a crash or process kill. Reads memory/in_flight_goal.json written by the goal run loop. Use --run to immediately execute the re-queued goal.
+
+`action`: `goal_resume` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py goal resume`
+- `python3 main.py goal resume --run`
 
 ## `workflow`
 
@@ -537,3 +562,116 @@ Resume an interrupted SADD session from its last checkpoint.
 
 Examples:
 - `python3 main.py sadd resume --session-id <id>`
+
+## `innovate`
+
+### `aura innovate`
+
+Innovation Catalyst session management
+
+Start, list, and manage innovation sessions using brainstorming techniques.
+
+Examples:
+- `python3 main.py innovate start "How to improve X?"`
+- `python3 main.py innovate list`
+- `python3 main.py innovate show --session-id abc123`
+
+### `aura innovate start`
+
+Start a new innovation session
+
+Start a new innovation session with the Innovation Catalyst framework.
+
+`action`: `innovate_start` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py innovate start "How to improve code review?"`
+- `python3 main.py innovate start "Reduce bugs" --techniques scamper,six_hats`
+- `python3 main.py innovate start "Improve UX" --execute-phase divergence`
+
+### `aura innovate list`
+
+List innovation sessions
+
+List all innovation sessions with their status and metrics.
+
+`action`: `innovate_list` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py innovate list`
+- `python3 main.py innovate list --status active`
+- `python3 main.py innovate list --json`
+
+### `aura innovate show`
+
+Show session details
+
+Show detailed information about a specific innovation session.
+
+`action`: `innovate_show` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py innovate show --session-id abc123`
+- `python3 main.py innovate show --session-id abc123 --show-ideas`
+- `python3 main.py innovate show --session-id abc123 --json`
+
+### `aura innovate resume`
+
+Resume an innovation session
+
+Resume an innovation session at a specific phase.
+
+`action`: `innovate_resume` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py innovate resume --session-id abc123`
+- `python3 main.py innovate resume --session-id abc123 --phase convergence`
+
+### `aura innovate export`
+
+Export session results
+
+Export innovation session results to markdown or JSON.
+
+`action`: `innovate_export` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py innovate export --session-id abc123 --format markdown`
+- `python3 main.py innovate export --session-id abc123 --output report.md`
+
+### `aura innovate techniques`
+
+List available brainstorming techniques
+
+Show all available brainstorming techniques with descriptions.
+
+`action`: `innovate_techniques` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py innovate techniques`
+- `python3 main.py innovate techniques --json`
+
+### `aura innovate to-goals`
+
+Convert selected ideas to goals
+
+Convert selected ideas from an innovation session to goals in the queue.
+
+`action`: `innovate_to_goals` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py innovate to-goals --session-id abc123`
+- `python3 main.py innovate to-goals --session-id abc123 --preview`
+
+### `aura innovate insights`
+
+Show innovation analytics and insights
+
+Display analytics about innovation sessions including trends, technique effectiveness, and idea quality metrics.
+
+`action`: `innovate_insights` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py innovate insights`
+- `python3 main.py innovate insights --session-id abc123`
+- `python3 main.py innovate insights --json`

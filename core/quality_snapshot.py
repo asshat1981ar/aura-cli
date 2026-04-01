@@ -38,7 +38,7 @@ def run_quality_snapshot(
                     timeout=5,
                 )
                 test_count = len(result.stdout.splitlines())
-            except Exception:
+            except (OSError, IOError, ValueError):
                 test_count = 0
 
         # Syntax check changed files
@@ -124,5 +124,5 @@ def check_coverage_thresholds(
                 gaps.append({"file": f, "coverage": 0.0})
                 
         return gaps
-    except Exception:
+    except (OSError, IOError, ValueError):
         return []

@@ -1,0 +1,147 @@
+
+# ── Local backups / scratch ───────────────────────────────────────────────
+*.bak_*
+*.backup*
+tmp*/
+tmp_out/
+tmp_tail.log
+tmp2*
+tmp_*.txt
+*.tmp
+*.log
+
+# ── Virtual environments ────────────────────────────────────────────────
+test-aura-env/
+
+# ── Agent session logs ──────────────────────────────────────────────────
+.remember/
+
+# ── AI tool config directories (multi-env skill symlinks) ───────────────
+.adal/
+.agent/
+.agents/
+.augment/
+.codebuddy/
+.commandcode/
+.continue/
+.cortex/
+.crush/
+.factory/
+.goose/
+.iflow/
+.junie/
+.kilocode/
+.kiro/
+.kode/
+.mcpjam/
+.mux/
+.neovate/
+.openhands/
+.pi/
+.pochi/
+.qoder/
+.qwen/
+.roo/
+.trae/
+.vibe/
+.windsurf/
+.zencoder/
+
+# ── Environment and secrets ───────────────────────────────────────────────
+.env
+.env.save
+*.key
+*.pat
+.aura_history
+secrets/
+
+# ── Python bytecode and caches ────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.cache/
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# ── Database / runtime state (auto-generated) ─────────────────────────────
+memory/capability_status.json
+memory/project_sync_hashes.json
+memory/brain.db
+memory/brain_v2.db
+memory/local_cache.db
+memory/context_graph.db
+memory/thinking_sessions.db
+memory/goal_queue_v2.json
+memory/goal_archive_v2.json
+memory/task_hierarchy_v2.json
+memory/strategy_stats.json
+memory/quality_trends.json
+memory/skill_correlations.json
+memory/capability_status.json
+memory/store/
+memory/experiments.jsonl
+memory/negative_examples.json
+*.db
+*.db-shm
+*.db-wal
+
+# ── Node / npm ────────────────────────────────────────────────────────────
+node_modules/
+package-lock.json
+
+# ── GitHub Actions loop artifacts ─────────────────────────────────────────
+loop-output.txt
+reflect-out.txt
+pytest-out.txt
+lint-errors.txt
+test-results.txt
+pylint-out.txt
+skills-out.txt
+changed.txt
+
+# ── Environment workspaces (runtime, per-CLI isolated) ────────────────────
+environments/workspaces/
+
+# ── Gemini CLI ────────────────────────────────────────────────────────────
+.gemini/
+
+# ── IDE / editor ──────────────────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Dolt database files (added by bd init)
+.dolt/
+cli/__pycache__/
+.venv/
+.coverage
+.mcp.json
+
+gha-creds-*.json
+
+# ── Binary archives ──────────────────────────────────────────────────
+*.tar.gz
+
+# ── Agent ephemeral memory ───────────────────────────────────────────
+.agentMemory/
+
+# ── sdlc-orchestrator (Botpress ADK scaffold) ────────────────────────
+sdlc-orchestrator/node_modules/
+sdlc-orchestrator/.adk/bot/node_modules/
+sdlc-orchestrator/.adk/bot/dist/
+sdlc-orchestrator/.adk/bot/bp_modules/
+sdlc-orchestrator/.adk/bot/.botpress/
+sdlc-orchestrator/.adk/bot/traces/
+sdlc-orchestrator/.adk/logs/
+
+# ── swarm-mcp-server ─────────────────────────────────────────────────
+swarm-mcp-server/node_modules/
+swarm-mcp-server/dist/

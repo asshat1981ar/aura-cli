@@ -77,7 +77,7 @@ class SecurityHardenerSkill(SkillBase):
                 if findings:
                     all_findings[str(py_file)] = findings
                     total_count += len(findings)
-            except Exception:
+            except (OSError, IOError, ValueError):
                 continue
         return {
             "project_root": str(root),

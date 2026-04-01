@@ -25,6 +25,8 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
@@ -62,6 +64,34 @@ RUN_TIMEOUT_SECONDS: int = int(os.getenv("MCP_RUN_TIMEOUT_SECONDS", "30"))
 #: Rate-limit ceiling (calls per minute, per token).  0 = disabled.
 RATE_LIMIT_PER_MIN: int = int(os.getenv("MCP_RATE_LIMIT_PER_MIN", "0"))
 
+#: Allowed environment variable names returned by ``env_snapshot`` when no
+#: explicit key list is provided.  Prevents disclosure of secrets/tokens.
+ENV_WHITELIST: frozenset = frozenset({
+    "PYTHONPATH",
+    "PATH",
+    "HOME",
+    "USER",
+    "AURA_SKIP_CHDIR",
+    "AURA_ENABLE_SWARM",
+})
+
+
+def _env_snapshot(args: dict) -> dict:
+    """Return a safe environment snapshot.
+
+    When *args* contains a ``keys`` list the caller-specified keys are
+    returned verbatim (existing behaviour for explicit requests).  When no
+    keys are requested only whitelisted variables are included so that API
+    keys, tokens, and other secrets are never inadvertently disclosed.
+    """
+    keys = args.get("keys", None)
+    if keys:
+        snapshot = {k: os.environ.get(k, "") for k in keys}
+    else:
+        snapshot = {k: os.environ.get(k, "") for k in ENV_WHITELIST}
+    return {"data": {"env": snapshot}}
+
+
 # ---------------------------------------------------------------------------
 # Rate-limit state (in-process, per-token sliding window)
 # ---------------------------------------------------------------------------
@@ -86,15 +116,17 @@ def _check_rate_limit(token: str) -> None:
 # ---------------------------------------------------------------------------
 # FastAPI application
 # ---------------------------------------------------------------------------
-app = FastAPI(title="AURA MCP Server", version="0.2.0")
 
 
-# Fail closed at startup if auth is not configured
-@app.on_event("startup")
-async def _startup_auth_guard() -> None:
+@asynccontextmanager
+async def _lifespan(application: FastAPI):
     token = os.getenv("MCP_API_TOKEN", "").strip()
     if not token:
         raise RuntimeError("MCP_API_TOKEN must be set before starting the MCP server")
+    yield
+
+
+app = FastAPI(title="AURA MCP Server", version="0.2.0", lifespan=_lifespan)
 
 
 # ---------------------------------------------------------------------------
@@ -595,9 +627,7 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
     # env_snapshot
     # ------------------------------------------------------------------ #
     if name == "env_snapshot":
-        keys = args.get("keys", None)
-        snapshot = {k: os.environ.get(k, "") for k in keys} if keys else dict(os.environ)
-        return {"data": {"env": snapshot}}
+        return _env_snapshot(args)
 
     # ------------------------------------------------------------------ #
     # package_scripts

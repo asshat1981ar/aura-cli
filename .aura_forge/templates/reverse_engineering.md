@@ -34,4 +34,10 @@
 
 ---
 
+## Gap Identified
+
+> One sentence: what is the specific gap, missing contract, or unsafe assumption this pass uncovered?
+
+---
+
 ## Notes

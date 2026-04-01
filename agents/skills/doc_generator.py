@@ -13,7 +13,7 @@ def _annotation_str(node: Optional[ast.expr]) -> str:
         return "Any"
     try:
         return ast.unparse(node)
-    except Exception:
+    except (OSError, IOError, ValueError):
         return "Any"
 
 

@@ -106,7 +106,7 @@ def _flake8_available() -> bool:
             capture_output=True, text=True, timeout=10,
         )
         return result.returncode == 0
-    except Exception:
+    except (OSError, IOError, ValueError):
         return False
 
 
@@ -146,7 +146,7 @@ def _run_flake8(
         return violations
     except FileNotFoundError:
         return None
-    except Exception:
+    except (OSError, IOError, ValueError):
         return None
 
 

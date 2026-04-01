@@ -148,6 +148,19 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         legacy_flags=("--goal",),
     ),
     CommandSpec(
+        path=("goal", "resume"),
+        summary="Resume an interrupted goal",
+        description=(
+            "Re-queue a goal that was interrupted mid-execution due to a crash or "
+            "process kill. Reads memory/in_flight_goal.json written by the goal run "
+            "loop. Use --run to immediately execute the re-queued goal."
+        ),
+        examples=(
+            "python3 main.py goal resume",
+            "python3 main.py goal resume --run",
+        ),
+    ),
+    CommandSpec(
         path=("workflow",),
         summary="Workflow operations",
         description="Run orchestrated workflow goals with explicit cycle limits.",
@@ -300,6 +313,93 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         description="Resume an interrupted SADD session from its last checkpoint.",
         examples=("python3 main.py sadd resume --session-id <id>",),
     ),
+    # ── Innovation Catalyst Commands ────────────────────────────────────────────
+    CommandSpec(
+        path=("innovate",),
+        summary="Innovation Catalyst session management",
+        description="Start, list, and manage innovation sessions using brainstorming techniques.",
+        examples=(
+            'python3 main.py innovate start "How to improve X?"',
+            "python3 main.py innovate list",
+            "python3 main.py innovate show --session-id abc123",
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "start"),
+        summary="Start a new innovation session",
+        description="Start a new innovation session with the Innovation Catalyst framework.",
+        examples=(
+            'python3 main.py innovate start "How to improve code review?"',
+            'python3 main.py innovate start "Reduce bugs" --techniques scamper,six_hats',
+            'python3 main.py innovate start "Improve UX" --execute-phase divergence',
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "list"),
+        summary="List innovation sessions",
+        description="List all innovation sessions with their status and metrics.",
+        examples=(
+            "python3 main.py innovate list",
+            "python3 main.py innovate list --status active",
+            "python3 main.py innovate list --json",
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "show"),
+        summary="Show session details",
+        description="Show detailed information about a specific innovation session.",
+        examples=(
+            "python3 main.py innovate show --session-id abc123",
+            "python3 main.py innovate show --session-id abc123 --show-ideas",
+            "python3 main.py innovate show --session-id abc123 --json",
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "resume"),
+        summary="Resume an innovation session",
+        description="Resume an innovation session at a specific phase.",
+        examples=(
+            "python3 main.py innovate resume --session-id abc123",
+            "python3 main.py innovate resume --session-id abc123 --phase convergence",
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "export"),
+        summary="Export session results",
+        description="Export innovation session results to markdown or JSON.",
+        examples=(
+            "python3 main.py innovate export --session-id abc123 --format markdown",
+            "python3 main.py innovate export --session-id abc123 --output report.md",
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "techniques"),
+        summary="List available brainstorming techniques",
+        description="Show all available brainstorming techniques with descriptions.",
+        examples=(
+            "python3 main.py innovate techniques",
+            "python3 main.py innovate techniques --json",
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "to-goals"),
+        summary="Convert selected ideas to goals",
+        description="Convert selected ideas from an innovation session to goals in the queue.",
+        examples=(
+            "python3 main.py innovate to-goals --session-id abc123",
+            "python3 main.py innovate to-goals --session-id abc123 --preview",
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "insights"),
+        summary="Show innovation analytics and insights",
+        description="Display analytics about innovation sessions including trends, technique effectiveness, and idea quality metrics.",
+        examples=(
+            "python3 main.py innovate insights",
+            "python3 main.py innovate insights --session-id abc123",
+            "python3 main.py innovate insights --json",
+        ),
+    ),
 )
 
 COMMAND_SPECS_BY_PATH: dict[tuple[str, ...], CommandSpec] = {spec.path: spec for spec in COMMAND_SPECS}
@@ -333,6 +433,7 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     ),
     CLIActionSpec("goal_once", True, ("goal", "once"), legacy_primary_flags=("goal",)),
     CLIActionSpec("goal_run", True, ("goal", "run"), legacy_primary_flags=("run_goals",)),
+    CLIActionSpec("goal_resume", False, ("goal", "resume")),
     CLIActionSpec("queue_list", True, ("queue", "list")),
     CLIActionSpec("queue_clear", True, ("queue", "clear")),
     CLIActionSpec("memory_search", True, ("memory", "search")),
@@ -341,6 +442,15 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("sadd_run", True, ("sadd", "run")),
     CLIActionSpec("sadd_status", False, ("sadd", "status")),
     CLIActionSpec("sadd_resume", True, ("sadd", "resume")),
+    # ── Innovation Catalyst Actions ────────────────────────────────────────────
+    CLIActionSpec("innovate_start", True, ("innovate", "start")),
+    CLIActionSpec("innovate_list", True, ("innovate", "list")),
+    CLIActionSpec("innovate_show", True, ("innovate", "show")),
+    CLIActionSpec("innovate_resume", True, ("innovate", "resume")),
+    CLIActionSpec("innovate_export", True, ("innovate", "export")),
+    CLIActionSpec("innovate_techniques", False, ("innovate", "techniques")),
+    CLIActionSpec("innovate_to_goals", True, ("innovate", "to-goals")),
+    CLIActionSpec("innovate_insights", True, ("innovate", "insights")),
     CLIActionSpec("interactive", True, None),
 )
 
@@ -361,6 +471,7 @@ _SMOKE_POSITIONAL_ARGS_BY_PATH: dict[tuple[str, ...], tuple[str, ...]] = {
     ("mcp", "call"): ("limits",),
     ("scaffold",): ("demo",),
     ("memory", "search"): ("example-query",),
+    ("innovate", "start"): ("example-problem-statement",),
 }
 
 HELP_SCHEMA_VERSION = 3
@@ -429,6 +540,7 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("goal", "status"): "goal_status",
     ("goal", "once"): "goal_once",
     ("goal", "run"): "goal_run",
+    ("goal", "resume"): "goal_resume",
     ("queue", "list"): "queue_list",
     ("queue", "clear"): "queue_clear",
     ("memory", "search"): "memory_search",
@@ -437,6 +549,14 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("sadd", "run"): "sadd_run",
     ("sadd", "status"): "sadd_status",
     ("sadd", "resume"): "sadd_resume",
+    ("innovate", "start"): "innovate_start",
+    ("innovate", "list"): "innovate_list",
+    ("innovate", "show"): "innovate_show",
+    ("innovate", "resume"): "innovate_resume",
+    ("innovate", "export"): "innovate_export",
+    ("innovate", "techniques"): "innovate_techniques",
+    ("innovate", "to-goals"): "innovate_to_goals",
+    ("innovate", "insights"): "innovate_insights",
 }
 
 _LEGACY_PRIMARY_FLAGS: tuple[str, ...] = (

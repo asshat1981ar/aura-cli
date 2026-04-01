@@ -1,0 +1,11 @@
+{
+  "name": "@bp-templates/sdlc-orchestrator-bot",
+  "scripts": {
+    "check:type": "tsc --noEmit"
+  },
+  "private": true,
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

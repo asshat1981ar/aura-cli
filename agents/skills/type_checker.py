@@ -40,7 +40,7 @@ def _run_mypy(target: str, cwd: Path) -> Optional[List[Dict]]:
         return errors
     except FileNotFoundError:
         return None
-    except Exception:
+    except (OSError, IOError, ValueError):
         return None
 
 

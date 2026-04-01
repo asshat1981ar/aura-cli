@@ -5,6 +5,98 @@ All notable changes to AURA CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Sprint S004] - 2026-03-27
+
+### Added
+- `core/swarm_models.py`: Pydantic dataclasses for hierarchical swarm workflow (SwarmTask, TaskResult, CycleLesson, CycleReport, PRGateDecision, SupervisorConfig, SDLCFinding)
+- `agents/hierarchical_coordinator.py`: Architect→Coder→Tester async pipeline with lesson injection every N cycles
+- `agents/sdlc_debugger.py`: 10-lens SDLC failure classifier (requirements, design, implementation, integration, testing, security, performance, operations, DX, delivery)
+- `core/swarm_supervisor.py`: `install_swarm_runtime()` single-call wiring entry point
+- `memory/learning_loop.py`: `LessonStore` JSONL persistence for cycle lessons
+- `aura_cli/runtime_factory.py`: `RuntimeFactory` with `_WeaknessRemediatorLoop` (every 5 cycles) and `_ConvergenceEscapeLoop` (per cycle)
+- Feature flag: `AURA_ENABLE_SWARM=1` activates hierarchical coordinator in `create_runtime()`
+- 27 net-new tests across `test_swarm_supervisor.py`, `test_swarm_models.py`, `test_runtime_factory.py`
+
+### Changed
+- `aura_cli/cli_main.py`: `create_runtime()` now wires `install_swarm_runtime()` when `AURA_ENABLE_SWARM=1`
+- `agents/hierarchical_coordinator.py`: `_perform_github_delivery` gated behind `SupervisorConfig.github_delivery_enabled` (default `False`)
+- All bare `print()` calls replaced with `log_json()` in coordinator and debugger
+
+### Safety
+- `github_delivery_enabled: bool = False` in `SupervisorConfig` — no GitHub API calls without opt-in
+- `AURA_SWARM_PR_GATE=1` required to enable PR automation
+
+## [Unreleased] — Sprint S003: SADD Workflow Completion
+
+### Added
+
+- **`sadd resume --run`**: fully implements SADD session resume. Restores
+  `WorkstreamGraph` from `SessionStore`, resets previously-failed and blocked
+  workstreams to pending for retry, then drives the remaining workstreams to
+  completion via `SessionCoordinator.resume()`. Without `--run`, prints a safe
+  summary (total/completed/remaining) and exits 0.
+- **`SessionCoordinator.resume(graph, completed_results)`**: new method that
+  accepts a pre-restored graph and dict of completed results, then executes only
+  the remaining workstreams. Resets `failed` and `blocked` nodes to `pending`
+  before execution so dependency chains are correctly retried.
+- **Live progress output** in `SessionCoordinator`: per-workstream start/complete/fail
+  lines printed to stdout during live `sadd run` and `sadd resume` execution so
+  users can see real-time progress.
+- **`MCPToolBridge` auto-wiring**: `SessionCoordinator` now accepts an optional
+  `mcp_bridge` parameter (passed through to `SubAgentRunner`). Both `sadd run`
+  and `sadd resume` dispatch handlers auto-create `MCPToolBridge()` with
+  `(ImportError, OSError)` fallback to `None`.
+- **`tests/test_sadd_coordinator.py`**: 19 tests covering live coordinator
+  execution, resume skipping completed workstreams, resume retrying failed
+  workstreams, and unblocking dependents of failed workstreams.
+
+### Fixed
+
+- `sadd resume` dispatch handler was a stub ("not yet implemented"); it now
+  executes the full resume path via `SessionCoordinator.resume()`.
+- `_handle_sadd_resume_dispatch`: failed workstreams in raw results were
+  incorrectly passed to `graph.mark_completed()`; fixed to call `mark_failed()`
+  for failed results and only pass truly-completed results to `coordinator.resume()`.
+- `SessionCoordinator.resume()`: blocked dependents of failed workstreams were
+  not reset to pending, preventing them from executing after the failed dependency
+  was retried; now resets both `failed` and `blocked` nodes before the execution loop.
+- MCP bridge `except Exception` narrowed to `except (ImportError, OSError)` to
+  avoid swallowing unexpected runtime errors.
+
+### Added
+
+- **`goal resume` command** (`core/in_flight_tracker.py`): recovers goals silently lost when the
+  AURA loop is interrupted between queue dequeue and archive. Writes `memory/in_flight_goal.json`
+  atomically after each dequeue; `goal resume` re-prepends the goal and optionally runs it.
+  Closes #301.
+- **`goal run --resume` flag**: automatically re-queues any interrupted in-flight goal before
+  running the queue. `goal run` (no flag) prints a stderr warning if an in-flight file is detected.
+- **`scripts/link_story_plans.py`**: validates that `plans_link` fields in ready-stage Forge stories
+  point to existing plan files. Exits 1 on broken links. Integrates with the forge lint pipeline.
+- **`scripts/new_story.py`**: scaffolds new Forge stories into `inbox/`. Supports `--quick` mode
+  (8-field lightweight template) and full-template mode. Auto-increments story ID.
+- **`.aura_forge/templates/story_quick.yaml`**: 8-field quick-ideation template for fast inbox
+  capture without forcing early design commitment.
+- **`scripts/lint_forge_index.py`**: backlog index drift detector (5 rule classes). Catches stories
+  indexed but absent on disk, stories on disk but not indexed, phantom done entries, duplicate IDs
+  across lanes, and broken plans_link references.
+
+### Fixed
+
+- `tests/test_orchestrator_hub.py`: added `pytest.importorskip("orchestrator_hub")` guard to
+  prevent collection ERROR when the now-deleted `orchestrator_hub` package is absent.
+
+### Changed
+
+- `.aura_forge/backlog/ready/`: promoted AF-STORY-0006 (story-plan linker), AF-STORY-0008
+  (follow-up status conventions), AF-STORY-0009 (quick ideation template) from refined to ready
+  with full `contract_impact`, `safety_impact`, and `acceptance_criteria` declarations.
+- `.aura_forge/schemas/story.schema.yaml`: added `design_pass_notes` typed section (6 pass types)
+  and `plans_link` field.
+- `docs/CLI_REFERENCE.md`: regenerated to include `goal resume` and `goal run --resume`.
+
+---
+
 ## [0.1.0] — 2026-03-24
 
 First stable release of AURA CLI — an autonomous, multi-agent software

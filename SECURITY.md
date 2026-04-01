@@ -55,6 +55,24 @@ The following are in scope for security reports:
 - Follow the principle of least privilege in code and configuration
 - Run `pre-commit` hooks which include security checks before committing
 
+## Secret Scanning
+
+This repository uses automated secret scanning:
+
+```bash
+# Run secrets scanner locally
+python3 scripts/scan_secrets.py .
+```
+
+The scanner detects:
+- API keys and tokens
+- Bearer tokens
+- AWS access keys
+- GitHub personal access tokens
+- OpenAI API keys
+
+CI/CD runs this scanner on every PR. Zero hardcoded secrets is the policy.
+
 ## Dependencies
 
 We monitor our dependencies for known vulnerabilities. If you notice a vulnerable dependency, please open an issue or report it through the security process above.

@@ -19,12 +19,18 @@ Adapters defined here:
 * :class:`SandboxAdapter`  — wraps :class:`~agents.sandbox.SandboxAgent`
 """
 
+from __future__ import annotations
+
 import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.types import AgentSpec
+    from agents.planner import PlannerAgent
+    from agents.critic import CriticAgent
+    from agents.coder import CoderAgent
+    from agents.sandbox import SandboxAgent
 
 # ---------------------------------------------------------------------------
 # Capability declarations
@@ -56,6 +62,8 @@ FALLBACK_CAPABILITIES: dict[str, list[str]] = {
     "investigation":       ["investigation", "research", "analysis"],
     "external_llm":        ["routing", "proxy", "llm_proxy", "model_routing", "external_llm"],
     "documentation":       ["doc_generation", "readme", "inline_docs", "commenting", "documentation"],
+    "innovation_swarm":    ["innovation", "brainstorming", "divergence", "convergence", "creativity", "ideation"],
+    "meta_conductor":      ["innovation", "orchestration", "facilitation", "design_thinking", "session_management"],
 }
 
 
@@ -76,21 +84,60 @@ def _make_spec(name: str, agent: object) -> "AgentSpec":
         source="local",
     )
 
-from agents.ingest import IngestAgent
-from agents.verifier import VerifierAgent
-from agents.synthesizer import SynthesizerAgent
-from agents.reflector import ReflectorAgent
-from agents.planner import PlannerAgent
-from agents.critic import CriticAgent
-from agents.coder import CoderAgent
-from agents.sandbox import SandboxAgent
-from agents.telemetry_agent import TelemetryAgent
-from agents.self_correction_agent import SelfCorrectionAgent
-from agents.code_search_agent import CodeSearchAgent
-from agents.investigation_agent import InvestigationAgent
-from agents.root_cause_analysis import RootCauseAnalysisAgent
-from agents.mcp_discovery_agent import MCPDiscoveryAgent
-from agents.mcp_health_agent import MCPHealthAgent
+# ---------------------------------------------------------------------------
+# Lazy import cache — populated on first access, keyed by short agent name.
+# This avoids importing all agent modules at module-load time, keeping the
+# startup cost proportional to what is actually used (closes #321).
+# ---------------------------------------------------------------------------
+
+_agent_cache: dict[str, object] = {}
+
+# Maps short names to (module_path, class_name) for deferred imports.
+_AGENT_MODULE_MAP: dict[str, tuple[str, str]] = {
+    "ingest":              ("agents.ingest",              "IngestAgent"),
+    "verifier":            ("agents.verifier",            "VerifierAgent"),
+    "synthesizer":         ("agents.synthesizer",         "SynthesizerAgent"),
+    "reflector":           ("agents.reflector",           "ReflectorAgent"),
+    "planner":             ("agents.planner",             "PlannerAgent"),
+    "critic":              ("agents.critic",              "CriticAgent"),
+    "coder":               ("agents.coder",               "CoderAgent"),
+    "sandbox":             ("agents.sandbox",             "SandboxAgent"),
+    "telemetry":           ("agents.telemetry_agent",     "TelemetryAgent"),
+    "self_correction":     ("agents.self_correction_agent", "SelfCorrectionAgent"),
+    "code_search":         ("agents.code_search_agent",   "CodeSearchAgent"),
+    "investigation":       ("agents.investigation_agent", "InvestigationAgent"),
+    "root_cause_analysis": ("agents.root_cause_analysis", "RootCauseAnalysisAgent"),
+    "mcp_discovery":       ("agents.mcp_discovery_agent", "MCPDiscoveryAgent"),
+    "mcp_health":          ("agents.mcp_health_agent",    "MCPHealthAgent"),
+    "innovation_swarm":    ("agents.innovation_swarm",    "InnovationSwarm"),
+    "meta_conductor":      ("agents.meta_conductor",      "MetaConductor"),
+}
+
+
+def _lazy_import(agent_name: str) -> object:
+    """Return the agent *class* for *agent_name*, importing it only once.
+
+    Results are stored in the module-level :data:`_agent_cache` dict so
+    subsequent calls return the cached class without re-importing the module.
+
+    Args:
+        agent_name: Short agent key as defined in :data:`_AGENT_MODULE_MAP`.
+
+    Returns:
+        The agent class object, or ``None`` if the key is unknown.
+    """
+    if agent_name in _agent_cache:
+        return _agent_cache[agent_name]
+
+    if agent_name not in _AGENT_MODULE_MAP:
+        return None
+
+    module_path, class_name = _AGENT_MODULE_MAP[agent_name]
+    import importlib
+    module = importlib.import_module(module_path)
+    cls = getattr(module, class_name)
+    _agent_cache[agent_name] = cls
+    return cls
 
 
 class PlannerAdapter:
@@ -520,6 +567,25 @@ def default_agents(brain, model, context_manager=None, skills=None, health_monit
     from agents.monitoring_agent import MonitoringAgentAdapter
     from agents.notification_agent import NotificationAgentAdapter
 
+    # Use lazy imports for core agent classes (populated into _agent_cache)
+    IngestAgent = _lazy_import("ingest")
+    PlannerAgent = _lazy_import("planner")
+    CriticAgent = _lazy_import("critic")
+    CoderAgent = _lazy_import("coder")
+    SandboxAgent = _lazy_import("sandbox")
+    SynthesizerAgent = _lazy_import("synthesizer")
+    VerifierAgent = _lazy_import("verifier")
+    ReflectorAgent = _lazy_import("reflector")
+    TelemetryAgent = _lazy_import("telemetry")
+    SelfCorrectionAgent = _lazy_import("self_correction")
+    CodeSearchAgent = _lazy_import("code_search")
+    InvestigationAgent = _lazy_import("investigation")
+    RootCauseAnalysisAgent = _lazy_import("root_cause_analysis")
+    MCPDiscoveryAgent = _lazy_import("mcp_discovery")
+    MCPHealthAgent = _lazy_import("mcp_health")
+    InnovationSwarm = _lazy_import("innovation_swarm")
+    MetaConductor = _lazy_import("meta_conductor")
+
     sandbox_agent = SandboxAgent(brain, timeout=30)
     planner = PlannerAdapter(PlannerAgent(brain, model))
     critic = CriticAdapter(CriticAgent(brain, model))
@@ -549,6 +615,8 @@ def default_agents(brain, model, context_manager=None, skills=None, health_monit
         "root_cause_analysis": RootCauseAnalysisAgent(),
         "mcp_discovery": MCPDiscoveryAgent(),
         "mcp_health": MCPHealthAgent(),
+        "innovation_swarm": InnovationSwarm(brain=brain, model=model),
+        "meta_conductor": MetaConductor(brain=brain, model=model),
     }
 
     from agents.autogen_agent import AutoGenGroupChatAgent

@@ -1,70 +1,47 @@
 import inspect
-from typing import List
+from typing import List, Union
 import json
 from core.file_tools import _aura_safe_loads
 from core.logging_utils import log_json
+from pydantic import ValidationError
 
-
-EVOLUTION_PROMPT = """
-You are AURA — an autonomous recursive engineering system.
-
-Current Goal:
-{goal}
-
-System State:
-- Memory Snapshot: {memory}
-- Similar Past Problems: {similar}
-- Known Weaknesses: {weakness}
-
-{backfill_instr}
-
-You must:
-
-1. Analyze structural gaps.
-2. Propose capability upgrades.
-3. Design execution steps.
-4. Predict failure modes.
-5. Suggest improvements to your own architecture.
-
-Think recursively.
-Optimize long-term intelligence.
-
-Provide your response as a JSON array of strings, where each string is a planning step.
-Example: ["Step 1: ...", "Step 2: ..."]
-Ensure your response contains ONLY the JSON array, with no conversational text or other explanations.
-"""
+try:
+    from agents.schemas import PlannerOutput, PlanStep
+    from agents.prompt_manager import render_prompt, get_cached_prompt_stats
+    SCHEMAS_AVAILABLE = True
+except ImportError:
+    SCHEMAS_AVAILABLE = False
 
 
 class PlannerAgent:
     """
-    The PlannerAgent is responsible for generating and updating plans based on a given goal,
-    system state, and feedback. It leverages the LLM to analyze problems, propose solutions,
-    and decompose complex tasks into atomic steps.
+    The PlannerAgent generates and updates plans using Chain-of-Thought reasoning
+    and structured outputs for improved reliability and transparency.
+    
+    Uses role-based system prompts (Senior Software Architect) and prompt caching
+    for efficient token usage.
     """
 
     capabilities = ["planning", "decomposition", "design", "tree_of_thought", "strategy"]
 
     def __init__(self, brain, model):
-        """
-        Initializes the PlannerAgent with access to the system's brain and model.
-
-        Args:
-            brain: An instance of the system's memory (Brain).
-            model: An instance of the model adapter for LLM interactions.
-        """
         self.brain = brain
         self.model = model
+        self.use_structured = SCHEMAS_AVAILABLE
 
     def run(self, input_data: dict) -> dict:
-        """Standard agent interface."""
+        """Standard agent interface with structured output support."""
         goal = input_data.get("goal", "")
         mem = input_data.get("memory_snapshot", "")
         sim = input_data.get("similar_past_problems", "")
         weak = input_data.get("known_weaknesses", "")
         backfill_ctx = input_data.get("backfill_context", [])
-
-        steps = self.plan(goal, mem, sim, weak, backfill_context=backfill_ctx)
-        return {"steps": steps}
+        
+        result = self.plan(goal, mem, sim, weak, backfill_context=backfill_ctx)
+        
+        if isinstance(result, dict) and "plan" in result:
+            return result
+        return {"steps": result}
 
     def _respond(self, prompt: str) -> str:
         try:
@@ -76,51 +53,128 @@ class PlannerAgent:
             return responder("planning", prompt)
         return self.model.respond(prompt)
 
-    def plan(self, goal: str, memory_snapshot: str, similar_past_problems: str, known_weaknesses: str, backfill_context: list = None) -> List[str]:
-        """
-        Generates a detailed plan based on the current goal, system memory,
-        similar past problems, and known system weaknesses.
-        """
+    def plan(self, goal: str, memory_snapshot: str, similar_past_problems: str, 
+             known_weaknesses: str, backfill_context: list = None) -> Union[List[str], dict]:
+        """Generate a detailed plan with Chain-of-Thought reasoning and structured output."""
         backfill_instr = ""
         if backfill_context:
-            backfill_instr = "CRITICAL: The following modules have LOW/ZERO test coverage and are considered HIGH RISK:\n"
+            backfill_instr = "CRITICAL: Modules with LOW/ZERO test coverage:\n"
             for item in backfill_context:
                 pct = item.get("coverage_pct", item.get("coverage", 0.0))
                 backfill_instr += f"- {item['file']} ({pct}% coverage)\n"
-            backfill_instr += "\nPRIORITIZE these modules by adding 'Test Backfill' steps at the BEGINNING of your plan."
+            backfill_instr += "\nPRIORITIZE with 'Test Backfill' steps at BEGINNING."
 
-        prompt = EVOLUTION_PROMPT.format(goal=goal, memory=memory_snapshot, similar=similar_past_problems, weakness=known_weaknesses, backfill_instr=backfill_instr)
+        if self.use_structured:
+            return self._plan_structured(goal, memory_snapshot, similar_past_problems, 
+                                         known_weaknesses, backfill_instr)
+        else:
+            return self._plan_legacy(goal, memory_snapshot, similar_past_problems, 
+                                     known_weaknesses, backfill_instr)
+
+    def _plan_structured(self, goal: str, memory: str, similar: str, 
+                         weakness: str, backfill_instr: str) -> dict:
+        """Generate plan using structured output with CoT reasoning and role-based prompt."""
+        # Use cached prompt with role-based system context
+        prompt = render_prompt(
+            template_name="planner",
+            role="planner",
+            params={
+                "goal": goal,
+                "memory": memory,
+                "similar": similar,
+                "weakness": weakness,
+                "backfill_instr": backfill_instr
+            }
+        )
+        
         response = self._respond(prompt)
-        self.brain.remember(f"Planned for goal: {goal} with raw response: {response[:100]}...")
+        self.brain.remember(f"Structured plan for: {goal[:50]}...")
+        
         try:
-            plan = _aura_safe_loads(response, "planner_plan_response")
+            parsed = _aura_safe_loads(response, "planner_structured_response")
+            planner_output = PlannerOutput(**parsed)
+            
+            # Log CoT reasoning for observability
+            log_json("INFO", "planner_cot_reasoning", details={
+                "analysis": planner_output.analysis[:200],
+                "approach": planner_output.approach[:200],
+                "risk_assessment": planner_output.risk_assessment[:200],
+                "confidence": planner_output.confidence,
+                "complexity": planner_output.estimated_complexity
+            })
+            
+            # Convert PlanStep objects to step strings for backward compatibility
+            steps = []
+            for step in planner_output.plan:
+                step_str = f"Step {step.step_number}: {step.description}"
+                if step.target_file:
+                    step_str += f" [{step.target_file}]"
+                steps.append(step_str)
+            
+            return {
+                "steps": steps,
+                "structured_output": planner_output.dict(),
+                "confidence": planner_output.confidence,
+                "complexity": planner_output.estimated_complexity,
+                "reasoning": {
+                    "analysis": planner_output.analysis,
+                    "gap_assessment": planner_output.gap_assessment,
+                    "approach": planner_output.approach,
+                    "risk_assessment": planner_output.risk_assessment
+                }
+            }
+            
+        except (json.JSONDecodeError, ValidationError) as e:
+            log_json("WARN", "planner_structured_parse_failed", details={
+                "error": str(e),
+                "response_snippet": response[:200]
+            })
+            # Fallback to legacy format
+            return self._parse_legacy_response(response, goal)
+        except Exception as e:
+            log_json("ERROR", "planner_structured_unexpected_error", details={"error": str(e)})
+            return [f"ERROR: Plan generation failed: {e}"]
+
+    def _plan_legacy(self, goal: str, memory: str, similar: str, 
+                     weakness: str, backfill_instr: str) -> List[str]:
+        """Fallback legacy planning method."""
+        prompt = f"""You are AURA — an autonomous recursive engineering system.
+
+Current Goal:
+{goal}
+
+System State:
+- Memory: {memory}
+- Similar Past Problems: {similar}
+- Known Weaknesses: {weakness}
+
+{backfill_instr}
+
+Provide response as JSON array of strings: ["Step 1: ...", "Step 2: ..."]"""
+        
+        response = self._respond(prompt)
+        return self._parse_legacy_response(response, goal)
+
+    def _parse_legacy_response(self, response: str, goal: str) -> List[str]:
+        """Parse legacy JSON array response."""
+        self.brain.remember(f"Legacy plan for: {goal[:50]}...")
+        try:
+            plan = _aura_safe_loads(response, "planner_legacy_response")
             if isinstance(plan, list) and all(isinstance(step, str) for step in plan):
                 return plan
             else:
-                log_json("ERROR", "planner_plan_response_invalid_format", details={"response_snippet": response[:200], "parsed_type": type(plan).__name__})
-                return [f"ERROR: Planner response was not a valid JSON array of strings. Raw response: {response}"]
-        except json.JSONDecodeError as e:
-            log_json("ERROR", "planner_plan_json_decode_error", details={"error": str(e), "response_snippet": response[:200]})
-            return [f"ERROR: Failed to decode JSON from planner response: {e}. Raw response: {response}"]
+                log_json("ERROR", "planner_legacy_invalid_format")
+                return [f"ERROR: Invalid plan format. Raw: {response[:200]}"]
         except Exception as e:
-            log_json("ERROR", "planner_plan_unexpected_error", details={"error": str(e), "response_snippet": response[:200]})
-            return [f"ERROR: An unexpected error occurred during plan parsing: {e}. Raw response: {response}"]
+            log_json("ERROR", "planner_legacy_parse_error", details={"error": str(e)})
+            return [f"ERROR: Failed to parse plan: {e}"]
 
     def _update_plan(self, original_plan: List[str], feedback: str) -> List[str]:
-        """
-        Revises an existing plan based on new feedback. The LLM is prompted
-        to return the revised plan as a JSON array of strings.
-
-        Args:
-            original_plan (List[str]): The existing plan that needs revision.
-            feedback (str): Feedback received on the original plan.
-
-        Returns:
-            List[str]: A list of strings, where each string is a step in the revised plan.
-                       Returns an error message within the list if parsing fails.
-        """
-        prompt = f"""
-You are an autonomous planning agent. You have an existing plan and have received feedback on it. Your task is to revise the plan based on the feedback.
+        """Revises an existing plan based on feedback."""
+        if isinstance(original_plan, dict) and "steps" in original_plan:
+            original_plan = original_plan["steps"]
+            
+        prompt = f"""Revise this plan based on feedback.
 
 Original Plan:
 {json.dumps(original_plan)}
@@ -128,22 +182,24 @@ Original Plan:
 Feedback:
 {feedback}
 
-Provide the revised plan as a JSON array of strings, where each string is a step.
-Example: ["Revised Step 1: ...", "Revised Step 2: ..."]
-Ensure your response contains ONLY the JSON array, with no conversational text or other explanations.
-"""
+Provide revised plan as JSON array: ["Step 1: ...", "Step 2: ..."]"""
+
         response = self._respond(prompt)
-        self.brain.remember(f"Revised plan based on feedback: {feedback}. Raw response: {response[:100]}...")
+        self.brain.remember(f"Plan revision: {feedback[:50]}...")
+        
         try:
-            plan = _aura_safe_loads(response, "planner_update_plan_response")
+            plan = _aura_safe_loads(response, "planner_update_response")
             if isinstance(plan, list) and all(isinstance(step, str) for step in plan):
                 return plan
             else:
-                log_json("ERROR", "planner_update_plan_response_invalid_format", details={"response_snippet": response[:200], "parsed_type": type(plan).__name__})
-                return [f"ERROR: Planner update response was not a valid JSON array of strings. Raw response: {response}"]
-        except json.JSONDecodeError as e:
-            log_json("ERROR", "planner_update_plan_json_decode_error", details={"error": str(e), "response_snippet": response[:200]})
-            return [f"ERROR: Failed to decode JSON from planner update response: {e}. Raw response: {response}"]
+                log_json("ERROR", "planner_update_invalid_format")
+                return original_plan
         except Exception as e:
-            log_json("ERROR", "planner_update_plan_unexpected_error", details={"error": str(e), "response_snippet": response[:200]})
-            return [f"ERROR: An unexpected error occurred during plan update parsing: {e}. Raw response: {response}"]
+            log_json("ERROR", "planner_update_error", details={"error": str(e)})
+            return original_plan
+
+    def get_cache_stats(self) -> dict:
+        """Get prompt cache statistics."""
+        if SCHEMAS_AVAILABLE:
+            return get_cached_prompt_stats()
+        return {"error": "Prompt manager not available"}

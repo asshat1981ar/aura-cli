@@ -933,6 +933,65 @@ def _handle_goal_resume_dispatch(ctx: DispatchContext) -> int:
     return 0
 
 
+# ── Innovation Catalyst Dispatch Handlers ─────────────────────────────────────
+
+
+def _handle_innovate_start_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate start command."""
+    from aura_cli.commands import _handle_innovate_start
+    _handle_innovate_start(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_innovate_list_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate list command."""
+    from aura_cli.commands import _handle_innovate_list
+    _handle_innovate_list(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_innovate_show_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate show command."""
+    from aura_cli.commands import _handle_innovate_show
+    _handle_innovate_show(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_innovate_resume_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate resume command."""
+    from aura_cli.commands import _handle_innovate_resume
+    _handle_innovate_resume(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_innovate_export_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate export command."""
+    from aura_cli.commands import _handle_innovate_export
+    _handle_innovate_export(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_innovate_techniques_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate techniques command."""
+    from aura_cli.commands import _handle_innovate_techniques
+    _handle_innovate_techniques(ctx.args)
+    return 0
+
+
+def _handle_innovate_to_goals_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate to-goals command."""
+    from aura_cli.commands import _handle_innovate_to_goals
+    _handle_innovate_to_goals(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_innovate_insights_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate insights command."""
+    from aura_cli.commands import _handle_innovate_insights
+    _handle_innovate_insights(ctx.args, ctx.runtime)
+    return 0
+
+
 def _dispatch_rule(action: str, handler) -> DispatchRule:
     return DispatchRule(action, action_runtime_required(action), handler)
 
@@ -968,6 +1027,15 @@ COMMAND_DISPATCH_REGISTRY = {
     "sadd_run": _dispatch_rule("sadd_run", _handle_sadd_run_dispatch),
     "sadd_status": _dispatch_rule("sadd_status", _handle_sadd_status_dispatch),
     "sadd_resume": _dispatch_rule("sadd_resume", _handle_sadd_resume_dispatch),
+    # ── Innovation Catalyst Dispatch Rules ─────────────────────────────────────
+    "innovate_start": _dispatch_rule("innovate_start", _handle_innovate_start_dispatch),
+    "innovate_list": _dispatch_rule("innovate_list", _handle_innovate_list_dispatch),
+    "innovate_show": _dispatch_rule("innovate_show", _handle_innovate_show_dispatch),
+    "innovate_resume": _dispatch_rule("innovate_resume", _handle_innovate_resume_dispatch),
+    "innovate_export": _dispatch_rule("innovate_export", _handle_innovate_export_dispatch),
+    "innovate_techniques": _dispatch_rule("innovate_techniques", _handle_innovate_techniques_dispatch),
+    "innovate_to_goals": _dispatch_rule("innovate_to_goals", _handle_innovate_to_goals_dispatch),
+    "innovate_insights": _dispatch_rule("innovate_insights", _handle_innovate_insights_dispatch),
     "interactive": _dispatch_rule("interactive", _handle_interactive_dispatch),
 }
 

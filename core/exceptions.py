@@ -10,6 +10,10 @@ class AURAError(Exception):
     pass
 
 
+# Alias for backward compatibility
+AuraError = AURAError
+
+
 # File/IO Exceptions
 class FileToolsError(AURAError):
     """Base exception for file tool operations."""
@@ -195,4 +199,45 @@ class SecretDetectedError(SecurityError):
 
 class InjectionDetectedError(SecurityError):
     """Injection attack detected."""
+    pass
+
+
+# Git Exceptions
+class GitToolsError(AURAError):
+    """Base exception for git tool operations."""
+    pass
+
+
+class GitRepoError(GitToolsError):
+    """Git repository error."""
+    pass
+
+
+class GitCommitError(GitToolsError):
+    """Git commit error."""
+    pass
+
+
+class GitRollbackError(GitToolsError):
+    """Git rollback error."""
+    pass
+
+
+class GitDiffError(GitToolsError):
+    """Git diff error."""
+    pass
+
+
+class GitBranchError(GitToolsError):
+    """Git branch error."""
+    pass
+
+
+class GitStashError(GitToolsError):
+    """Git stash error."""
+    pass
+
+
+class GitStashPopError(GitStashError):
+    """Git stash pop error."""
     pass

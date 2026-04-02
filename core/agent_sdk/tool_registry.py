@@ -6,6 +6,7 @@ subsystem (agents, skills, MCP servers, memory, workflows).
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import traceback
 from dataclasses import dataclass, field
@@ -358,17 +359,29 @@ def _handle_discover_mcp_tools(
 ) -> Dict[str, Any]:
     """Discover tools across MCP servers."""
     try:
-        import requests
-
-        discovery_url = "http://localhost:8025/call"
-        resp = requests.post(
-            discovery_url,
-            json={"tool_name": "search_tools_semantically", "args": {"query": args.get("query", "")}},
-            timeout=3,
-        )
-        if resp.ok:
-            return resp.json()
-        return {"tools": [], "error": f"Discovery server returned {resp.status_code}"}
+        # Use resilient client if available
+        try:
+            from core.agent_sdk.resilience import get_health_monitor, ResilientMCPClient
+            monitor = get_health_monitor()
+            client = ResilientMCPClient(health_monitor=monitor)
+            return asyncio.run(client.invoke(
+                "discovery",
+                "search_tools_semantically",
+                {"query": args.get("query", "")},
+                timeout=5.0
+            ))
+        except ImportError:
+            # Fallback to direct request
+            import requests
+            discovery_url = "http://localhost:8025/call"
+            resp = requests.post(
+                discovery_url,
+                json={"tool_name": "search_tools_semantically", "args": {"query": args.get("query", "")}},
+                timeout=3,
+            )
+            if resp.ok:
+                return resp.json()
+            return {"tools": [], "error": f"Discovery server returned {resp.status_code}"}
     except Exception as exc:
         return {"tools": [], "error": str(exc)}
 
@@ -379,26 +392,45 @@ def _handle_invoke_mcp_tool(
     config: Any = None,
     **_: Any,
 ) -> Dict[str, Any]:
-    """Invoke a tool on any MCP server."""
+    """Invoke a tool on any MCP server with resilience patterns."""
+    import asyncio
+    
+    server = args["server"]
+    tool_name = args["tool_name"]
+    tool_args = args.get("tool_args", {})
+    timeout = args.get("timeout", 30)
+    
     try:
-        import requests
-
-        server = args["server"]
-        from core.agent_sdk.config import AgentSDKConfig
-
-        cfg = config or AgentSDKConfig()
-        port = cfg.mcp_ports.get(server)
-        if not port:
-            return {"error": f"Unknown MCP server: {server}"}
-
-        resp = requests.post(
-            f"http://localhost:{port}/call",
-            json={"tool_name": args["tool_name"], "args": args.get("tool_args", {})},
-            timeout=args.get("timeout", 30),
-        )
-        return resp.json() if resp.ok else {"error": f"Server returned {resp.status_code}"}
+        # Use resilient client for production hardening
+        from core.agent_sdk.resilience import get_health_monitor, ResilientMCPClient
+        
+        monitor = get_health_monitor()
+        client = ResilientMCPClient(health_monitor=monitor)
+        
+        # Run async invocation in sync context
+        loop = asyncio.get_event_loop()
+        return loop.run_until_complete(client.invoke(
+            server, tool_name, tool_args, timeout=timeout
+        ))
     except Exception as exc:
-        return {"error": str(exc)}
+        # Fallback to direct request on resilience failure
+        try:
+            import requests
+            from core.agent_sdk.config import AgentSDKConfig
+
+            cfg = config or AgentSDKConfig()
+            port = cfg.mcp_ports.get(server)
+            if not port:
+                return {"error": f"Unknown MCP server: {server}"}
+
+            resp = requests.post(
+                f"http://localhost:{port}/call",
+                json={"tool_name": tool_name, "args": tool_args},
+                timeout=timeout,
+            )
+            return resp.json() if resp.ok else {"error": f"Server returned {resp.status_code}"}
+        except Exception as fallback_exc:
+            return {"error": str(exc), "fallback_error": str(fallback_exc)}
 
 
 def _handle_run_workflow(

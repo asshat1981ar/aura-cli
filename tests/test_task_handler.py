@@ -1,650 +1,376 @@
+"""Tests for core/task_handler.py."""
+
+import argparse
 import json
 import tempfile
-import unittest
 from pathlib import Path
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import Mock, patch, MagicMock
 
-import core.task_handler as task_handler
+import pytest
 
-
-class _FakeGoalQueue:
-    def __init__(self, goals):
-        self._goals = list(goals)
-
-    def has_goals(self):
-        return bool(self._goals)
-
-    def next(self):
-        return self._goals.pop(0)
-
-
-class _FakeGoalArchive:
-    def __init__(self):
-        self.records = []
-
-    def record(self, goal, score):
-        self.records.append((goal, score))
+from core.task_handler import (
+    _check_project_writability,
+    _goal_cycle_limit,
+    _validate_change_target_path,
+    _allow_new_test_file_target,
+    _tokenize_for_path_matching,
+    _normalize_cached_candidate_path,
+    _candidate_files_from_symbol_index_cache,
+    _candidate_files_by_exact_name,
+    _candidate_files_from_repo_scan,
+    _candidate_existing_files,
+    _compose_loop_goal,
+    _invalid_path_grounding_hint,
+    _mismatch_overwrite_blocked_grounding_hint,
+    _REPO_SCAN_SKIP_PARTS,
+)
 
 
-class _FakeTaskManager:
-    def __init__(self, *args, **kwargs):
-        self.root_tasks = []
+class TestCheckProjectWritability:
+    """Test _check_project_writability function."""
+    
+    def test_writable_directory(self):
+        """Test checking writable directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = _check_project_writability(Path(tmpdir))
+            assert result is True
+    
+    def test_non_writable_directory(self):
+        """Test checking non-writable directory."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Make directory read-only
+            Path(tmpdir).chmod(0o555)
+            try:
+                result = _check_project_writability(Path(tmpdir))
+                assert result is False
+            finally:
+                Path(tmpdir).chmod(0o755)
 
-    def add_task(self, task):
-        self.root_tasks.append(task)
 
-    def save(self):
-        return None
+class TestGoalCycleLimit:
+    """Test _goal_cycle_limit function."""
+    
+    def test_default_limit(self):
+        """Test default cycle limit."""
+        args = argparse.Namespace()
+        result = _goal_cycle_limit(args)
+        assert result == 10
+    
+    def test_custom_limit(self):
+        """Test custom cycle limit."""
+        args = argparse.Namespace(max_cycles=5)
+        result = _goal_cycle_limit(args)
+        assert result == 5
+    
+    def test_invalid_limit_string(self):
+        """Test invalid string limit defaults to 10."""
+        args = argparse.Namespace(max_cycles="invalid")
+        result = _goal_cycle_limit(args)
+        assert result == 10
+    
+    def test_zero_limit_normalized(self):
+        """Test zero limit is normalized to 1."""
+        args = argparse.Namespace(max_cycles=0)
+        result = _goal_cycle_limit(args)
+        assert result == 1
+    
+    def test_negative_limit_normalized(self):
+        """Test negative limit is normalized to 1."""
+        args = argparse.Namespace(max_cycles=-5)
+        result = _goal_cycle_limit(args)
+        assert result == 1
 
 
-@unittest.skip("Legacy loop logic moved to orchestrator")
-class TestTaskHandlerLoopControls(unittest.TestCase):
-    def test_run_goals_loop_honors_args_max_cycles(self):
-        args = SimpleNamespace(dry_run=True, max_cycles=1)
-        queue = _FakeGoalQueue(["Respect max cycles"])
-        archive = _FakeGoalArchive()
-        loop = MagicMock()
-        loop.run.return_value = "{}"
-        loop.current_score = 1.23
+class TestValidateChangeTargetPath:
+    """Test _validate_change_target_path function."""
+    
+    def test_valid_file_path(self):
+        """Test validating valid file path."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_file = Path(tmpdir) / "test.py"
+            test_file.write_text("content")
+            
+            target, error = _validate_change_target_path(Path(tmpdir), "test.py")
+            
+            assert target is not None
+            assert error is None
+            assert target.name == "test.py"
+    
+    def test_empty_path(self):
+        """Test validating empty path."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target, error = _validate_change_target_path(Path(tmpdir), "")
+            
+            assert target is None
+            assert error == "missing_file_path"
+    
+    def test_path_outside_project(self):
+        """Test path outside project root."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target, error = _validate_change_target_path(Path(tmpdir), "../outside.py")
+            
+            assert target is None
+            assert error == "outside_project_root"
+    
+    def test_nonexistent_file(self):
+        """Test non-existent file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            target, error = _validate_change_target_path(Path(tmpdir), "nonexistent.py")
+            
+            assert target is None
+            assert error == "file_not_found"
 
-        with tempfile.TemporaryDirectory() as td, \
-             patch("core.task_handler.TaskManager", _FakeTaskManager), \
-             patch("core.task_handler.log_json") as mock_log:
-            task_handler.run_goals_loop(
-                args,
-                queue,
-                loop,
-                debugger_instance=None,
-                planner_instance=None,
-                goal_archive=archive,
-                project_root=Path(td),
-                decompose=False,
+
+class TestAllowNewTestFileTarget:
+    """Test _allow_new_test_file_target function."""
+    
+    def test_test_file_allowed(self):
+        """Test test file is allowed to be created."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create tests directory and target file
+            tests_dir = Path(tmpdir) / "tests"
+            tests_dir.mkdir()
+            target_file = tests_dir / "test_something.py"
+            
+            result = _allow_new_test_file_target(
+                Path(tmpdir), "tests/test_something.py", 
+                "Create test for feature", "", None
             )
-
-        self.assertEqual(loop.run.call_count, 1)
-        self.assertEqual(archive.records, [("Respect max cycles", 1.23)])
-
-        cycle_limit_logs = [
-            c for c in mock_log.call_args_list
-            if len(c.args) >= 2 and c.args[1] == "cycle_limit_reached"
-        ]
-        self.assertEqual(len(cycle_limit_logs), 1)
-        self.assertEqual(cycle_limit_logs[0].kwargs.get("details", {}).get("cycle_limit"), 1)
-
-    def test_run_goals_loop_retries_once_with_grounding_hint_after_invalid_implement_path(self):
-        args = SimpleNamespace(dry_run=True, max_cycles=5)
-        queue = _FakeGoalQueue(["Retry invalid implement path with grounding hint"])
-        archive = _FakeGoalArchive()
-        loop = MagicMock()
-        loop.run.side_effect = [
-            json.dumps(
-                {
-                    "IMPLEMENT": {
-                        "file_path": "cli_app.py",
-                        "old_code": "old",
-                        "new_code": "new",
-                    }
-                }
-            ),
-            json.dumps({"FINAL_STATUS": "ok"}),
-        ]
-        loop.current_score = 0.5
-
-        with tempfile.TemporaryDirectory() as td, \
-             patch("core.task_handler.TaskManager", _FakeTaskManager), \
-             patch("core.task_handler.log_json") as mock_log:
-            project_root = Path(td)
-            (project_root / "aura_cli").mkdir(parents=True, exist_ok=True)
-            (project_root / "aura_cli" / "cli_app_helper.py").write_text("# helper\n", encoding="utf-8")
-            (project_root / "core").mkdir(parents=True, exist_ok=True)
-            (project_root / "core" / "queue_retry.py").write_text("# queue retry\n", encoding="utf-8")
-            task_handler.run_goals_loop(
-                args,
-                queue,
-                loop,
-                debugger_instance=None,
-                planner_instance=None,
-                goal_archive=archive,
-                project_root=project_root,
-                decompose=False,
+            assert result is not None
+            assert result.name == "test_something.py"
+    
+    def test_non_test_file_rejected(self):
+        """Test non-test file is not allowed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = _allow_new_test_file_target(
+                Path(tmpdir), "something.py",
+                "Create something", "", None
             )
-
-        self.assertEqual(loop.run.call_count, 2, "Invalid path should trigger one grounded retry")
-        self.assertEqual(
-            archive.records,
-            [("Retry invalid implement path with grounding hint", 0.5)],
-        )
-
-        first_goal = loop.run.call_args_list[0].args[0]
-        second_goal = loop.run.call_args_list[1].args[0]
-        self.assertEqual(first_goal, "Retry invalid implement path with grounding hint")
-        self.assertIn("GROUNDING_HINT", second_goal)
-        self.assertIn("cli_app.py", second_goal)
-        self.assertIn("file_not_found", second_goal)
-        self.assertIn("Candidate existing files", second_goal)
-        self.assertIn("aura_cli/cli_app_helper.py", second_goal)
-
-        events = [c.args[1] for c in mock_log.call_args_list if len(c.args) >= 2]
-        self.assertIn("invalid_implement_target_path", events)
-        self.assertIn("grounding_retry_scheduled", events)
-        self.assertIn("goal_completed", events)
-        self.assertNotIn("goal_terminated_without_convergence", events)
-        self.assertNotIn("replace_code_skipped", events)
-
-        invalid_logs = [
-            c for c in mock_log.call_args_list
-            if len(c.args) >= 2 and c.args[1] == "invalid_implement_target_path"
-        ]
-        self.assertEqual(invalid_logs[0].kwargs.get("details", {}).get("reason"), "file_not_found")
-        self.assertIn(
-            "aura_cli/cli_app_helper.py",
-            invalid_logs[0].kwargs.get("details", {}).get("candidate_files", []),
-        )
-        self.assertTrue(invalid_logs[0].kwargs.get("details", {}).get("retry_with_grounding_hint"))
-
-    def test_run_goals_loop_terminates_when_invalid_implement_path_repeats_after_retry(self):
-        args = SimpleNamespace(dry_run=True, max_cycles=5)
-        queue = _FakeGoalQueue(["Terminate after repeated invalid path"])
-        archive = _FakeGoalArchive()
-        loop = MagicMock()
-        loop.run.return_value = json.dumps(
-            {
-                "IMPLEMENT": {
-                    "file_path": "cli_app.py",
-                    "old_code": "old",
-                    "new_code": "new",
-                }
-            }
-        )
-        loop.current_score = 0.0
-
-        with tempfile.TemporaryDirectory() as td, \
-             patch("core.task_handler.TaskManager", _FakeTaskManager), \
-             patch("core.task_handler.log_json") as mock_log:
-            task_handler.run_goals_loop(
-                args,
-                queue,
-                loop,
-                debugger_instance=None,
-                planner_instance=None,
-                goal_archive=archive,
-                project_root=Path(td),
-                decompose=False,
+            assert result is None
+    
+    def test_tests_directory_allowed(self):
+        """Test file in tests directory allowed."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tests_dir = Path(tmpdir) / "tests"
+            tests_dir.mkdir()
+            target_file = tests_dir / "test_module.py"
+            target_file.write_text("# test")
+            
+            result = _allow_new_test_file_target(
+                Path(tmpdir), "tests/test_module.py",
+                "Create regression test", "", None
             )
+            assert result is not None
 
-        self.assertEqual(loop.run.call_count, 2, "One retry should be attempted before terminating")
-        self.assertEqual(archive.records, [("Terminate after repeated invalid path", 0.0)])
 
-        events = [c.args[1] for c in mock_log.call_args_list if len(c.args) >= 2]
-        self.assertIn("grounding_retry_scheduled", events)
-        self.assertIn("goal_terminated_without_convergence", events)
-        self.assertNotIn("replace_code_skipped", events)
+class TestTokenizeForPathMatching:
+    """Test _tokenize_for_path_matching function."""
+    
+    def test_basic_tokenization(self):
+        """Test basic text tokenization."""
+        result = _tokenize_for_path_matching("Implement user authentication")
+        assert "implement" not in result  # Stopword
+        assert "user" in result
+        assert "authentication" in result
+    
+    def test_empty_string(self):
+        """Test empty string returns empty list."""
+        result = _tokenize_for_path_matching("")
+        assert result == []
+    
+    def test_only_stopwords(self):
+        """Test string with only stopwords."""
+        result = _tokenize_for_path_matching("the and for")
+        assert result == []
 
-    def test_run_goals_loop_does_not_build_candidates_for_valid_path(self):
-        args = SimpleNamespace(dry_run=True, max_cycles=1)
-        queue = _FakeGoalQueue(["Valid path should skip candidate scan"])
-        archive = _FakeGoalArchive()
-        loop = MagicMock()
-        loop.run.return_value = json.dumps(
-            {
-                "IMPLEMENT": {
-                    "file_path": "core/existing.py",
-                    "old_code": "old",
-                    "new_code": "new",
-                }
-            }
-        )
-        loop.current_score = 0.0
 
-        with tempfile.TemporaryDirectory() as td, \
-             patch("core.task_handler.TaskManager", _FakeTaskManager), \
-             patch("core.task_handler.log_json"), \
-             patch("core.task_handler._candidate_existing_files") as mock_candidates:
-            project_root = Path(td)
-            (project_root / "core").mkdir(parents=True, exist_ok=True)
-            (project_root / "core" / "existing.py").write_text("print('x')\n", encoding="utf-8")
-            task_handler.run_goals_loop(
-                args,
-                queue,
-                loop,
-                debugger_instance=None,
-                planner_instance=None,
-                goal_archive=archive,
-                project_root=project_root,
-                decompose=False,
+class TestNormalizeCachedCandidatePath:
+    """Test _normalize_cached_candidate_path function."""
+    
+    def test_valid_path_normalization(self):
+        """Test valid path normalization."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create the file
+            test_file = Path(tmpdir) / "test.py"
+            test_file.write_text("content")
+            
+            result = _normalize_cached_candidate_path(Path(tmpdir), "test.py")
+            assert result == "test.py"
+    
+    def test_path_outside_repo(self):
+        """Test path outside repo returns None."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = _normalize_cached_candidate_path(Path(tmpdir), "/etc/passwd")
+            assert result is None
+    
+    def test_skip_directories_filtered(self):
+        """Test paths in skip directories are filtered."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for skip_part in _REPO_SCAN_SKIP_PARTS:
+                result = _normalize_cached_candidate_path(
+                    Path(tmpdir), f"{skip_part}/file.py"
+                )
+                assert result is None
+
+
+class TestCandidateFilesFromSymbolIndexCache:
+    """Test _candidate_files_from_symbol_index_cache function."""
+    
+    def test_no_cache_files(self):
+        """Test when no cache files exist."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = _candidate_files_from_symbol_index_cache(
+                Path(tmpdir), ["query"], limit=6
             )
-
-        mock_candidates.assert_not_called()
-        self.assertEqual(loop.run.call_count, 1)
-        self.assertEqual(archive.records, [("Valid path should skip candidate scan", 0.0)])
-
-    def test_candidate_existing_files_prefers_exact_basename_match(self):
-        with tempfile.TemporaryDirectory() as td:
-            project_root = Path(td)
-            (project_root / "run_aura.sh").write_text("#!/usr/bin/env bash\n", encoding="utf-8")
-            (project_root / "tests").mkdir(parents=True, exist_ok=True)
-            (project_root / "tests" / "test_run_aura_wrapper.py").write_text("# test\n", encoding="utf-8")
-
-            candidates = task_handler._candidate_existing_files(
-                project_root,
-                "scripts/run_aura.sh",
-                "Update run_aura.sh wrapper help",
-                limit=4,
-            )
-
-        self.assertGreaterEqual(len(candidates), 1)
-        self.assertEqual(candidates[0], "run_aura.sh")
-
-    def test_invalid_path_grounding_hint_surfaces_closest_exact_match(self):
-        hint = task_handler._invalid_path_grounding_hint(
-            "scripts/run_aura.sh",
-            "file_not_found",
-            ["run_aura.sh", "tests/test_run_aura_wrapper.py"],
-        )
-
-        self.assertIn("Closest existing match: run_aura.sh", hint)
-        self.assertIn("Do not invent a new top-level directory", hint)
-
-    def test_candidate_existing_files_prefers_exact_python_basename_match(self):
-        with tempfile.TemporaryDirectory() as td:
-            project_root = Path(td)
-            (project_root / "agents" / "skills").mkdir(parents=True, exist_ok=True)
-            (project_root / "agents" / "skills" / "structural_analyzer.py").write_text(
-                "# analyzer\n",
-                encoding="utf-8",
-            )
-            (project_root / "agents" / "skills" / "dependency_analyzer.py").write_text(
-                "# dependency\n",
-                encoding="utf-8",
-            )
-
-            candidates = task_handler._candidate_existing_files(
-                project_root,
-                "analysis/structural_analyzer.py",
-                "Run architecture validation after refactor",
-                limit=4,
-            )
-
-        self.assertGreaterEqual(len(candidates), 1)
-        self.assertEqual(candidates[0], "agents/skills/structural_analyzer.py")
-
-    def test_allow_new_test_file_target_for_regression_goal(self):
-        with tempfile.TemporaryDirectory() as td:
-            project_root = Path(td)
-            (project_root / "tests").mkdir(parents=True, exist_ok=True)
-
-            result = task_handler._allow_new_test_file_target(
-                project_root,
-                "tests/test_cli_loop.py",
-                "Add interactive CLI loop regression tests",
-                "",
-                False,
-            )
-
-        self.assertIsNotNone(result)
-        self.assertEqual(result.name, "test_cli_loop.py")
-
-    def test_run_goals_loop_allows_new_test_file_target_without_retry(self):
-        args = SimpleNamespace(dry_run=True, max_cycles=1)
-        queue = _FakeGoalQueue(["Add interactive CLI loop regression tests"])
-        archive = _FakeGoalArchive()
-        loop = MagicMock()
-        loop.run.return_value = json.dumps(
-            {
-                "IMPLEMENT": {
-                    "file_path": "tests/test_cli_loop.py",
-                    "old_code": "",
-                    "new_code": "def test_placeholder():\n    assert True\n",
-                    "overwrite_file": False,
-                }
-            }
-        )
-        loop.current_score = 0.0
-
-        with tempfile.TemporaryDirectory() as td, \
-             patch("core.task_handler.TaskManager", _FakeTaskManager), \
-             patch("core.task_handler.log_json") as mock_log:
-            project_root = Path(td)
-            (project_root / "tests").mkdir(parents=True, exist_ok=True)
-            task_handler.run_goals_loop(
-                args,
-                queue,
-                loop,
-                debugger_instance=None,
-                planner_instance=None,
-                goal_archive=archive,
-                project_root=project_root,
-                decompose=False,
-            )
-
-        self.assertEqual(loop.run.call_count, 1)
-        events = [c.args[1] for c in mock_log.call_args_list if len(c.args) >= 2]
-        self.assertIn("allowed_new_test_target", events)
-        self.assertIn("replace_code_skipped", events)
-        self.assertNotIn("invalid_implement_target_path", events)
-
-    def test_symbol_index_cache_candidates_filter_invalid_and_stale_paths(self):
-        with tempfile.TemporaryDirectory() as td:
-            project_root = Path(td)
-            (project_root / "memory").mkdir(parents=True, exist_ok=True)
-            (project_root / "core").mkdir(parents=True, exist_ok=True)
-            (project_root / "core" / "good_target.py").write_text("# ok\n", encoding="utf-8")
-
-            payload = {
+            assert result == []
+    
+    def test_cache_file_found(self):
+        """Test finding candidates from cache file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            memory_dir = Path(tmpdir) / "memory"
+            memory_dir.mkdir()
+            
+            # Create mock symbol index with proper structure
+            # Also create the referenced files
+            (Path(tmpdir) / "auth.py").write_text("# auth")
+            
+            symbol_index = {
                 "name_index": {
-                    "target": [
-                        {"file": "core/good_target.py", "line": 1, "type": "function"},
-                        {"file": "../outside.py", "line": 1, "type": "function"},
-                        {"file": "core/missing_target.py", "line": 1, "type": "function"},
-                    ]
+                    "user_auth": [{"file": "auth.py"}, {"file": "models.py"}],
+                    "data_model": [{"file": "models.py"}, {"file": "schema.py"}],
                 }
             }
-            (project_root / "memory" / "symbol_index.json").write_text(
-                json.dumps(payload),
-                encoding="utf-8",
+            (memory_dir / "symbol_index.json").write_text(json.dumps(symbol_index))
+            
+            result = _candidate_files_from_symbol_index_cache(
+                Path(tmpdir), ["user", "auth"], limit=6
             )
+            
+            assert "auth.py" in result
 
-            result = task_handler._candidate_files_from_symbol_index_cache(project_root, ["target"], limit=6)
 
-        self.assertEqual(result, ["core/good_target.py"])
+class TestCandidateFilesByExactName:
+    """Test _candidate_files_by_exact_name function."""
+    
+    def test_exact_match_found(self):
+        """Test finding exact name match."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_file = Path(tmpdir) / "test.py"
+            test_file.write_text("content")
+            
+            result = _candidate_files_by_exact_name(Path(tmpdir), "test.py", limit=6)
+            
+            assert "test.py" in result
+    
+    def test_exact_name_match(self):
+        """Test exact name matching."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            test_file = Path(tmpdir) / "testfile.py"
+            test_file.write_text("content")
+            
+            result = _candidate_files_by_exact_name(Path(tmpdir), "testfile.py", limit=6)
+            
+            assert "testfile.py" in result
 
-    def test_grounding_hint_is_cleared_after_valid_target_cycle(self):
-        args = SimpleNamespace(dry_run=True, max_cycles=3)
-        queue = _FakeGoalQueue(["Clear grounding hint after valid cycle"])
-        archive = _FakeGoalArchive()
-        loop = MagicMock()
-        loop.run.side_effect = [
-            json.dumps(
-                {
-                    "IMPLEMENT": {
-                        "file_path": "cli_app.py",
-                        "old_code": "old",
-                        "new_code": "new",
-                    }
-                }
-            ),
-            json.dumps(
-                {
-                    "IMPLEMENT": {
-                        "file_path": "core/existing.py",
-                        "old_code": "old",
-                        "new_code": "new",
-                    }
-                }
-            ),
-            json.dumps({"FINAL_STATUS": "ok"}),
-        ]
-        loop.current_score = 0.9
 
-        with tempfile.TemporaryDirectory() as td, \
-             patch("core.task_handler.TaskManager", _FakeTaskManager), \
-             patch("core.task_handler.log_json"):
-            project_root = Path(td)
-            (project_root / "aura_cli").mkdir(parents=True, exist_ok=True)
-            (project_root / "aura_cli" / "cli_app_helper.py").write_text("# helper\n", encoding="utf-8")
-            (project_root / "core").mkdir(parents=True, exist_ok=True)
-            (project_root / "core" / "existing.py").write_text("# existing\n", encoding="utf-8")
-            task_handler.run_goals_loop(
-                args,
-                queue,
-                loop,
-                debugger_instance=None,
-                planner_instance=None,
-                goal_archive=archive,
-                project_root=project_root,
-                decompose=False,
+class TestCandidateFilesFromRepoScan:
+    """Test _candidate_files_from_repo_scan function."""
+    
+    def test_basic_scan(self):
+        """Test basic repository scan."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create some files
+            (Path(tmpdir) / "auth.py").write_text("# auth")
+            (Path(tmpdir) / "models.py").write_text("# models")
+            
+            result = _candidate_files_from_repo_scan(
+                Path(tmpdir), "auth.py", ["auth"], limit=6
             )
+            
+            assert "auth.py" in result
+    
+    def test_skip_directories_excluded(self):
+        """Test skip directories are excluded from scan."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create files in skip directories
+            pycache = Path(tmpdir) / "__pycache__"
+            pycache.mkdir()
+            (pycache / "cached.pyc").write_text("cached")
+            
+            # Create valid file
+            (Path(tmpdir) / "valid.py").write_text("valid")
+            
+            result = _candidate_files_from_repo_scan(
+                Path(tmpdir), "valid.py", ["valid"], limit=6
+            )
+            
+            assert "valid.py" in result
+            assert all("__pycache__" not in f for f in result)
 
-        self.assertEqual(loop.run.call_count, 3)
-        first_goal = loop.run.call_args_list[0].args[0]
-        second_goal = loop.run.call_args_list[1].args[0]
-        third_goal = loop.run.call_args_list[2].args[0]
-        self.assertEqual(first_goal, "Clear grounding hint after valid cycle")
-        self.assertIn("GROUNDING_HINT", second_goal)
-        self.assertEqual(third_goal, "Clear grounding hint after valid cycle")
 
-    def test_run_goals_loop_retries_once_then_terminates_on_repeated_mismatch_overwrite_block(self):
-        args = SimpleNamespace(dry_run=False, max_cycles=3)
-        queue = _FakeGoalQueue(["Retry then terminate on repeated mismatch overwrite block"])
-        archive = _FakeGoalArchive()
-        loop = MagicMock()
-        loop.run.return_value = json.dumps(
-            {
-                "IMPLEMENT": {
-                    "file_path": "core/existing.py",
-                    "old_code": "missing_old_code_marker()",
-                    "new_code": "print('after')\n",
-                }
-            }
+class TestCandidateExistingFiles:
+    """Test _candidate_existing_files function."""
+    
+    def test_candidates_returned(self):
+        """Test candidates are returned for invalid path."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            # Create files
+            (Path(tmpdir) / "auth.py").write_text("# auth")
+            (Path(tmpdir) / "user.py").write_text("# user")
+            
+            result = _candidate_existing_files(
+                Path(tmpdir), "authentication.py", "Implement user auth", limit=6
+            )
+            
+            assert isinstance(result, list)
+            # Should find auth.py as candidate
+            assert "auth.py" in result
+
+
+class TestComposeLoopGoal:
+    """Test _compose_loop_goal function."""
+    
+    def test_basic_composition(self):
+        """Test basic goal composition."""
+        result = _compose_loop_goal("Fix bug", None)
+        assert result == "Fix bug"
+    
+    def test_with_grounding_hint(self):
+        """Test composition with grounding hint."""
+        result = _compose_loop_goal("Fix bug", "Hint: check line 42")
+        assert "Fix bug" in result
+        assert "Hint: check line 42" in result
+
+
+class TestInvalidPathGroundingHint:
+    """Test _invalid_path_grounding_hint function."""
+    
+    def test_hint_includes_candidates(self):
+        """Test hint includes candidate files."""
+        result = _invalid_path_grounding_hint(
+            "bad.py", "file_not_found", ["good.py", "better.py"]
         )
-        loop.current_score = 0.77
-
-        with tempfile.TemporaryDirectory() as td, \
-             patch("core.task_handler.TaskManager", _FakeTaskManager), \
-             patch("core.task_handler.log_json") as mock_log, \
-             patch("core.file_tools.recover_old_code_from_git", return_value=None), \
-             patch("core.file_tools.log_json"):
-            project_root = Path(td)
-            (project_root / "core").mkdir(parents=True, exist_ok=True)
-            target = project_root / "core" / "existing.py"
-            target.write_text("print('before')\n", encoding="utf-8")
-
-            task_handler.run_goals_loop(
-                args,
-                queue,
-                loop,
-                debugger_instance=None,
-                planner_instance=None,
-                goal_archive=archive,
-                project_root=project_root,
-                decompose=False,
-            )
-
-            final_contents = target.read_text(encoding="utf-8")
-
-        self.assertEqual(loop.run.call_count, 2)
-        self.assertEqual(final_contents, "print('before')\n")
-        self.assertEqual(
-            archive.records,
-            [("Retry then terminate on repeated mismatch overwrite block", 0.77)],
+        
+        assert "bad.py" in result
+        assert "good.py" in result
+        assert "better.py" in result
+    
+    def test_hint_for_path_traversal(self):
+        """Test hint for path traversal error."""
+        result = _invalid_path_grounding_hint(
+            "../etc/passwd", "outside_project_root", []
         )
-
-        first_goal = loop.run.call_args_list[0].args[0]
-        second_goal = loop.run.call_args_list[1].args[0]
-        self.assertEqual(first_goal, "Retry then terminate on repeated mismatch overwrite block")
-        self.assertIn("GROUNDING_HINT", second_goal)
-        self.assertIn("overwrite_file", second_goal)
-        self.assertIn("old_code to an empty string", second_goal)
-        self.assertIn("core/existing.py", second_goal)
-
-        events = [c.args[1] for c in mock_log.call_args_list if len(c.args) >= 2]
-        self.assertIn("applying_code_change", events)
-        self.assertIn("old_code_mismatch_overwrite_blocked", events)
-        self.assertNotIn("old_code_not_found", events)
-        self.assertIn("grounding_retry_scheduled", events)
-        self.assertIn("goal_terminated_without_convergence", events)
-        self.assertNotIn("goal_completed", events)
-
-        blocked_logs = [
-            c for c in mock_log.call_args_list
-            if len(c.args) >= 2 and c.args[1] == "old_code_mismatch_overwrite_blocked"
-        ]
-        self.assertEqual(
-            blocked_logs[0].kwargs.get("details", {}).get("policy"),
-            "explicit_overwrite_file_required",
-        )
-
-    def test_run_goals_loop_retries_with_grounding_hint_after_mismatch_overwrite_block_and_completes(self):
-        args = SimpleNamespace(dry_run=False, max_cycles=3)
-        queue = _FakeGoalQueue(["Retry after mismatch overwrite block and complete"])
-        archive = _FakeGoalArchive()
-        loop = MagicMock()
-        loop.run.side_effect = [
-            json.dumps(
-                {
-                    "IMPLEMENT": {
-                        "file_path": "core/existing.py",
-                        "old_code": "missing_old_code_marker()",
-                        "new_code": "print('after')\n",
-                    }
-                }
-            ),
-            json.dumps({"FINAL_STATUS": "ok"}),
-        ]
-        loop.current_score = 0.81
-
-        with tempfile.TemporaryDirectory() as td, \
-             patch("core.task_handler.TaskManager", _FakeTaskManager), \
-             patch("core.task_handler.log_json") as mock_log, \
-             patch("core.file_tools.recover_old_code_from_git", return_value=None), \
-             patch("core.file_tools.log_json"):
-            project_root = Path(td)
-            (project_root / "core").mkdir(parents=True, exist_ok=True)
-            target = project_root / "core" / "existing.py"
-            target.write_text("print('before')\n", encoding="utf-8")
-
-            task_handler.run_goals_loop(
-                args,
-                queue,
-                loop,
-                debugger_instance=None,
-                planner_instance=None,
-                goal_archive=archive,
-                project_root=project_root,
-                decompose=False,
-            )
-
-            final_contents = target.read_text(encoding="utf-8")
-
-        self.assertEqual(loop.run.call_count, 2)
-        self.assertEqual(final_contents, "print('before')\n")
-        self.assertEqual(archive.records, [("Retry after mismatch overwrite block and complete", 0.81)])
-
-        second_goal = loop.run.call_args_list[1].args[0]
-        self.assertIn("GROUNDING_HINT", second_goal)
-        self.assertIn("overwrite_file", second_goal)
-        self.assertIn("old_code to an empty string", second_goal)
-        self.assertIn("core/existing.py", second_goal)
-
-        events = [c.args[1] for c in mock_log.call_args_list if len(c.args) >= 2]
-        self.assertIn("old_code_mismatch_overwrite_blocked", events)
-        self.assertIn("grounding_retry_scheduled", events)
-        self.assertIn("goal_completed", events)
-        self.assertNotIn("goal_terminated_without_convergence", events)
-        self.assertNotIn("old_code_not_found", events)
-
-    def test_run_goals_loop_allows_mismatch_overwrite_when_explicit_flag_is_set(self):
-        args = SimpleNamespace(dry_run=False, max_cycles=3)
-        queue = _FakeGoalQueue(["Allow mismatch overwrite with explicit flag"])
-        archive = _FakeGoalArchive()
-        loop = MagicMock()
-        loop.run.side_effect = [
-            json.dumps(
-                {
-                    "IMPLEMENT": {
-                        "file_path": "core/existing.py",
-                        "old_code": "",
-                        "new_code": "print('after')\n",
-                        "overwrite_file": True,
-                    }
-                }
-            ),
-            json.dumps({"FINAL_STATUS": "ok"}),
-        ]
-        loop.current_score = 0.88
-
-        with tempfile.TemporaryDirectory() as td, \
-             patch("core.task_handler.TaskManager", _FakeTaskManager), \
-             patch("core.task_handler.log_json") as mock_log, \
-             patch("core.file_tools.recover_old_code_from_git", return_value=None), \
-             patch("core.file_tools.log_json"):
-            project_root = Path(td)
-            (project_root / "core").mkdir(parents=True, exist_ok=True)
-            target = project_root / "core" / "existing.py"
-            target.write_text("print('before')\n", encoding="utf-8")
-
-            task_handler.run_goals_loop(
-                args,
-                queue,
-                loop,
-                debugger_instance=None,
-                planner_instance=None,
-                goal_archive=archive,
-                project_root=project_root,
-                decompose=False,
-            )
-
-            final_contents = target.read_text(encoding="utf-8")
-
-        self.assertEqual(loop.run.call_count, 2)
-        self.assertEqual(final_contents, "print('after')\n")
-        self.assertEqual(archive.records, [("Allow mismatch overwrite with explicit flag", 0.88)])
-
-        events = [c.args[1] for c in mock_log.call_args_list if len(c.args) >= 2]
-        self.assertIn("applying_code_change", events)
-        self.assertIn("goal_completed", events)
-        self.assertNotIn("old_code_not_found", events)
-        self.assertNotIn("goal_terminated_without_convergence", events)
-
-    def test_run_goals_loop_blocks_explicit_overwrite_flag_when_old_code_is_non_empty(self):
-        args = SimpleNamespace(dry_run=False, max_cycles=2)
-        queue = _FakeGoalQueue(["Block explicit overwrite when old_code is non-empty"])
-        archive = _FakeGoalArchive()
-        loop = MagicMock()
-        loop.run.return_value = json.dumps(
-            {
-                "IMPLEMENT": {
-                    "file_path": "core/existing.py",
-                    "old_code": "stale marker",
-                    "new_code": "print('after')\n",
-                    "overwrite_file": True,
-                }
-            }
-        )
-        loop.current_score = 0.66
-
-        with tempfile.TemporaryDirectory() as td, \
-             patch("core.task_handler.TaskManager", _FakeTaskManager), \
-             patch("core.task_handler.log_json") as mock_log, \
-             patch("core.file_tools.recover_old_code_from_git", return_value=None), \
-             patch("core.file_tools.log_json"):
-            project_root = Path(td)
-            (project_root / "core").mkdir(parents=True, exist_ok=True)
-            target = project_root / "core" / "existing.py"
-            target.write_text("print('before')\n", encoding="utf-8")
-
-            task_handler.run_goals_loop(
-                args,
-                queue,
-                loop,
-                debugger_instance=None,
-                planner_instance=None,
-                goal_archive=archive,
-                project_root=project_root,
-                decompose=False,
-            )
-
-            final_contents = target.read_text(encoding="utf-8")
-
-        self.assertEqual(loop.run.call_count, 2)
-        self.assertEqual(final_contents, "print('before')\n")
-        self.assertEqual(
-            archive.records,
-            [("Block explicit overwrite when old_code is non-empty", 0.66)],
-        )
-
-        second_goal = loop.run.call_args_list[1].args[0]
-        self.assertIn("GROUNDING_HINT", second_goal)
-        self.assertIn("old_code to an empty string", second_goal)
-        self.assertIn("overwrite_file", second_goal)
-
-        events = [c.args[1] for c in mock_log.call_args_list if len(c.args) >= 2]
-        self.assertIn("old_code_mismatch_overwrite_blocked", events)
-        self.assertIn("grounding_retry_scheduled", events)
-        self.assertIn("goal_terminated_without_convergence", events)
-        self.assertNotIn("goal_completed", events)
+        
+        assert "../etc/passwd" in result
+        assert "outside_project_root" in result or "project root" in result.lower()
 
 
-if __name__ == "__main__":
-    unittest.main()
+class TestMismatchOverwriteBlockedGroundingHint:
+    """Test _mismatch_overwrite_blocked_grounding_hint function."""
+    
+    def test_hint_includes_file_path(self):
+        """Test hint includes file path."""
+        result = _mismatch_overwrite_blocked_grounding_hint("target.py")
+        
+        assert "target.py" in result
+        assert "overwrite" in result.lower() or "mismatch" in result.lower()

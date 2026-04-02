@@ -451,6 +451,38 @@ def _handle_run_workflow(
         return {"error": str(exc)}
 
 
+def _handle_query_codebase(
+    args: Dict[str, Any],
+    *,
+    semantic_querier: Any = None,
+    **_: Any,
+) -> Dict[str, Any]:
+    """Dispatch query_type to SemanticQuerier methods."""
+    if semantic_querier is None:
+        return {"error": "Semantic index not available. Run 'agent scan' first."}
+
+    query_type = args["query_type"]
+    target = args.get("target", "")
+    depth = args.get("depth", 2)
+
+    dispatch = {
+        "what_calls": lambda: semantic_querier.what_calls(target),
+        "what_depends_on": lambda: semantic_querier.what_depends_on(target),
+        "what_changes_break": lambda: semantic_querier.what_changes_break(target, depth=depth),
+        "summarize": lambda: {"summary": semantic_querier.summarize(target)},
+        "find_similar": lambda: {"results": semantic_querier.find_similar(target)},
+        "architecture_overview": lambda: semantic_querier.architecture_overview(),
+        "recent_changes": lambda: {"changes": semantic_querier.recent_changes(n_commits=depth)},
+    }
+    handler = dispatch.get(query_type)
+    if not handler:
+        return {"error": f"Unknown query_type: {query_type}"}
+    try:
+        return handler()
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
 # ---------------------------------------------------------------------------
 # Tool Definitions
 # ---------------------------------------------------------------------------
@@ -660,6 +692,27 @@ _TOOL_DEFS: List[Dict[str, Any]] = [
         },
         "handler": _handle_run_workflow,
     },
+    {
+        "name": "query_codebase",
+        "description": "Query the semantic codebase index for deep code understanding. "
+                       "Use this to understand call chains, dependencies, impact of changes, "
+                       "and to find relevant code by description.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query_type": {
+                    "type": "string",
+                    "enum": ["what_calls", "what_depends_on", "what_changes_break",
+                             "summarize", "find_similar", "architecture_overview",
+                             "recent_changes"],
+                },
+                "target": {"type": "string", "description": "File path, symbol name, or description"},
+                "depth": {"type": "integer", "default": 2, "description": "Recursion depth for transitive queries"},
+            },
+            "required": ["query_type"],
+        },
+        "handler": _handle_query_codebase,
+    },
 ]
 
 
@@ -670,6 +723,7 @@ def create_aura_tools(
     goal_queue: Any = None,
     goal_archive: Any = None,
     config: Any = None,
+    semantic_querier: Any = None,
 ) -> List[AuraTool]:
     """Create all custom AURA tools for Agent SDK registration."""
     deps = dict(
@@ -679,6 +733,7 @@ def create_aura_tools(
         goal_queue=goal_queue,
         goal_archive=goal_archive,
         config=config,
+        semantic_querier=semantic_querier,
     )
 
     tools = []

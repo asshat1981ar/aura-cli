@@ -63,20 +63,24 @@ class AuraController:
         self.workflow_executor = workflow_executor
         self.session_store = session_store
         self.feedback = feedback
+        # Create semantic querier if index exists
+        querier = None
+        if hasattr(config, 'semantic_index_path') and config.semantic_index_path.exists():
+            try:
+                from core.agent_sdk.semantic_querier import SemanticQuerier
+                querier = SemanticQuerier(db_path=config.semantic_index_path)
+            except Exception:
+                pass
+        self._semantic_querier = querier
         self.context_builder = ContextBuilder(
             project_root=project_root, brain=brain,
+            semantic_querier=querier,
         )
 
     def _build_prompt(self, goal: str) -> str:
         """Build the full prompt for the Agent SDK session."""
-        from core.agent_sdk.context_builder import ContextBuilder
-
-        builder = ContextBuilder(
-            project_root=self.project_root,
-            brain=self._brain,
-        )
-        context = builder.build(goal=goal)
-        return builder.build_system_prompt(
+        context = self.context_builder.build(goal=goal)
+        return self.context_builder.build_system_prompt(
             goal=goal,
             goal_type=context["goal_type"],
             context=context,
@@ -118,6 +122,7 @@ class AuraController:
             goal_queue=self._goal_queue,
             goal_archive=self._goal_archive,
             config=self.config,
+            semantic_querier=self._semantic_querier,
         )
 
         if not _check_sdk():

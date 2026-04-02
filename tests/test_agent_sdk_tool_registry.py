@@ -96,5 +96,39 @@ class TestDispatchSkillsTool(unittest.TestCase):
         self.assertIsInstance(result["skills_run"], list)
 
 
+class TestQueryCodebaseTool(unittest.TestCase):
+    def test_query_codebase_in_tool_list(self):
+        from core.agent_sdk.tool_registry import create_aura_tools
+        tools = create_aura_tools(project_root=Path("/tmp/test"))
+        names = [t.name for t in tools]
+        self.assertIn("query_codebase", names)
+
+    def test_query_codebase_without_querier(self):
+        from core.agent_sdk.tool_registry import _handle_query_codebase
+        result = _handle_query_codebase({"query_type": "what_calls", "target": "foo"})
+        self.assertIn("error", result)
+        self.assertIn("not available", result["error"])
+
+    def test_query_codebase_dispatches(self):
+        from core.agent_sdk.tool_registry import _handle_query_codebase
+        mock_querier = MagicMock()
+        mock_querier.what_calls.return_value = [{"caller": "bar"}]
+        result = _handle_query_codebase(
+            {"query_type": "what_calls", "target": "foo"},
+            semantic_querier=mock_querier,
+        )
+        mock_querier.what_calls.assert_called_once_with("foo")
+
+    def test_query_codebase_unknown_type(self):
+        from core.agent_sdk.tool_registry import _handle_query_codebase
+        mock_querier = MagicMock()
+        result = _handle_query_codebase(
+            {"query_type": "nonexistent"},
+            semantic_querier=mock_querier,
+        )
+        self.assertIn("error", result)
+        self.assertIn("Unknown", result["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

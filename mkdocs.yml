@@ -1,0 +1,75 @@
+site_name: AURA CLI Documentation
+site_description: Autonomous software development platform with multi-agent loop
+site_url: https://asshat1981ar.github.io/aura-cli
+repo_url: https://github.com/asshat1981ar/aura-cli
+repo_name: asshat1981ar/aura-cli
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [core, aura_cli, agents]
+          options:
+            docstring_style: google
+            show_source: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: getting-started/installation.md
+    - Quick Start: getting-started/quickstart.md
+    - Configuration: getting-started/configuration.md
+  - User Guide:
+    - CLI Commands: user-guide/cli.md
+    - Web Dashboard: user-guide/dashboard.md
+    - GitHub Integration: user-guide/github.md
+  - Development:
+    - Architecture: development/architecture.md
+    - Contributing: development/contributing.md
+    - API Reference: development/api.md
+  - Deployment:
+    - Docker: deployment/docker.md
+    - Kubernetes: deployment/kubernetes.md
+    - Production Setup: deployment/production.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/asshat1981ar/aura-cli
+  version:
+    provider: mike
+
+markdown_extensions:
+  - admonition
+  - codehilite
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.tabbed
+  - pymdownx.details

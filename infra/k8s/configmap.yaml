@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aura-config
+  namespace: aura
+data:
+  AURA_ENV: "production"
+  AURA_HOST: "0.0.0.0"
+  AURA_PORT: "8000"
+  AURA_WORKERS: "2"
+  AURA_LOG_LEVEL: "INFO"
+  AURA_SKIP_CHDIR: "1"
+  REDIS_URL: "redis://aura-redis:6379/0"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: aura-worker-config
+  namespace: aura
+data:
+  AURA_ENV: "production"
+  AURA_ROLE: "worker"
+  AURA_QUEUE: "default"
+  AURA_WORKER_CONCURRENCY: "4"
+  REDIS_URL: "redis://aura-redis:6379/0"

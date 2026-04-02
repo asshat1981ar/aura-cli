@@ -88,5 +88,93 @@ class TestFullAssembly(unittest.TestCase):
         self.assertEqual(stats["tool_calls"]["verify_changes"]["success_rate"], 0.0)
 
 
+class TestProductionLoopIntegration(unittest.TestCase):
+    """Test the full production loop assembly."""
+
+    def setUp(self):
+        import tempfile
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_full_feedback_chain(self):
+        """Goal → router → workflow → session → feedback."""
+        from core.agent_sdk.config import AgentSDKConfig
+        from core.agent_sdk.model_router import AdaptiveModelRouter
+        from core.agent_sdk.workflow_templates import WorkflowExecutor, get_builtin_templates
+        from core.agent_sdk.session_persistence import SessionStore
+        from core.agent_sdk.feedback import SkillWeightUpdater, FeedbackCollector
+
+        config = AgentSDKConfig(
+            model_stats_path=Path(self.tmpdir) / "stats.json",
+            session_db_path=Path(self.tmpdir) / "sessions.db",
+            skill_weights_path=Path(self.tmpdir) / "weights.json",
+        )
+
+        router = AdaptiveModelRouter(stats_path=config.model_stats_path)
+        session_store = SessionStore(db_path=config.session_db_path)
+        skill_updater = SkillWeightUpdater(weights_path=config.skill_weights_path)
+        feedback = FeedbackCollector(
+            model_router=router, skill_updater=skill_updater,
+            brain=None, session_store=session_store,
+        )
+
+        # 1. Router selects default model
+        model = router.select_model("bug_fix")
+        self.assertEqual(model, "claude-sonnet-4-6")
+
+        # 2. Create session
+        pk = session_store.create_session("test-1", "Fix bug", "bug_fix", "bug_fix", model)
+        self.assertGreater(pk, 0)
+
+        # 3. Record a cycle event
+        session_store.record_event(pk, "analyze_goal", "analyze_goal", model, 500, 200, True, None)
+
+        # 4. Trigger feedback
+        result = feedback.on_goal_complete(
+            session_pk=pk, goal="Fix bug", goal_type="bug_fix",
+            model=model, skills_used=["linter", "type_checker"],
+            success=True, verification_result={"passed": True}, cost=0.05,
+        )
+        self.assertTrue(result["model_updated"])
+
+        # 5. Router should now have stats
+        stats = router.get_stats()
+        self.assertIn("bug_fix", stats)
+
+        # 6. Skill weights should be updated
+        weights = skill_updater.get_weights()
+        self.assertIn("linter", weights)
+
+    def test_workflow_executor_with_mock_handlers(self):
+        """Execute a workflow with mock tool handlers."""
+        from core.agent_sdk.workflow_templates import (
+            WorkflowExecutor, WorkflowTemplate, WorkflowPhase,
+        )
+
+        success_handler = lambda args: {"result": "ok"}
+        handlers = {
+            "analyze_goal": success_handler,
+            "create_plan": success_handler,
+            "generate_code": success_handler,
+            "verify_changes": success_handler,
+        }
+        wf = WorkflowTemplate(
+            name="test", goal_types=["test"],
+            phases=[
+                WorkflowPhase(tool_name="analyze_goal"),
+                WorkflowPhase(tool_name="create_plan"),
+                WorkflowPhase(tool_name="generate_code"),
+                WorkflowPhase(tool_name="verify_changes"),
+            ],
+        )
+        executor = WorkflowExecutor(templates={"test": wf}, tool_handlers=handlers)
+        result = executor.execute(wf, goal="Test", context={})
+        self.assertTrue(result.success)
+        self.assertEqual(result.phases_completed, 4)
+
+
 if __name__ == "__main__":
     unittest.main()

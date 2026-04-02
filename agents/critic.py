@@ -234,28 +234,17 @@ Evaluate for correctness, efficiency, readability, and adherence."""
 
     def _validate_mutation_structured(self, mutation_proposal: str) -> dict:
         """Structured mutation validation with CoT."""
-        prompt = f"""{render_prompt('critic', 'critic', {})}
-
-Validate this system mutation:
-
-{mutation_proposal}
-
-Think step-by-step:
-1. Impact Analysis: Analyze potential impact
-2. Safety Assessment: Assess safety concerns  
-3. Effectiveness Evaluation: Evaluate likelihood of success
-
-Then provide JSON:
-{{
-    "impact_analysis": "your analysis",
-    "safety_assessment": "your safety assessment",
-    "effectiveness_evaluation": "your evaluation",
-    "decision": "APPROVED|REJECTED|NEEDS_REVISION",
-    "confidence_score": 0.0-1.0,
-    "impact_assessment": "summary of impacts",
-    "reasoning": "detailed reasoning",
-    "recommendations": "optional revision recommendations"
-}}"""
+        memory_text = "\n".join(self.brain.recall_with_budget(max_tokens=1000))
+        prompt = render_prompt(
+            template_name="critic",
+            role="critic",
+            params={
+                "target_type": "mutation proposal",
+                "task": "Validate system mutation for safety and effectiveness",
+                "target_content": mutation_proposal,
+                "memory": memory_text
+            }
+        )
 
         response = self._respond("analysis", prompt)
         self.brain.remember(f"Structured mutation validation: {mutation_proposal[:50]}...")

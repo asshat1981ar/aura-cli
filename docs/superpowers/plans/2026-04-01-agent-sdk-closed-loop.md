@@ -303,8 +303,10 @@ class TestContextBuilder(unittest.TestCase):
         from core.agent_sdk.context_builder import ContextBuilder
 
         mock_brain = MagicMock()
+        # Brain.recall_with_budget(max_tokens) returns List[str]
         mock_brain.recall_with_budget.return_value = [
-            {"content": "Auth uses JWT tokens", "score": 0.9}
+            "Auth uses JWT tokens with 30min expiry",
+            "Token refresh implemented in core/auth.py",
         ]
         builder = ContextBuilder(
             project_root=Path("/tmp/test-project"),
@@ -313,6 +315,7 @@ class TestContextBuilder(unittest.TestCase):
         ctx = builder.build(goal="Fix auth token expiry")
         self.assertIn("memory_hints", ctx)
         self.assertGreater(len(ctx["memory_hints"]), 0)
+        mock_brain.recall_with_budget.assert_called_once_with(max_tokens=2000)
 
     def test_memory_hints_without_brain(self):
         from core.agent_sdk.context_builder import ContextBuilder
@@ -466,12 +469,23 @@ class ContextBuilder:
         """Get skill names recommended for this goal type."""
         return list(SKILL_MAP.get(goal_type, SKILL_MAP.get("default", [])))
 
-    def _get_memory_hints(self, goal: str) -> List[Dict[str, Any]]:
-        """Retrieve relevant memory hints from brain."""
+    def _get_memory_hints(self, goal: str) -> List[str]:
+        """Retrieve relevant memory hints from brain.
+
+        Brain.recall_with_budget(max_tokens) returns List[str] of
+        recent memories. We filter by goal keywords for relevance.
+        """
         if self._brain is None:
             return []
         try:
-            return self._brain.recall_with_budget(goal, budget=5)
+            memories = self._brain.recall_with_budget(max_tokens=2000)
+            # Simple keyword filtering for relevance
+            goal_words = set(goal.lower().split())
+            relevant = [
+                m for m in memories
+                if any(w in m.lower() for w in goal_words)
+            ]
+            return relevant or memories[:5]
         except Exception:
             return []
 
@@ -2414,42 +2428,46 @@ Run: `python3 -m pytest tests/test_cli_main_dispatch.py -v --co` (collect only, 
 
 - [ ] **Step 2: Add agent-run command spec to options.py**
 
-Add the new command spec to the existing command definitions in `aura_cli/options.py`. The exact insertion point depends on the existing structure — add it alongside other command specs:
+Add a new `CommandSpec` to `COMMAND_SPECS` tuple in `aura_cli/options.py`, following the existing pattern:
 
 ```python
-# In the command definitions section of aura_cli/options.py
-# Add a new CommandSpec for agent-run:
-{
-    "name": "agent-run",
-    "help": "Run a goal using the Agent SDK meta-controller (Claude-as-brain orchestration)",
-    "args": [
-        {"name": "--goal", "required": True, "help": "Development goal to execute"},
-        {"name": "--model", "default": None, "help": "Model override (e.g., claude-opus-4-6)"},
-        {"name": "--max-turns", "type": int, "default": None, "help": "Maximum agent turns"},
-        {"name": "--max-budget", "type": float, "default": None, "help": "Maximum budget in USD"},
-        {"name": "--permission-mode", "default": None, "choices": ["default", "acceptEdits", "bypassPermissions", "plan"]},
-        {"name": "--project-root", "default": ".", "help": "Project root directory"},
-    ],
-}
+# Add to COMMAND_SPECS tuple in aura_cli/options.py:
+CommandSpec(
+    path=("agent", "run"),
+    summary="Run goal via Agent SDK meta-controller",
+    description="Execute a development goal using Claude-as-brain orchestration with dynamic tool/skill/workflow selection.",
+),
+```
+
+Add to `CLI_ACTIONS` tuple:
+
+```python
+CLIActionSpec("agent_run", True, ("agent", "run")),
+```
+
+Add to `_CANONICAL_PATH_TO_ACTION` dict:
+
+```python
+("agent", "run"): "agent_run",
 ```
 
 - [ ] **Step 3: Add dispatch entry to cli_main.py**
 
-In `aura_cli/cli_main.py`, add `"agent-run"` to the `COMMAND_DISPATCH_REGISTRY`:
+In `aura_cli/cli_main.py`, add `"agent_run"` to the `COMMAND_DISPATCH_REGISTRY`:
 
 ```python
 # In COMMAND_DISPATCH_REGISTRY dict:
-"agent-run": _handle_agent_run,
+"agent_run": _handle_agent_run,
 ```
 
-And add the handler function:
+And add the handler function (using anyio to avoid nested event loop issues):
 
 ```python
-async def _handle_agent_run(args, **kwargs):
+def _handle_agent_run(args, **kwargs):
     """Dispatch to Agent SDK meta-controller."""
+    import anyio
     from core.agent_sdk.cli_integration import handle_agent_run
-    import asyncio
-    return asyncio.run(handle_agent_run(args))
+    return anyio.from_thread.run(handle_agent_run, args)
 ```
 
 - [ ] **Step 4: Regenerate CLI docs**

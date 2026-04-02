@@ -66,3 +66,44 @@ class TestAgentSDKConfig(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestAgentSDKConfigV2(unittest.TestCase):
+    """Test new config fields for production loop."""
+
+    def test_default_config_has_router_fields(self):
+        from core.agent_sdk.config import AgentSDKConfig
+        config = AgentSDKConfig()
+        self.assertEqual(config.escalation_threshold, 2)
+        self.assertEqual(config.de_escalation_threshold, 5)
+        self.assertAlmostEqual(config.min_success_rate, 0.7)
+        self.assertAlmostEqual(config.ema_alpha, 0.2)
+
+    def test_default_config_has_session_fields(self):
+        from core.agent_sdk.config import AgentSDKConfig
+        from pathlib import Path
+        config = AgentSDKConfig()
+        self.assertEqual(config.session_db_path, Path("memory/agent_sdk_sessions.db"))
+        self.assertEqual(config.model_stats_path, Path("memory/agent_sdk_model_stats.json"))
+
+    def test_default_config_has_skill_weight_fields(self):
+        from core.agent_sdk.config import AgentSDKConfig
+        config = AgentSDKConfig()
+        self.assertAlmostEqual(config.skill_weight_success_delta, 0.1)
+        self.assertAlmostEqual(config.skill_weight_failure_delta, -0.05)
+        self.assertAlmostEqual(config.skill_weight_cap, 1.0)
+        self.assertAlmostEqual(config.skill_weight_floor, 0.1)
+
+    def test_from_aura_config_reads_new_fields(self):
+        from core.agent_sdk.config import AgentSDKConfig
+        aura_config = {
+            "agent_sdk": {
+                "escalation_threshold": 3,
+                "ema_alpha": 0.3,
+            }
+        }
+        config = AgentSDKConfig.from_aura_config(aura_config)
+        self.assertEqual(config.escalation_threshold, 3)
+        self.assertAlmostEqual(config.ema_alpha, 0.3)
+        # Unchanged defaults
+        self.assertEqual(config.de_escalation_threshold, 5)

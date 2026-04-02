@@ -24,7 +24,7 @@ interface GoalState {
   updateGoalStatus: (id: string, status: Goal['status']) => void
 }
 
-export const useGoalStore = create<GoalState>((set, get) => ({
+export const useGoalStore = create<GoalState>((set) => ({
   goals: [],
   selectedGoal: null,
   isLoading: false,

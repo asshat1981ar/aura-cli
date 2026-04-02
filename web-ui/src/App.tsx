@@ -7,26 +7,33 @@ import { Logs } from './pages/Logs'
 import { Settings } from './pages/Settings'
 import { Login } from './pages/Login'
 import { useAuthStore } from './stores/authStore'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 function App() {
   const { isAuthenticated } = useAuthStore()
 
   if (!isAuthenticated) {
-    return <Login />
+    return (
+      <ErrorBoundary>
+        <Login />
+      </ErrorBoundary>
+    )
   }
 
   return (
-    <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/goals" element={<Goals />} />
-          <Route path="/agents" element={<Agents />} />
-          <Route path="/logs" element={<Logs />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
-      </Layout>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/goals" element={<Goals />} />
+            <Route path="/agents" element={<Agents />} />
+            <Route path="/logs" element={<Logs />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </Layout>
+      </BrowserRouter>
+    </ErrorBoundary>
   )
 }
 

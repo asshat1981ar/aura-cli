@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Trash2, Download, Wifi, WifiOff } from 'lucide-react'
-import { useLogStore } from '../stores/logStore'
+import { useLogStore, LogEntry } from '../stores/logStore'
 import { useWebSocket } from '../hooks/useWebSocket'
 
 const LOG_LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR'] as const
@@ -12,8 +12,14 @@ export function Logs() {
 
   useWebSocket('ws://localhost:8000/ws/logs', {
     onMessage: (data) => {
-      if (data.type === 'log') {
-        addLog(data.payload)
+      if (
+        typeof data === 'object' &&
+        data !== null &&
+        'type' in data &&
+        (data as { type: string }).type === 'log' &&
+        'payload' in data
+      ) {
+        addLog((data as { payload: unknown }).payload as LogEntry)
       }
     },
     onConnect: () => setConnected(true),

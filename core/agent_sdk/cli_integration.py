@@ -7,6 +7,8 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from core.agent_sdk.config import AgentSDKConfig
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,11 +57,41 @@ def build_controller_from_args(args: Any) -> Any:
     except Exception:
         pass
 
+    # Initialize production subsystems
+    from core.agent_sdk.model_router import AdaptiveModelRouter
+    from core.agent_sdk.session_persistence import SessionStore
+    from core.agent_sdk.feedback import SkillWeightUpdater, FeedbackCollector
+
+    model_router = AdaptiveModelRouter(
+        stats_path=config.model_stats_path,
+        ema_alpha=config.ema_alpha,
+        min_success_rate=config.min_success_rate,
+        escalation_threshold=config.escalation_threshold,
+        de_escalation_threshold=config.de_escalation_threshold,
+    )
+    session_store = SessionStore(db_path=config.session_db_path)
+    skill_updater = SkillWeightUpdater(
+        weights_path=config.skill_weights_path,
+        success_delta=config.skill_weight_success_delta,
+        failure_delta=config.skill_weight_failure_delta,
+        cap=config.skill_weight_cap,
+        floor=config.skill_weight_floor,
+    )
+    feedback = FeedbackCollector(
+        model_router=model_router,
+        skill_updater=skill_updater,
+        brain=brain,
+        session_store=session_store,
+    )
+
     return AuraController(
         config=config,
         project_root=project_root,
         brain=brain,
         model_adapter=model_adapter,
+        model_router=model_router,
+        session_store=session_store,
+        feedback=feedback,
     )
 
 
@@ -72,6 +104,9 @@ def format_result(result: Dict[str, Any]) -> str:
 
     if result.get("session_id"):
         parts.append(f"\n--- Session: {result['session_id']} ---")
+
+    if result.get("total_cost_usd"):
+        parts.append(f"Cost: ${result['total_cost_usd']:.2f}")
 
     if result.get("metrics"):
         m = result["metrics"]

@@ -89,5 +89,50 @@ class TestCLICommands(unittest.TestCase):
         mock_store.list_sessions.assert_called_once_with(limit=20)
 
 
+class TestCLIIntegrationV2(unittest.TestCase):
+    """Test enhanced CLI with subsystem initialization."""
+
+    def setUp(self):
+        import tempfile
+        self.tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_build_controller_initializes_subsystems(self):
+        from core.agent_sdk.cli_integration import build_controller_from_args
+        args = MagicMock()
+        args.model = None
+        args.max_turns = None
+        args.max_budget = None
+        args.permission_mode = None
+        args.project_root = self.tmpdir
+        # Patch config to use temp paths so no side effects in CWD
+        with patch("core.agent_sdk.cli_integration.AgentSDKConfig") as MockConfig:
+            from core.agent_sdk.config import AgentSDKConfig
+            cfg = AgentSDKConfig(
+                model_stats_path=Path(self.tmpdir) / "stats.json",
+                session_db_path=Path(self.tmpdir) / "sessions.db",
+                skill_weights_path=Path(self.tmpdir) / "weights.json",
+            )
+            MockConfig.return_value = cfg
+            MockConfig.from_aura_config.return_value = cfg
+            controller = build_controller_from_args(args)
+        self.assertIsNotNone(controller.model_router)
+        self.assertIsNotNone(controller.session_store)
+
+    def test_format_result_shows_cost(self):
+        from core.agent_sdk.cli_integration import format_result
+        result = {
+            "result": "Done.",
+            "session_id": "abc-123",
+            "total_cost_usd": 0.37,
+            "metrics": {"total_calls": 5, "success_rate": 1.0},
+        }
+        output = format_result(result)
+        self.assertIn("$0.37", output)
+
+
 if __name__ == "__main__":
     unittest.main()

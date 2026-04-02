@@ -134,7 +134,8 @@ class TestCriticAgent:
 
     def test_critic_critique_plan_happy_path(self):
         result = self.agent.critique_plan("task", ["step 1", "step 2"])
-        assert isinstance(result, str)
+        assert isinstance(result, dict)
+        assert "feedback_text" in result
 
     def test_critic_model_raises(self):
         self.model.respond.side_effect = Exception("err")
@@ -143,11 +144,12 @@ class TestCriticAgent:
         except Exception:
             pass
 
-    def test_critic_critique_code_returns_str(self):
+    def test_critic_critique_code_returns_dict(self):
         result = self.agent.critique_code("task", "def foo(): pass")
-        assert isinstance(result, str)
+        assert isinstance(result, dict)
+        assert "feedback_text" in result
 
-    def test_critic_validate_mutation_returns_json_str(self):
+    def test_critic_validate_mutation_returns_dict(self):
         self.model.respond.return_value = json.dumps({
             "decision": "APPROVED",
             "confidence_score": 0.9,
@@ -155,8 +157,8 @@ class TestCriticAgent:
             "reasoning": "looks fine",
         })
         result = self.agent.validate_mutation("ADD_FILE core/foo.py\nx=1")
-        parsed = json.loads(result)
-        assert "decision" in parsed
+        assert isinstance(result, dict)
+        assert "decision" in result
 
 
 # ===========================================================================

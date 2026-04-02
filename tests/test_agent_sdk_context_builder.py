@@ -81,5 +81,56 @@ class TestContextBuilder(unittest.TestCase):
         self.assertGreater(len(prompt), 100)
 
 
+class TestContextBuilderV2(unittest.TestCase):
+    """Tests for enhanced context builder with failure_patterns, skill_weights, workflow_info, model_tier."""
+
+    def test_failure_patterns_rendered_in_prompt(self):
+        from core.agent_sdk.context_builder import ContextBuilder
+
+        builder = ContextBuilder(project_root=Path("/tmp/test-project"))
+        context = {
+            "failure_patterns": ["timeout on large files", "import error in test env"],
+        }
+        prompt = builder.build_system_prompt(
+            goal="Fix auth bug", goal_type="bug_fix", context=context
+        )
+        self.assertIn("Failure Patterns", prompt)
+        self.assertIn("timeout on large files", prompt)
+        self.assertIn("import error in test env", prompt)
+
+    def test_skill_weights_rendered_sorted_descending(self):
+        from core.agent_sdk.context_builder import ContextBuilder
+
+        builder = ContextBuilder(project_root=Path("/tmp/test-project"))
+        context = {
+            "skill_weights": {"linter": 0.5, "type_checker": 0.9, "coverage": 0.7},
+        }
+        prompt = builder.build_system_prompt(
+            goal="Refactor module", goal_type="refactor", context=context
+        )
+        self.assertIn("Skill Weights", prompt)
+        # type_checker (0.9) should appear before linter (0.5) in sorted order
+        # Use " (0.9)" and " (0.5)" markers to avoid substring collisions
+        idx_type = prompt.index("type_checker (0.9)")
+        idx_linter = prompt.index("linter (0.5)")
+        self.assertLess(idx_type, idx_linter)
+
+    def test_workflow_info_and_model_tier_rendered(self):
+        from core.agent_sdk.context_builder import ContextBuilder
+
+        builder = ContextBuilder(project_root=Path("/tmp/test-project"))
+        context = {
+            "workflow_info": "refactor-standard v1.2",
+            "model_tier": "quality",
+        }
+        prompt = builder.build_system_prompt(
+            goal="Refactor utils", goal_type="refactor", context=context
+        )
+        self.assertIn("Workflow", prompt)
+        self.assertIn("refactor-standard v1.2", prompt)
+        self.assertIn("Model Tier", prompt)
+        self.assertIn("quality", prompt)
+
+
 if __name__ == "__main__":
     unittest.main()

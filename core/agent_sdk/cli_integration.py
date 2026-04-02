@@ -83,6 +83,16 @@ def format_result(result: Dict[str, Any]) -> str:
     return "\n".join(parts)
 
 
+def handle_agent_status(session_store: Any, limit: int = 20) -> list:
+    """Return a list of recent sessions from the session store."""
+    return session_store.list_sessions(limit=limit)
+
+
+def handle_agent_cost(session_store: Any, days: int = 7) -> Dict[str, Any]:
+    """Return a cost summary dict from the session store."""
+    return session_store.get_cost_summary(days=days)
+
+
 async def handle_agent_run(args: Any) -> int:
     """CLI handler for 'agent-run' command."""
     goal = getattr(args, "goal", None)

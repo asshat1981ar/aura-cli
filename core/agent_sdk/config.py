@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
@@ -38,6 +39,20 @@ class AgentSDKConfig:
     enable_thinking: bool = True
     enable_subagents: bool = True
     enable_hooks: bool = True
+    # Model router config
+    model_stats_path: Path = field(default_factory=lambda: Path("memory/agent_sdk_model_stats.json"))
+    escalation_threshold: int = 2
+    de_escalation_threshold: int = 5
+    min_success_rate: float = 0.7
+    ema_alpha: float = 0.2
+    # Session persistence
+    session_db_path: Path = field(default_factory=lambda: Path("memory/agent_sdk_sessions.db"))
+    # Skill weight updater
+    skill_weights_path: Path = field(default_factory=lambda: Path("memory/skill_weights.json"))
+    skill_weight_success_delta: float = 0.1
+    skill_weight_failure_delta: float = -0.05
+    skill_weight_cap: float = 1.0
+    skill_weight_floor: float = 0.1
 
     @classmethod
     def from_aura_config(cls, aura_config: Dict[str, Any]) -> "AgentSDKConfig":
@@ -55,6 +70,17 @@ class AgentSDKConfig:
             enable_thinking=sdk_section.get("enable_thinking", True),
             enable_subagents=sdk_section.get("enable_subagents", True),
             enable_hooks=sdk_section.get("enable_hooks", True),
+            model_stats_path=Path(sdk_section.get("model_stats_path", "memory/agent_sdk_model_stats.json")),
+            escalation_threshold=sdk_section.get("escalation_threshold", 2),
+            de_escalation_threshold=sdk_section.get("de_escalation_threshold", 5),
+            min_success_rate=sdk_section.get("min_success_rate", 0.7),
+            ema_alpha=sdk_section.get("ema_alpha", 0.2),
+            session_db_path=Path(sdk_section.get("session_db_path", "memory/agent_sdk_sessions.db")),
+            skill_weights_path=Path(sdk_section.get("skill_weights_path", "memory/skill_weights.json")),
+            skill_weight_success_delta=sdk_section.get("skill_weight_success_delta", 0.1),
+            skill_weight_failure_delta=sdk_section.get("skill_weight_failure_delta", -0.05),
+            skill_weight_cap=sdk_section.get("skill_weight_cap", 1.0),
+            skill_weight_floor=sdk_section.get("skill_weight_floor", 0.1),
         )
 
     def apply_env_overrides(self) -> None:

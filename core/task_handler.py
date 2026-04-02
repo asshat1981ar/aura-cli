@@ -357,88 +357,113 @@ def run_goals_loop(args, goal_queue, orchestrator, debugger_instance, planner_in
     """
     task_manager = TaskManager()
     cycle_limit = _goal_cycle_limit(args)
+    
+    # Safety limits to prevent infinite loops
+    max_iterations = 10000  # Absolute upper bound
+    iteration_count = 0
 
     while True:
+        iteration_count += 1
+        if iteration_count > max_iterations:
+            log_json("ERROR", "goals_loop_max_iterations_reached", {"max": max_iterations})
+            break
+        
         # 1. If queue is empty, poll for external goals (e.g. BEADS)
         if not goal_queue.has_goals() and hasattr(orchestrator, "poll_external_goals"):
-            new_goals = orchestrator.poll_external_goals()
-            for g in new_goals:
-                goal_queue.add(g)
-                log_json("INFO", "external_goal_discovered", goal=g)
+            try:
+                new_goals = orchestrator.poll_external_goals()
+                for g in new_goals:
+                    goal_queue.add(g)
+                    log_json("INFO", "external_goal_discovered", goal=g)
+            except Exception as e:
+                log_json("ERROR", "external_goal_poll_failed", {"error": str(e)})
 
         if not goal_queue.has_goals():
+            log_json("INFO", "goals_loop_empty_queue_exit", {"iterations": iteration_count})
             break
 
         goal = goal_queue.next()
         log_json("INFO", "processing_goal", goal=goal)
 
-        tracker = InFlightTracker()
-        tracker.write(goal, cycle_limit)
+        try:
+            tracker = InFlightTracker()
+            tracker.write(goal, cycle_limit)
 
-        if decompose and planner_instance:
-            root_task = task_manager.decompose_goal(goal, planner_instance)
-            tasks_to_process = root_task.subtasks
-        else:
-            root_task = Task(id=f"goal_{int(time.time())}", title=goal)
-            task_manager.add_task(root_task)
-            tasks_to_process = [root_task]
-
-        for task in tasks_to_process:
-            if task != root_task:
-                log_json("INFO", "executing_subtask", details={"task_id": task.id, "title": task.title})
-
-            task.status = "in_progress"
-            task_manager.save()
-
-            try:
-                # Execute the goal using the modern orchestrator
-                result = orchestrator.run_loop(
-                    task.title,
-                    max_cycles=cycle_limit,
-                    dry_run=getattr(args, "dry_run", False)
-                )
-            finally:
-                tracker.clear()
-
-            history = result.get("history", [])
-
-            # Update task status based on orchestrator result
-            if result.get("stop_reason") == "PASS":
-                task.status = "completed"
-                task.result = "Goal achieved (PASS)"
-            elif result.get("stop_reason") == "MAX_CYCLES":
-                task.status = "failed"
-                task.result = "Cycle limit reached"
+            if decompose and planner_instance:
+                root_task = task_manager.decompose_goal(goal, planner_instance)
+                tasks_to_process = root_task.subtasks
             else:
-                task.status = "failed"
-                task.result = result.get("stop_reason", "unknown_failure")
+                root_task = Task(id=f"goal_{int(time.time())}", title=goal)
+                task_manager.add_task(root_task)
+                tasks_to_process = [root_task]
 
-            task_manager.save()
+            for task in tasks_to_process:
+                if task != root_task:
+                    log_json("INFO", "executing_subtask", details={"task_id": task.id, "title": task.title})
 
-            # Record outcome in archive
-            final_score = 0.0 # Modern orchestrator doesn't have a single score yet
-            if history:
-                # We could derive a score from verification or use legacy if available
-                final_score = 1.0 if result.get("stop_reason") == "PASS" else 0.0
+                task.status = "in_progress"
+                task_manager.save()
 
-            goal_archive.record(task.title, final_score)
+                try:
+                    # Execute the goal using the modern orchestrator
+                    result = orchestrator.run_loop(
+                        task.title,
+                        max_cycles=cycle_limit,
+                        dry_run=getattr(args, "dry_run", False)
+                    )
+                except Exception as e:
+                    log_json("ERROR", "orchestrator_run_loop_failed", {"error": str(e), "goal": task.title})
+                    result = {
+                        "stop_reason": "EXCEPTION",
+                        "error": str(e),
+                        "history": []
+                    }
+                finally:
+                    tracker.clear()
 
-            if task.status == "failed":
-                log_json("WARN", "goal_failed" if task == root_task else "subtask_failed", goal=task.title)
-                break
-            else:
-                log_json(
-                    "INFO",
-                    "goal_completed" if task == root_task else "subtask_completed",
-                    goal=task.title,
-                    details={"status": task.result},
-                )
+                history = result.get("history", [])
 
-        if decompose and planner_instance:
-            if all(st.status == "completed" for st in root_task.subtasks):
-                root_task.status = "completed"
-                log_json("INFO", "goal_completed", goal=goal)
-            else:
-                root_task.status = "failed"
-                log_json("WARN", "goal_failed", goal=goal)
-            task_manager.save()
+                # Update task status based on orchestrator result
+                if result.get("stop_reason") == "PASS":
+                    task.status = "completed"
+                    task.result = "Goal achieved (PASS)"
+                elif result.get("stop_reason") == "MAX_CYCLES":
+                    task.status = "failed"
+                    task.result = "Cycle limit reached"
+                else:
+                    task.status = "failed"
+                    task.result = result.get("stop_reason", "unknown_failure")
+
+                task_manager.save()
+
+                # Record outcome in archive
+                final_score = 0.0 # Modern orchestrator doesn't have a single score yet
+                if history:
+                    # We could derive a score from verification or use legacy if available
+                    final_score = 1.0 if result.get("stop_reason") == "PASS" else 0.0
+
+                goal_archive.record(task.title, final_score)
+
+                if task.status == "failed":
+                    log_json("WARN", "goal_failed" if task == root_task else "subtask_failed", goal=task.title)
+                    break
+                else:
+                    log_json(
+                        "INFO",
+                        "goal_completed" if task == root_task else "subtask_completed",
+                        goal=task.title,
+                        details={"status": task.result},
+                    )
+
+            if decompose and planner_instance:
+                if all(st.status == "completed" for st in root_task.subtasks):
+                    root_task.status = "completed"
+                    log_json("INFO", "goal_completed", goal=goal)
+                else:
+                    root_task.status = "failed"
+                    log_json("WARN", "goal_failed", goal=goal)
+                task_manager.save()
+                
+        except Exception as e:
+            log_json("ERROR", "goal_processing_failed", {"goal": goal, "error": str(e)})
+            # Continue to next goal instead of crashing the entire loop

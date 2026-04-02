@@ -258,6 +258,13 @@ async def websocket_logs(websocket: WebSocket):
     """WebSocket endpoint for real-time log streaming."""
     await manager.connect(websocket)
     
+    # Track connection start time for max duration limit (8 hours)
+    connection_start = asyncio.get_event_loop().time()
+    max_connection_duration = 8 * 60 * 60  # 8 hours
+    ping_interval = 30.0
+    max_missed_pongs = 3
+    missed_pongs = 0
+    
     try:
         # Send connection confirmation
         await websocket.send_json({
@@ -267,23 +274,56 @@ async def websocket_logs(websocket: WebSocket):
         
         # Keep connection alive and handle client messages
         while True:
+            # Check max connection duration
+            elapsed = asyncio.get_event_loop().time() - connection_start
+            if elapsed > max_connection_duration:
+                log_json("INFO", "websocket_max_duration_reached", {"duration_sec": elapsed})
+                await websocket.send_json({
+                    "type": "disconnect",
+                    "reason": "max_duration_reached",
+                })
+                break
+            
             try:
                 data = await asyncio.wait_for(
                     websocket.receive_text(),
-                    timeout=30.0
+                    timeout=ping_interval
                 )
+                # Reset missed pongs on successful message
+                missed_pongs = 0
+                
                 # Handle ping/keepalive
                 message = json.loads(data)
                 if message.get("type") == "ping":
                     await websocket.send_json({"type": "pong"})
+                elif message.get("type") == "pong":
+                    # Client responded to our ping
+                    missed_pongs = 0
+                    
             except asyncio.TimeoutError:
+                # Check if we've missed too many pongs
+                missed_pongs += 1
+                if missed_pongs >= max_missed_pongs:
+                    log_json("WARN", "websocket_client_unresponsive", {"missed_pongs": missed_pongs})
+                    break
+                    
                 # Send keepalive ping
-                await websocket.send_json({"type": "ping"})
+                try:
+                    await websocket.send_json({"type": "ping"})
+                except Exception as e:
+                    log_json("DEBUG", "websocket_ping_failed", {"error": str(e)})
+                    break
+                    
+            except json.JSONDecodeError:
+                # Invalid message format, log and continue
+                log_json("DEBUG", "websocket_invalid_message", {"data": data[:100]})
+                continue
                 
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        log_json("INFO", "websocket_client_disconnected")
     except Exception as e:
         log_json("ERROR", "websocket_error", {"error": str(e)})
+    finally:
         manager.disconnect(websocket)
 
 # Serve static files (production build)

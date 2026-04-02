@@ -1,0 +1,36 @@
+# GitHub App Manifest for AURA
+# This manifest can be used to create a GitHub App via the GitHub API
+# See: https://docs.github.com/en/developers/apps/creating-a-github-app-from-a-manifest
+
+name: AURA Code Assistant
+description: Autonomous software development powered by AI
+url: https://github.com/asshat1981ar/aura-cli
+hook_attributes:
+  url: https://your-domain.com/api/github/webhook
+  content_type: json
+  secret: ${GITHUB_WEBHOOK_SECRET}
+redirect_url: https://your-domain.com/api/github/callback
+setup_url: https://your-domain.com/dashboard/setup
+setup_on_update: true
+public: false
+default_permissions:
+  contents: write
+  issues: write
+  pull_requests: write
+  statuses: write
+  checks: write
+  actions: read
+  metadata: read
+  administration: read
+  workflows: write
+default_events:
+  - pull_request
+  - pull_request_review
+  - pull_request_review_comment
+  - issues
+  - issue_comment
+  - push
+  - status
+  - check_run
+  - check_suite
+  - workflow_run

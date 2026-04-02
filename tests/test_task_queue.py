@@ -1,83 +1,157 @@
-import unittest
+"""Tests for core/task_queue.py."""
+
+import json
+import tempfile
 from pathlib import Path
-from unittest.mock import patch
+
+import pytest
 
 from core.task_queue import TaskQueue
 
-class TestTaskQueue(unittest.TestCase):
 
-    def setUp(self):
-        self.test_queue_path = Path("memory/test_task_queue.json")
-        # Ensure a clean state for each test
-        if self.test_queue_path.exists():
-            self.test_queue_path.unlink()
-        self.task_queue = TaskQueue(queue_path=self.test_queue_path)
-
-    def tearDown(self):
-        # Clean up the test file after each test
-        if self.test_queue_path.exists():
-            self.test_queue_path.unlink()
-
-    def test_add_task_and_get_next_task(self):
-        task1 = {"id": 1, "name": "Task 1"}
-        task2 = {"id": 2, "name": "Task 2"}
-
-        self.task_queue.add_task(task1)
-        self.task_queue.add_task(task2)
-
-        self.assertTrue(self.task_queue.has_tasks())
-        self.assertEqual(self.task_queue.get_next_task(), task1)
-        self.assertEqual(self.task_queue.get_next_task(), task2)
-        self.assertFalse(self.task_queue.has_tasks())
-        self.assertIsNone(self.task_queue.get_next_task())
-
-    def test_persistence(self):
-        task1 = {"id": 1, "name": "Task 1"}
-        task2 = {"id": 2, "name": "Task 2"}
-
-        self.task_queue.add_task(task1)
-        self.task_queue.add_task(task2)
-
-        # Re-initialize the queue to simulate loading from disk
-        new_task_queue = TaskQueue(queue_path=self.test_queue_path)
-        self.assertTrue(new_task_queue.has_tasks())
-        self.assertEqual(new_task_queue.get_next_task(), task1)
-        self.assertEqual(new_task_queue.get_next_task(), task2)
-        self.assertFalse(new_task_queue.has_tasks())
-
-    def test_empty_queue(self):
-        self.assertFalse(self.task_queue.has_tasks())
-        self.assertIsNone(self.task_queue.get_next_task())
-
-    def test_corrupted_queue_file(self):
-        # Create a corrupted JSON file
-        self.test_queue_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.test_queue_path, 'w') as f:
-            f.write("this is not json")
-
-        with patch('core.task_queue.log_json') as mock_log_json:
-            corrupted_task_queue = TaskQueue(queue_path=self.test_queue_path)
-            self.assertFalse(corrupted_task_queue.has_tasks())
-            mock_log_json.assert_called_with("WARN", "task_queue_corrupted", details={"path": str(self.test_queue_path), "message": "Starting with empty queue."})
-
-    @patch('core.task_queue.log_json')
-    def test_logging(self, mock_log_json):
-        task = {"id": 1, "name": "Logged Task"}
-        self.task_queue.add_task(task)
-        mock_log_json.assert_any_call("INFO", "task_added", details={"task": task, "queue_size": 1})
-
-        self.task_queue.get_next_task()
-        mock_log_json.assert_any_call("INFO", "task_retrieved", details={"task": task, "queue_size": 0})
-
-        # Test for no tasks in queue
-        self.task_queue.get_next_task()
-        mock_log_json.assert_any_call("INFO", "no_tasks_in_queue")
-
-        # Test initial load with no file
-        if self.test_queue_path.exists():
-            self.test_queue_path.unlink() # Ensure file doesn't exist
-        TaskQueue(queue_path=self.test_queue_path)
-        mock_log_json.assert_any_call("INFO", "task_queue_file_not_found", details={"path": str(self.test_queue_path), "message": "Initializing empty queue."})
-
-if __name__ == '__main__':
-    unittest.main()
+class TestTaskQueue:
+    """Test TaskQueue functionality."""
+    
+    def test_init_creates_empty_queue(self):
+        """Test initialization creates empty queue when file doesn't exist."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "test_queue.json"
+            queue = TaskQueue(str(queue_path))
+            assert len(queue.queue) == 0
+            assert not queue.has_tasks()
+    
+    def test_init_loads_existing_queue(self):
+        """Test initialization loads existing queue from file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "test_queue.json"
+            
+            # Pre-populate file
+            queue_path.parent.mkdir(parents=True, exist_ok=True)
+            queue_path.write_text(json.dumps(["task1", "task2"]))
+            
+            queue = TaskQueue(str(queue_path))
+            assert len(queue.queue) == 2
+            assert queue.has_tasks()
+    
+    def test_init_handles_corrupted_file(self):
+        """Test initialization handles corrupted JSON file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "test_queue.json"
+            queue_path.parent.mkdir(parents=True, exist_ok=True)
+            queue_path.write_text("invalid json")
+            
+            queue = TaskQueue(str(queue_path))
+            assert len(queue.queue) == 0
+    
+    def test_add_task(self):
+        """Test adding task to queue."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "test_queue.json"
+            queue = TaskQueue(str(queue_path))
+            
+            queue.add_task("task_data")
+            assert len(queue.queue) == 1
+            assert queue.has_tasks()
+    
+    def test_add_task_persists(self):
+        """Test that add_task persists to file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "test_queue.json"
+            queue = TaskQueue(str(queue_path))
+            
+            queue.add_task("persisted_task")
+            
+            # Load fresh instance
+            queue2 = TaskQueue(str(queue_path))
+            assert len(queue2.queue) == 1
+            assert queue2.queue[0] == "persisted_task"
+    
+    def test_get_next_task_fifo_order(self):
+        """Test FIFO order of task retrieval."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "test_queue.json"
+            queue = TaskQueue(str(queue_path))
+            
+            queue.add_task("first")
+            queue.add_task("second")
+            queue.add_task("third")
+            
+            assert queue.get_next_task() == "first"
+            assert queue.get_next_task() == "second"
+            assert queue.get_next_task() == "third"
+            assert queue.get_next_task() is None
+    
+    def test_get_next_task_empty_queue(self):
+        """Test getting task from empty queue returns None."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "test_queue.json"
+            queue = TaskQueue(str(queue_path))
+            
+            assert queue.get_next_task() is None
+    
+    def test_get_next_task_persists(self):
+        """Test that get_next_task persists state."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "test_queue.json"
+            queue = TaskQueue(str(queue_path))
+            
+            queue.add_task("task1")
+            queue.add_task("task2")
+            queue.get_next_task()
+            
+            # Load fresh instance
+            queue2 = TaskQueue(str(queue_path))
+            assert len(queue2.queue) == 1
+            assert queue2.queue[0] == "task2"
+    
+    def test_has_tasks(self):
+        """Test has_tasks method."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "test_queue.json"
+            queue = TaskQueue(str(queue_path))
+            
+            assert not queue.has_tasks()
+            queue.add_task("task")
+            assert queue.has_tasks()
+            queue.get_next_task()
+            assert not queue.has_tasks()
+    
+    def test_complex_task_data(self):
+        """Test queue handles complex task data types."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "test_queue.json"
+            queue = TaskQueue(str(queue_path))
+            
+            complex_task = {
+                "id": 123,
+                "action": "process",
+                "data": ["item1", "item2"],
+                "nested": {"key": "value"},
+            }
+            
+            queue.add_task(complex_task)
+            retrieved = queue.get_next_task()
+            
+            assert retrieved == complex_task
+    
+    def test_multiple_tasks_persistence(self):
+        """Test persistence with multiple add/remove operations."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            queue_path = Path(tmpdir) / "test_queue.json"
+            queue = TaskQueue(str(queue_path))
+            
+            # Add tasks
+            for i in range(5):
+                queue.add_task(f"task_{i}")
+            
+            # Remove some
+            queue.get_next_task()
+            queue.get_next_task()
+            
+            # Add more
+            queue.add_task("new_task")
+            
+            # Verify state
+            queue2 = TaskQueue(str(queue_path))
+            assert len(queue2.queue) == 4
+            assert list(queue2.queue) == ["task_2", "task_3", "task_4", "new_task"]

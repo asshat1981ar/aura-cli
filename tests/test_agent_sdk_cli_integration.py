@@ -134,5 +134,37 @@ class TestCLIIntegrationV2(unittest.TestCase):
         self.assertIn("$0.37", output)
 
 
+class TestAgentScanCLI(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.tmpdir = tempfile.mkdtemp()
+        (Path(self.tmpdir) / "test.py").write_text("def hello():\n    pass\n")
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmpdir, ignore_errors=True)
+
+    def test_handle_agent_scan(self):
+        from core.agent_sdk.cli_integration import handle_agent_scan
+        result = handle_agent_scan(
+            project_root=Path(self.tmpdir),
+            db_path=Path(self.tmpdir) / "index.db",
+            exclude_patterns=["__pycache__"],
+            no_llm=True,
+        )
+        self.assertIn("files_scanned", result)
+        self.assertGreater(result["files_scanned"], 0)
+
+    def test_handle_agent_scan_stats(self):
+        from core.agent_sdk.cli_integration import handle_agent_scan, format_scan_stats
+        handle_agent_scan(
+            project_root=Path(self.tmpdir),
+            db_path=Path(self.tmpdir) / "index.db",
+            no_llm=True,
+        )
+        stats = format_scan_stats(Path(self.tmpdir) / "index.db")
+        self.assertIn("files", stats.lower())
+
+
 if __name__ == "__main__":
     unittest.main()

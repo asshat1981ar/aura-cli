@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from core.agent_sdk.config import AgentSDKConfig
 
@@ -148,3 +148,37 @@ async def handle_agent_run(args: Any) -> int:
         logger.exception("Agent run failed")
         print(f"Error: {exc}")
         return 1
+
+
+def handle_agent_scan(
+    project_root: Path,
+    db_path: Path,
+    exclude_patterns: Optional[List[str]] = None,
+    model_adapter: Any = None,
+    no_llm: bool = False,
+) -> Dict[str, Any]:
+    """Run a semantic scan of the codebase."""
+    from core.agent_sdk.semantic_scanner import SemanticScanner
+    scanner = SemanticScanner(
+        project_root=project_root,
+        db_path=db_path,
+        exclude_patterns=exclude_patterns or [".git", "__pycache__", "node_modules"],
+        model_adapter=None if no_llm else model_adapter,
+    )
+    return scanner.scan_full()
+
+
+def format_scan_stats(db_path: Path) -> str:
+    """Format scan statistics for CLI output."""
+    from core.agent_sdk.semantic_schema import SemanticDB
+    db = SemanticDB(db_path)
+    meta = db.get_last_scan()
+    if not meta:
+        return "No scan data available. Run 'agent scan' first."
+    files = db.get_all_files()
+    return (
+        f"Last scan: {meta['scan_time']}\n"
+        f"Type: {meta['scan_type']}, SHA: {meta['scan_sha'][:8]}\n"
+        f"Files: {len(files)}, Symbols: {meta['symbols_found']}\n"
+        f"LLM calls: {meta['llm_calls_made']}, Cost: ${meta['llm_cost_usd']:.3f}"
+    )

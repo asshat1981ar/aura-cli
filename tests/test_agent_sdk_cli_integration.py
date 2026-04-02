@@ -49,5 +49,45 @@ class TestCLIIntegration(unittest.TestCase):
         self.assertIn("abc-123", output)
 
 
+class TestCLICommands(unittest.TestCase):
+    """Tests for handle_agent_status and handle_agent_cost functions."""
+
+    def test_handle_agent_status_returns_list(self):
+        from core.agent_sdk.cli_integration import handle_agent_status
+
+        mock_store = MagicMock()
+        mock_store.list_sessions.return_value = [
+            {"session_id": "abc-1", "status": "completed", "goal": "Fix bug"},
+            {"session_id": "abc-2", "status": "running", "goal": "Add feature"},
+        ]
+        result = handle_agent_status(mock_store, limit=10)
+        self.assertIsInstance(result, list)
+        self.assertEqual(len(result), 2)
+        mock_store.list_sessions.assert_called_once_with(limit=10)
+
+    def test_handle_agent_cost_returns_summary(self):
+        from core.agent_sdk.cli_integration import handle_agent_cost
+
+        mock_store = MagicMock()
+        mock_store.get_cost_summary.return_value = {
+            "total_usd": 1.23,
+            "session_count": 5,
+            "days": 7,
+        }
+        result = handle_agent_cost(mock_store, days=7)
+        self.assertIsInstance(result, dict)
+        self.assertIn("total_usd", result)
+        self.assertEqual(result["total_usd"], 1.23)
+        mock_store.get_cost_summary.assert_called_once_with(days=7)
+
+    def test_handle_agent_status_default_limit(self):
+        from core.agent_sdk.cli_integration import handle_agent_status
+
+        mock_store = MagicMock()
+        mock_store.list_sessions.return_value = []
+        handle_agent_status(mock_store)
+        mock_store.list_sessions.assert_called_once_with(limit=20)
+
+
 if __name__ == "__main__":
     unittest.main()

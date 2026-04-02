@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
@@ -301,6 +301,57 @@ try:
         return "web-ui/dist/index.html"
 except RuntimeError:
     pass  # dist folder doesn't exist in development
+
+# GitHub App webhook endpoint
+@app.post("/api/github/webhook")
+async def github_webhook(request: Request, x_github_event: str = Header(None), x_hub_signature_256: str = Header(None)):
+    """Handle GitHub App webhook events."""
+    from aura_cli.github_integration import get_github_app, GitHubIntegrationError
+    
+    body = await request.body()
+    
+    # Get GitHub app instance
+    github_app = get_github_app()
+    if not github_app:
+        raise HTTPException(status_code=503, detail="GitHub App not configured")
+    
+    # Verify webhook signature
+    if not github_app.verify_webhook_signature(body, x_hub_signature_256 or ""):
+        raise HTTPException(status_code=401, detail="Invalid signature")
+    
+    # Parse payload
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload")
+    
+    # Handle event
+    event_type = x_github_event or "unknown"
+    result = github_app.handle_webhook(event_type, payload)
+    
+    log_json("INFO", "github_webhook_processed", {
+        "event": event_type,
+        "action": payload.get("action"),
+        "result": result.get("status"),
+    })
+    
+    return result
+
+
+@app.get("/api/github/callback")
+async def github_callback(code: str, installation_id: Optional[str] = None, setup_action: Optional[str] = None):
+    """Handle GitHub App installation callback."""
+    log_json("INFO", "github_installation_callback", {
+        "installation_id": installation_id,
+        "setup_action": setup_action,
+    })
+    
+    return {
+        "status": "success",
+        "message": "GitHub App installed successfully",
+        "installation_id": installation_id,
+    }
+
 
 # Function to broadcast log messages
 def broadcast_log(log_entry: dict):

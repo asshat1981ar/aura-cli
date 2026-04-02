@@ -400,6 +400,11 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
             "python3 main.py innovate insights --json",
         ),
     ),
+    CommandSpec(
+        path=("agent", "run"),
+        summary="Run goal via Agent SDK meta-controller",
+        description="Execute a development goal using Claude-as-brain orchestration with dynamic tool/skill/workflow selection.",
+    ),
 )
 
 COMMAND_SPECS_BY_PATH: dict[tuple[str, ...], CommandSpec] = {spec.path: spec for spec in COMMAND_SPECS}
@@ -452,6 +457,7 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("innovate_to_goals", True, ("innovate", "to-goals")),
     CLIActionSpec("innovate_insights", True, ("innovate", "insights")),
     CLIActionSpec("interactive", True, None),
+    CLIActionSpec("agent_run", True, ("agent", "run")),
 )
 
 CLI_ACTION_SPECS_BY_ACTION: dict[str, CLIActionSpec] = {spec.action: spec for spec in CLI_ACTION_SPECS}
@@ -557,6 +563,7 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("innovate", "techniques"): "innovate_techniques",
     ("innovate", "to-goals"): "innovate_to_goals",
     ("innovate", "insights"): "innovate_insights",
+    ("agent", "run"): "agent_run",
 }
 
 _LEGACY_PRIMARY_FLAGS: tuple[str, ...] = (

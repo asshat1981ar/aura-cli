@@ -107,3 +107,26 @@ class TestAgentSDKConfigV2(unittest.TestCase):
         self.assertAlmostEqual(config.ema_alpha, 0.3)
         # Unchanged defaults
         self.assertEqual(config.de_escalation_threshold, 5)
+
+
+class TestAgentSDKConfigScan(unittest.TestCase):
+    """Test scan config fields."""
+
+    def test_default_scan_fields(self):
+        from core.agent_sdk.config import AgentSDKConfig
+        from pathlib import Path
+        config = AgentSDKConfig()
+        self.assertEqual(config.semantic_index_path, Path("memory/semantic_index.db"))
+        self.assertAlmostEqual(config.scan_llm_budget_usd, 0.50)
+        self.assertEqual(config.scan_llm_model, "claude-haiku-4-5")
+        self.assertEqual(config.scan_min_function_lines, 10)
+        self.assertEqual(config.scan_min_file_lines, 5)
+        self.assertEqual(config.scan_batch_size, 10)
+        self.assertIn(".git", config.scan_exclude_patterns)
+
+    def test_from_aura_config_reads_scan_fields(self):
+        from core.agent_sdk.config import AgentSDKConfig
+        aura_config = {"agent_sdk": {"scan_batch_size": 20, "scan_min_file_lines": 10}}
+        config = AgentSDKConfig.from_aura_config(aura_config)
+        self.assertEqual(config.scan_batch_size, 20)
+        self.assertEqual(config.scan_min_file_lines, 10)

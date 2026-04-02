@@ -992,6 +992,13 @@ def _handle_innovate_insights_dispatch(ctx: DispatchContext) -> int:
     return 0
 
 
+def _handle_agent_run_dispatch(ctx: DispatchContext) -> int:
+    """Dispatch to Agent SDK meta-controller."""
+    import anyio
+    from core.agent_sdk.cli_integration import handle_agent_run
+    return anyio.from_thread.run(handle_agent_run, ctx.args)
+
+
 def _dispatch_rule(action: str, handler) -> DispatchRule:
     return DispatchRule(action, action_runtime_required(action), handler)
 
@@ -1036,6 +1043,7 @@ COMMAND_DISPATCH_REGISTRY = {
     "innovate_techniques": _dispatch_rule("innovate_techniques", _handle_innovate_techniques_dispatch),
     "innovate_to_goals": _dispatch_rule("innovate_to_goals", _handle_innovate_to_goals_dispatch),
     "innovate_insights": _dispatch_rule("innovate_insights", _handle_innovate_insights_dispatch),
+    "agent_run": _dispatch_rule("agent_run", _handle_agent_run_dispatch),
     "interactive": _dispatch_rule("interactive", _handle_interactive_dispatch),
 }
 

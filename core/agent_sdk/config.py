@@ -53,6 +53,16 @@ class AgentSDKConfig:
     skill_weight_failure_delta: float = -0.05
     skill_weight_cap: float = 1.0
     skill_weight_floor: float = 0.1
+    # Semantic scanner config
+    semantic_index_path: Path = field(default_factory=lambda: Path("memory/semantic_index.db"))
+    scan_llm_budget_usd: float = 0.50
+    scan_llm_model: str = "claude-haiku-4-5"
+    scan_exclude_patterns: List[str] = field(default_factory=lambda: [
+        ".git", "__pycache__", "node_modules", ".venv", "venv", "*.egg-info",
+    ])
+    scan_min_function_lines: int = 10
+    scan_min_file_lines: int = 5
+    scan_batch_size: int = 10
 
     @classmethod
     def from_aura_config(cls, aura_config: Dict[str, Any]) -> "AgentSDKConfig":
@@ -81,6 +91,15 @@ class AgentSDKConfig:
             skill_weight_failure_delta=sdk_section.get("skill_weight_failure_delta", -0.05),
             skill_weight_cap=sdk_section.get("skill_weight_cap", 1.0),
             skill_weight_floor=sdk_section.get("skill_weight_floor", 0.1),
+            semantic_index_path=Path(sdk_section.get("semantic_index_path", "memory/semantic_index.db")),
+            scan_llm_budget_usd=sdk_section.get("scan_llm_budget_usd", 0.50),
+            scan_llm_model=sdk_section.get("scan_llm_model", "claude-haiku-4-5"),
+            scan_exclude_patterns=sdk_section.get("scan_exclude_patterns", [
+                ".git", "__pycache__", "node_modules", ".venv", "venv", "*.egg-info",
+            ]),
+            scan_min_function_lines=sdk_section.get("scan_min_function_lines", 10),
+            scan_min_file_lines=sdk_section.get("scan_min_file_lines", 5),
+            scan_batch_size=sdk_section.get("scan_batch_size", 10),
         )
 
     def apply_env_overrides(self) -> None:

@@ -88,10 +88,12 @@ class ContextBuilder:
         project_root: Path,
         brain: Any = None,
         vector_store: Any = None,
+        semantic_querier: Any = None,
     ) -> None:
         self._project_root = project_root
         self._brain = brain
         self._vector_store = vector_store
+        self._semantic_querier = semantic_querier
 
     def classify_goal(self, goal: str) -> str:
         """Classify goal using keyword-overlap scoring (no LLM call).
@@ -135,10 +137,30 @@ class ContextBuilder:
         """Return available MCP tool categories."""
         return list(_MCP_CATEGORIES.keys())
 
+    def _get_codebase_context(self, goal: str) -> Dict[str, Any]:
+        """Query semantic index for goal-relevant codebase context."""
+        if self._semantic_querier is None:
+            return {}
+        try:
+            overview = self._semantic_querier.architecture_overview()
+            relevant = self._semantic_querier.find_similar(goal, limit=5)
+            goal_files = [s["path"] for s in relevant if "path" in s]
+            impact = []
+            for f in goal_files[:3]:
+                deps = self._semantic_querier.what_depends_on(f)
+                impact.extend(deps)
+            return {
+                "codebase_overview": overview,
+                "relevant_symbols": relevant,
+                "impact_radius": impact,
+            }
+        except Exception:
+            return {}
+
     def build(self, goal: str) -> Dict[str, Any]:
         """Build complete context dict for a goal."""
         goal_type = self.classify_goal(goal)
-        return {
+        ctx = {
             "goal": goal,
             "goal_type": goal_type,
             "project_root": str(self._project_root),
@@ -146,6 +168,8 @@ class ContextBuilder:
             "memory_hints": self._get_memory_hints(goal),
             "available_mcp_categories": self._get_available_mcp_categories(),
         }
+        ctx.update(self._get_codebase_context(goal))
+        return ctx
 
     def build_system_prompt(self, goal: str, goal_type: str, context: Optional[Dict[str, Any]] = None) -> str:
         """Build the system prompt for the Agent SDK session."""
@@ -174,6 +198,21 @@ class ContextBuilder:
                 parts.append(f"### Workflow\n{context['workflow_info']}")
             if context.get("model_tier"):
                 parts.append(f"### Model Tier\n{context['model_tier']}")
+            if context.get("codebase_overview"):
+                overview = context["codebase_overview"]
+                summary = overview.get("summary", "")
+                parts.append(f"### Codebase Understanding\n**Architecture:** {summary}")
+            if context.get("relevant_symbols"):
+                lines = []
+                for s in context["relevant_symbols"][:5]:
+                    desc = s.get("intent_summary", s.get("docstring", ""))
+                    lines.append(f"- {s.get('path', '?')}: {s['name']} — {desc}")
+                if lines:
+                    parts.append("**Relevant Code:**\n" + "\n".join(lines))
+            if context.get("impact_radius"):
+                paths = list(set(d["path"] for d in context["impact_radius"][:10]))
+                if paths:
+                    parts.append(f"**Impact Radius:** {len(paths)} files affected: {', '.join(paths[:5])}")
             context_section = "\n\n".join(parts)
 
         return _SYSTEM_PROMPT_TEMPLATE.format(

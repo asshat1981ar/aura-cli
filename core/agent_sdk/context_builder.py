@@ -161,6 +161,19 @@ class ContextBuilder:
             if context.get("recommended_skills"):
                 skills = ", ".join(context["recommended_skills"])
                 parts.append(f"### Recommended Skills\n{skills}")
+            if context.get("failure_patterns"):
+                patterns = "\n".join(f"- {p}" for p in context["failure_patterns"])
+                parts.append(f"### Failure Patterns\nRecent failures for this goal type:\n{patterns}")
+            if context.get("skill_weights"):
+                sorted_skills = sorted(
+                    context["skill_weights"].items(), key=lambda x: x[1], reverse=True
+                )
+                weights_str = ", ".join(f"{name} ({w:.1f})" for name, w in sorted_skills)
+                parts.append(f"### Skill Weights\n{weights_str}")
+            if context.get("workflow_info"):
+                parts.append(f"### Workflow\n{context['workflow_info']}")
+            if context.get("model_tier"):
+                parts.append(f"### Model Tier\n{context['model_tier']}")
             context_section = "\n\n".join(parts)
 
         return _SYSTEM_PROMPT_TEMPLATE.format(

@@ -40,19 +40,24 @@ class GitHubApp:
         private_key: str,
         webhook_secret: Optional[str] = None,
     ):
+        self.app_id = app_id
+        self.private_key = private_key
+        self.webhook_secret = webhook_secret
+        
+        # App-level client (for app operations) - lazy initialization
+        self._app_auth = None
+        self._app_client = None
+    
+    def _ensure_client(self):
+        """Ensure GitHub client is initialized."""
         if not GITHUB_AVAILABLE:
             raise ImportError(
                 "GitHub integration requires PyGithub. "
                 "Install with: pip install PyGithub"
             )
-        
-        self.app_id = app_id
-        self.private_key = private_key
-        self.webhook_secret = webhook_secret
-        
-        # App-level client (for app operations)
-        self._app_auth = Auth.AppAuth(app_id, private_key)
-        self._app_client = Github(auth=self._app_auth)
+        if self._app_client is None:
+            self._app_auth = Auth.AppAuth(self.app_id, self.private_key)
+            self._app_client = Github(auth=self._app_auth)
     
     def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:
         """Verify GitHub webhook signature."""
@@ -68,8 +73,9 @@ class GitHubApp:
         
         return hmac.compare_digest(f"sha256={expected}", signature)
     
-    def get_installation_client(self, installation_id: int) -> Github:
+    def get_installation_client(self, installation_id: int):
         """Get GitHub client for specific installation."""
+        self._ensure_client()
         auth = self._app_auth.get_installation_auth(installation_id)
         return Github(auth=auth)
     
@@ -262,6 +268,7 @@ class GitHubApp:
         installation_id: Optional[int] = None,
     ) -> Dict:
         """Create a pull request."""
+        self._ensure_client()
         if installation_id:
             client = self.get_installation_client(installation_id)
         else:

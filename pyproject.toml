@@ -49,6 +49,14 @@ dev = [
     "pip-audit>=2.7",
     "pre-commit>=3.0",
 ]
+github = [
+    "PyGithub>=2.1.0",
+]
+webui = [
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.0",
+    "redis>=5.0.0",
+]
 
 [project.scripts]
 aura = "aura_cli.cli_main:main"

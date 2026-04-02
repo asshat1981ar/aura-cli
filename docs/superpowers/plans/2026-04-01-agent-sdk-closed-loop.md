@@ -845,14 +845,17 @@ def _handle_run_sandbox(
         from agents.sandbox import SandboxAgent
 
         agent = SandboxAgent(brain=brain, timeout=args.get("timeout", 30))
-        result = agent.run({
-            "code": args["code"],
-            "language": args.get("language", "python"),
-            "project_root": str(project_root),
-        })
-        return result if isinstance(result, dict) else {"output": str(result)}
+        # SandboxAgent is NOT an Agent subclass — use run_code(), not run()
+        # Returns a SandboxResult dataclass with passed, exit_code, stdout, stderr
+        sandbox_result = agent.run_code(args["code"])
+        return {
+            "success": sandbox_result.passed,
+            "exit_code": sandbox_result.exit_code,
+            "stdout": sandbox_result.stdout,
+            "stderr": sandbox_result.stderr,
+        }
     except Exception as exc:
-        return {"output": "", "error": str(exc), "exit_code": 1}
+        return {"success": False, "stdout": "", "stderr": str(exc), "exit_code": 1}
 
 
 def _handle_apply_changes(
@@ -892,10 +895,14 @@ def _handle_verify_changes(
         from agents.verifier import VerifierAgent
 
         agent = VerifierAgent(timeout=120)
+        # VerifierAgent.run() expects change_set with nested changes list,
+        # not a flat changed_files key
+        changed_files = args.get("changed_files", [])
         result = agent.run({
-            "goal": args.get("goal", "verify changes"),
             "project_root": str(project_root or "."),
-            "changed_files": args.get("changed_files", []),
+            "change_set": {
+                "changes": [{"file_path": f} for f in changed_files]
+            },
         })
         return result if isinstance(result, dict) else {"passed": False, "raw": str(result)}
     except Exception as exc:

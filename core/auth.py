@@ -1,0 +1,368 @@
+"""OAuth2 authentication and authorization for AURA CLI.
+
+Provides JWT-based authentication with:
+- OAuth2 password flow for CLI/API access
+- API key authentication for service-to-service
+- Role-based access control (RBAC)
+- Token refresh and revocation
+"""
+
+from __future__ import annotations
+
+import hashlib
+import secrets
+from datetime import datetime, timedelta, timezone
+from enum import Enum
+from typing import Any, Optional
+
+from core.logging_utils import log_json
+
+# Optional JWT support
+try:
+    from jose import JWTError, jwt
+    JWT_AVAILABLE = True
+except ImportError:
+    JWT_AVAILABLE = False
+    jwt = None
+    JWTError = Exception
+
+# Optional password hashing
+try:
+    from passlib.context import CryptContext
+    PWD_CONTEXT = CryptContext(schemes=["bcrypt"], deprecated="auto")
+except ImportError:
+    PWD_CONTEXT = None
+
+
+class AuthError(Exception):
+    """Authentication/authorization error."""
+    pass
+
+
+class AuthenticationError(AuthError):
+    """Invalid credentials."""
+    pass
+
+
+class AuthorizationError(AuthError):
+    """Insufficient permissions."""
+    pass
+
+
+class TokenError(AuthError):
+    """Invalid or expired token."""
+    pass
+
+
+class UserRole(str, Enum):
+    """User roles for RBAC."""
+    ADMIN = "admin"
+    DEVELOPER = "developer"
+    VIEWER = "viewer"
+    SERVICE = "service"
+
+
+class User:
+    """User model for authentication."""
+    
+    def __init__(
+        self,
+        username: str,
+        hashed_password: Optional[str] = None,
+        role: UserRole = UserRole.VIEWER,
+        api_key: Optional[str] = None,
+        disabled: bool = False,
+        metadata: Optional[dict] = None,
+    ):
+        self.username = username
+        self.hashed_password = hashed_password
+        self.role = role
+        self.api_key = api_key
+        self.disabled = disabled
+        self.metadata = metadata or {}
+    
+    def has_permission(self, required_role: UserRole) -> bool:
+        """Check if user has required role or higher."""
+        role_hierarchy = {
+            UserRole.VIEWER: 0,
+            UserRole.DEVELOPER: 1,
+            UserRole.ADMIN: 2,
+            UserRole.SERVICE: 3,
+        }
+        return role_hierarchy.get(self.role, 0) >= role_hierarchy.get(required_role, 0)
+    
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize user to dict (excludes sensitive fields)."""
+        return {
+            "username": self.username,
+            "role": self.role.value,
+            "disabled": self.disabled,
+            "metadata": self.metadata,
+        }
+
+
+class AuthManager:
+    """Manages authentication and authorization."""
+    
+    def __init__(
+        self,
+        secret_key: str,
+        algorithm: str = "HS256",
+        access_token_expire_minutes: int = 30,
+        refresh_token_expire_days: int = 7,
+    ):
+        self._jwt_available = JWT_AVAILABLE
+        if not self._jwt_available and algorithm not in ("none", "dummy"):
+            # Allow initialization without JWT for non-token operations
+            pass
+        
+        self.secret_key = secret_key
+        self.algorithm = algorithm
+        self.access_token_expire_minutes = access_token_expire_minutes
+        self.refresh_token_expire_days = refresh_token_expire_days
+        self._users: dict[str, User] = {}
+        self._api_keys: dict[str, str] = {}  # api_key -> username
+        self._revoked_tokens: set[str] = set()
+    
+    def hash_password(self, password: str) -> str:
+        """Hash a password."""
+        if PWD_CONTEXT:
+            return PWD_CONTEXT.hash(password)
+        # Fallback: simple SHA256 (NOT for production)
+        return hashlib.sha256(password.encode()).hexdigest()
+    
+    def verify_password(self, plain_password: str, hashed_password: str) -> bool:
+        """Verify a password against its hash."""
+        if PWD_CONTEXT:
+            return PWD_CONTEXT.verify(plain_password, hashed_password)
+        # Fallback: simple SHA256 (NOT for production)
+        return hashlib.sha256(plain_password.encode()).hexdigest() == hashed_password
+    
+    def create_user(
+        self,
+        username: str,
+        password: Optional[str] = None,
+        role: UserRole = UserRole.VIEWER,
+        generate_api_key: bool = False,
+    ) -> User:
+        """Create a new user."""
+        if username in self._users:
+            raise AuthError(f"User '{username}' already exists")
+        
+        hashed_password = self.hash_password(password) if password else None
+        api_key = None
+        
+        if generate_api_key:
+            api_key = self._generate_api_key()
+        
+        user = User(
+            username=username,
+            hashed_password=hashed_password,
+            role=role,
+            api_key=api_key,
+        )
+        self._users[username] = user
+        
+        if api_key:
+            self._api_keys[api_key] = username
+        
+        log_json("INFO", "user_created", {"username": username, "role": role.value})
+        return user
+    
+    def authenticate_user(self, username: str, password: str) -> Optional[User]:
+        """Authenticate a user with username and password."""
+        user = self._users.get(username)
+        if not user:
+            return None
+        if user.disabled:
+            raise AuthenticationError("User account is disabled")
+        if not user.hashed_password:
+            raise AuthenticationError("User has no password set")
+        if not self.verify_password(password, user.hashed_password):
+            return None
+        
+        log_json("INFO", "user_authenticated", {"username": username})
+        return user
+    
+    def authenticate_api_key(self, api_key: str) -> Optional[User]:
+        """Authenticate using API key."""
+        username = self._api_keys.get(api_key)
+        if not username:
+            return None
+        
+        user = self._users.get(username)
+        if not user or user.disabled:
+            return None
+        
+        log_json("INFO", "api_key_authenticated", {"username": username})
+        return user
+    
+    def create_access_token(
+        self,
+        user: User,
+        expires_delta: Optional[timedelta] = None,
+    ) -> str:
+        """Create JWT access token for user."""
+        if not self._jwt_available:
+            raise ImportError("JWT not available. Install with: pip install python-jose[cryptography]")
+        
+        if expires_delta is None:
+            expires_delta = timedelta(minutes=self.access_token_expire_minutes)
+        
+        expire = datetime.now(timezone.utc) + expires_delta
+        
+        payload = {
+            "sub": user.username,
+            "role": user.role.value,
+            "exp": expire,
+            "iat": datetime.now(timezone.utc),
+            "jti": secrets.token_urlsafe(16),
+            "type": "access",
+        }
+        
+        token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+        log_json("INFO", "access_token_created", {"username": user.username})
+        return token
+    
+    def create_refresh_token(self, user: User) -> str:
+        """Create JWT refresh token."""
+        if not self._jwt_available:
+            raise ImportError("JWT not available. Install with: pip install python-jose[cryptography]")
+        
+        expire = datetime.now(timezone.utc) + timedelta(days=self.refresh_token_expire_days)
+        
+        payload = {
+            "sub": user.username,
+            "exp": expire,
+            "iat": datetime.now(timezone.utc),
+            "jti": secrets.token_urlsafe(16),
+            "type": "refresh",
+        }
+        
+        token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
+        log_json("INFO", "refresh_token_created", {"username": user.username})
+        return token
+    
+    def verify_token(self, token: str, token_type: str = "access") -> dict[str, Any]:
+        """Verify and decode a JWT token."""
+        if not self._jwt_available:
+            raise ImportError("JWT not available. Install with: pip install python-jose[cryptography]")
+        
+        if token in self._revoked_tokens:
+            raise TokenError("Token has been revoked")
+        
+        try:
+            payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
+            
+            if payload.get("type") != token_type:
+                raise TokenError(f"Invalid token type. Expected {token_type}")
+            
+            return payload
+            
+        except JWTError as e:
+            raise TokenError(f"Invalid token: {e}")
+    
+    def get_current_user(self, token: str) -> User:
+        """Get user from access token."""
+        payload = self.verify_token(token, "access")
+        username = payload.get("sub")
+        
+        if not username:
+            raise TokenError("Token missing subject")
+        
+        user = self._users.get(username)
+        if not user:
+            raise TokenError("User not found")
+        if user.disabled:
+            raise AuthenticationError("User account is disabled")
+        
+        return user
+    
+    def revoke_token(self, token: str) -> None:
+        """Revoke a token (add to blacklist)."""
+        self._revoked_tokens.add(token)
+        log_json("INFO", "token_revoked")
+    
+    def refresh_access_token(self, refresh_token: str) -> str:
+        """Create new access token from refresh token."""
+        payload = self.verify_token(refresh_token, "refresh")
+        username = payload.get("sub")
+        
+        if not username:
+            raise TokenError("Refresh token missing subject")
+        
+        user = self._users.get(username)
+        if not user or user.disabled:
+            raise TokenError("User not found or disabled")
+        
+        return self.create_access_token(user)
+    
+    def require_role(self, user: User, required_role: UserRole) -> None:
+        """Check if user has required role."""
+        if not user.has_permission(required_role):
+            raise AuthorizationError(
+                f"User '{user.username}' with role '{user.role.value}' "
+                f"does not have required permission '{required_role.value}'"
+            )
+    
+    def _generate_api_key(self) -> str:
+        """Generate a secure API key."""
+        return f"aura_{secrets.token_urlsafe(32)}"
+    
+    def regenerate_api_key(self, username: str) -> str:
+        """Regenerate API key for user."""
+        user = self._users.get(username)
+        if not user:
+            raise AuthError(f"User '{username}' not found")
+        
+        # Remove old API key
+        if user.api_key:
+            self._api_keys.pop(user.api_key, None)
+        
+        # Generate new key
+        new_key = self._generate_api_key()
+        user.api_key = new_key
+        self._api_keys[new_key] = username
+        
+        log_json("INFO", "api_key_regenerated", {"username": username})
+        return new_key
+    
+    def list_users(self) -> list[dict[str, Any]]:
+        """List all users (without sensitive data)."""
+        return [user.to_dict() for user in self._users.values()]
+    
+    def delete_user(self, username: str) -> bool:
+        """Delete a user."""
+        user = self._users.pop(username, None)
+        if user:
+            if user.api_key:
+                self._api_keys.pop(user.api_key, None)
+            log_json("INFO", "user_deleted", {"username": username})
+            return True
+        return False
+
+
+# Global auth manager instance
+_auth_manager: Optional[AuthManager] = None
+
+
+def init_auth(
+    secret_key: str,
+    algorithm: str = "HS256",
+    access_token_expire_minutes: int = 30,
+) -> AuthManager:
+    """Initialize global auth manager."""
+    global _auth_manager
+    _auth_manager = AuthManager(
+        secret_key=secret_key,
+        algorithm=algorithm,
+        access_token_expire_minutes=access_token_expire_minutes,
+    )
+    return _auth_manager
+
+
+def get_auth_manager() -> AuthManager:
+    """Get global auth manager."""
+    if _auth_manager is None:
+        raise RuntimeError("Auth manager not initialized. Call init_auth() first.")
+    return _auth_manager

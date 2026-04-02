@@ -70,6 +70,46 @@ Note: `package.json` exists but no npm scripts are defined.
 - PRs should include a clear description, rationale, and test results.
 - Screenshots are only needed for UI changes (rare in this repo).
 
+## Agent SDK Meta-Controller (Issue #378)
+The Agent SDK meta-controller provides Claude-powered orchestration with production resilience:
+
+- **Controller:** `core/agent_sdk/controller.py` - Main entry point (`AuraController`)
+- **Tools:** `core/agent_sdk/tool_registry.py` - MCP tool wrappers for AURA subsystems
+- **Resilience:** `core/agent_sdk/resilience.py` - Circuit breakers, retries, health monitoring
+- **Config:** `core/agent_sdk/config.py` - AgentSDKConfig with env overrides
+
+### Resilience Patterns (Production Hardening)
+The resilience module provides enterprise-grade fault tolerance:
+
+- **Circuit Breaker:** Prevents cascading failures by rejecting requests to failing MCP servers
+  - States: CLOSED (normal) → OPEN (failing) → HALF_OPEN (testing recovery)
+  - Configurable thresholds and recovery timeouts
+  
+- **Retry with Exponential Backoff:** Automatic retry for transient failures
+  - Configurable max attempts, base delay, jitter
+  - Retryable exception filtering
+  
+- **Health Monitoring:** Background health checks for all MCP servers
+  - Async health check loop with configurable intervals
+  - Tracks response times and consecutive failures
+  
+- **Resilient MCP Client:** Combines all patterns for robust tool invocation
+  - Usage: `ResilientMCPClient(health_monitor=monitor).invoke(server, tool, args)`
+
+### Health Check API
+```python
+from core.agent_sdk.resilience import get_health_monitor
+
+monitor = get_health_monitor()
+monitor.register_server("dev_tools", "http://localhost:8001")
+await monitor.start()  # Background health checks
+
+# Check server health
+health = monitor.get_health("dev_tools")
+print(health.healthy, health.response_time_ms)
+```
+
 ## Security & Configuration Tips
 - `aura.config.json` contains an API key placeholder; do not commit real secrets.
 - `.gitignore` excludes `.env`, `memory/*.db`, `memory/*.json`, and `.aura_history`.
+- MCP servers should use authentication in production (not yet implemented).

@@ -316,10 +316,10 @@ def __init__(
 
 When None, `_get_codebase_context()` returns empty dict — fully backward compatible. Existing callers that pass `(project_root, brain)` or `(project_root, brain, vector_store)` are unaffected.
 
-The controller creates the querier from config:
+The controller creates the querier from config. **Important:** The existing `_build_prompt()` method creates a fresh `ContextBuilder` internally — it must be changed to use `self.context_builder` instead, so the querier is available for prompt generation.
 
 ```python
-# In AuraController.__init__:
+# In AuraController.__init__ (after existing context_builder creation):
 querier = None
 if config.semantic_index_path.exists():
     from core.agent_sdk.semantic_querier import SemanticQuerier
@@ -329,6 +329,13 @@ self.context_builder = ContextBuilder(
     project_root=project_root, brain=brain,
     semantic_querier=querier,
 )
+
+# In AuraController._build_prompt() — change from creating fresh builder to:
+def _build_prompt(self, goal: str) -> str:
+    context = self.context_builder.build(goal=goal)
+    return self.context_builder.build_system_prompt(
+        goal=goal, goal_type=context["goal_type"], context=context,
+    )
 ```
 
 ### Tool Handler + Dependency Threading
@@ -368,7 +375,23 @@ def _handle_query_codebase(
         return {"error": str(exc)}
 ```
 
-`create_aura_tools()` gains an optional `semantic_querier` parameter (default None), threaded through to the handler via the existing closure-binding pattern. The controller passes its querier instance when building the MCP server:
+`create_aura_tools()` gains an optional `semantic_querier` parameter. Full updated signature:
+
+```python
+def create_aura_tools(
+    project_root: Path,
+    brain: Any = None,
+    model_adapter: Any = None,
+    goal_queue: Any = None,
+    goal_archive: Any = None,
+    config: Any = None,
+    semantic_querier: Any = None,   # NEW
+) -> List[AuraTool]:
+```
+
+The `semantic_querier` is added to the `deps` dict and bound to `_handle_query_codebase` via the existing closure pattern. The `query_codebase` tool is added to the `_TOOL_DEFS` list with `"handler": _handle_query_codebase`.
+
+The controller passes its querier instance:
 
 ```python
 # In AuraController._build_mcp_server():
@@ -376,8 +399,10 @@ tools = create_aura_tools(
     project_root=self.project_root,
     brain=self._brain,
     model_adapter=self._model_adapter,
-    ...,
-    semantic_querier=querier,  # NEW
+    goal_queue=self._goal_queue,
+    goal_archive=self._goal_archive,
+    config=self.config,
+    semantic_querier=querier,
 )
 ```
 
@@ -406,9 +431,28 @@ scan_min_file_lines: int = 5       # skip trivial files for LLM summaries
 scan_batch_size: int = 10           # functions per LLM call
 ```
 
-`from_aura_config()` must be updated to read all new fields from `aura_config.get("agent_sdk", {})`, following the existing pattern of `sdk_section.get("field_name", default)` with `Path()` wrapping for path fields.
+`from_aura_config()` must be updated to add these lines in the `cls(...)` call:
 
-**LLM routing:** `scan_llm_model` is passed to `ModelAdapter.respond()` as a model hint, not as a separate LLM calling path. The scanner calls `model_adapter.respond(prompt, model=config.scan_llm_model)` — this uses the existing model routing infrastructure. If `ModelAdapter` is not available, Layer 3 degrades gracefully (no summaries generated).
+```python
+            semantic_index_path=Path(sdk_section.get("semantic_index_path", "memory/semantic_index.db")),
+            scan_llm_budget_usd=sdk_section.get("scan_llm_budget_usd", 0.50),
+            scan_llm_model=sdk_section.get("scan_llm_model", "claude-haiku-4-5"),
+            scan_exclude_patterns=sdk_section.get("scan_exclude_patterns", [
+                ".git", "__pycache__", "node_modules", ".venv", "venv", "*.egg-info",
+            ]),
+            scan_min_function_lines=sdk_section.get("scan_min_function_lines", 10),
+            scan_min_file_lines=sdk_section.get("scan_min_file_lines", 5),
+            scan_batch_size=sdk_section.get("scan_batch_size", 10),
+```
+
+**LLM routing:** The scanner uses `ModelAdapter.respond_for_role(route_key, prompt)` — not `respond()` which takes only a prompt string. The route_key is set to `"code_generation"` (which maps to the cheapest configured model in `settings.json` model_routing). This uses the existing model routing infrastructure without requiring a new parameter.
+
+```python
+# In semantic_scanner.py Layer 3:
+summary = model_adapter.respond_for_role("code_generation", prompt)
+```
+
+If `ModelAdapter` is not available, Layer 3 degrades gracefully (no summaries generated). The `scan_llm_model` config field is reserved for future use when `ModelAdapter` supports explicit model override — for now it serves as documentation of intent.
 
 ## 8. File Structure
 

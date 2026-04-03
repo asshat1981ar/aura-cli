@@ -1,5 +1,6 @@
 {
   "action_spec_actions": [
+    "agent_run",
     "bootstrap",
     "contract_report",
     "diag",
@@ -12,6 +13,14 @@
     "goal_run",
     "goal_status",
     "help",
+    "innovate_export",
+    "innovate_insights",
+    "innovate_list",
+    "innovate_resume",
+    "innovate_show",
+    "innovate_start",
+    "innovate_techniques",
+    "innovate_to_goals",
     "interactive",
     "json_help",
     "logs",
@@ -73,6 +82,38 @@
       "help"
     ],
     [
+      "innovate",
+      "export"
+    ],
+    [
+      "innovate",
+      "insights"
+    ],
+    [
+      "innovate",
+      "list"
+    ],
+    [
+      "innovate",
+      "resume"
+    ],
+    [
+      "innovate",
+      "show"
+    ],
+    [
+      "innovate",
+      "start"
+    ],
+    [
+      "innovate",
+      "techniques"
+    ],
+    [
+      "innovate",
+      "to-goals"
+    ],
+    [
       "logs"
     ],
     [
@@ -130,6 +171,7 @@
   ],
   "customizers_on_non_leaf_paths": [],
   "dispatch_actions": [
+    "agent_run",
     "bootstrap",
     "contract_report",
     "diag",
@@ -142,6 +184,14 @@
     "goal_run",
     "goal_status",
     "help",
+    "innovate_export",
+    "innovate_insights",
+    "innovate_list",
+    "innovate_resume",
+    "innovate_show",
+    "innovate_start",
+    "innovate_techniques",
+    "innovate_to_goals",
     "interactive",
     "json_help",
     "logs",
@@ -168,6 +218,7 @@
   "extra_required_parent_paths": [],
   "failure_keys": [],
   "help_actions": [
+    "agent_run",
     "bootstrap",
     "contract_report",
     "diag",
@@ -179,6 +230,14 @@
     "goal_run",
     "goal_status",
     "help",
+    "innovate_export",
+    "innovate_insights",
+    "innovate_list",
+    "innovate_resume",
+    "innovate_show",
+    "innovate_start",
+    "innovate_techniques",
+    "innovate_to_goals",
     "logs",
     "mcp_call",
     "mcp_tools",
@@ -199,6 +258,13 @@
   ],
   "help_actions_with_runtime_mismatches": [],
   "help_paths": [
+    [
+      "agent"
+    ],
+    [
+      "agent",
+      "run"
+    ],
     [
       "bootstrap"
     ],
@@ -242,6 +308,41 @@
     ],
     [
       "help"
+    ],
+    [
+      "innovate"
+    ],
+    [
+      "innovate",
+      "export"
+    ],
+    [
+      "innovate",
+      "insights"
+    ],
+    [
+      "innovate",
+      "list"
+    ],
+    [
+      "innovate",
+      "resume"
+    ],
+    [
+      "innovate",
+      "show"
+    ],
+    [
+      "innovate",
+      "start"
+    ],
+    [
+      "innovate",
+      "techniques"
+    ],
+    [
+      "innovate",
+      "to-goals"
     ],
     [
       "logs"
@@ -319,6 +420,10 @@
   ],
   "leaf_paths": [
     [
+      "agent",
+      "run"
+    ],
+    [
       "bootstrap"
     ],
     [
@@ -358,6 +463,38 @@
     ],
     [
       "help"
+    ],
+    [
+      "innovate",
+      "export"
+    ],
+    [
+      "innovate",
+      "insights"
+    ],
+    [
+      "innovate",
+      "list"
+    ],
+    [
+      "innovate",
+      "resume"
+    ],
+    [
+      "innovate",
+      "show"
+    ],
+    [
+      "innovate",
+      "start"
+    ],
+    [
+      "innovate",
+      "techniques"
+    ],
+    [
+      "innovate",
+      "to-goals"
     ],
     [
       "logs"
@@ -426,7 +563,13 @@
   "ok": true,
   "parent_paths": [
     [
+      "agent"
+    ],
+    [
       "goal"
+    ],
+    [
+      "innovate"
     ],
     [
       "mcp"
@@ -445,6 +588,13 @@
     ]
   ],
   "parser_paths": [
+    [
+      "agent"
+    ],
+    [
+      "agent",
+      "run"
+    ],
     [
       "bootstrap"
     ],
@@ -488,6 +638,41 @@
     ],
     [
       "help"
+    ],
+    [
+      "innovate"
+    ],
+    [
+      "innovate",
+      "export"
+    ],
+    [
+      "innovate",
+      "insights"
+    ],
+    [
+      "innovate",
+      "list"
+    ],
+    [
+      "innovate",
+      "resume"
+    ],
+    [
+      "innovate",
+      "show"
+    ],
+    [
+      "innovate",
+      "start"
+    ],
+    [
+      "innovate",
+      "techniques"
+    ],
+    [
+      "innovate",
+      "to-goals"
     ],
     [
       "logs"
@@ -565,7 +750,13 @@
   ],
   "required_parent_paths": [
     [
+      "agent"
+    ],
+    [
       "goal"
+    ],
+    [
+      "innovate"
     ],
     [
       "mcp"
@@ -587,6 +778,13 @@
   "smoke_dispatch_mismatches": [],
   "smoke_invocation_failures": [],
   "spec_paths": [
+    [
+      "agent"
+    ],
+    [
+      "agent",
+      "run"
+    ],
     [
       "bootstrap"
     ],
@@ -630,6 +828,41 @@
     ],
     [
       "help"
+    ],
+    [
+      "innovate"
+    ],
+    [
+      "innovate",
+      "export"
+    ],
+    [
+      "innovate",
+      "insights"
+    ],
+    [
+      "innovate",
+      "list"
+    ],
+    [
+      "innovate",
+      "resume"
+    ],
+    [
+      "innovate",
+      "show"
+    ],
+    [
+      "innovate",
+      "start"
+    ],
+    [
+      "innovate",
+      "techniques"
+    ],
+    [
+      "innovate",
+      "to-goals"
     ],
     [
       "logs"

@@ -1,1 +1,1 @@
-Error: Unknown command help topic 'nope'.
+Error: Unknown command help topic 'nope'. Did you mean 'innovate'?

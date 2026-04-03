@@ -447,6 +447,16 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
             "python3 main.py creative stats",
         ),
     ),
+    CommandSpec(
+        path=("agent",),
+        summary="Agent SDK commands",
+        description="Commands for running goals via the Agent SDK meta-controller.",
+    ),
+    CommandSpec(
+        path=("agent", "run"),
+        summary="Run goal via Agent SDK meta-controller",
+        description="Execute a development goal using Claude-as-brain orchestration with dynamic tool/skill/workflow selection.",
+    ),
 )
 
 COMMAND_SPECS_BY_PATH: dict[tuple[str, ...], CommandSpec] = {spec.path: spec for spec in COMMAND_SPECS}
@@ -513,6 +523,11 @@ _ACTION_SMOKE_OVERRIDES: dict[str, tuple[str, ...]] = {
     "goal_add_run": ("goal", "add", "example-goal", "--run"),
     "sadd_run": ("sadd", "run", "--spec", "example-spec.md", "--dry-run"),
     "sadd_resume": ("sadd", "resume", "--session-id", "example-id"),
+    "innovate_show": ("innovate", "show", "example-id"),
+    "innovate_resume": ("innovate", "resume", "example-id"),
+    "innovate_export": ("innovate", "export", "example-id"),
+    "innovate_to_goals": ("innovate", "to-goals", "--session-id", "example-id"),
+    "creative_solve": ("creative", "solve", "example-problem"),
 }
 
 _SMOKE_POSITIONAL_ARGS_BY_PATH: dict[tuple[str, ...], tuple[str, ...]] = {

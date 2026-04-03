@@ -675,3 +675,19 @@ Examples:
 - `python3 main.py innovate insights`
 - `python3 main.py innovate insights --session-id abc123`
 - `python3 main.py innovate insights --json`
+
+## `agent`
+
+### `aura agent`
+
+Agent SDK commands
+
+Commands for running goals via the Agent SDK meta-controller.
+
+### `aura agent run`
+
+Run goal via Agent SDK meta-controller
+
+Execute a development goal using Claude-as-brain orchestration with dynamic tool/skill/workflow selection.
+
+`action`: `agent_run` `requires_runtime`: `true`

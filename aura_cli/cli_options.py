@@ -27,7 +27,9 @@ from aura_cli.options import (
 
 
 _REQUIRED_SUBCOMMAND_PARENT_PATHS: set[tuple[str, ...]] = {
+    ("agent",),
     ("goal",),
+    ("innovate",),
     ("mcp",),
     ("memory",),
     ("queue",),

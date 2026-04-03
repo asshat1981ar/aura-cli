@@ -371,7 +371,9 @@ def _normalize_for_check(text: str) -> str:
     # Collapse full 40-char SHAs and short 7-char hex abbreviations
     text = re.sub(r"`[0-9a-f]{40}`", "`<SHA>`", text)
     text = re.sub(r"`[0-9a-f]{7}`", "`<sha>`", text)
-    # Collapse branch names on the "Branch:" header line
+    # Collapse branch/SHA pairs in table cells: `<branch>` / `<sha>`
+    text = re.sub(r"`[^`]+` / `<sha>`", "`<branch>` / `<sha>`", text)
+    # Collapse branch names on standalone "Branch:" header lines
     text = re.sub(r"^(Branch: *)`[^`]+`", r"\1`<branch>`", text, flags=re.MULTILINE)
     return text
 

@@ -76,6 +76,13 @@ class TestBaseBrainstormingBot(unittest.TestCase):
             def technique_name(self) -> str:
                 return "TestTechnique"
 
+            @property
+            def technique_key(self) -> str:
+                return "test_technique"
+
+            def _generate_template(self, task: str, context: str = "") -> List[Idea]:
+                return [self._create_idea("A test idea")]
+
             def generate(self, task: str, context: str = "") -> List[Idea]:
                 return [self._create_idea("A test idea")]
 
@@ -95,6 +102,13 @@ class TestBaseBrainstormingBot(unittest.TestCase):
             def technique_name(self) -> str:
                 return "Defaults"
 
+            @property
+            def technique_key(self) -> str:
+                return "defaults"
+
+            def _generate_template(self, task: str, context: str = "") -> List[Idea]:
+                return [self._create_idea("default scores")]
+
             def generate(self, task: str, context: str = "") -> List[Idea]:
                 return [self._create_idea("default scores")]
 
@@ -112,6 +126,13 @@ class TestBaseBrainstormingBot(unittest.TestCase):
             def technique_name(self) -> str:
                 return "Custom"
 
+            @property
+            def technique_key(self) -> str:
+                return "custom"
+
+            def _generate_template(self, task: str, context: str = "") -> List[Idea]:
+                return [self._create_idea("custom", novelty=0.9, feasibility=0.3, impact=0.7)]
+
             def generate(self, task: str, context: str = "") -> List[Idea]:
                 return [self._create_idea("custom", novelty=0.9, feasibility=0.3, impact=0.7)]
 
@@ -128,6 +149,13 @@ class TestBaseBrainstormingBot(unittest.TestCase):
             @property
             def technique_name(self) -> str:
                 return "Meta"
+
+            @property
+            def technique_key(self) -> str:
+                return "meta"
+
+            def _generate_template(self, task: str, context: str = "") -> List[Idea]:
+                return [self._create_idea("no meta")]
 
             def generate(self, task: str, context: str = "") -> List[Idea]:
                 return [self._create_idea("no meta")]

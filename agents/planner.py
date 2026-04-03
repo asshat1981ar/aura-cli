@@ -6,7 +6,7 @@ from core.logging_utils import log_json
 from pydantic import ValidationError
 
 try:
-    from agents.schemas import PlannerOutput, PlanStep
+    from agents.schemas import PlannerOutput
     from agents.prompt_manager import render_prompt, get_cached_prompt_stats
     SCHEMAS_AVAILABLE = True
 except ImportError:

@@ -1,7 +1,6 @@
 import ast
 from dataclasses import dataclass
-from typing import List, Dict, Set, Optional
-from pathlib import Path
+from typing import List, Dict, Set
 
 @dataclass
 class DuplicateCode:

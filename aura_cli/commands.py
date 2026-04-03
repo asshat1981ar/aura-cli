@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-from typing import Optional
 
 from core.capability_manager import build_capability_status_report, capability_doctor_check
 from core.goal_queue import GoalQueue
@@ -369,7 +368,7 @@ def _handle_innovate_start(args, runtime=None):
     else:
         if len(sessions) == 1:
             s = sessions[0]
-            print(f"\n🚀 Innovation Session Started")
+            print("\n🚀 Innovation Session Started")
             print(f"Problem: {s.problem_statement}")
             print(f"Techniques: {', '.join(techniques)}")
             print(f"Session ID: {s.session_id}")
@@ -380,20 +379,20 @@ def _handle_innovate_start(args, runtime=None):
                 for r in phase_results:
                     if 'ideas_generated' in r:
                         print(f"Ideas generated: {r['ideas_generated']}")
-            print(f"\nNext steps:")
+            print("\nNext steps:")
             print(f"  Show:   python3 main.py innovate show {s.session_id}")
             print(f"  Resume: python3 main.py innovate resume {s.session_id} --phase divergence")
         else:
             print(f"\n🚀 Started {len(sessions)} Innovation Sessions")
             print(f"Techniques: {', '.join(techniques)}")
-            print(f"\nSessions:")
+            print("\nSessions:")
             for s in sessions:
                 print(f"  {s.session_id}: {s.problem_statement[:50]}...")
             if phase_results:
                 total_ideas = sum(r.get('ideas_generated', 0) for r in phase_results)
                 print(f"\n✅ Phase '{execute_phase}' executed for all sessions")
                 print(f"Total ideas generated: {total_ideas}")
-            print(f"\nShow all: python3 main.py innovate list")
+            print("\nShow all: python3 main.py innovate list")
 
 
 def _handle_innovate_list(args, runtime=None):
@@ -531,7 +530,7 @@ def _handle_innovate_show(args, runtime=None):
         print(f"Status: {'🟢 Active' if session.status == 'active' else '✅ ' + session.status}")
         print(f"Current Phase: {session.current_phase.value}")
         print(f"Techniques: {', '.join(session.techniques)}")
-        print(f"\nProgress:")
+        print("\nProgress:")
         print(f"  Ideas generated: {ideas_count}")
         print(f"  Ideas selected: {selected_count}")
         
@@ -548,7 +547,7 @@ def _handle_innovate_show(args, runtime=None):
             if len(all_ideas) > 20:
                 print(f"  ... and {len(all_ideas) - 20} more")
         
-        print(f"\nNext steps:")
+        print("\nNext steps:")
         print(f"  Resume: python3 main.py innovate resume {session.session_id} --phase divergence")
         print(f"  Export: python3 main.py innovate export {session.session_id}")
 
@@ -628,7 +627,7 @@ def _handle_innovate_resume(args, runtime=None):
                 print(f"Ideas in this phase: {result['ideas_count']}")
             print(f"\nSession now at: {session.current_phase.value}")
             print(f"Total ideas: {session.ideas_generated}")
-            print(f"\nNext steps:")
+            print("\nNext steps:")
             print(f"  Show:   python3 main.py innovate show {session_id}")
             print(f"  Resume: python3 main.py innovate resume {session_id}")
             
@@ -676,7 +675,7 @@ def _handle_innovate_techniques(args):
             print(f"\n{t['id']}")
             print(f"  Name: {t['name']}")
             print(f"  Description: {t['description']}")
-        print(f"\nUsage: python3 main.py innovate start 'Problem' --techniques scamper,six_hats")
+        print("\nUsage: python3 main.py innovate start 'Problem' --techniques scamper,six_hats")
 
 
 def _generate_json_export(session, all_ideas, selected_ideas):
@@ -818,60 +817,60 @@ def _generate_html_export(session, all_ideas, selected_ideas):
 def _generate_markdown_export(session, all_ideas, selected_ideas):
     """Generate Markdown export content."""
     lines = [
-        f"# Innovation Session Report",
-        f"",
+        "# Innovation Session Report",
+        "",
         f"**Session ID:** {session.session_id}",
         f"**Status:** {session.status}",
         f"**Current Phase:** {session.current_phase.value}",
         f"**Created:** {session.created_at.strftime('%Y-%m-%d %H:%M') if session.created_at else 'Unknown'}",
-        f"",
-        f"## Problem Statement",
-        f"",
+        "",
+        "## Problem Statement",
+        "",
         f"{session.problem_statement}",
-        f"",
-        f"## Techniques Used",
-        f"",
+        "",
+        "## Techniques Used",
+        "",
         f"{', '.join(session.techniques)}",
-        f"",
-        f"## Summary",
-        f"",
+        "",
+        "## Summary",
+        "",
         f"- **Total Ideas:** {session.ideas_generated}",
         f"- **Selected Ideas:** {session.ideas_selected}",
         f"- **Phases Completed:** {', '.join(p.value for p in session.phases_completed) or 'None'}",
-        f"",
+        "",
     ]
     
     if session.output:
         lines.extend([
-            f"## Scores",
-            f"",
+            "## Scores",
+            "",
             f"- **Diversity:** {session.output.diversity_score:.2f}",
             f"- **Novelty:** {session.output.novelty_score:.2f}",
             f"- **Feasibility:** {session.output.feasibility_score:.2f}",
-            f"",
+            "",
         ])
     
     if all_ideas:
         lines.extend([
-            f"## Ideas Generated",
-            f"",
+            "## Ideas Generated",
+            "",
         ])
         
         for i, idea in enumerate(all_ideas, 1):
             selected = "✅ Selected" if idea in selected_ideas else ""
             lines.append(f"### Idea {i} ({idea.technique}) {selected}")
-            lines.append(f"")
+            lines.append("")
             lines.append(f"{idea.description}")
-            lines.append(f"")
+            lines.append("")
             lines.append(f"**Scores:** Novelty: {idea.novelty:.2f} | Feasibility: {idea.feasibility:.2f} | Impact: {idea.impact:.2f}")
-            lines.append(f"")
+            lines.append("")
     
     if selected_ideas:
-        lines.append(f"## Selected Ideas Summary")
-        lines.append(f"")
+        lines.append("## Selected Ideas Summary")
+        lines.append("")
         for idea in selected_ideas:
             lines.append(f"- **{idea.technique}**: {idea.description[:100]}...")
-        lines.append(f"")
+        lines.append("")
     
     return "\n".join(lines)
 
@@ -999,8 +998,8 @@ def _handle_innovate_to_goals(args, runtime=None):
     print(f"\n✅ Created {created} goals from {len(ideas_to_convert)} ideas")
     
     if goal_queue:
-        print(f"\nView goals: python3 main.py goal status")
-        print(f"Run goals:  python3 main.py goal run")
+        print("\nView goals: python3 main.py goal status")
+        print("Run goals:  python3 main.py goal run")
 
 
 def _handle_innovate_insights(args, runtime=None):
@@ -1133,30 +1132,30 @@ def _print_session_insights(insights):
     print(f"Problem: {insights['problem']}")
     print(f"Status: {insights['status']}")
     print(f"Techniques: {', '.join(insights['techniques_used'])}")
-    print(f"\n📈 Summary:")
+    print("\n📈 Summary:")
     print(f"  Ideas generated: {insights['ideas_generated']}")
     print(f"  Ideas selected: {insights['ideas_selected']}")
     
     if 'technique_breakdown' in insights:
-        print(f"\n🔧 Technique Breakdown:")
+        print("\n🔧 Technique Breakdown:")
         for tech, count in sorted(insights['technique_breakdown'].items(), key=lambda x: -x[1]):
             print(f"  {tech}: {count} ideas")
     
     if 'quality_metrics' in insights:
         m = insights['quality_metrics']
-        print(f"\n📊 Quality Metrics (All Ideas):")
+        print("\n📊 Quality Metrics (All Ideas):")
         print(f"  Avg Novelty: {m['avg_novelty']:.2f}")
         print(f"  Avg Feasibility: {m['avg_feasibility']:.2f}")
         print(f"  Avg Impact: {m['avg_impact']:.2f}")
         
         if insights['ideas_selected'] > 0:
-            print(f"\n⭐ Selected Ideas Quality:")
+            print("\n⭐ Selected Ideas Quality:")
             print(f"  Avg Novelty: {m['selected_avg_novelty']:.2f}")
             print(f"  Avg Feasibility: {m['selected_avg_feasibility']:.2f}")
             print(f"  Avg Impact: {m['selected_avg_impact']:.2f}")
     
     if 'top_ideas' in insights:
-        print(f"\n🏆 Top Ideas by Score:")
+        print("\n🏆 Top Ideas by Score:")
         for i, idea in enumerate(insights['top_ideas'], 1):
             print(f"  {i}. [{idea['technique']}] (Score: {idea['total_score']})")
             print(f"     {idea['description'][:60]}...")
@@ -1164,25 +1163,25 @@ def _print_session_insights(insights):
 
 def _print_global_insights(insights):
     """Print global insights in table format."""
-    print(f"\n🌍 Global Innovation Insights")
+    print("\n🌍 Global Innovation Insights")
     print("-" * 60)
-    print(f"\n📊 Overview:")
+    print("\n📊 Overview:")
     print(f"  Total sessions: {insights['total_sessions']}")
     print(f"  Total ideas: {insights['total_ideas']}")
     print(f"  Total selected: {insights['total_selected']}")
     print(f"  Selection rate: {insights['selection_rate']:.1%}")
     
-    print(f"\n🔧 Technique Usage:")
+    print("\n🔧 Technique Usage:")
     for tech, count in sorted(insights['technique_usage'].items(), key=lambda x: -x[1]):
         print(f"  {tech}: {count} sessions")
     
-    print(f"\n📈 Average Scores:")
+    print("\n📈 Average Scores:")
     scores = insights['average_scores']
     print(f"  Novelty: {scores['novelty']:.2f}")
     print(f"  Feasibility: {scores['feasibility']:.2f}")
     print(f"  Diversity: {scores['diversity']:.2f}")
     
-    print(f"\n📋 Sessions by Status:")
+    print("\n📋 Sessions by Status:")
     for status, count in insights['sessions_by_status'].items():
         print(f"  {status.capitalize()}: {count}")
 

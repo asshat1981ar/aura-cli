@@ -4,10 +4,30 @@ This module coordinates multiple specialized agents to analyze project architect
 predict failure modes, suggest improvements, and generate comprehensive summaries.
 """
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from datetime import datetime
 
 from core.logging_utils import log_json
+
+
+class _AgentStub:
+    """Placeholder for unimplemented external agent."""
+    @classmethod
+    def analyze_architecture(cls, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        return {}
+
+    @classmethod
+    def assess_capabilities(cls, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        return {}
+
+    @classmethod
+    def create_execution_plan(cls, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        return {}
+
+
+PythonAgent = _AgentStub
+TypeScriptAgent = _AgentStub
+CodeSearchAgent = _AgentStub
 
 
 def create_multi_agent_workflow():

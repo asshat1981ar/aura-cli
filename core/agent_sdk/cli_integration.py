@@ -14,7 +14,6 @@ logger = logging.getLogger(__name__)
 
 def build_controller_from_args(args: Any) -> Any:
     """Build an AuraController from parsed CLI args."""
-    from core.agent_sdk.config import AgentSDKConfig
     from core.agent_sdk.controller import AuraController
 
     # Load base config from aura.config.json if available

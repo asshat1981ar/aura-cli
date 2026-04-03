@@ -2,7 +2,6 @@
 
 import typer
 import uvicorn
-from typing import Optional
 
 from core.logging_utils import log_json
 
@@ -37,7 +36,7 @@ def status():
         response = requests.get("http://localhost:8000/health", timeout=5)
         if response.status_code == 200:
             data = response.json()
-            typer.echo(f"✓ API server is running")
+            typer.echo("✓ API server is running")
             typer.echo(f"  Status: {data['status']}")
             typer.echo(f"  Timestamp: {data['timestamp']}")
         else:

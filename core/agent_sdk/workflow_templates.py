@@ -8,7 +8,7 @@ from __future__ import annotations
 import enum
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
@@ -167,7 +167,6 @@ class WorkflowExecutor:
             if not phase.required:
                 continue  # skip optional failures
 
-            retried = False
             for attempt in range(phase.retry_on_fail):
                 if total_retries >= workflow.max_retries_total:
                     break
@@ -175,7 +174,6 @@ class WorkflowExecutor:
                 pr = self._run_phase(phase, goal, context)
                 results.append(pr)
                 if pr.success:
-                    retried = True
                     break
 
             if not pr.success and phase.required:

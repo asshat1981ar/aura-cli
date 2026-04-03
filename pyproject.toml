@@ -73,9 +73,14 @@ exclude = ["tests*", "scripts*", "archive*", "docs*", "plans*", "conductor*", "p
 [tool.pytest.ini_options]
 pythonpath = [".", "experimental"]
 testpaths = ["."]
+asyncio_mode = "auto"
 addopts = [
     "--strict-markers",
     "-q",
+]
+markers = [
+    "integration: marks tests as integration tests",
+    "asyncio: marks tests as async",
 ]
 
 [tool.coverage.run]

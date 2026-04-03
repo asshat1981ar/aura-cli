@@ -7,9 +7,8 @@ for efficient token usage and consistent agent behavior.
 
 import hashlib
 import time
-from typing import Dict, Optional, Any
+from typing import Dict, Optional
 from dataclasses import dataclass, field
-from functools import lru_cache
 
 
 @dataclass

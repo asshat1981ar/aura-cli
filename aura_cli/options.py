@@ -340,8 +340,8 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         description="List all innovation sessions with their status and metrics.",
         examples=(
             "python3 main.py innovate list",
-            "python3 main.py innovate list --status active",
-            "python3 main.py innovate list --json",
+            "python3 main.py innovate list --limit 10",
+            "python3 main.py innovate list --output json",
         ),
     ),
     CommandSpec(
@@ -350,8 +350,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         description="Show detailed information about a specific innovation session.",
         examples=(
             "python3 main.py innovate show --session-id abc123",
-            "python3 main.py innovate show --session-id abc123 --show-ideas",
-            "python3 main.py innovate show --session-id abc123 --json",
+            "python3 main.py innovate show --session-id abc123 --output json",
         ),
     ),
     CommandSpec(
@@ -399,6 +398,11 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
             "python3 main.py innovate insights --session-id abc123",
             "python3 main.py innovate insights --json",
         ),
+    ),
+    CommandSpec(
+        path=("agent",),
+        summary="Agent SDK commands",
+        description="Commands for the Agent SDK meta-controller.",
     ),
     CommandSpec(
         path=("agent", "run"),
@@ -468,6 +472,10 @@ _ACTION_SMOKE_OVERRIDES: dict[str, tuple[str, ...]] = {
     "goal_add_run": ("goal", "add", "example-goal", "--run"),
     "sadd_run": ("sadd", "run", "--spec", "example-spec.md", "--dry-run"),
     "sadd_resume": ("sadd", "resume", "--session-id", "example-id"),
+    "innovate_show": ("innovate", "show", "--session-id", "example-id"),
+    "innovate_resume": ("innovate", "resume", "--session-id", "example-id"),
+    "innovate_export": ("innovate", "export", "--session-id", "example-id"),
+    "innovate_to_goals": ("innovate", "to-goals", "--session-id", "example-id"),
 }
 
 _SMOKE_POSITIONAL_ARGS_BY_PATH: dict[tuple[str, ...], tuple[str, ...]] = {

@@ -313,6 +313,147 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         description="Resume an interrupted SADD session from its last checkpoint.",
         examples=("python3 main.py sadd resume --session-id <id>",),
     ),
+    # ── Innovation Catalyst Commands ────────────────────────────────────────────
+    CommandSpec(
+        path=("innovate",),
+        summary="Innovation Catalyst session management",
+        description="Start, list, and manage innovation sessions using brainstorming techniques.",
+        examples=(
+            'python3 main.py innovate start "How to improve X?"',
+            "python3 main.py innovate list",
+            "python3 main.py innovate show --session-id abc123",
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "start"),
+        summary="Start a new innovation session",
+        description="Start a new innovation session with the Innovation Catalyst framework.",
+        examples=(
+            'python3 main.py innovate start "How to improve code review?"',
+            'python3 main.py innovate start "Reduce bugs" --techniques scamper,six_hats',
+            'python3 main.py innovate start "Improve UX" --execute-phase divergence',
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "list"),
+        summary="List innovation sessions",
+        description="List all innovation sessions with their status and metrics.",
+        examples=(
+            "python3 main.py innovate list",
+            "python3 main.py innovate list --limit 10",
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "show"),
+        summary="Show session details",
+        description="Show detailed information about a specific innovation session.",
+        examples=(
+            "python3 main.py innovate show --session-id abc123",
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "resume"),
+        summary="Resume an innovation session",
+        description="Resume an innovation session at a specific phase.",
+        examples=(
+            "python3 main.py innovate resume --session-id abc123",
+            "python3 main.py innovate resume --session-id abc123 --phase convergence",
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "export"),
+        summary="Export session results",
+        description="Export innovation session results to markdown or JSON.",
+        examples=(
+            "python3 main.py innovate export --session-id abc123 --format markdown",
+            "python3 main.py innovate export --session-id abc123 --output report.md",
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "techniques"),
+        summary="List available brainstorming techniques",
+        description="Show all available brainstorming techniques with descriptions.",
+        examples=(
+            "python3 main.py innovate techniques",
+            "python3 main.py innovate techniques --json",
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "to-goals"),
+        summary="Convert selected ideas to goals",
+        description="Convert selected ideas from an innovation session to goals in the queue.",
+        examples=(
+            "python3 main.py innovate to-goals --session-id abc123",
+            "python3 main.py innovate to-goals --session-id abc123 --preview",
+        ),
+    ),
+    CommandSpec(
+        path=("innovate", "insights"),
+        summary="Show innovation analytics and insights",
+        description="Display analytics about innovation sessions including trends, technique effectiveness, and idea quality metrics.",
+        examples=(
+            "python3 main.py innovate insights",
+            "python3 main.py innovate insights --session-id abc123",
+            "python3 main.py innovate insights --json",
+        ),
+    ),
+    CommandSpec(
+        path=("creative",),
+        summary="Creative-AURA unified problem solving",
+        description="Use creative techniques combined with AURA implementation for end-to-end problem solving.",
+        examples=(
+            'python3 main.py creative solve "Reduce API latency"',
+            'python3 main.py creative solve "Add caching" --techniques SCAMPER,RPE',
+            "python3 main.py creative patterns",
+            "python3 main.py creative cross-pollinate --from web --to mobile",
+        ),
+    ),
+    CommandSpec(
+        path=("creative", "solve"),
+        summary="Solve problem using creative + AURA approach",
+        description="Generate ideas using creative techniques and implement the best one with AURA.",
+        examples=(
+            'python3 main.py creative solve "Improve performance"',
+            'python3 main.py creative solve "Add feature X" --techniques SCAMPER,RPE,SixHats',
+            'python3 main.py creative solve "Refactor module" --domain architecture',
+        ),
+    ),
+    CommandSpec(
+        path=("creative", "patterns"),
+        summary="List stored creative patterns",
+        description="View stored patterns and their success rates.",
+        examples=(
+            "python3 main.py creative patterns",
+            "python3 main.py creative patterns --domain api_design",
+        ),
+    ),
+    CommandSpec(
+        path=("creative", "cross-pollinate"),
+        summary="Find cross-domain analogies",
+        description="Find patterns from one domain applicable to another.",
+        examples=(
+            "python3 main.py creative cross-pollinate --from web --to mobile",
+            "python3 main.py creative cross-pollinate --from backend --to frontend",
+        ),
+    ),
+    CommandSpec(
+        path=("creative", "stats"),
+        summary="Show creative system statistics",
+        description="Display statistics about the creative system including success rates and pattern counts.",
+        examples=(
+            "python3 main.py creative stats",
+        ),
+    ),
+    CommandSpec(
+        path=("agent",),
+        summary="Agent SDK commands",
+        description="Commands for running goals via the Agent SDK meta-controller.",
+    ),
+    CommandSpec(
+        path=("agent", "run"),
+        summary="Run goal via Agent SDK meta-controller",
+        description="Execute a development goal using Claude-as-brain orchestration with dynamic tool/skill/workflow selection.",
+    ),
 )
 
 COMMAND_SPECS_BY_PATH: dict[tuple[str, ...], CommandSpec] = {spec.path: spec for spec in COMMAND_SPECS}
@@ -355,6 +496,19 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("sadd_run", True, ("sadd", "run")),
     CLIActionSpec("sadd_status", False, ("sadd", "status")),
     CLIActionSpec("sadd_resume", True, ("sadd", "resume")),
+    # ── Innovation Catalyst Actions ────────────────────────────────────────────
+    CLIActionSpec("innovate_start", True, ("innovate", "start")),
+    CLIActionSpec("innovate_list", True, ("innovate", "list")),
+    CLIActionSpec("innovate_show", True, ("innovate", "show")),
+    CLIActionSpec("innovate_resume", True, ("innovate", "resume")),
+    CLIActionSpec("innovate_export", True, ("innovate", "export")),
+    CLIActionSpec("innovate_techniques", False, ("innovate", "techniques")),
+    CLIActionSpec("innovate_to_goals", True, ("innovate", "to-goals")),
+    CLIActionSpec("innovate_insights", True, ("innovate", "insights")),
+    CLIActionSpec("creative_solve", True, ("creative", "solve")),
+    CLIActionSpec("creative_patterns", True, ("creative", "patterns")),
+    CLIActionSpec("creative_cross_pollinate", True, ("creative", "cross-pollinate")),
+    CLIActionSpec("creative_stats", True, ("creative", "stats")),
     CLIActionSpec("interactive", True, None),
 )
 
@@ -366,6 +520,12 @@ _ACTION_SMOKE_OVERRIDES: dict[str, tuple[str, ...]] = {
     "goal_add_run": ("goal", "add", "example-goal", "--run"),
     "sadd_run": ("sadd", "run", "--spec", "example-spec.md", "--dry-run"),
     "sadd_resume": ("sadd", "resume", "--session-id", "example-id"),
+    "innovate_show": ("innovate", "show", "--session-id", "example-id"),
+    "innovate_resume": ("innovate", "resume", "--session-id", "example-id"),
+    "innovate_export": ("innovate", "export", "--session-id", "example-id"),
+    "innovate_to_goals": ("innovate", "to-goals", "--session-id", "example-id"),
+    "creative_solve": ("creative", "solve", "example-problem"),
+    "creative_cross_pollinate": ("creative", "cross-pollinate", "--from", "web", "--to", "mobile"),
 }
 
 _SMOKE_POSITIONAL_ARGS_BY_PATH: dict[tuple[str, ...], tuple[str, ...]] = {
@@ -375,6 +535,7 @@ _SMOKE_POSITIONAL_ARGS_BY_PATH: dict[tuple[str, ...], tuple[str, ...]] = {
     ("mcp", "call"): ("limits",),
     ("scaffold",): ("demo",),
     ("memory", "search"): ("example-query",),
+    ("innovate", "start"): ("example-problem-statement",),
 }
 
 HELP_SCHEMA_VERSION = 3
@@ -452,6 +613,18 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("sadd", "run"): "sadd_run",
     ("sadd", "status"): "sadd_status",
     ("sadd", "resume"): "sadd_resume",
+    ("innovate", "start"): "innovate_start",
+    ("innovate", "list"): "innovate_list",
+    ("innovate", "show"): "innovate_show",
+    ("innovate", "resume"): "innovate_resume",
+    ("innovate", "export"): "innovate_export",
+    ("innovate", "techniques"): "innovate_techniques",
+    ("innovate", "to-goals"): "innovate_to_goals",
+    ("innovate", "insights"): "innovate_insights",
+    ("creative", "solve"): "creative_solve",
+    ("creative", "patterns"): "creative_patterns",
+    ("creative", "cross-pollinate"): "creative_cross_pollinate",
+    ("creative", "stats"): "creative_stats",
 }
 
 _LEGACY_PRIMARY_FLAGS: tuple[str, ...] = (

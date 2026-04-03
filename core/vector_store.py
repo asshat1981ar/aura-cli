@@ -28,6 +28,11 @@ except ImportError:  # pragma: no cover - exercised via optional-deps tests
 from core.logging_utils import log_json
 from core.memory_types import MemoryRecord, RetrievalQuery, SearchHit
 
+# Maximum number of candidate rows fetched from the DB during a search query.
+# Prevents unbounded memory use when the embeddings table grows large.
+SEARCH_LIMIT = 1000
+
+
 class VectorStore:
     """
     Unified Control Plane: Centralized semantic memory store.
@@ -202,20 +207,24 @@ class VectorStore:
             return []
 
         # 1. Fetch candidates from DB (constrained by filters)
-        # For efficiency, we only load vectors for the active model
+        # For efficiency, we only load vectors for the active model.
+        # SEARCH_LIMIT caps the result set to prevent unbounded memory use.
         sql = """
-            SELECT mr.*, e.data as embedding_blob 
+            SELECT mr.*, e.data as embedding_blob
             FROM memory_records mr
             JOIN embeddings e ON mr.id = e.record_id
             WHERE e.model_id = ?
         """
-        params = [current_model]
-        
+        params: list = [current_model]
+
         if q_obj.filters:
             for key, val in q_obj.filters.items():
                 if key in ["source_type", "goal_id", "agent_name"]:
                     sql += f" AND mr.{key} = ?"
                     params.append(val)
+
+        sql += " LIMIT ?"
+        params.append(SEARCH_LIMIT)
 
         candidates = self.brain.db.execute(sql, params).fetchall()
         hits = []
@@ -361,7 +370,7 @@ class VectorStore:
                         )
                         stats["embeddings_written"] += 1
                     self.brain.db.commit()
-                except Exception:
+                except (OSError, IOError, ValueError):
                     self.brain.db.rollback()
                     raise
 

@@ -8,6 +8,21 @@ from core.logging_utils import log_json
 from core.task_handler import run_goals_loop  # Import run_goals_loop from core.task_handler
 from core.task_manager import TaskManager
 
+# Module-level MetaConductor singleton for innovation sessions
+_meta_conductor = None
+
+
+def _get_meta_conductor(brain=None):
+    """Get or create the shared MetaConductor instance."""
+    global _meta_conductor
+    if _meta_conductor is None:
+        from agents.meta_conductor import MetaConductor
+        _meta_conductor = MetaConductor(brain=brain)
+    elif brain is not None and _meta_conductor.brain is None:
+        # Update brain if conductor exists but brain was added
+        _meta_conductor.brain = brain
+    return _meta_conductor
+
 
 def _handle_help():
     try:
@@ -225,5 +240,1213 @@ def _handle_status(
     print("------------------------\n")
 
 
+# ── Innovation Catalyst Command Handlers ─────────────────────────────────────
+
+
+def _handle_innovate_start(args, runtime=None):
+    """Start a new innovation session with the Innovation Catalyst.
+    
+    Args:
+        args: Parsed CLI arguments
+        runtime: Optional runtime dict with brain
+    """
+    from agents.brainstorming_bots import list_techniques
+    from agents.schemas import InnovationPhase
+    
+    log_json("INFO", "innovate_start_requested")
+    
+    # Get brain from runtime if available
+    brain = None
+    if runtime and isinstance(runtime, dict):
+        brain = runtime.get("brain")
+    
+    # Parse techniques
+    techniques_str = getattr(args, "techniques", "")
+    if techniques_str:
+        techniques = [t.strip() for t in techniques_str.split(",")]
+    else:
+        techniques = list_techniques()  # Use all available
+    
+    # Validate techniques
+    valid_techniques = list_techniques()
+    invalid = [t for t in techniques if t not in valid_techniques]
+    if invalid:
+        print(f"Error: Invalid techniques: {invalid}")
+        print(f"Valid techniques: {', '.join(valid_techniques)}")
+        return
+    
+    # Parse constraints if provided
+    constraints = {}
+    constraints_json = getattr(args, "constraints", "")
+    if constraints_json:
+        try:
+            constraints = json.loads(constraints_json)
+        except json.JSONDecodeError:
+            print("Error: Invalid JSON in --constraints")
+            return
+    
+    # Get output format
+    output_json = getattr(args, "json", False) or getattr(args, "output", "table") == "json"
+    
+    # Get problems - either from args, batch file, or error
+    problems = []
+    batch_file = getattr(args, "batch_file", None)
+    
+    if batch_file:
+        # Read problems from file
+        try:
+            with open(batch_file, 'r') as f:
+                problems = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+        except FileNotFoundError:
+            print(f"Error: Batch file not found: {batch_file}")
+            return
+        except Exception as e:
+            print(f"Error reading batch file: {e}")
+            return
+    else:
+        # Get problem from command line
+        problem = " ".join(getattr(args, "problem_statement", []))
+        if problem:
+            problems = [problem]
+    
+    if not problems:
+        print("Error: Problem statement required.")
+        print('Usage: python3 main.py innovate start "How to improve X?"')
+        print('   or: python3 main.py innovate start --batch problems.txt')
+        return
+    
+    # Use shared conductor with brain
+    conductor = _get_meta_conductor(brain=brain)
+    
+    # Process each problem
+    sessions = []
+    for problem in problems:
+        session = conductor.start_session(
+            problem_statement=problem,
+            techniques=techniques,
+            constraints=constraints
+        )
+        sessions.append(session)
+    
+    # Optionally execute phase for all sessions
+    execute_phase = getattr(args, "execute_phase", None)
+    phase_results = []
+    if execute_phase:
+        phase_map = {
+            "immersion": InnovationPhase.IMMERSION,
+            "divergence": InnovationPhase.DIVERGENCE,
+            "convergence": InnovationPhase.CONVERGENCE,
+            "incubation": InnovationPhase.INCUBATION,
+            "transformation": InnovationPhase.TRANSFORMATION,
+        }
+        if execute_phase in phase_map:
+            if not output_json:
+                print(f"\n▶️  Executing {execute_phase} phase for {len(sessions)} session(s)...")
+            for session in sessions:
+                result = conductor.execute_phase(session.session_id, phase_map[execute_phase])
+                phase_results.append(result)
+    
+    # Output results
+    if output_json:
+        output = {
+            "sessions": [
+                {
+                    "session_id": s.session_id,
+                    "problem": s.problem_statement,
+                    "techniques": techniques,
+                    "status": s.status,
+                    "current_phase": s.current_phase.value,
+                    "phases_completed": [p.value for p in s.phases_completed],
+                }
+                for s in sessions
+            ],
+            "count": len(sessions),
+        }
+        if phase_results:
+            output["phase_results"] = phase_results
+        print(json.dumps(output, indent=2))
+    else:
+        if len(sessions) == 1:
+            s = sessions[0]
+            print("\n🚀 Innovation Session Started")
+            print(f"Problem: {s.problem_statement}")
+            print(f"Techniques: {', '.join(techniques)}")
+            print(f"Session ID: {s.session_id}")
+            print(f"Status: {s.status}")
+            print(f"Current phase: {s.current_phase.value}")
+            if phase_results:
+                print(f"\n✅ Phase executed: {execute_phase}")
+                for r in phase_results:
+                    if 'ideas_generated' in r:
+                        print(f"Ideas generated: {r['ideas_generated']}")
+            print("\nNext steps:")
+            print(f"  Show:   python3 main.py innovate show {s.session_id}")
+            print(f"  Resume: python3 main.py innovate resume {s.session_id} --phase divergence")
+        else:
+            print(f"\n🚀 Started {len(sessions)} Innovation Sessions")
+            print(f"Techniques: {', '.join(techniques)}")
+            print("\nSessions:")
+            for s in sessions:
+                print(f"  {s.session_id}: {s.problem_statement[:50]}...")
+            if phase_results:
+                total_ideas = sum(r.get('ideas_generated', 0) for r in phase_results)
+                print(f"\n✅ Phase '{execute_phase}' executed for all sessions")
+                print(f"Total ideas generated: {total_ideas}")
+            print("\nShow all: python3 main.py innovate list")
+
+
+def _handle_innovate_list(args, runtime=None):
+    """List all innovation sessions."""
+    log_json("INFO", "innovate_list_requested")
+    
+    # Get brain from runtime if available
+    brain = None
+    if runtime and isinstance(runtime, dict):
+        brain = runtime.get("brain")
+    
+    conductor = _get_meta_conductor(brain=brain)
+    sessions = conductor.list_sessions()
+    
+    # Get output format
+    output_json = getattr(args, "json", False) or getattr(args, "output", "table") == "json"
+    limit = getattr(args, "limit", 20)
+    
+    if output_json:
+        output = {
+            "sessions": [
+                {
+                    "session_id": s.session_id,
+                    "problem": s.problem_statement,
+                    "status": s.status,
+                    "current_phase": s.current_phase.value,
+                    "techniques": s.techniques,
+                    "ideas_count": s.ideas_generated,
+                    "selected_count": s.ideas_selected,
+                    "created_at": s.created_at.isoformat() if s.created_at else None,
+                }
+                for s in sessions[:limit]
+            ],
+            "total": len(sessions),
+        }
+        print(json.dumps(output, indent=2))
+    else:
+        print("\n📋 Innovation Sessions")
+        print("-" * 60)
+        
+        if not sessions:
+            print("\nNo active sessions.")
+            print("\nStart a new session with:")
+            print('  python3 main.py innovate start "How to improve X?"')
+        else:
+            # Group by status
+            active = [s for s in sessions if s.status == "active"]
+            completed = [s for s in sessions if s.status == "completed"]
+            
+            if active:
+                print(f"\n🟢 Active Sessions ({len(active)}):")
+                for s in active[:limit]:
+                    ideas_count = s.ideas_generated
+                    selected_count = s.ideas_selected
+                    print(f"  {s.session_id} - {s.problem_statement[:40]}...")
+                    print(f"    Phase: {s.current_phase.value} | Ideas: {ideas_count} | Selected: {selected_count}")
+            
+            if completed:
+                print(f"\n✅ Completed Sessions ({len(completed)}):")
+                for s in completed[:limit]:
+                    ideas_count = s.ideas_generated
+                    selected_count = s.ideas_selected
+                    print(f"  {s.session_id} - {s.problem_statement[:40]}...")
+                    print(f"    Ideas: {ideas_count} | Selected: {selected_count}")
+            
+            total_ideas = sum(s.ideas_generated for s in sessions)
+            print(f"\nTotal: {len(sessions)} sessions, {total_ideas} ideas generated")
+
+
+def _handle_innovate_show(args, runtime=None):
+    """Show details of a specific innovation session."""
+    log_json("INFO", "innovate_show_requested")
+    
+    session_id = getattr(args, "session_id", None) or getattr(args, "session_id", None)
+    if not session_id:
+        print("Error: session_id required")
+        return
+    
+    # Get brain from runtime if available
+    brain = None
+    if runtime and isinstance(runtime, dict):
+        brain = runtime.get("brain")
+    
+    conductor = _get_meta_conductor(brain=brain)
+    session = conductor.get_session(session_id)
+    
+    # Get output format
+    output_json = getattr(args, "json", False) or getattr(args, "output", "table") == "json"
+    show_ideas = getattr(args, "show_ideas", False)
+    
+    if not session:
+        if output_json:
+            print(json.dumps({"error": f"Session {session_id} not found"}))
+        else:
+            print(f"\n❌ Session not found: {session_id}")
+            print("\nUse 'python3 main.py innovate list' to see available sessions.")
+        return
+    
+    # Get idea counts from output if available
+    ideas_count = session.ideas_generated
+    selected_count = session.ideas_selected
+    all_ideas = session.output.all_ideas if session.output else []
+    selected_ideas = session.output.selected_ideas if session.output else []
+    
+    if output_json:
+        output = {
+            "session_id": session.session_id,
+            "problem": session.problem_statement,
+            "status": session.status,
+            "current_phase": session.current_phase.value,
+            "phases_completed": [p.value for p in session.phases_completed],
+            "techniques": session.techniques,
+            "constraints": session.constraints,
+            "ideas_count": ideas_count,
+            "selected_count": selected_count,
+            "created_at": session.created_at.isoformat() if session.created_at else None,
+            "updated_at": session.updated_at.isoformat() if session.updated_at else None,
+        }
+        if show_ideas and all_ideas:
+            output["ideas"] = [
+                {
+                    "description": idea.description,
+                    "technique": idea.technique,
+                    "novelty": idea.novelty,
+                    "feasibility": idea.feasibility,
+                    "impact": idea.impact,
+                }
+                for idea in all_ideas
+            ]
+        print(json.dumps(output, indent=2))
+    else:
+        print(f"\n📊 Session: {session.session_id}")
+        print("-" * 60)
+        print(f"Problem: {session.problem_statement}")
+        print(f"Status: {'🟢 Active' if session.status == 'active' else '✅ ' + session.status}")
+        print(f"Current Phase: {session.current_phase.value}")
+        print(f"Techniques: {', '.join(session.techniques)}")
+        print("\nProgress:")
+        print(f"  Ideas generated: {ideas_count}")
+        print(f"  Ideas selected: {selected_count}")
+        
+        if session.output:
+            print(f"  Diversity score: {session.output.diversity_score:.2f}")
+            print(f"  Novelty score: {session.output.novelty_score:.2f}")
+            print(f"  Feasibility score: {session.output.feasibility_score:.2f}")
+        
+        if show_ideas and all_ideas:
+            print(f"\n💡 Ideas ({len(all_ideas)}):")
+            for idea in all_ideas[:20]:  # Limit to 20 for display
+                selected = "✓" if idea in selected_ideas else " "
+                print(f"  [{selected}] ({idea.technique}) {idea.description[:60]}...")
+            if len(all_ideas) > 20:
+                print(f"  ... and {len(all_ideas) - 20} more")
+        
+        print("\nNext steps:")
+        print(f"  Resume: python3 main.py innovate resume {session.session_id} --phase divergence")
+        print(f"  Export: python3 main.py innovate export {session.session_id}")
+
+
+def _handle_innovate_resume(args, runtime=None):
+    """Resume an innovation session at a specific phase."""
+    log_json("INFO", "innovate_resume_requested")
+    
+    session_id = getattr(args, "session_id", None) or getattr(args, "session_id", None)
+    if not session_id:
+        print("Error: session_id required")
+        return
+    
+    phase = getattr(args, "phase", None)
+    
+    # Get brain from runtime if available
+    brain = None
+    if runtime and isinstance(runtime, dict):
+        brain = runtime.get("brain")
+    
+    conductor = _get_meta_conductor(brain=brain)
+    session = conductor.get_session(session_id)
+    
+    if not session:
+        print(f"\n❌ Session not found: {session_id}")
+        print("\nUse 'python3 main.py innovate list' to see available sessions.")
+        return
+    
+    from agents.schemas import InnovationPhase
+    phase_map = {
+        "immersion": InnovationPhase.IMMERSION,
+        "divergence": InnovationPhase.DIVERGENCE,
+        "convergence": InnovationPhase.CONVERGENCE,
+        "incubation": InnovationPhase.INCUBATION,
+        "transformation": InnovationPhase.TRANSFORMATION,
+    }
+    
+    # Determine which phase to execute
+    target_phase = None
+    if phase:
+        target_phase = phase_map.get(phase)
+        if not target_phase:
+            print(f"Error: Invalid phase '{phase}'")
+            print(f"Valid phases: {', '.join(phase_map.keys())}")
+            return
+    else:
+        # Auto-determine next phase based on current state
+        target_phase = session.current_phase
+    
+    # Get output format
+    output_json = getattr(args, "json", False) or getattr(args, "output", "table") == "json"
+    
+    if not output_json:
+        print(f"\n🔄 Resuming Session: {session_id}")
+        print(f"Current phase: {session.current_phase.value}")
+        print(f"Target phase: {target_phase.value}")
+        print("\n▶️  Executing phase...")
+    
+    try:
+        result = conductor.execute_phase(session_id, target_phase)
+        
+        # Update session state
+        session = conductor.get_session(session_id)
+        
+        if output_json:
+            output = {
+                "session_id": session_id,
+                "executed_phase": target_phase.value,
+                "result": result,
+                "current_phase": session.current_phase.value if session else None,
+                "ideas_count": session.ideas_generated if session else 0,
+            }
+            print(json.dumps(output, indent=2))
+        else:
+            print(f"\n✅ Phase complete: {target_phase.value}")
+            if 'ideas_count' in result:
+                print(f"Ideas in this phase: {result['ideas_count']}")
+            print(f"\nSession now at: {session.current_phase.value}")
+            print(f"Total ideas: {session.ideas_generated}")
+            print("\nNext steps:")
+            print(f"  Show:   python3 main.py innovate show {session_id}")
+            print(f"  Resume: python3 main.py innovate resume {session_id}")
+            
+    except Exception as e:
+        if output_json:
+            print(json.dumps({"error": str(e)}))
+        else:
+            print(f"\n❌ Error executing phase: {e}")
+
+
+def _handle_innovate_techniques(args):
+    """List available brainstorming techniques."""
+    log_json("INFO", "innovate_techniques_requested")
+    
+    from agents.brainstorming_bots import BRAINSTORMING_BOTS
+    
+    # Technique descriptions
+    descriptions = {
+        "scamper": "Substitute, Combine, Adapt, Modify, Put to other uses, Eliminate, Reverse",
+        "six_hats": "Six Thinking Hats - Parallel thinking from different perspectives",
+        "mind_map": "Visual brainstorming with hierarchical idea mapping",
+        "reverse": "Reverse Brainstorming - Identify problems to find solutions",
+        "worst_idea": "Worst Idea Technique - Invert bad ideas to find good ones",
+        "lotus": "Lotus Blossom - Expand ideas in a grid pattern",
+        "star": "Starbursting - Generate questions from different angles",
+        "bia": "Bottleneck Identification & Analysis - Find constraints",
+    }
+    
+    output_json = getattr(args, "json", False) or getattr(args, "output", "table") == "json"
+    
+    techniques = []
+    for key, bot_class in BRAINSTORMING_BOTS.items():
+        techniques.append({
+            "id": key,
+            "name": bot_class().technique_name,
+            "description": descriptions.get(key, ""),
+        })
+    
+    if output_json:
+        print(json.dumps({"techniques": techniques}, indent=2))
+    else:
+        print("\n🧠 Available Brainstorming Techniques")
+        print("-" * 60)
+        for t in techniques:
+            print(f"\n{t['id']}")
+            print(f"  Name: {t['name']}")
+            print(f"  Description: {t['description']}")
+        print("\nUsage: python3 main.py innovate start 'Problem' --techniques scamper,six_hats")
+
+
+def _generate_json_export(session, all_ideas, selected_ideas):
+    """Generate JSON export content."""
+    export_data = {
+        "session_id": session.session_id,
+        "problem_statement": session.problem_statement,
+        "status": session.status,
+        "current_phase": session.current_phase.value,
+        "phases_completed": [p.value for p in session.phases_completed],
+        "techniques_used": session.techniques,
+        "constraints": session.constraints,
+        "ideas_count": session.ideas_generated,
+        "selected_count": session.ideas_selected,
+        "ideas": [
+            {
+                "description": idea.description,
+                "technique": idea.technique,
+                "novelty": idea.novelty,
+                "feasibility": idea.feasibility,
+                "impact": idea.impact,
+                "metadata": idea.metadata,
+            }
+            for idea in all_ideas
+        ],
+        "selected_ideas": [
+            {
+                "description": idea.description,
+                "technique": idea.technique,
+            }
+            for idea in selected_ideas
+        ],
+        "created_at": session.created_at.isoformat() if session.created_at else None,
+        "updated_at": session.updated_at.isoformat() if session.updated_at else None,
+    }
+    if session.output:
+        export_data["scores"] = {
+            "diversity": session.output.diversity_score,
+            "novelty": session.output.novelty_score,
+            "feasibility": session.output.feasibility_score,
+        }
+    return json.dumps(export_data, indent=2)
+
+
+def _generate_csv_export(session, all_ideas, selected_ideas):
+    """Generate CSV export content."""
+    import csv
+    import io
+    
+    output = io.StringIO()
+    writer = csv.writer(output)
+    
+    # Header
+    writer.writerow([
+        "Session ID", "Problem", "Status", "Current Phase",
+        "Idea #", "Technique", "Description", "Novelty", "Feasibility", "Impact", "Selected"
+    ])
+    
+    # Data rows
+    for i, idea in enumerate(all_ideas, 1):
+        is_selected = "Yes" if idea in selected_ideas else "No"
+        writer.writerow([
+            session.session_id,
+            session.problem_statement,
+            session.status,
+            session.current_phase.value,
+            i,
+            idea.technique,
+            idea.description,
+            f"{idea.novelty:.2f}",
+            f"{idea.feasibility:.2f}",
+            f"{idea.impact:.2f}",
+            is_selected
+        ])
+    
+    return output.getvalue()
+
+
+def _generate_html_export(session, all_ideas, selected_ideas):
+    """Generate HTML export content."""
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Innovation Session Report - {session.session_id}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 40px; background: #f5f5f5; }}
+        .container {{ max-width: 900px; margin: 0 auto; background: white; padding: 30px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }}
+        h1 {{ color: #333; border-bottom: 2px solid #4CAF50; padding-bottom: 10px; }}
+        h2 {{ color: #555; margin-top: 30px; }}
+        .meta {{ background: #f9f9f9; padding: 15px; border-radius: 5px; margin: 20px 0; }}
+        .meta-row {{ margin: 5px 0; }}
+        .idea {{ border: 1px solid #ddd; padding: 15px; margin: 15px 0; border-radius: 5px; }}
+        .idea.selected {{ border-left: 4px solid #4CAF50; background: #f8fff8; }}
+        .idea-header {{ font-weight: bold; color: #333; margin-bottom: 10px; }}
+        .scores {{ color: #666; font-size: 0.9em; margin-top: 10px; }}
+        .technique {{ display: inline-block; background: #e3f2fd; padding: 2px 8px; border-radius: 3px; font-size: 0.85em; }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧠 Innovation Session Report</h1>
+        
+        <div class="meta">
+            <div class="meta-row"><strong>Session ID:</strong> {session.session_id}</div>
+            <div class="meta-row"><strong>Problem:</strong> {session.problem_statement}</div>
+            <div class="meta-row"><strong>Status:</strong> {session.status}</div>
+            <div class="meta-row"><strong>Current Phase:</strong> {session.current_phase.value}</div>
+            <div class="meta-row"><strong>Techniques:</strong> {', '.join(session.techniques)}</div>
+            <div class="meta-row"><strong>Total Ideas:</strong> {session.ideas_generated} | <strong>Selected:</strong> {session.ideas_selected}</div>
+        </div>
+        
+        <h2>💡 Ideas Generated ({len(all_ideas)})</h2>
+"""
+    
+    for i, idea in enumerate(all_ideas, 1):
+        selected_class = "selected" if idea in selected_ideas else ""
+        selected_badge = " ✅ SELECTED" if idea in selected_ideas else ""
+        html += f"""
+        <div class="idea {selected_class}">
+            <div class="idea-header">Idea {i}{selected_badge}</div>
+            <div><span class="technique">{idea.technique}</span></div>
+            <p>{idea.description}</p>
+            <div class="scores">
+                Novelty: {idea.novelty:.2f} | 
+                Feasibility: {idea.feasibility:.2f} | 
+                Impact: {idea.impact:.2f}
+            </div>
+        </div>
+"""
+    
+    html += """
+    </div>
+</body>
+</html>
+"""
+    return html
+
+
+def _generate_markdown_export(session, all_ideas, selected_ideas):
+    """Generate Markdown export content."""
+    lines = [
+        "# Innovation Session Report",
+        "",
+        f"**Session ID:** {session.session_id}",
+        f"**Status:** {session.status}",
+        f"**Current Phase:** {session.current_phase.value}",
+        f"**Created:** {session.created_at.strftime('%Y-%m-%d %H:%M') if session.created_at else 'Unknown'}",
+        "",
+        "## Problem Statement",
+        "",
+        f"{session.problem_statement}",
+        "",
+        "## Techniques Used",
+        "",
+        f"{', '.join(session.techniques)}",
+        "",
+        "## Summary",
+        "",
+        f"- **Total Ideas:** {session.ideas_generated}",
+        f"- **Selected Ideas:** {session.ideas_selected}",
+        f"- **Phases Completed:** {', '.join(p.value for p in session.phases_completed) or 'None'}",
+        "",
+    ]
+    
+    if session.output:
+        lines.extend([
+            "## Scores",
+            "",
+            f"- **Diversity:** {session.output.diversity_score:.2f}",
+            f"- **Novelty:** {session.output.novelty_score:.2f}",
+            f"- **Feasibility:** {session.output.feasibility_score:.2f}",
+            "",
+        ])
+    
+    if all_ideas:
+        lines.extend([
+            "## Ideas Generated",
+            "",
+        ])
+        
+        for i, idea in enumerate(all_ideas, 1):
+            selected = "✅ Selected" if idea in selected_ideas else ""
+            lines.append(f"### Idea {i} ({idea.technique}) {selected}")
+            lines.append("")
+            lines.append(f"{idea.description}")
+            lines.append("")
+            lines.append(f"**Scores:** Novelty: {idea.novelty:.2f} | Feasibility: {idea.feasibility:.2f} | Impact: {idea.impact:.2f}")
+            lines.append("")
+    
+    if selected_ideas:
+        lines.append("## Selected Ideas Summary")
+        lines.append("")
+        for idea in selected_ideas:
+            lines.append(f"- **{idea.technique}**: {idea.description[:100]}...")
+        lines.append("")
+    
+    return "\n".join(lines)
+
+
+def _handle_innovate_export(args, runtime=None):
+    """Export innovation session results."""
+    log_json("INFO", "innovate_export_requested")
+    
+    session_id = getattr(args, "session_id", None) or getattr(args, "session_id", None)
+    if not session_id:
+        print("Error: session_id required")
+        return
+    
+    format_type = getattr(args, "format", "markdown")
+    output_path = getattr(args, "output", None)
+    
+    # Get brain from runtime if available
+    brain = None
+    if runtime and isinstance(runtime, dict):
+        brain = runtime.get("brain")
+    
+    conductor = _get_meta_conductor(brain=brain)
+    session = conductor.get_session(session_id)
+    
+    if not session:
+        print(f"\n❌ Session not found: {session_id}")
+        return
+    
+    # Get ideas from output
+    all_ideas = session.output.all_ideas if session.output else []
+    selected_ideas = session.output.selected_ideas if session.output else []
+    
+    # Generate export content based on format
+    if format_type == "json":
+        content = _generate_json_export(session, all_ideas, selected_ideas)
+    elif format_type == "csv":
+        content = _generate_csv_export(session, all_ideas, selected_ideas)
+    elif format_type == "html":
+        content = _generate_html_export(session, all_ideas, selected_ideas)
+    else:  # markdown
+        content = _generate_markdown_export(session, all_ideas, selected_ideas)
+    
+    # Output or save
+    if output_path:
+        with open(output_path, 'w') as f:
+            f.write(content)
+        print(f"\n✅ Exported to: {output_path}")
+        print(f"Format: {format_type}")
+        print(f"Session: {session_id}")
+        print(f"Ideas: {len(all_ideas)}")
+    else:
+        print(content)
+    
+    return content
+
+
+def _handle_innovate_to_goals(args, runtime=None):
+    """Convert selected ideas from an innovation session to goals."""
+    log_json("INFO", "innovate_to_goals_requested")
+    
+    session_id = getattr(args, "session_id", None)
+    if not session_id:
+        print("Error: --session-id required")
+        return
+    
+    preview = getattr(args, "preview", False)
+    max_goals = getattr(args, "max_goals", 5)
+    
+    # Get brain from runtime if available
+    brain = None
+    if runtime and isinstance(runtime, dict):
+        brain = runtime.get("brain")
+    
+    conductor = _get_meta_conductor(brain=brain)
+    session = conductor.get_session(session_id)
+    
+    if not session:
+        print(f"\n❌ Session not found: {session_id}")
+        return
+    
+    # Get selected ideas
+    selected_ideas = []
+    if session.output and session.output.selected_ideas:
+        selected_ideas = session.output.selected_ideas
+    
+    if not selected_ideas:
+        print(f"\n⚠️  No selected ideas in session {session_id}")
+        print("Run convergence phase first to select ideas.")
+        return
+    
+    # Limit to max_goals
+    ideas_to_convert = selected_ideas[:max_goals]
+    
+    print(f"\n🎯 Converting {len(ideas_to_convert)} ideas to goals")
+    print(f"Session: {session_id}")
+    print(f"Problem: {session.problem_statement}")
+    
+    if preview:
+        print("\n--- PREVIEW - Goals that would be created ---")
+        for i, idea in enumerate(ideas_to_convert, 1):
+            print(f"\n{i}. [{idea.technique}] {idea.description[:80]}...")
+        print("\n--- End preview ---")
+        return
+    
+    # Create goals from ideas
+    created = 0
+    goal_queue = None
+    if runtime and isinstance(runtime, dict):
+        goal_queue = runtime.get("goal_queue")
+    
+    for idea in ideas_to_convert:
+        goal_text = f"[From innovation {session_id}] {idea.technique}: {idea.description[:100]}"
+        
+        if goal_queue:
+            try:
+                goal_queue.add(goal_text)
+                created += 1
+            except Exception as e:
+                print(f"  ⚠️  Failed to add goal: {e}")
+        else:
+            # Fallback: just print what would be added
+            print(f"  + {goal_text[:60]}...")
+            created += 1
+    
+    print(f"\n✅ Created {created} goals from {len(ideas_to_convert)} ideas")
+    
+    if goal_queue:
+        print("\nView goals: python3 main.py goal status")
+        print("Run goals:  python3 main.py goal run")
+
+
+def _handle_innovate_insights(args, runtime=None):
+    """Show analytics and insights about innovation sessions."""
+    log_json("INFO", "innovate_insights_requested")
+    
+    session_id = getattr(args, "session_id", None)
+    output_json = getattr(args, "json", False) or getattr(args, "output", "table") == "json"
+    
+    # Get brain from runtime if available
+    brain = None
+    if runtime and isinstance(runtime, dict):
+        brain = runtime.get("brain")
+    
+    conductor = _get_meta_conductor(brain=brain)
+    
+    if session_id:
+        # Show insights for specific session
+        session = conductor.get_session(session_id)
+        if not session:
+            print(f"\n❌ Session not found: {session_id}")
+            return
+        
+        insights = _compute_session_insights(session)
+        
+        if output_json:
+            print(json.dumps(insights, indent=2))
+        else:
+            _print_session_insights(insights)
+    else:
+        # Show global insights
+        sessions = conductor.list_sessions()
+        insights = _compute_global_insights(sessions)
+        
+        if output_json:
+            print(json.dumps(insights, indent=2))
+        else:
+            _print_global_insights(insights)
+
+
+def _compute_session_insights(session):
+    """Compute detailed insights for a single session."""
+    insights = {
+        "session_id": session.session_id,
+        "problem": session.problem_statement,
+        "status": session.status,
+        "techniques_used": session.techniques,
+        "ideas_generated": session.ideas_generated,
+        "ideas_selected": session.ideas_selected,
+    }
+    
+    if session.output:
+        all_ideas = session.output.all_ideas
+        selected = session.output.selected_ideas
+        
+        # Technique breakdown
+        technique_counts = {}
+        for idea in all_ideas:
+            technique_counts[idea.technique] = technique_counts.get(idea.technique, 0) + 1
+        insights["technique_breakdown"] = technique_counts
+        
+        # Quality metrics
+        if all_ideas:
+            insights["quality_metrics"] = {
+                "avg_novelty": sum(i.novelty for i in all_ideas) / len(all_ideas),
+                "avg_feasibility": sum(i.feasibility for i in all_ideas) / len(all_ideas),
+                "avg_impact": sum(i.impact for i in all_ideas) / len(all_ideas),
+                "selected_avg_novelty": sum(i.novelty for i in selected) / len(selected) if selected else 0,
+                "selected_avg_feasibility": sum(i.feasibility for i in selected) / len(selected) if selected else 0,
+                "selected_avg_impact": sum(i.impact for i in selected) / len(selected) if selected else 0,
+            }
+        
+        # Top ideas by score
+        top_ideas = sorted(all_ideas, key=lambda i: i.novelty + i.feasibility + i.impact, reverse=True)[:5]
+        insights["top_ideas"] = [
+            {
+                "technique": i.technique,
+                "description": i.description[:100],
+                "total_score": round(i.novelty + i.feasibility + i.impact, 2)
+            }
+            for i in top_ideas
+        ]
+    
+    return insights
+
+
+def _compute_global_insights(sessions):
+    """Compute global insights across all sessions."""
+    total_ideas = sum(s.ideas_generated for s in sessions)
+    total_selected = sum(s.ideas_selected for s in sessions)
+    
+    # Technique frequency
+    technique_counts = {}
+    for s in sessions:
+        for t in s.techniques:
+            technique_counts[t] = technique_counts.get(t, 0) + 1
+    
+    # Average scores across sessions with output
+    all_novelty = []
+    all_feasibility = []
+    all_diversity = []
+    for s in sessions:
+        if s.output:
+            all_novelty.append(s.output.novelty_score)
+            all_feasibility.append(s.output.feasibility_score)
+            all_diversity.append(s.output.diversity_score)
+    
+    return {
+        "total_sessions": len(sessions),
+        "total_ideas": total_ideas,
+        "total_selected": total_selected,
+        "selection_rate": total_selected / total_ideas if total_ideas > 0 else 0,
+        "technique_usage": technique_counts,
+        "average_scores": {
+            "novelty": sum(all_novelty) / len(all_novelty) if all_novelty else 0,
+            "feasibility": sum(all_feasibility) / len(all_feasibility) if all_feasibility else 0,
+            "diversity": sum(all_diversity) / len(all_diversity) if all_diversity else 0,
+        },
+        "sessions_by_status": {
+            "active": len([s for s in sessions if s.status == "active"]),
+            "completed": len([s for s in sessions if s.status == "completed"]),
+        }
+    }
+
+
+def _print_session_insights(insights):
+    """Print session insights in table format."""
+    print(f"\n📊 Session Insights: {insights['session_id']}")
+    print("-" * 60)
+    print(f"Problem: {insights['problem']}")
+    print(f"Status: {insights['status']}")
+    print(f"Techniques: {', '.join(insights['techniques_used'])}")
+    print("\n📈 Summary:")
+    print(f"  Ideas generated: {insights['ideas_generated']}")
+    print(f"  Ideas selected: {insights['ideas_selected']}")
+    
+    if 'technique_breakdown' in insights:
+        print("\n🔧 Technique Breakdown:")
+        for tech, count in sorted(insights['technique_breakdown'].items(), key=lambda x: -x[1]):
+            print(f"  {tech}: {count} ideas")
+    
+    if 'quality_metrics' in insights:
+        m = insights['quality_metrics']
+        print("\n📊 Quality Metrics (All Ideas):")
+        print(f"  Avg Novelty: {m['avg_novelty']:.2f}")
+        print(f"  Avg Feasibility: {m['avg_feasibility']:.2f}")
+        print(f"  Avg Impact: {m['avg_impact']:.2f}")
+        
+        if insights['ideas_selected'] > 0:
+            print("\n⭐ Selected Ideas Quality:")
+            print(f"  Avg Novelty: {m['selected_avg_novelty']:.2f}")
+            print(f"  Avg Feasibility: {m['selected_avg_feasibility']:.2f}")
+            print(f"  Avg Impact: {m['selected_avg_impact']:.2f}")
+    
+    if 'top_ideas' in insights:
+        print("\n🏆 Top Ideas by Score:")
+        for i, idea in enumerate(insights['top_ideas'], 1):
+            print(f"  {i}. [{idea['technique']}] (Score: {idea['total_score']})")
+            print(f"     {idea['description'][:60]}...")
+
+
+def _print_global_insights(insights):
+    """Print global insights in table format."""
+    print("\n🌍 Global Innovation Insights")
+    print("-" * 60)
+    print("\n📊 Overview:")
+    print(f"  Total sessions: {insights['total_sessions']}")
+    print(f"  Total ideas: {insights['total_ideas']}")
+    print(f"  Total selected: {insights['total_selected']}")
+    print(f"  Selection rate: {insights['selection_rate']:.1%}")
+    
+    print("\n🔧 Technique Usage:")
+    for tech, count in sorted(insights['technique_usage'].items(), key=lambda x: -x[1]):
+        print(f"  {tech}: {count} sessions")
+    
+    print("\n📈 Average Scores:")
+    scores = insights['average_scores']
+    print(f"  Novelty: {scores['novelty']:.2f}")
+    print(f"  Feasibility: {scores['feasibility']:.2f}")
+    print(f"  Diversity: {scores['diversity']:.2f}")
+    
+    print("\n📋 Sessions by Status:")
+    for status, count in insights['sessions_by_status'].items():
+        print(f"  {status.capitalize()}: {count}")
+
+
 def _handle_exit():
     log_json("INFO", "aura_cli_exit")
+
+
+# ============================================================================
+# Creative-AURA Integration Commands
+# ============================================================================
+
+def _handle_creative_solve(args, runtime=None):
+    """Solve a problem using unified creative-aura approach.
+    
+    Usage: creative solve "problem description" --techniques SCAMPER,RPE
+    """
+    import asyncio
+    from agents.creative_orchestrator import create_unified_orchestrator
+    
+    problem = getattr(args, 'problem', None)
+    if not problem:
+        print("Error: Problem description required")
+        print("Usage: creative solve \"reduce API latency\" --techniques SCAMPER,RPE")
+        return
+    
+    techniques_str = getattr(args, 'techniques', 'SCAMPER,RPE')
+    techniques = [t.strip() for t in techniques_str.split(',')]
+    domain = getattr(args, 'domain', 'general')
+    
+    print(f"\n🎯 Solving: {problem}")
+    print(f"🛠️  Techniques: {', '.join(techniques)}")
+    print(f"📂 Domain: {domain}")
+    print("\n" + "="*60)
+    
+    try:
+        # Get orchestrator and brain from runtime
+        if runtime:
+            aura_orchestrator = runtime.get('orchestrator')
+            brain = runtime.get('brain')
+        else:
+            print("Error: Runtime not available")
+            return
+        
+        if not aura_orchestrator or not brain:
+            print("Error: Orchestrator or Brain not available in runtime")
+            return
+        
+        # Create unified orchestrator
+        creative_orch = create_unified_orchestrator(
+            aura_orchestrator=aura_orchestrator,
+            brain=brain,
+            enable_creative_phase=True,
+            enable_review_council=True,
+        )
+        
+        # Run the solve loop
+        result = asyncio.run(creative_orch.solve(
+            problem=problem,
+            techniques=techniques,
+            domain=domain,
+        ))
+        
+        # Display results
+        print("\n" + "="*60)
+        print("📊 RESULTS")
+        print("="*60)
+        
+        if result.success:
+            print("\n✅ SUCCESS!")
+        else:
+            print("\n❌ Implementation did not succeed")
+        
+        print(f"\n💡 Selected Technique: {result.selected_idea.technique if result.selected_idea else 'N/A'}")
+        print(f"⏱️  Total Time: {result.cycle_time_seconds:.2f}s")
+        
+        if result.implementation:
+            impl = result.implementation
+            print(f"\n📁 Files Changed: {len(impl.files_changed)}")
+            for f in impl.files_changed:
+                print(f"   - {f}")
+            print(f"🧪 Tests Passed: {'Yes' if impl.tests_passed else 'No'}")
+            print(f"🔄 AURA Cycles: {impl.cycles_used}")
+        
+        if result.ideas:
+            print(f"\n💭 Ideas Generated: {len(result.ideas)}")
+            for idea in result.ideas[:5]:  # Show top 5
+                print(f"   [{idea.technique}] {idea.content[:50]}... (conf: {idea.confidence:.2f})")
+        
+        if result.lessons_learned:
+            print("\n📚 Lessons Learned:")
+            for lesson in result.lessons_learned:
+                print(f"   - {lesson}")
+        
+        print()
+        
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def _handle_creative_patterns(args, runtime=None):
+    """List stored creative patterns.
+    
+    Usage: creative patterns [--domain api_design]
+    """
+    from core.creative_memory import create_creative_memory
+    
+    domain = getattr(args, 'domain', None)
+    
+    print("\n🎨 Creative Patterns")
+    print("="*60)
+    
+    try:
+        if runtime:
+            brain = runtime.get('brain')
+        else:
+            print("Error: Runtime not available")
+            return
+        
+        if not brain:
+            print("Error: Brain not available")
+            return
+        
+        memory = create_creative_memory(brain)
+        
+        if domain:
+            # Show stats for specific domain
+            stats = memory.get_domain_stats(domain)
+            print(f"\n📂 Domain: {domain}")
+            print(f"   Patterns: {stats.get('pattern_count', 0)}")
+            print(f"   Avg Success Rate: {stats.get('avg_success_rate', 0):.2%}")
+            print(f"   Total Usage: {stats.get('total_usage', 0)}")
+            if stats.get('techniques'):
+                print(f"   Techniques: {', '.join(stats['techniques'])}")
+        else:
+            # List all domains
+            domains = memory.list_domains()
+            if domains:
+                print(f"\n📂 Known Domains ({len(domains)}):")
+                for d in domains:
+                    stats = memory.get_domain_stats(d)
+                    print(f"   {d}: {stats.get('pattern_count', 0)} patterns")
+            else:
+                print("\n   No patterns stored yet.")
+                print("   Patterns are learned from successful creative solves.")
+        
+        print()
+        
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+
+
+def _handle_creative_cross_pollinate(args, runtime=None):
+    """Find cross-domain pattern analogies.
+    
+    Usage: creative cross-pollinate --from web --to mobile
+    """
+    from core.creative_memory import create_creative_memory
+    
+    source = getattr(args, 'from_domain', None)
+    target = getattr(args, 'to_domain', None)
+    
+    if not source or not target:
+        print("Error: Both --from and --to domains required")
+        print("Usage: creative cross-pollinate --from web --to mobile")
+        return
+    
+    print(f"\n🌉 Cross-Pollination: {source} → {target}")
+    print("="*60)
+    
+    try:
+        if runtime:
+            brain = runtime.get('brain')
+        else:
+            print("Error: Runtime not available")
+            return
+        
+        if not brain:
+            print("Error: Brain not available")
+            return
+        
+        memory = create_creative_memory(brain)
+        
+        analogies = memory.cross_pollinate(
+            source_domain=source,
+            target_domain=target,
+            top_k=5,
+        )
+        
+        if analogies:
+            print(f"\n🔍 Found {len(analogies)} analogies:\n")
+            for i, analogy in enumerate(analogies, 1):
+                pattern = analogy['pattern']
+                print(f"{i}. [{pattern.technique}] (relevance: {analogy['relevance']:.2f})")
+                print(f"   Pattern: {pattern.content[:60]}...")
+                print(f"   Success Rate: {pattern.success_rate:.2%}")
+                print(f"   Hint: {analogy['adaptation_hint']}")
+                print()
+        else:
+            print("\n   No analogies found.")
+            print(f"   Try generating patterns from {source} domain first.")
+        
+        print()
+        
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
+
+
+def _handle_creative_stats(args, runtime=None):
+    """Show creative system statistics.
+    
+    Usage: creative stats
+    """
+    from core.creative_memory import create_creative_memory
+    from core.creative_bridge import CreativeImplementationBridge
+    
+    print("\n📈 Creative System Statistics")
+    print("="*60)
+    
+    try:
+        if runtime:
+            brain = runtime.get('brain')
+            orchestrator = runtime.get('orchestrator')
+        else:
+            print("Error: Runtime not available")
+            return
+        
+        if brain:
+            memory = create_creative_memory(brain)
+            domains = memory.list_domains()
+            
+            print("\n📚 Pattern Memory:")
+            print(f"   Domains: {len(domains)}")
+            if domains:
+                total_patterns = sum(
+                    memory.get_domain_stats(d).get('pattern_count', 0)
+                    for d in domains
+                )
+                print(f"   Total Patterns: {total_patterns}")
+        
+        if orchestrator:
+            bridge = CreativeImplementationBridge(orchestrator)
+            history = bridge.get_implementation_history()
+            
+            print("\n🔧 Implementation History:")
+            print(f"   Total Implementations: {len(history)}")
+            if history:
+                success_count = sum(1 for h in history if h.success)
+                print(f"   Success Rate: {success_count / len(history):.1%}")
+                
+                # By technique
+                techniques = set(h.idea.technique for h in history)
+                print("\n   By Technique:")
+                for tech in techniques:
+                    tech_rate = bridge.get_success_rate(technique=tech)
+                    print(f"      {tech}: {tech_rate:.1%}")
+        
+        print("\n✨ Available Techniques:")
+        print("   - RPE (Recursive Prompt Expansion)")
+        print("   - SCAMPER")
+        print("   - SixHats")
+        print("   - AutoTRIZ")
+        print()
+        
+    except Exception as e:
+        print(f"\n❌ Error: {e}")

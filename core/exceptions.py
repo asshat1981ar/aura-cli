@@ -1,79 +1,240 @@
-class AuraError(Exception):
-    """Base class for all exceptions in AURA."""
+"""Standardized exceptions for AURA CLI.
+
+Provides specific exception types for different error categories
+to enable precise error handling and reduce bare 'except Exception' usage.
+"""
+
+
+class AURAError(Exception):
+    """Base exception for all AURA errors."""
     pass
 
-class GitToolsError(AuraError):
-    """Base class for all Git-related errors."""
+
+# File/IO Exceptions
+class FileToolsError(AURAError):
+    """Base exception for file tool operations."""
     pass
+
+
+class PathTraversalError(FileToolsError):
+    """Attempted path traversal attack detected."""
+    pass
+
+
+class PathOutsideRootError(FileToolsError):
+    """Path is outside the allowed project root."""
+    pass
+
+
+class NullByteInjectionError(FileToolsError):
+    """Null byte detected in path (injection attempt)."""
+    pass
+
+
+# MCP/Network Exceptions
+class MCPError(AURAError):
+    """Base exception for MCP-related errors."""
+    pass
+
+
+class MCPConnectionError(MCPError):
+    """Failed to connect to MCP server."""
+    pass
+
+
+class MCPTimeoutError(MCPError):
+    """MCP operation timed out."""
+    pass
+
+
+class MCPProtocolError(MCPError):
+    """MCP protocol error."""
+    pass
+
+
+class MCPServerUnavailableError(MCPError):
+    """MCP server unavailable."""
+    pass
+
+
+class MCPInvalidResponseError(MCPError):
+    """MCP invalid response."""
+    pass
+
+
+class MCPRetryExhaustedError(MCPError):
+    """MCP retry exhausted."""
+    pass
+
+
+# Agent Exceptions
+class AgentError(AURAError):
+    """Base exception for agent errors."""
+    pass
+
+
+class AgentInitializationError(AgentError):
+    """Failed to initialize agent."""
+    pass
+
+
+class AgentExecutionError(AgentError):
+    """Agent execution failed."""
+    pass
+
+
+class AgentTimeoutError(AgentError):
+    """Agent execution timed out."""
+    pass
+
+
+# Orchestration Exceptions
+class OrchestrationError(AURAError):
+    """Base exception for orchestration errors."""
+    pass
+
+
+class PhaseExecutionError(OrchestrationError):
+    """Phase execution failed."""
+    pass
+
+
+class CycleExceededError(OrchestrationError):
+    """Maximum cycles exceeded."""
+    pass
+
+
+class VerificationFailedError(OrchestrationError):
+    """Verification phase failed."""
+    pass
+
+
+# SADD Exceptions
+class SADDError(AURAError):
+    """Base exception for SADD-related errors."""
+    pass
+
+
+class WorkstreamError(SADDError):
+    """Workstream execution error."""
+    pass
+
+
+class DependencyCycleError(SADDError):
+    """Circular dependency detected in workstreams."""
+    pass
+
+
+class SessionError(SADDError):
+    """SADD session error."""
+    pass
+
+
+# Memory Exceptions
+class MemoryError(AURAError):
+    """Base exception for memory-related errors."""
+    pass
+
+
+class RecallError(MemoryError):
+    """Failed to recall from memory."""
+    pass
+
+
+class StorageError(MemoryError):
+    """Failed to store to memory."""
+    pass
+
+
+# Configuration Exceptions
+class ConfigError(AURAError):
+    """Base exception for configuration errors."""
+    pass
+
+
+class ConfigurationError(ConfigError):
+    """Configuration error (alias for backward compatibility)."""
+    pass
+
+
+class ConfigNotFoundError(ConfigError):
+    """Configuration file not found."""
+    pass
+
+
+class ConfigValidationError(ConfigError):
+    """Configuration validation failed."""
+    pass
+
+
+# Validation Exceptions
+class ValidationError(AURAError):
+    """Base exception for validation errors."""
+    pass
+
+
+class SchemaValidationError(ValidationError):
+    """Schema validation failed."""
+    pass
+
+
+class OutputValidationError(ValidationError):
+    """Output validation failed."""
+    pass
+
+
+# Git Exceptions
+class GitToolsError(AURAError):
+    """Base exception for git tool errors."""
+    pass
+
 
 class GitRepoError(GitToolsError):
-    """Exception raised when the Git repository is invalid or not found."""
+    """Git repository error."""
     pass
+
 
 class GitCommitError(GitToolsError):
-    """Exception raised for errors during Git commit operations."""
+    """Git commit error."""
     pass
+
 
 class GitRollbackError(GitToolsError):
-    """Exception raised for errors during Git rollback operations."""
+    """Git rollback error."""
     pass
+
 
 class GitDiffError(GitToolsError):
-    """Exception raised for errors during Git diff operations."""
+    """Git diff error."""
     pass
+
 
 class GitBranchError(GitToolsError):
-    """Exception raised for errors during Git branch operations."""
+    """Git branch error."""
     pass
+
 
 class GitStashError(GitToolsError):
-    """Exception raised for errors during Git stash operations."""
+    """Git stash error."""
     pass
+
 
 class GitStashPopError(GitToolsError):
-    """Exception raised for errors during Git stash pop operations."""
+    """Git stash pop error."""
     pass
 
-class GoalQueueError(AuraError):
-    """Raised when an error occurs in Goal Queue operations."""
+
+# Security Exceptions
+class SecurityError(AURAError):
+    """Base exception for security-related errors."""
     pass
 
-class BrainError(AuraError):
-    """Raised when an error occurs in Brain operations."""
+
+class SecretDetectedError(SecurityError):
+    """Hardcoded secret detected."""
     pass
 
-class ModelAdapterError(AuraError):
-    """Raised when an error occurs in Model Adapter operations."""
-    pass
 
-class LoopError(AuraError):
-    """Raised when an error occurs in the Hybrid Loop."""
-    pass
-
-class ConfigurationError(AuraError):
-    """Raised when there is a configuration-related error."""
-    pass
-
-class MCPError(AuraError):
-    """Base class for all MCP-related errors."""
-    pass
-
-class MCPTransportError(MCPError):
-    """Raised for errors in the MCP transport layer (e.g., connection failure)."""
-    pass
-
-class MCPTimeoutError(MCPTransportError):
-    """Raised when an MCP request times out."""
-    pass
-
-class MCPServerUnavailableError(MCPTransportError):
-    """Raised when an MCP server is unavailable or down."""
-    pass
-
-class MCPInvalidResponseError(MCPTransportError):
-    """Raised when an MCP server returns a malformed response."""
-    pass
-
-class MCPRetryExhaustedError(MCPTransportError):
-    """Raised when all retries for an MCP request have failed."""
+class InjectionDetectedError(SecurityError):
+    """Injection attack detected."""
     pass

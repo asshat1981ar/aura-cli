@@ -1,0 +1,143 @@
+<style>
+  h2 { color: #e2e8f0; margin-bottom: 4px; font-size: 1.1rem; }
+  .subtitle { color: #64748b; font-size: .8rem; margin-bottom: 14px; }
+  .wf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .wf { border-radius: 10px; padding: 14px 16px; border: 1.5px solid; }
+  .wf.master  { border-color: #7c3aed; background: #13092b; }
+  .wf.bug     { border-color: #dc2626; background: #1c0a0a; }
+  .wf.feature { border-color: #16a34a; background: #061a0e; }
+  .wf.refactor{ border-color: #2563eb; background: #080e1f; }
+  .wf.security{ border-color: #d97706; background: #1a0e00; }
+  .wf.docs    { border-color: #475569; background: #0d1117; }
+  .wf-title { font-size: .85rem; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+  .wf.master  .wf-title { color: #c4b5fd; }
+  .wf.bug     .wf-title { color: #fca5a5; }
+  .wf.feature .wf-title { color: #86efac; }
+  .wf.refactor .wf-title { color: #93c5fd; }
+  .wf.security .wf-title { color: #fcd34d; }
+  .wf.docs    .wf-title { color: #94a3b8; }
+  .nodes { display: flex; flex-direction: column; gap: 5px; }
+  .node { display: flex; align-items: flex-start; gap: 8px; font-size: .7rem; }
+  .node-type { font-size: .6rem; font-weight: 700; border-radius: 3px; padding: 1px 5px; white-space: nowrap; margin-top: 1px; }
+  .nt-trigger  { background: #1e3a5f; color: #93c5fd; }
+  .nt-llm      { background: #2d1b69; color: #c4b5fd; }
+  .nt-http     { background: #14532d; color: #86efac; }
+  .nt-code     { background: #1f1208; color: #fcd34d; }
+  .nt-switch   { background: #4c1d95; color: #ddd6fe; }
+  .nt-sub      { background: #0f2318; color: #6ee7b7; }
+  .nt-wait     { background: #292524; color: #d6d3d1; }
+  .nt-gh       { background: #0d1117; color: #f0f6fc; border: 1px solid #30363d; }
+  .node-detail { color: #94a3b8; line-height: 1.5; flex: 1; }
+  .node-detail strong { color: #e2e8f0; }
+  .arrow-down { color: #334155; font-size: .65rem; margin-left: 28px; }
+  .prompt-tag { font-size: .62rem; color: #818cf8; font-style: italic; margin-left: 4px; }
+  .skills-tag { font-size: .62rem; color: #34d399; font-style: italic; }
+  .full-width { grid-column: 1 / -1; }
+</style>
+
+<h2>Fleet Workflows — Internal Node Structure</h2>
+<p class="subtitle">6 n8n workflows. Each box = a node. Colours = node type.</p>
+
+<div class="wf-grid">
+
+  <!-- MASTER DISPATCHER - full width -->
+  <div class="wf master full-width">
+    <div class="wf-title">🎛️ WF-0: Master Dispatcher</div>
+    <div class="nodes">
+      <div class="node"><span class="node-type nt-trigger">TRIGGER</span><span class="node-detail"><strong>GitHub Webhook</strong> — issue.opened, issue.labeled events</span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-llm">LLM</span><span class="node-detail"><strong>Issue Classifier</strong> — reads title+body, returns <code>{type, confidence, summary, key_files[]}</code><span class="prompt-tag">prompt: classify-issue-v1</span></span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-code">CODE</span><span class="node-detail"><strong>Retry State Init</strong> — sets <code>retryCount=0</code>, stamps <code>fleetRunId</code>, adds label <code>fleet:processing</code> to issue</span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-switch">SWITCH</span><span class="node-detail"><strong>Type Router</strong> — routes to WF-1 through WF-5 based on classifier output. Fallback → Feature Flow</span></div>
+    </div>
+  </div>
+
+  <!-- BUG FIX -->
+  <div class="wf bug">
+    <div class="wf-title">🐛 WF-1: Bug-Fix Flow</div>
+    <div class="nodes">
+      <div class="node"><span class="node-type nt-http">HTTP</span><span class="node-detail"><strong>AURA Skills fan-out</strong> <span class="skills-tag">error_pattern_matcher, type_checker, test_coverage_analyzer</span></span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-llm">LLM</span><span class="node-detail"><strong>Bug Analyst</strong> — root cause + patch strategy<span class="prompt-tag">prompt: bug-analyst-v1</span></span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-http">HTTP</span><span class="node-detail"><strong>AURA Loop /run</strong> — goal: "Fix bug: {summary}" with patch context injected</span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-sub">SUB</span><span class="node-detail"><strong>→ WF-5 Merge</strong></span></div>
+    </div>
+  </div>
+
+  <!-- FEATURE -->
+  <div class="wf feature">
+    <div class="wf-title">✨ WF-2: Feature Flow</div>
+    <div class="nodes">
+      <div class="node"><span class="node-type nt-http">HTTP</span><span class="node-detail"><strong>AURA Skills fan-out</strong> <span class="skills-tag">symbol_indexer, architecture_validator, api_contract_validator</span></span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-llm">LLM</span><span class="node-detail"><strong>Feature Planner</strong> — spec extraction + scaffold plan<span class="prompt-tag">prompt: feature-planner-v1</span></span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-http">HTTP</span><span class="node-detail"><strong>AURA Loop /run</strong> — goal: "Implement: {spec}"</span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-sub">SUB</span><span class="node-detail"><strong>→ WF-5 Merge</strong></span></div>
+    </div>
+  </div>
+
+  <!-- REFACTOR -->
+  <div class="wf refactor">
+    <div class="wf-title">♻️ WF-3: Refactor Flow</div>
+    <div class="nodes">
+      <div class="node"><span class="node-type nt-http">HTTP</span><span class="node-detail"><strong>AURA Skills fan-out</strong> <span class="skills-tag">complexity_scorer, code_clone_detector, tech_debt_quantifier, refactoring_advisor</span></span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-llm">LLM</span><span class="node-detail"><strong>Refactor Planner</strong> — decomposition plan, preserves test coverage<span class="prompt-tag">prompt: refactor-planner-v1</span></span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-http">HTTP</span><span class="node-detail"><strong>AURA Loop /run</strong> — goal: "Refactor: {target}" with debt context</span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-sub">SUB</span><span class="node-detail"><strong>→ WF-5 Merge</strong></span></div>
+    </div>
+  </div>
+
+  <!-- SECURITY -->
+  <div class="wf security">
+    <div class="wf-title">🔒 WF-4: Security Flow</div>
+    <div class="nodes">
+      <div class="node"><span class="node-type nt-http">HTTP</span><span class="node-detail"><strong>AURA Skills fan-out</strong> <span class="skills-tag">security_scanner, dependency_analyzer, linter_enforcer</span></span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-llm">LLM</span><span class="node-detail"><strong>Security Analyst</strong> — CVE triage, patch priority<span class="prompt-tag">prompt: security-analyst-v1</span></span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-http">HTTP</span><span class="node-detail"><strong>AURA Loop /run</strong> — goal: "Fix security: {finding}"</span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-sub">SUB</span><span class="node-detail"><strong>→ WF-5 Merge</strong></span></div>
+    </div>
+  </div>
+
+  <!-- DOCS -->
+  <div class="wf docs">
+    <div class="wf-title">📄 WF-5a: Docs Flow</div>
+    <div class="nodes">
+      <div class="node"><span class="node-type nt-http">HTTP</span><span class="node-detail"><strong>AURA Skills fan-out</strong> <span class="skills-tag">symbol_indexer, doc_generator</span></span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-llm">LLM</span><span class="node-detail"><strong>Doc Writer</strong> — generates docstrings, README sections<span class="prompt-tag">prompt: doc-writer-v1</span></span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-http">HTTP</span><span class="node-detail"><strong>AURA Loop /run</strong> — goal: "Document: {scope}"</span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-sub">SUB</span><span class="node-detail"><strong>→ WF-5b Merge</strong></span></div>
+    </div>
+  </div>
+
+  <!-- MERGE + RETRY - full width -->
+  <div class="wf master full-width" style="border-color:#16a34a;background:#061a0e;">
+    <div class="wf-title" style="color:#86efac;">✅ WF-6: Push PR + Auto-Merge (shared convergence)</div>
+    <div class="nodes">
+      <div class="node"><span class="node-type nt-http">HTTP</span><span class="node-detail"><strong>generation_quality_checker</strong> — scores output before PR. Score &lt;70 → retry signal</span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-gh">GH</span><span class="node-detail"><strong>gh pr create</strong> — branch: <code>fleet/{type}/{issue-number}</code>, body includes AURA skill report + quality score</span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-wait">WAIT</span><span class="node-detail"><strong>CI Poll</strong> — waits for status checks to pass (max 10 min)</span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-switch">SWITCH</span><span class="node-detail"><strong>CI Result</strong> → pass: <code>gh pr merge --squash</code> · fail + retryCount&lt;3: back to sub-flow · fail + retryCount=3: blocker comment + label <code>fleet:blocked</code></span></div>
+      <div class="arrow-down">↓</div>
+      <div class="node"><span class="node-type nt-gh">GH</span><span class="node-detail"><strong>Issue Close</strong> — posts summary comment, removes <code>fleet:processing</code>, closes issue</span></div>
+    </div>
+  </div>
+
+</div>

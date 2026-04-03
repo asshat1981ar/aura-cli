@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
 from core.logging_utils import log_json
+from core.schema import RoutingDecision, validate_phase_output
 from core.beads_bridge import build_beads_runtime_input
 from core.operator_runtime import build_cycle_summary
 from core.cycle_outcome import CycleOutcome
@@ -48,13 +49,13 @@ from core.file_tools import (
     apply_change_with_explicit_overwrite_policy,
     mismatch_overwrite_block_log_details,
 )
-from core.schema import validate_phase_output
 from core.skill_dispatcher import classify_goal, dispatch_skills
 from core.human_gate import HumanGate
 from core.types import TaskRequest, TaskResult, ExecutionContext
 from core.mcp_agent_registry import agent_registry
 from core.mcp_client import MCPAsyncClient
 from memory.controller import memory_controller, MemoryTier
+from core.phase_dispatcher import PhaseDispatcher
 
 MAX_SANDBOX_RETRIES = 3
 
@@ -164,6 +165,12 @@ class LoopOrchestrator:
         self.config = config
         self.debugger = debugger  # Optional DebuggerAgent for auto-recovery
         self.human_gate = HumanGate()
+        self.lesson_store = None
+        try:
+            from memory.lesson_store import LessonStore
+            self.lesson_store = LessonStore()
+        except (OSError, ImportError):
+            pass
         self.auto_add_capabilities = auto_add_capabilities
         self.auto_queue_missing_capabilities = auto_queue_missing_capabilities
         self.auto_provision_mcp = auto_provision_mcp
@@ -200,6 +207,13 @@ class LoopOrchestrator:
         # ── Innovation modules ──
         # Hook engine: guaranteed-execution lifecycle hooks at phase boundaries
         self.hook_engine = HookEngine(self._load_config_file())
+        # Phase dispatcher: thin delegation layer for phase → agent mapping + hooks
+        self._phase_dispatcher = PhaseDispatcher(
+            agents=self.agents,
+            hook_engine=self.hook_engine,
+            config=self.config,
+            project_root=str(self.project_root),
+        )
         # Confidence router: data-driven phase routing based on confidence scores
         self.confidence_router = ConfidenceRouter()
         # Quality trend analyzer: cross-cycle regression detection
@@ -209,7 +223,7 @@ class LoopOrchestrator:
             from core.skill_correlation import SkillCorrelationMatrix
 
             self.skill_correlation = SkillCorrelationMatrix()
-        except Exception:
+        except (OSError, ImportError):
             self.skill_correlation = None
 
         # Self-improvement loops (all optional — never block the main loop)
@@ -239,7 +253,7 @@ class LoopOrchestrator:
             if method:
                 try:
                     method(*args, **kwargs)
-                except Exception:
+                except (TypeError, AttributeError):
                     pass
 
     def _analyze_error(self, error: str, context: Optional[dict] = None) -> Optional[str]:
@@ -315,7 +329,7 @@ class LoopOrchestrator:
             return []
         try:
             return list(self.memory_controller.read_log()[-limit:])
-        except Exception:
+        except (OSError, AttributeError):
             return []
 
     def attach_improvement_loops(self, *loops) -> None:
@@ -398,7 +412,7 @@ class LoopOrchestrator:
             return []
         try:
             summaries = self.memory_controller.persistent_store.query("cycle_summaries", limit=200)
-        except Exception:
+        except (OSError, AttributeError):
             return []
         if not summaries:
             return []
@@ -435,8 +449,10 @@ class LoopOrchestrator:
     def _run_phase(self, name: str, input_data: Dict) -> Dict:
         """Dispatch a single pipeline phase to its registered agent.
 
-        Wraps execution with guaranteed-execution pre/post hooks and
-        records confidence scores for routing decisions.
+        Delegates to :attr:`_phase_dispatcher` which handles hook wrapping,
+        canary routing, and agent lookup.  Shadow-mode comparison is still
+        performed here because it requires access to :meth:`_dispatch_task`
+        and :meth:`_run_shadow_check` which live on the orchestrator.
 
         Args:
             name: The phase identifier (e.g. ``"plan"``, ``"act"``, ``"verify"``).
@@ -446,54 +462,12 @@ class LoopOrchestrator:
             The dict returned by ``agent.run()``, or an empty dict ``{}`` when
             no agent is registered for *name*.
         """
-        # Emergency bypass (M5 rollback)
-        if self.config.get("force_legacy_orchestrator"):
-            agent = self.agents.get(name)
-            return agent.run(input_data) if agent else {}
+        result = self._phase_dispatcher.dispatch(name, input_data)
 
-        # Pre-phase hooks (guaranteed execution — cannot be bypassed by model)
-        should_proceed, input_data = self.hook_engine.run_pre_hooks(name, input_data)
-        if not should_proceed:
-            log_json("WARN", "phase_blocked_by_hook", details={"phase": name})
-            return {"_blocked_by_hook": True, "phase": name}
-
-        # M5-002, M5-003: Canary Waves - Route low-risk and core tooling to async path
-        canary_phases = ["mcp_discovery", "mcp_health", "code_search", "investigation"]
-        if name in canary_phases and self.config.get("enable_new_orchestrator"):
-            log_json("INFO", "orchestrator_canary_routing", details={"phase": name})
-            try:
-                import anyio
-                import asyncio
-
-                req = TaskRequest(task_id=f"canary_{uuid.uuid4().hex[:8]}", agent_name=name, input_data=input_data, context=ExecutionContext(project_root=str(self.project_root)))
-
-                async def call_dispatch():
-                    return await self._dispatch_task(req)
-
-                try:
-                    asyncio.get_running_loop()
-                    task_res = anyio.from_thread.run(call_dispatch)
-                except RuntimeError:
-                    task_res = anyio.run(call_dispatch)
-
-                if task_res.status == "success":
-                    return task_res.output
-                log_json("ERROR", "orchestrator_canary_failed", details={"phase": name, "error": task_res.error})
-            except Exception as e:
-                log_json("ERROR", "orchestrator_canary_exception", details={"phase": name, "error": str(e)})
-
-        agent = self.agents.get(name)
-        if not agent:
-            return {}
-
-        result = agent.run(input_data)
-
-        # Shadow mode comparison (M4-005, M5-005)
-        if self.config.get("new_orchestrator_shadow_mode"):
+        # Shadow mode comparison (M4-005, M5-005) — kept here as it needs
+        # access to _dispatch_task which is an orchestrator-level concern.
+        if self.config.get("new_orchestrator_shadow_mode") and isinstance(result, dict) and not result.get("_blocked_by_hook"):
             self._run_shadow_check(name, input_data, result)
-
-        # Post-phase hooks (observational)
-        self.hook_engine.run_post_hooks(name, result if isinstance(result, dict) else {})
 
         return result
 
@@ -704,11 +678,11 @@ class LoopOrchestrator:
                 all other keys are ignored.
 
         Returns:
-            One of three string literals:
+            A :class:`~core.schema.RoutingDecision` value:
 
-            * ``"act"``  — recoverable code-level error; retry the act phase.
-            * ``"plan"`` — structural or design error; re-plan from scratch.
-            * ``"skip"`` — external / environment issue that cannot be
+            * :attr:`~core.schema.RoutingDecision.ACT`  — recoverable code-level error; retry the act phase.
+            * :attr:`~core.schema.RoutingDecision.PLAN` — structural or design error; re-plan from scratch.
+            * :attr:`~core.schema.RoutingDecision.SKIP` — external / environment issue that cannot be
               self-fixed (e.g. missing dependency, network error).
         """
         failures = " ".join(str(f) for f in verification.get("failures", []))
@@ -736,10 +710,10 @@ class LoopOrchestrator:
         ]
 
         if any(s in combined for s in structural_signals):
-            return "plan"
+            return RoutingDecision.PLAN
         if any(s in combined for s in external_signals):
-            return "skip"
-        return "act"  # default: code-level fix is worth retrying
+            return RoutingDecision.SKIP
+        return RoutingDecision.ACT  # default: code-level fix is worth retrying
 
     def _normalize_verification_result(self, verification: Dict) -> Dict:
         """Accept both legacy ``passed`` and canonical ``status`` verification payloads."""
@@ -810,7 +784,7 @@ class LoopOrchestrator:
                 goal=goal,
                 verification={"failures": [stderr_hint], "logs": stderr_hint},
                 context=failure_context,
-                route="act",
+                route=RoutingDecision.ACT.value,
                 analysis_suggestion=analysis_suggestion,
                 root_cause_analysis=root_cause_analysis,
             )
@@ -867,9 +841,111 @@ class LoopOrchestrator:
             spec = resolve_agent_for_goal(goal, model_adapter=model_adapter)
             if spec and spec.name in self.agents:
                 return spec.name
-        except Exception:
+        except (AttributeError, KeyError):
             pass
         return "act"
+
+    def _notify_n8n_feedback(self, goal: str, cycle_id: str, passed: bool, phase_outputs: Dict) -> None:
+        """POST cycle reflection + skill summary to n8n P4 Feedback Loop webhook.
+
+        Fires non-blocking after the reflect phase completes.  Gated by
+        ``n8n_connector.enabled`` in config.  Failures are swallowed and
+        logged — never allowed to interrupt cycle completion.
+        """
+        try:
+            config = self._load_config_file()
+            n8n_cfg = config.get("n8n_connector", {})
+            if not n8n_cfg.get("enabled", False):
+                return
+
+            webhook_url = n8n_cfg.get("feedback_loop_webhook", "")
+            if not webhook_url:
+                return
+
+            reflection: Dict = phase_outputs.get("reflection", {})
+            payload = {
+                "pipeline_run_id": getattr(self, "_cycle_context", {}).get("pipeline_run_id", cycle_id),
+                "cycle_id": cycle_id,
+                "goal": goal,
+                "passed": passed,
+                "verification_status": phase_outputs.get("verification", {}).get("status", "skip"),
+                "learnings": reflection.get("learnings", []),
+                "summary": reflection.get("summary", ""),
+                "skill_summary": reflection.get("skill_summary", {}),
+                "act_confidence": phase_outputs.get("act_confidence"),
+                "plan_confidence": phase_outputs.get("plan_confidence"),
+                "retry_count": phase_outputs.get("retry_count", 0),
+                "quality": phase_outputs.get("quality", {}),
+            }
+
+            import urllib.request
+
+            def _post(url: str, body: bytes) -> int:
+                req = urllib.request.Request(
+                    url, data=body,
+                    headers={"Content-Type": "application/json"}, method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=5) as resp:
+                    return resp.status
+
+            data = json.dumps(payload).encode()
+            status = _post(webhook_url, data)
+            log_json("INFO", "n8n_feedback_sent", details={
+                "cycle_id": cycle_id,
+                "passed": passed,
+                "learnings": len(payload["learnings"]),
+                "status_code": status,
+            })
+
+            # Fan-out to P5 Observability Collector (best-effort)
+            obs_url = n8n_cfg.get("observability_webhook", "")
+            if obs_url:
+                try:
+                    _post(obs_url, data)
+                except Exception as obs_exc:
+                    log_json("WARN", "n8n_observability_send_failed", details={"error": str(obs_exc)})
+
+        except Exception as exc:
+            log_json("WARN", "n8n_feedback_notify_failed", details={"error": str(exc)})
+
+    def _enrich_act_context(self, task_bundle: Dict) -> Dict:
+        """Inject quality-gate critique from n8n P3 Pipeline Coordinator into task_bundle.
+
+        P3 pre-fetches Dev Suite review results and injects them via
+        WebhookGoalRequest.metadata["quality_gate_critique"] into the cycle
+        context before the act phase.  This method reads from that context
+        field and prepends the critique to the task bundle so the CoderAgent
+        sees it as part of the prompt — no blocking HTTP call.
+
+        If quality_gate is not enabled or no critique is available, returns
+        task_bundle unchanged.
+        """
+        try:
+            config = self._load_config_file()
+            n8n_cfg = config.get("n8n_connector", {})
+            if not n8n_cfg.get("quality_gate_enabled", False):
+                return task_bundle
+
+            critique = (
+                getattr(self, "_cycle_context", {}).get("quality_gate_critique")
+                or (task_bundle.get("_cycle_context") or {}).get("quality_gate_critique")
+                or task_bundle.get("quality_gate_critique")
+            )
+            if not critique:
+                return task_bundle
+
+            task_bundle = dict(task_bundle) if isinstance(task_bundle, dict) else {}
+            existing = task_bundle.get("critique", "") or ""
+            task_bundle["critique"] = (
+                f"[Dev Suite Quality Gate Review]\n{critique}\n\n{existing}".strip()
+            )
+            log_json("INFO", "aura_act_context_enriched", details={
+                "critique_len": len(critique),
+                "quality_gate_enabled": True,
+            })
+        except Exception as exc:
+            log_json("WARN", "aura_act_context_enrich_failed", details={"error": str(exc)})
+        return task_bundle
 
     def _execute_act_verify_attempt(self, goal: str, plan: Dict, task_bundle: Dict, cycle_id: str, phase_outputs: Dict, dry_run: bool):
         """Execute one attempt of act -> sandbox -> apply -> verify.
@@ -897,8 +973,13 @@ class LoopOrchestrator:
                 task_bundle = dict(task_bundle) if isinstance(task_bundle, dict) else {}
                 task_bundle["rag_examples"] = [e.get("content", "")[:300] for e in rag_context.examples[:3]]
                 task_bundle["rag_anti_patterns"] = rag_context.anti_patterns[:3]
-        except Exception:
+        except (AttributeError, TypeError):
             pass
+
+        # Pipeline quality gate: inject critique from P3 Pipeline Coordinator.
+        # P3 pre-fetches Dev Suite review and injects it via WebhookGoalRequest.metadata
+        # into the cycle_context before this phase runs.  No blocking HTTP call here.
+        task_bundle = self._enrich_act_context(task_bundle)
 
         if n_best > 1 and self.model and not dry_run:
             # N-Best code generation with critic tournament
@@ -1053,12 +1134,12 @@ class LoopOrchestrator:
             if root_cause_analysis:
                 verification["root_cause_analysis"] = root_cause_analysis
 
-            if route == "plan" and plan_attempt < max_plan_retries:
+            if route == RoutingDecision.PLAN and plan_attempt < max_plan_retries:
                 phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
                 phase_outputs["_failure_context"] = {
                     "failures": verification.get("failures", []),
                     "logs": verification.get("logs", ""),
-                    "route": "plan",
+                    "route": RoutingDecision.PLAN.value,
                     "suggestion": analysis_suggestion,
                     "failure_investigation": failure_investigation,
                     "root_cause_analysis": root_cause_analysis,
@@ -1067,7 +1148,7 @@ class LoopOrchestrator:
                 }
                 replan_needed = True
                 break
-            elif route == "skip":
+            elif route == RoutingDecision.SKIP:
                 break
             task_bundle["fix_hints"] = fix_hints
 
@@ -1317,7 +1398,7 @@ class LoopOrchestrator:
                         if suggested_name in self.skills and suggested_name not in active_skills:
                             active_skills[suggested_name] = self.skills[suggested_name]
                             log_json("INFO", "skill_correlation_added", details={"skill": suggested_name, "correlation": round(corr_score, 3)})
-                except Exception:
+                except (TypeError, KeyError):
                     pass
 
             skill_context = dispatch_skills(goal_type, active_skills, str(self.project_root))
@@ -1417,7 +1498,12 @@ class LoopOrchestrator:
         """Section 7: REFLECT."""
         self._notify_ui("on_phase_start", "reflect")
         t0 = time.time()
-        reflection = self._run_phase("reflect", {"verification": verification, "skill_context": skill_context, "goal_type": goal_type})
+        reflection = self._run_phase("reflect", {
+            "verification": verification,
+            "skill_context": skill_context,
+            "goal_type": goal_type,
+            "pipeline_run_id": getattr(self, "_cycle_context", {}).get("pipeline_run_id"),
+        })
         self._notify_ui("on_phase_complete", "reflect", (time.time() - t0) * 1000)
         errors = validate_phase_output("reflection", reflection)
         if errors:
@@ -1529,6 +1615,12 @@ class LoopOrchestrator:
 
         self._notify_ui("on_phase_complete", "learn", (time.time() - t0_learn) * 1000)
 
+        # ── P4 Feedback Loop: POST reflection + skill summary to n8n ──
+        try:
+            self._notify_n8n_feedback(goal, cycle_id, passed, phase_outputs)
+        except Exception as exc:
+            log_json("WARN", "n8n_feedback_notify_failed", details={"error": str(exc)})
+
         if self.context_graph is not None:
             try:
                 self.context_graph.update_from_cycle(entry)
@@ -1633,6 +1725,15 @@ class LoopOrchestrator:
         pipeline_cfg = self._configure_pipeline(goal, goal_type, phase_outputs)
         self._handle_capabilities(goal, pipeline_cfg, phase_outputs, dry_run)
 
+        # Inject lessons from previous cycles into planner context
+        if self.lesson_store:
+            try:
+                lessons = self.lesson_store.injectable_lessons()
+                if lessons:
+                    phase_outputs["injected_lessons"] = lessons
+            except (OSError, TypeError):
+                pass
+
         context = self._run_ingest_phase(goal, cycle_id, phase_outputs)
         if self.strict_schema and validate_phase_output("context", context):
             return self._build_early_stop_entry(
@@ -1727,7 +1828,16 @@ class LoopOrchestrator:
         phase_outputs["cycle_confidence"] = self.confidence_router.get_cycle_confidence()
 
         phase_outputs.pop("_failure_context", None)
-        return self._record_cycle_outcome(cycle_id, goal, goal_type, phase_outputs, started_at)
+        result = self._record_cycle_outcome(cycle_id, goal, goal_type, phase_outputs, started_at)
+
+        # Record lesson from this cycle
+        if self.lesson_store:
+            try:
+                self.lesson_store.record_cycle(result)
+            except (OSError, AttributeError):
+                pass
+
+        return result
 
     def _estimate_confidence(self, output: Dict, phase: str) -> float:
         """Heuristically estimate confidence for a phase output.
@@ -1871,7 +1981,7 @@ class LoopOrchestrator:
 
             try:
                 anyio.run(self.shutdown)
-            except Exception:
+            except (RuntimeError, OSError):
                 pass
 
     async def shutdown(self):

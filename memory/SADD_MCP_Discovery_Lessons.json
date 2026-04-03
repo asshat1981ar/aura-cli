@@ -1,0 +1,27 @@
+{
+    "event": "SADD Semantic MCP Discovery Implementation",
+    "date": "2026-03-25",
+    "lessons": [
+        {
+            "topic": "Dynamic Tool Discovery",
+            "observation": "Static keyword-to-tool maps are a bottleneck for autonomous sub-agents as the MCP ecosystem grows.",
+            "recommendation": "Use a central discovery MCP server to aggregate tool manifests and perform semantic search on descriptions."
+        },
+        {
+            "topic": "System Reliability",
+            "observation": "Network-based discovery can fail if the discovery server or target MCP servers are offline.",
+            "recommendation": "Implement a fallback mechanism (like the existing static keyword map) to ensure basic functionality remains available."
+        },
+        {
+            "topic": "Capability Gaps in SADD",
+            "observation": "SADD sub-agents benefit from knowing which tools are available *before* they start a workstream.",
+            "recommendation": "Inject semantic tool context into sub-agent runners using the MCPToolBridge to guide tool selection."
+        }
+    ],
+    "implementation_details": {
+        "server": "tools/mcp_discovery_server.py",
+        "bridge": "core/sadd/mcp_tool_bridge.py",
+        "skill": "agents/skills/mcp_semantic_discovery.py",
+        "test": "tests/integration/test_sadd_mcp_discovery.py"
+    }
+}

@@ -2,7 +2,7 @@ import os
 import re
 from pathlib import Path
 from typing import List, Union
-from core.exceptions import AuraError
+from core.exceptions import AURAError as AuraError
 from core.config_manager import config
 
 class SecurityError(AuraError):

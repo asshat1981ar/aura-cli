@@ -662,6 +662,317 @@
       ],
       "requires_runtime": true,
       "summary": "Resume a SADD session"
+    },
+    {
+      "action": null,
+      "description": "Start, list, and manage innovation sessions using brainstorming techniques.",
+      "examples": [
+        "python3 main.py innovate start \"How to improve X?\"",
+        "python3 main.py innovate list",
+        "python3 main.py innovate show --session-id abc123"
+      ],
+      "flags": [],
+      "legacy_flags": [],
+      "path": [
+        "innovate"
+      ],
+      "requires_runtime": null,
+      "summary": "Innovation Catalyst session management"
+    },
+    {
+      "action": "innovate_start",
+      "description": "Start a new innovation session with the Innovation Catalyst framework.",
+      "examples": [
+        "python3 main.py innovate start \"How to improve code review?\"",
+        "python3 main.py innovate start \"Reduce bugs\" --techniques scamper,six_hats",
+        "python3 main.py innovate start \"Improve UX\" --execute-phase divergence"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "innovate",
+        "start"
+      ],
+      "requires_runtime": true,
+      "summary": "Start a new innovation session"
+    },
+    {
+      "action": "innovate_list",
+      "description": "List all innovation sessions with their status and metrics.",
+      "examples": [
+        "python3 main.py innovate list",
+        "python3 main.py innovate list --limit 10"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "innovate",
+        "list"
+      ],
+      "requires_runtime": true,
+      "summary": "List innovation sessions"
+    },
+    {
+      "action": "innovate_show",
+      "description": "Show detailed information about a specific innovation session.",
+      "examples": [
+        "python3 main.py innovate show --session-id abc123"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "innovate",
+        "show"
+      ],
+      "requires_runtime": true,
+      "summary": "Show session details"
+    },
+    {
+      "action": "innovate_resume",
+      "description": "Resume an innovation session at a specific phase.",
+      "examples": [
+        "python3 main.py innovate resume --session-id abc123",
+        "python3 main.py innovate resume --session-id abc123 --phase convergence"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "innovate",
+        "resume"
+      ],
+      "requires_runtime": true,
+      "summary": "Resume an innovation session"
+    },
+    {
+      "action": "innovate_export",
+      "description": "Export innovation session results to markdown or JSON.",
+      "examples": [
+        "python3 main.py innovate export --session-id abc123 --format markdown",
+        "python3 main.py innovate export --session-id abc123 --output report.md"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "innovate",
+        "export"
+      ],
+      "requires_runtime": true,
+      "summary": "Export session results"
+    },
+    {
+      "action": "innovate_techniques",
+      "description": "Show all available brainstorming techniques with descriptions.",
+      "examples": [
+        "python3 main.py innovate techniques",
+        "python3 main.py innovate techniques --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "innovate",
+        "techniques"
+      ],
+      "requires_runtime": false,
+      "summary": "List available brainstorming techniques"
+    },
+    {
+      "action": "innovate_to_goals",
+      "description": "Convert selected ideas from an innovation session to goals in the queue.",
+      "examples": [
+        "python3 main.py innovate to-goals --session-id abc123",
+        "python3 main.py innovate to-goals --session-id abc123 --preview"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "innovate",
+        "to-goals"
+      ],
+      "requires_runtime": true,
+      "summary": "Convert selected ideas to goals"
+    },
+    {
+      "action": "innovate_insights",
+      "description": "Display analytics about innovation sessions including trends, technique effectiveness, and idea quality metrics.",
+      "examples": [
+        "python3 main.py innovate insights",
+        "python3 main.py innovate insights --session-id abc123",
+        "python3 main.py innovate insights --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "innovate",
+        "insights"
+      ],
+      "requires_runtime": true,
+      "summary": "Show innovation analytics and insights"
+    },
+    {
+      "action": null,
+      "description": "Use creative techniques combined with AURA implementation for end-to-end problem solving.",
+      "examples": [
+        "python3 main.py creative solve \"Reduce API latency\"",
+        "python3 main.py creative solve \"Add caching\" --techniques SCAMPER,RPE",
+        "python3 main.py creative patterns",
+        "python3 main.py creative cross-pollinate --from web --to mobile"
+      ],
+      "flags": [],
+      "legacy_flags": [],
+      "path": [
+        "creative"
+      ],
+      "requires_runtime": null,
+      "summary": "Creative-AURA unified problem solving"
+    },
+    {
+      "action": "creative_solve",
+      "description": "Generate ideas using creative techniques and implement the best one with AURA.",
+      "examples": [
+        "python3 main.py creative solve \"Improve performance\"",
+        "python3 main.py creative solve \"Add feature X\" --techniques SCAMPER,RPE,SixHats",
+        "python3 main.py creative solve \"Refactor module\" --domain architecture"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "creative",
+        "solve"
+      ],
+      "requires_runtime": true,
+      "summary": "Solve problem using creative + AURA approach"
+    },
+    {
+      "action": "creative_patterns",
+      "description": "View stored patterns and their success rates.",
+      "examples": [
+        "python3 main.py creative patterns",
+        "python3 main.py creative patterns --domain api_design"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "creative",
+        "patterns"
+      ],
+      "requires_runtime": true,
+      "summary": "List stored creative patterns"
+    },
+    {
+      "action": "creative_cross_pollinate",
+      "description": "Find patterns from one domain applicable to another.",
+      "examples": [
+        "python3 main.py creative cross-pollinate --from web --to mobile",
+        "python3 main.py creative cross-pollinate --from backend --to frontend"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "creative",
+        "cross-pollinate"
+      ],
+      "requires_runtime": true,
+      "summary": "Find cross-domain analogies"
+    },
+    {
+      "action": "creative_stats",
+      "description": "Display statistics about the creative system including success rates and pattern counts.",
+      "examples": [
+        "python3 main.py creative stats"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "creative",
+        "stats"
+      ],
+      "requires_runtime": true,
+      "summary": "Show creative system statistics"
+    },
+    {
+      "action": null,
+      "description": "Commands for running goals via the Agent SDK meta-controller.",
+      "examples": [],
+      "flags": [],
+      "legacy_flags": [],
+      "path": [
+        "agent"
+      ],
+      "requires_runtime": null,
+      "summary": "Agent SDK commands"
+    },
+    {
+      "action": null,
+      "description": "Execute a development goal using Claude-as-brain orchestration with dynamic tool/skill/workflow selection.",
+      "examples": [],
+      "flags": [],
+      "legacy_flags": [],
+      "path": [
+        "agent",
+        "run"
+      ],
+      "requires_runtime": null,
+      "summary": "Run goal via Agent SDK meta-controller"
     }
   ],
   "deterministic": true,

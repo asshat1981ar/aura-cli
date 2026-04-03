@@ -1,0 +1,113 @@
+<style>
+  h2 { color: #e2e8f0; margin-bottom: 4px; font-size: 1.1rem; }
+  .subtitle { color: #64748b; font-size: .8rem; margin-bottom: 16px; }
+  .arch { display: grid; grid-template-columns: 160px 1fr 160px; gap: 0; align-items: start; margin-top: 8px; }
+  .col { display: flex; flex-direction: column; gap: 10px; }
+  .col.center { padding: 0 18px; }
+  .box { border-radius: 8px; padding: 10px 12px; font-size: .75rem; }
+  .box .title { font-weight: 700; font-size: .78rem; margin-bottom: 4px; }
+  .box .detail { color: #94a3b8; font-size: .7rem; line-height: 1.5; }
+  .github { background: #0d1117; border: 1.5px solid #30363d; }
+  .github .title { color: #f0f6fc; }
+  .n8n-master { background: #1a1040; border: 1.5px solid #7c3aed; }
+  .n8n-master .title { color: #c4b5fd; }
+  .n8n-sub { background: #0f1f2e; border: 1.5px solid #0ea5e9; }
+  .n8n-sub .title { color: #7dd3fc; }
+  .aura { background: #0f2318; border: 1.5px solid #16a34a; }
+  .aura .title { color: #86efac; }
+  .git { background: #1f1208; border: 1.5px solid #d97706; }
+  .git .title { color: #fcd34d; }
+  .arrow { text-align: center; color: #475569; font-size: .75rem; padding: 4px 0; }
+  .arrow.right { text-align: right; }
+  .arrow.left { text-align: left; }
+  .mid-flow { border-left: 2px dashed #334155; border-right: 2px dashed #334155; padding: 8px 18px; }
+  .flow-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+  .flow-box { flex: 1; border-radius: 6px; padding: 7px 10px; font-size: .7rem; font-weight: 600; text-align: center; }
+  .fb-classify { background: #4c1d95; color: #ddd6fe; }
+  .fb-bug { background: #7f1d1d; color: #fca5a5; }
+  .fb-feat { background: #14532d; color: #86efac; }
+  .fb-ref { background: #1e3a5f; color: #93c5fd; }
+  .fb-sec { background: #451a03; color: #fcd34d; }
+  .fb-docs { background: #1e293b; color: #94a3b8; }
+  .fb-merge { background: #0f2318; color: #6ee7b7; }
+  .connector { color: #475569; font-size: .72rem; font-family: monospace; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 16px; border-top: 1px solid #1e293b; padding-top: 12px; }
+  .leg { display: flex; align-items: center; gap: 6px; font-size: .7rem; color: #94a3b8; }
+  .leg-dot { width: 10px; height: 10px; border-radius: 2px; }
+</style>
+
+<h2>Fleet Prompt Dispatcher — System Architecture</h2>
+<p class="subtitle">GitHub Issue → n8n Type-Router → Specialized Sub-Flows → AURA Skills → PR Auto-Merge</p>
+
+<div class="arch">
+
+  <!-- Left column: inputs -->
+  <div class="col">
+    <div class="box github">
+      <div class="title">📋 GitHub Issues</div>
+      <div class="detail">Issue opened or labeled triggers webhook → n8n</div>
+    </div>
+    <div class="arrow">↓ webhook</div>
+    <div class="box github">
+      <div class="title">🔀 Issue Classifier</div>
+      <div class="detail">LLM reads title + body → returns type tag: bug / feature / refactor / security / docs</div>
+    </div>
+    <div class="arrow">↓ route</div>
+    <div class="box n8n-master">
+      <div class="title">🎛️ Master Dispatcher</div>
+      <div class="detail">n8n Switch node fans out to the correct sub-workflow. Tracks retry count (max 3).</div>
+    </div>
+  </div>
+
+  <!-- Center column: sub-flows -->
+  <div class="col center mid-flow">
+    <div style="font-size:.7rem;color:#475569;text-align:center;margin-bottom:6px;">── SPECIALIZED SUB-FLOWS ──</div>
+    <div class="flow-row">
+      <div class="flow-box fb-bug">🐛 Bug-Fix Flow<br><span style="font-weight:400;font-size:.65rem">stack-trace analysis → patch → regression test</span></div>
+    </div>
+    <div class="flow-row">
+      <div class="flow-box fb-feat">✨ Feature Flow<br><span style="font-weight:400;font-size:.65rem">spec extraction → scaffold → integration test</span></div>
+    </div>
+    <div class="flow-row">
+      <div class="flow-box fb-ref">♻️ Refactor Flow<br><span style="font-weight:400;font-size:.65rem">complexity scan → decompose → preserve tests</span></div>
+    </div>
+    <div class="flow-row">
+      <div class="flow-box fb-sec">🔒 Security Flow<br><span style="font-weight:400;font-size:.65rem">CVE lookup → patch → SAST verify</span></div>
+    </div>
+    <div class="flow-row">
+      <div class="flow-box fb-docs">📄 Docs Flow<br><span style="font-weight:400;font-size:.65rem">symbol index → docstring gen → PR update</span></div>
+    </div>
+    <div style="font-size:.7rem;color:#475569;text-align:center;margin:8px 0 4px;">── ALL FLOWS CONVERGE ──</div>
+    <div class="flow-row">
+      <div class="flow-box fb-merge">✅ Push PR → Auto-Merge<br><span style="font-weight:400;font-size:.65rem">gh pr create → CI pass → gh pr merge</span></div>
+    </div>
+    <div style="font-size:.68rem;color:#ef4444;text-align:center;margin-top:6px;">↕ on fail: retry×3 → blocker comment</div>
+  </div>
+
+  <!-- Right column: services called -->
+  <div class="col">
+    <div class="box aura">
+      <div class="title">🧠 AURA Skills API</div>
+      <div class="detail">security_scanner<br>complexity_scorer<br>type_checker<br>symbol_indexer<br>test_coverage_analyzer<br>generation_quality_checker<br>+29 more</div>
+    </div>
+    <div class="arrow" style="text-align:center">↕ HTTP calls</div>
+    <div class="box aura">
+      <div class="title">🔄 AURA Loop API</div>
+      <div class="detail">POST /run → ingest → plan → code → apply → verify → reflect</div>
+    </div>
+    <div class="arrow" style="text-align:center">↓ results</div>
+    <div class="box git">
+      <div class="title">🐙 GitHub CLI</div>
+      <div class="detail">gh issue comment<br>gh pr create<br>gh pr merge<br>gh pr close</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="legend">
+  <div class="leg"><div class="leg-dot" style="background:#7c3aed"></div>n8n orchestration</div>
+  <div class="leg"><div class="leg-dot" style="background:#16a34a"></div>AURA skills / loop</div>
+  <div class="leg"><div class="leg-dot" style="background:#30363d"></div>GitHub I/O</div>
+  <div class="leg"><div class="leg-dot" style="background:#d97706"></div>Git / gh CLI</div>
+  <div class="leg"><div class="leg-dot" style="background:#0ea5e9"></div>Specialized sub-flows</div>
+</div>

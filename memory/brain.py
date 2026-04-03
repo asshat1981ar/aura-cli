@@ -1,4 +1,6 @@
 import sqlite3
+import threading
+from contextlib import contextmanager
 from pathlib import Path
 import json  # Added this line
 import time
@@ -34,7 +36,7 @@ def _ensure_nx():
 
 class Brain:
     # Current schema version. Bump when adding columns / tables.
-    SCHEMA_VERSION = 4
+    SCHEMA_VERSION = 5
 
     def __init__(self, db_path: Optional[str] = None):
         # Construct absolute path for the database file
@@ -42,11 +44,18 @@ class Brain:
         self._db_path = db_file_path
         self.db = sqlite3.connect(str(db_file_path), check_same_thread=False)
         self.db.row_factory = sqlite3.Row
+        self._lock = threading.Lock()
         self._graph = None  # lazy — created on first relate() call
         self._recall_cache: dict = {}  # {query_key: (result, timestamp)}
         self._cache_ttl: float = 5.0  # seconds — invalidated on remember()
         self._init_db()
         self._migrate()
+
+    @contextmanager
+    def _db_lock(self):
+        """Context manager that serialises database operations across threads."""
+        with self._lock:
+            yield
 
     @property
     def graph(self):
@@ -57,44 +66,64 @@ class Brain:
 
     def _init_db(self):
         # WAL mode: concurrent reads don't block writes; NORMAL sync is safe and ~3x faster
-        self.db.execute("PRAGMA journal_mode=WAL")
-        self.db.execute("PRAGMA synchronous=NORMAL")
-        self.db.execute("PRAGMA cache_size=10000")
-        self.db.execute("""
-        CREATE TABLE IF NOT EXISTS schema_version(
-            version INTEGER PRIMARY KEY
-        )
-        """)
-        self.db.execute("""
-        CREATE TABLE IF NOT EXISTS memory(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            content TEXT
-        )
-        """)
-        self.db.execute("""
-        CREATE TABLE IF NOT EXISTS weaknesses(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            description TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
-        self.db.execute("""
-        CREATE TABLE IF NOT EXISTS vector_store_data(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            content TEXT,
-            embedding BLOB
-        )
-        """)
-        self.db.execute("""
-        CREATE TABLE IF NOT EXISTS kv_store(
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-        """)
-        # Index on memory.id enables fast ORDER BY id DESC LIMIT N queries (200x speedup
-        # vs full-table scan on 30k+ row databases)
-        self.db.execute("CREATE INDEX IF NOT EXISTS idx_memory_id ON memory(id)")
-        self.db.commit()
+        with self._lock:
+            self.db.execute("PRAGMA journal_mode=WAL")
+            self.db.execute("PRAGMA synchronous=NORMAL")
+            self.db.execute("PRAGMA cache_size=10000")
+            self.db.execute("""
+            CREATE TABLE IF NOT EXISTS schema_version(
+                version INTEGER PRIMARY KEY
+            )
+            """)
+            self.db.execute("""
+            CREATE TABLE IF NOT EXISTS memory(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                content TEXT
+            )
+            """)
+            self.db.execute("""
+            CREATE TABLE IF NOT EXISTS weaknesses(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                description TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            self.db.execute("""
+            CREATE TABLE IF NOT EXISTS vector_store_data(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                content TEXT,
+                embedding BLOB
+            )
+            """)
+            self.db.execute("""
+            CREATE TABLE IF NOT EXISTS kv_store(
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+            """)
+            # Innovation sessions table for Innovation Catalyst
+            self.db.execute("""
+            CREATE TABLE IF NOT EXISTS innovation_sessions(
+                session_id TEXT PRIMARY KEY,
+                problem_statement TEXT NOT NULL,
+                status TEXT DEFAULT 'active',
+                current_phase TEXT DEFAULT 'immersion',
+                phases_completed TEXT,  -- JSON array
+                techniques TEXT,  -- JSON array
+                constraints TEXT,  -- JSON object
+                ideas_generated INTEGER DEFAULT 0,
+                ideas_selected INTEGER DEFAULT 0,
+                output_data TEXT,  -- JSON serialized InnovationOutput
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            self.db.execute("CREATE INDEX IF NOT EXISTS idx_innovation_sessions_status ON innovation_sessions(status)")
+            self.db.execute("CREATE INDEX IF NOT EXISTS idx_innovation_sessions_updated ON innovation_sessions(updated_at)")
+            # Index on memory.id enables fast ORDER BY id DESC LIMIT N queries (200x speedup
+            # vs full-table scan on 30k+ row databases)
+            self.db.execute("CREATE INDEX IF NOT EXISTS idx_memory_id ON memory(id)")
+            self.db.commit()
 
     def _get_schema_version(self) -> int:
         """Return stored schema version, or 0 if none recorded."""
@@ -105,9 +134,10 @@ class Brain:
             return 0
 
     def _set_schema_version(self, version: int) -> None:
-        self.db.execute("DELETE FROM schema_version")
-        self.db.execute("INSERT INTO schema_version(version) VALUES (?)", (version,))
-        self.db.commit()
+        with self._lock:
+            self.db.execute("DELETE FROM schema_version")
+            self.db.execute("INSERT INTO schema_version(version) VALUES (?)", (version,))
+            self.db.commit()
 
     def _migrate(self) -> None:
         """Apply any pending schema migrations idempotently.
@@ -138,27 +168,55 @@ class Brain:
 
         # v2 → v3: create kv_store table
         if current < 3:
-            self.db.execute("""
-            CREATE TABLE IF NOT EXISTS kv_store(
-                key TEXT PRIMARY KEY,
-                value TEXT
-            )
-            """)
-            self.db.commit()
+            with self._lock:
+                self.db.execute("""
+                CREATE TABLE IF NOT EXISTS kv_store(
+                    key TEXT PRIMARY KEY,
+                    value TEXT
+                )
+                """)
+                self.db.commit()
             self._set_schema_version(3)
             log_json("INFO", "brain_migration", details={"from": 2, "to": 3})
             current = 3
 
         # v3 → v4: add tag column to memory table for SADD session-scoped context
         if current < 4:
-            try:
-                self.db.execute("ALTER TABLE memory ADD COLUMN tag TEXT DEFAULT NULL")
-            except sqlite3.OperationalError:
-                pass  # Column already exists
-            self.db.execute("CREATE INDEX IF NOT EXISTS idx_memory_tag ON memory(tag)")
-            self.db.commit()
+            with self._lock:
+                try:
+                    self.db.execute("ALTER TABLE memory ADD COLUMN tag TEXT DEFAULT NULL")
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
+                self.db.execute("CREATE INDEX IF NOT EXISTS idx_memory_tag ON memory(tag)")
+                self.db.commit()
             self._set_schema_version(4)
             log_json("INFO", "brain_migration", details={"from": 3, "to": 4})
+            current = 4
+
+        # v4 → v5: create innovation_sessions table
+        if current < 5:
+            with self._lock:
+                self.db.execute("""
+                CREATE TABLE IF NOT EXISTS innovation_sessions(
+                    session_id TEXT PRIMARY KEY,
+                    problem_statement TEXT NOT NULL,
+                    status TEXT DEFAULT 'active',
+                    current_phase TEXT DEFAULT 'immersion',
+                    phases_completed TEXT,
+                    techniques TEXT,
+                    constraints TEXT,
+                    ideas_generated INTEGER DEFAULT 0,
+                    ideas_selected INTEGER DEFAULT 0,
+                    output_data TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """)
+                self.db.execute("CREATE INDEX IF NOT EXISTS idx_innovation_sessions_status ON innovation_sessions(status)")
+                self.db.execute("CREATE INDEX IF NOT EXISTS idx_innovation_sessions_updated ON innovation_sessions(updated_at)")
+                self.db.commit()
+            self._set_schema_version(5)
+            log_json("INFO", "brain_migration", details={"from": 4, "to": 5})
 
     def _absorb_legacy_db(self, legacy_path: Path) -> None:
         """Copy rows from *legacy_path* into this DB, skipping duplicates."""
@@ -166,14 +224,15 @@ class Brain:
             legacy = sqlite3.connect(str(legacy_path), check_same_thread=False)
             # memory rows
             rows = legacy.execute("SELECT content FROM memory").fetchall()
-            existing = {r[0] for r in self.db.execute("SELECT content FROM memory").fetchall()}
-            new_rows = [r for r in rows if r[0] not in existing]
-            if new_rows:
-                self.db.executemany("INSERT INTO memory(content) VALUES (?)", new_rows)
-            # weaknesses rows
-            wrows = legacy.execute("SELECT description, timestamp FROM weaknesses").fetchall()
-            self.db.executemany("INSERT OR IGNORE INTO weaknesses(description, timestamp) VALUES (?, ?)", wrows)
-            self.db.commit()
+            with self._lock:
+                existing = {r[0] for r in self.db.execute("SELECT content FROM memory").fetchall()}
+                new_rows = [r for r in rows if r[0] not in existing]
+                if new_rows:
+                    self.db.executemany("INSERT INTO memory(content) VALUES (?)", new_rows)
+                # weaknesses rows
+                wrows = legacy.execute("SELECT description, timestamp FROM weaknesses").fetchall()
+                self.db.executemany("INSERT OR IGNORE INTO weaknesses(description, timestamp) VALUES (?, ?)", wrows)
+                self.db.commit()
             legacy.close()
             log_json("INFO", "brain_legacy_absorbed", details={"path": str(legacy_path), "memory_rows": len(new_rows), "weakness_rows": len(wrows)})
         except Exception as exc:
@@ -191,8 +250,9 @@ class Brain:
             content_to_store = str(data)
 
         # Store in textual memory
-        self.db.execute("INSERT INTO memory(content) VALUES (?)", (content_to_store,))
-        self.db.commit()
+        with self._lock:
+            self.db.execute("INSERT INTO memory(content) VALUES (?)", (content_to_store,))
+            self.db.commit()
         # Invalidate recall cache on write
         self._recall_cache.clear()
 
@@ -200,11 +260,12 @@ class Brain:
         """Store a tagged memory entry for session-scoped context (e.g. SADD)."""
         content = str(text)
         try:
-            self.db.execute(
-                "INSERT INTO memory(content, tag) VALUES (?, ?)",
-                (content, tag),
-            )
-            self.db.commit()
+            with self._lock:
+                self.db.execute(
+                    "INSERT INTO memory(content, tag) VALUES (?, ?)",
+                    (content, tag),
+                )
+                self.db.commit()
             self._recall_cache.clear()
         except sqlite3.OperationalError:
             # tag column may not exist yet; fall back to untagged
@@ -224,8 +285,9 @@ class Brain:
     def forget_tagged(self, tag: str) -> int:
         """Delete all memories with the given tag. Returns count deleted."""
         try:
-            cursor = self.db.execute("DELETE FROM memory WHERE tag = ?", (tag,))
-            self.db.commit()
+            with self._lock:
+                cursor = self.db.execute("DELETE FROM memory WHERE tag = ?", (tag,))
+                self.db.commit()
             self._recall_cache.clear()
             return cursor.rowcount
         except sqlite3.OperationalError:
@@ -235,8 +297,9 @@ class Brain:
         """Set a persistent key-value pair. value will be JSON serialized."""
         if not isinstance(value, str):
             value = json.dumps(value)
-        self.db.execute("INSERT OR REPLACE INTO kv_store(key, value) VALUES (?, ?)", (key, value))
-        self.db.commit()
+        with self._lock:
+            self.db.execute("INSERT OR REPLACE INTO kv_store(key, value) VALUES (?, ?)", (key, value))
+            self.db.commit()
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a persistent key-value pair. Attempts to JSON deserialize the result."""
@@ -319,8 +382,9 @@ class Brain:
         return row[0] if row else 0
 
     def add_weakness(self, weakness_description: str):
-        self.db.execute("INSERT INTO weaknesses(description) VALUES (?)", (weakness_description,))
-        self.db.commit()
+        with self._lock:
+            self.db.execute("INSERT INTO weaknesses(description) VALUES (?)", (weakness_description,))
+            self.db.commit()
 
     def recall_weaknesses(self) -> list[str]:
         rows = self.db.execute("SELECT description FROM weaknesses ORDER BY timestamp DESC").fetchall()
@@ -364,25 +428,175 @@ class Brain:
     # ── Weakness queue tracking ──────────────────────────────────────────────
 
     def _ensure_weakness_queue_table(self):
-        self.db.execute("""
-        CREATE TABLE IF NOT EXISTS weakness_queued(
-            hash TEXT PRIMARY KEY,
-            queued_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
-        self.db.commit()
+        with self._lock:
+            self.db.execute("""
+            CREATE TABLE IF NOT EXISTS weakness_queued(
+                hash TEXT PRIMARY KEY,
+                queued_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """)
+            self.db.commit()
 
     def mark_weakness_queued(self, weakness_hash: str) -> None:
         """Record that a weakness has been turned into a goal (prevents re-queuing)."""
         self._ensure_weakness_queue_table()
-        self.db.execute(
-            "INSERT OR IGNORE INTO weakness_queued(hash) VALUES (?)",
-            (weakness_hash,),
-        )
-        self.db.commit()
+        with self._lock:
+            self.db.execute(
+                "INSERT OR IGNORE INTO weakness_queued(hash) VALUES (?)",
+                (weakness_hash,),
+            )
+            self.db.commit()
 
     def recall_queued_weakness_hashes(self) -> list[str]:
         """Return all weakness hashes that have already been queued as goals."""
         self._ensure_weakness_queue_table()
         rows = self.db.execute("SELECT hash FROM weakness_queued").fetchall()
         return [r[0] for r in rows]
+
+    # ── Innovation Session Persistence ────────────────────────────────────────
+
+    def save_innovation_session(self, session) -> None:
+        """Save or update an innovation session.
+        
+        Args:
+            session: InnovationSessionState object or dict with session data
+        """
+        import json
+        from datetime import datetime
+        
+        # Handle both Pydantic v1/v2 models and dicts
+        if hasattr(session, 'model_dump'):
+            data = session.model_dump()
+        elif hasattr(session, 'dict'):
+            data = session.dict()
+        else:
+            data = session
+        
+        # Serialize complex fields
+        phases_completed = json.dumps([p.value if hasattr(p, 'value') else str(p) for p in data.get('phases_completed', [])])
+        techniques = json.dumps(data.get('techniques', []))
+        constraints = json.dumps(data.get('constraints', {}))
+        output_data = json.dumps(data.get('output', {}), default=str) if data.get('output') else None
+        
+        with self._lock:
+            self.db.execute(
+                """
+                INSERT OR REPLACE INTO innovation_sessions(
+                    session_id, problem_statement, status, current_phase,
+                    phases_completed, techniques, constraints, ideas_generated,
+                    ideas_selected, output_data, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    data.get('session_id'),
+                    data.get('problem_statement', ''),
+                    data.get('status', 'active'),
+                    data.get('current_phase', 'immersion'),
+                    phases_completed,
+                    techniques,
+                    constraints,
+                    data.get('ideas_generated', 0),
+                    data.get('ideas_selected', 0),
+                    output_data,
+                    datetime.utcnow().isoformat(),
+                ),
+            )
+            self.db.commit()
+        log_json("INFO", "innovation_session_saved", details={"session_id": data.get('session_id')})
+
+    def get_innovation_session(self, session_id: str) -> Optional[dict]:
+        """Retrieve an innovation session by ID.
+        
+        Args:
+            session_id: The session identifier
+            
+        Returns:
+            Session data as dict, or None if not found
+        """
+        import json
+        
+        row = self.db.execute(
+            "SELECT * FROM innovation_sessions WHERE session_id = ?",
+            (session_id,)
+        ).fetchone()
+        
+        if not row:
+            return None
+        
+        return {
+            'session_id': row['session_id'],
+            'problem_statement': row['problem_statement'],
+            'status': row['status'],
+            'current_phase': row['current_phase'],
+            'phases_completed': json.loads(row['phases_completed']) if row['phases_completed'] else [],
+            'techniques': json.loads(row['techniques']) if row['techniques'] else [],
+            'constraints': json.loads(row['constraints']) if row['constraints'] else {},
+            'ideas_generated': row['ideas_generated'],
+            'ideas_selected': row['ideas_selected'],
+            'output_data': json.loads(row['output_data']) if row['output_data'] else None,
+            'created_at': row['created_at'],
+            'updated_at': row['updated_at'],
+        }
+
+    def list_innovation_sessions(self, status: Optional[str] = None, limit: int = 100) -> List[dict]:
+        """List innovation sessions, optionally filtered by status.
+        
+        Args:
+            status: Filter by status ('active', 'completed', 'paused')
+            limit: Maximum number of sessions to return
+            
+        Returns:
+            List of session data dicts
+        """
+        import json
+        
+        query = "SELECT * FROM innovation_sessions"
+        params = ()
+        
+        if status:
+            query += " WHERE status = ?"
+            params = (status,)
+        
+        query += " ORDER BY updated_at DESC LIMIT ?"
+        params += (limit,)
+        
+        rows = self.db.execute(query, params).fetchall()
+        
+        sessions = []
+        for row in rows:
+            sessions.append({
+                'session_id': row['session_id'],
+                'problem_statement': row['problem_statement'],
+                'status': row['status'],
+                'current_phase': row['current_phase'],
+                'phases_completed': json.loads(row['phases_completed']) if row['phases_completed'] else [],
+                'techniques': json.loads(row['techniques']) if row['techniques'] else [],
+                'ideas_generated': row['ideas_generated'],
+                'ideas_selected': row['ideas_selected'],
+                'created_at': row['created_at'],
+                'updated_at': row['updated_at'],
+            })
+        
+        return sessions
+
+    def delete_innovation_session(self, session_id: str) -> bool:
+        """Delete an innovation session.
+        
+        Args:
+            session_id: The session identifier
+            
+        Returns:
+            True if deleted, False if not found
+        """
+        with self._lock:
+            cursor = self.db.execute(
+                "DELETE FROM innovation_sessions WHERE session_id = ?",
+                (session_id,)
+            )
+            self.db.commit()
+        
+        deleted = cursor.rowcount > 0
+        if deleted:
+            log_json("INFO", "innovation_session_deleted", details={"session_id": session_id})
+        return deleted
+

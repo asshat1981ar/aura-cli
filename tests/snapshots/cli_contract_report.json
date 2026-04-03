@@ -2,6 +2,10 @@
   "action_spec_actions": [
     "bootstrap",
     "contract_report",
+    "creative_cross_pollinate",
+    "creative_patterns",
+    "creative_solve",
+    "creative_stats",
     "diag",
     "doctor",
     "evolve",
@@ -12,6 +16,14 @@
     "goal_run",
     "goal_status",
     "help",
+    "innovate_export",
+    "innovate_insights",
+    "innovate_list",
+    "innovate_resume",
+    "innovate_show",
+    "innovate_start",
+    "innovate_techniques",
+    "innovate_to_goals",
     "interactive",
     "json_help",
     "logs",
@@ -44,6 +56,22 @@
       "contract-report"
     ],
     [
+      "creative",
+      "cross-pollinate"
+    ],
+    [
+      "creative",
+      "patterns"
+    ],
+    [
+      "creative",
+      "solve"
+    ],
+    [
+      "creative",
+      "stats"
+    ],
+    [
       "diag"
     ],
     [
@@ -71,6 +99,38 @@
     ],
     [
       "help"
+    ],
+    [
+      "innovate",
+      "export"
+    ],
+    [
+      "innovate",
+      "insights"
+    ],
+    [
+      "innovate",
+      "list"
+    ],
+    [
+      "innovate",
+      "resume"
+    ],
+    [
+      "innovate",
+      "show"
+    ],
+    [
+      "innovate",
+      "start"
+    ],
+    [
+      "innovate",
+      "techniques"
+    ],
+    [
+      "innovate",
+      "to-goals"
     ],
     [
       "logs"
@@ -132,6 +192,10 @@
   "dispatch_actions": [
     "bootstrap",
     "contract_report",
+    "creative_cross_pollinate",
+    "creative_patterns",
+    "creative_solve",
+    "creative_stats",
     "diag",
     "doctor",
     "evolve",
@@ -142,6 +206,14 @@
     "goal_run",
     "goal_status",
     "help",
+    "innovate_export",
+    "innovate_insights",
+    "innovate_list",
+    "innovate_resume",
+    "innovate_show",
+    "innovate_start",
+    "innovate_techniques",
+    "innovate_to_goals",
     "interactive",
     "json_help",
     "logs",
@@ -170,6 +242,10 @@
   "help_actions": [
     "bootstrap",
     "contract_report",
+    "creative_cross_pollinate",
+    "creative_patterns",
+    "creative_solve",
+    "creative_stats",
     "diag",
     "doctor",
     "evolve",
@@ -179,6 +255,14 @@
     "goal_run",
     "goal_status",
     "help",
+    "innovate_export",
+    "innovate_insights",
+    "innovate_list",
+    "innovate_resume",
+    "innovate_show",
+    "innovate_start",
+    "innovate_techniques",
+    "innovate_to_goals",
     "logs",
     "mcp_call",
     "mcp_tools",
@@ -200,6 +284,13 @@
   "help_actions_with_runtime_mismatches": [],
   "help_paths": [
     [
+      "agent"
+    ],
+    [
+      "agent",
+      "run"
+    ],
+    [
       "bootstrap"
     ],
     [
@@ -207,6 +298,25 @@
     ],
     [
       "contract-report"
+    ],
+    [
+      "creative"
+    ],
+    [
+      "creative",
+      "cross-pollinate"
+    ],
+    [
+      "creative",
+      "patterns"
+    ],
+    [
+      "creative",
+      "solve"
+    ],
+    [
+      "creative",
+      "stats"
     ],
     [
       "diag"
@@ -242,6 +352,41 @@
     ],
     [
       "help"
+    ],
+    [
+      "innovate"
+    ],
+    [
+      "innovate",
+      "export"
+    ],
+    [
+      "innovate",
+      "insights"
+    ],
+    [
+      "innovate",
+      "list"
+    ],
+    [
+      "innovate",
+      "resume"
+    ],
+    [
+      "innovate",
+      "show"
+    ],
+    [
+      "innovate",
+      "start"
+    ],
+    [
+      "innovate",
+      "techniques"
+    ],
+    [
+      "innovate",
+      "to-goals"
     ],
     [
       "logs"
@@ -319,6 +464,10 @@
   ],
   "leaf_paths": [
     [
+      "agent",
+      "run"
+    ],
+    [
       "bootstrap"
     ],
     [
@@ -326,6 +475,22 @@
     ],
     [
       "contract-report"
+    ],
+    [
+      "creative",
+      "cross-pollinate"
+    ],
+    [
+      "creative",
+      "patterns"
+    ],
+    [
+      "creative",
+      "solve"
+    ],
+    [
+      "creative",
+      "stats"
     ],
     [
       "diag"
@@ -358,6 +523,38 @@
     ],
     [
       "help"
+    ],
+    [
+      "innovate",
+      "export"
+    ],
+    [
+      "innovate",
+      "insights"
+    ],
+    [
+      "innovate",
+      "list"
+    ],
+    [
+      "innovate",
+      "resume"
+    ],
+    [
+      "innovate",
+      "show"
+    ],
+    [
+      "innovate",
+      "start"
+    ],
+    [
+      "innovate",
+      "techniques"
+    ],
+    [
+      "innovate",
+      "to-goals"
     ],
     [
       "logs"
@@ -426,7 +623,16 @@
   "ok": true,
   "parent_paths": [
     [
+      "agent"
+    ],
+    [
+      "creative"
+    ],
+    [
       "goal"
+    ],
+    [
+      "innovate"
     ],
     [
       "mcp"
@@ -446,6 +652,13 @@
   ],
   "parser_paths": [
     [
+      "agent"
+    ],
+    [
+      "agent",
+      "run"
+    ],
+    [
       "bootstrap"
     ],
     [
@@ -453,6 +666,25 @@
     ],
     [
       "contract-report"
+    ],
+    [
+      "creative"
+    ],
+    [
+      "creative",
+      "cross-pollinate"
+    ],
+    [
+      "creative",
+      "patterns"
+    ],
+    [
+      "creative",
+      "solve"
+    ],
+    [
+      "creative",
+      "stats"
     ],
     [
       "diag"
@@ -488,6 +720,41 @@
     ],
     [
       "help"
+    ],
+    [
+      "innovate"
+    ],
+    [
+      "innovate",
+      "export"
+    ],
+    [
+      "innovate",
+      "insights"
+    ],
+    [
+      "innovate",
+      "list"
+    ],
+    [
+      "innovate",
+      "resume"
+    ],
+    [
+      "innovate",
+      "show"
+    ],
+    [
+      "innovate",
+      "start"
+    ],
+    [
+      "innovate",
+      "techniques"
+    ],
+    [
+      "innovate",
+      "to-goals"
     ],
     [
       "logs"
@@ -565,7 +832,16 @@
   ],
   "required_parent_paths": [
     [
+      "agent"
+    ],
+    [
+      "creative"
+    ],
+    [
       "goal"
+    ],
+    [
+      "innovate"
     ],
     [
       "mcp"
@@ -588,6 +864,13 @@
   "smoke_invocation_failures": [],
   "spec_paths": [
     [
+      "agent"
+    ],
+    [
+      "agent",
+      "run"
+    ],
+    [
       "bootstrap"
     ],
     [
@@ -595,6 +878,25 @@
     ],
     [
       "contract-report"
+    ],
+    [
+      "creative"
+    ],
+    [
+      "creative",
+      "cross-pollinate"
+    ],
+    [
+      "creative",
+      "patterns"
+    ],
+    [
+      "creative",
+      "solve"
+    ],
+    [
+      "creative",
+      "stats"
     ],
     [
       "diag"
@@ -630,6 +932,41 @@
     ],
     [
       "help"
+    ],
+    [
+      "innovate"
+    ],
+    [
+      "innovate",
+      "export"
+    ],
+    [
+      "innovate",
+      "insights"
+    ],
+    [
+      "innovate",
+      "list"
+    ],
+    [
+      "innovate",
+      "resume"
+    ],
+    [
+      "innovate",
+      "show"
+    ],
+    [
+      "innovate",
+      "start"
+    ],
+    [
+      "innovate",
+      "techniques"
+    ],
+    [
+      "innovate",
+      "to-goals"
     ],
     [
       "logs"

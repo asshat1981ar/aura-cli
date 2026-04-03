@@ -162,7 +162,8 @@ class AutonomousDiscovery:
                     continue
                 try:
                     self._scan_file_signals(py_file, findings)
-                except Exception:
+                except (OSError, IOError, UnicodeDecodeError) as e:
+                    self._logger.debug("Could not scan %s: %s", py_file, e)
                     continue
         return findings
 
@@ -170,7 +171,7 @@ class AutonomousDiscovery:
         rel = str(path.relative_to(self.root))
         try:
             content = path.read_text(encoding="utf-8", errors="replace")
-        except Exception:
+        except (OSError, IOError):
             return
         for lineno, line in enumerate(content.splitlines(), 1):
             for pattern, signal, priority in _CODE_SIGNAL_PATTERNS:
@@ -274,7 +275,7 @@ class AutonomousDiscovery:
             tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
             return any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
                        for n in ast.walk(tree))
-        except Exception:
+        except (SyntaxError, UnicodeDecodeError):
             return False
 
     def _should_skip(self, path: Path) -> bool:
@@ -286,7 +287,7 @@ class AutonomousDiscovery:
             if self._seen_path.exists():
                 data = json.loads(self._seen_path.read_text(encoding="utf-8"))
                 return set(data) if isinstance(data, list) else set()
-        except Exception:
+        except (OSError, IOError, json.JSONDecodeError):
             pass
         return set()
 

@@ -91,7 +91,7 @@ def _validate_change_target_path(project_root: Path, file_path: str) -> tuple[Pa
         repo_root = project_root.resolve()
         target = (repo_root / file_path).resolve()
         target.relative_to(repo_root)
-    except Exception:
+    except (OSError, IOError, ValueError):
         return None, "outside_project_root"
     if not target.is_file():
         return None, "file_not_found"
@@ -117,7 +117,7 @@ def _allow_new_test_file_target(
         repo_root = project_root.resolve()
         target = (repo_root / file_path).resolve()
         target.relative_to(repo_root)
-    except Exception:
+    except (OSError, IOError, ValueError):
         return None
 
     relative = target.relative_to(repo_root)
@@ -153,13 +153,13 @@ def _normalize_cached_candidate_path(project_root: Path, file_path: str) -> str 
         repo_root = project_root.resolve()
         candidate = (repo_root / file_path).resolve()
         candidate.relative_to(repo_root)
-    except Exception:
+    except (OSError, IOError, ValueError):
         return None
     if not candidate.is_file():
         return None
     try:
         return str(candidate.relative_to(repo_root))
-    except Exception:
+    except (OSError, IOError, ValueError):
         return None
 
 
@@ -173,7 +173,7 @@ def _candidate_files_from_symbol_index_cache(project_root: Path, query_tokens: l
             continue
         try:
             payload = json.loads(cache_path.read_text(encoding="utf-8"))
-        except Exception:
+        except (OSError, IOError, ValueError):
             continue
 
         candidates: list[str] = []

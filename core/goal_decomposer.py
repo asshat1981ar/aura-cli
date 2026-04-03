@@ -118,7 +118,7 @@ class GoalDecomposer:
                 # crude: count how many result symbols appear in goal text
                 if file_count > FILE_COUNT_THRESHOLD * 10:
                     return True
-            except Exception:
+            except (OSError, IOError, ValueError):
                 pass
 
         return False

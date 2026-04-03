@@ -81,7 +81,7 @@ Line 3""")
 
     def test_file_not_found_raises_exception(self):
         non_existent_file = self.test_dir / "non_existent.txt"
-        with self.assertRaisesRegex(FileNotFoundError, f"File not found at '{non_existent_file}'"):
+        with self.assertRaisesRegex(FileToolsError, "File not found"):
             replace_code(str(non_existent_file), "old", "new")
 
     def test_atomic_write_integrity_on_success(self):

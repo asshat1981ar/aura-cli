@@ -83,5 +83,5 @@ class ContextBudgetManager:
             else:  # plain
                 return "\n".join(content for _, content in selected)
 
-        except Exception:
+        except (OSError, IOError, ValueError):
             return "" if format != "json" else "[]"

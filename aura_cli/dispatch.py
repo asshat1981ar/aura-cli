@@ -10,13 +10,8 @@ from agents.registry import default_agents
 from agents.scaffolder import ScaffolderAgent
 from aura_cli.cli_options import attach_cli_warnings, render_help, unknown_command_help_topic_payload
 from aura_cli.commands import (
-    _handle_add,
-    _handle_clear,
     _handle_doctor,
-    _handle_exit,
-    _handle_help,
     _handle_readiness,
-    _handle_run,
     _handle_status,
 )
 from aura_cli.mcp_client import cmd_diag, cmd_mcp_call, cmd_mcp_tools
@@ -663,8 +658,9 @@ def _handle_goal_add_run_dispatch(ctx: DispatchContext) -> int:
 
 
 def _handle_interactive_dispatch(ctx: DispatchContext) -> int:
+    from aura_cli.cli_main import cli_interaction_loop as _cli_loop
     runtime = ctx.runtime
-    cli_interaction_loop(ctx.args, runtime)
+    _cli_loop(ctx.args, runtime)
     return 0
 
 
@@ -906,7 +902,6 @@ def _handle_sadd_resume_dispatch(ctx: DispatchContext) -> int:
 
 def _handle_goal_resume_dispatch(ctx: DispatchContext) -> int:
     from core.in_flight_tracker import InFlightTracker
-    from core.goal_queue import GoalQueue
 
     tracker = InFlightTracker()
     record = tracker.read()
@@ -928,13 +923,100 @@ def _handle_goal_resume_dispatch(ctx: DispatchContext) -> int:
     goal_queue = runtime["goal_queue"]
     goal_queue.prepend_batch([goal])
     tracker.clear()
-    print(f"Re-queued at front of queue.")
+    print("Re-queued at front of queue.")
 
     if getattr(ctx.args, "run", False):
         print("Running now...")
         return _handle_goal_run_dispatch(ctx)
 
     print("Run 'goal run' (or --run) to execute.")
+    return 0
+
+
+# ── Innovation Catalyst Dispatch Handlers ─────────────────────────────────────
+
+
+def _handle_innovate_start_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate start command."""
+    from aura_cli.commands import _handle_innovate_start
+    _handle_innovate_start(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_innovate_list_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate list command."""
+    from aura_cli.commands import _handle_innovate_list
+    _handle_innovate_list(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_innovate_show_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate show command."""
+    from aura_cli.commands import _handle_innovate_show
+    _handle_innovate_show(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_innovate_resume_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate resume command."""
+    from aura_cli.commands import _handle_innovate_resume
+    _handle_innovate_resume(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_innovate_export_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate export command."""
+    from aura_cli.commands import _handle_innovate_export
+    _handle_innovate_export(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_innovate_techniques_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate techniques command."""
+    from aura_cli.commands import _handle_innovate_techniques
+    _handle_innovate_techniques(ctx.args)
+    return 0
+
+
+def _handle_innovate_to_goals_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate to-goals command."""
+    from aura_cli.commands import _handle_innovate_to_goals
+    _handle_innovate_to_goals(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_innovate_insights_dispatch(ctx: DispatchContext) -> int:
+    """Handle innovate insights command."""
+    from aura_cli.commands import _handle_innovate_insights
+    _handle_innovate_insights(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_creative_solve_dispatch(ctx: DispatchContext) -> int:
+    """Handle creative solve command."""
+    from aura_cli.commands import _handle_creative_solve
+    _handle_creative_solve(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_creative_patterns_dispatch(ctx: DispatchContext) -> int:
+    """Handle creative patterns command."""
+    from aura_cli.commands import _handle_creative_patterns
+    _handle_creative_patterns(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_creative_cross_pollinate_dispatch(ctx: DispatchContext) -> int:
+    """Handle creative cross-pollinate command."""
+    from aura_cli.commands import _handle_creative_cross_pollinate
+    _handle_creative_cross_pollinate(ctx.args, ctx.runtime)
+    return 0
+
+
+def _handle_creative_stats_dispatch(ctx: DispatchContext) -> int:
+    """Handle creative stats command."""
+    from aura_cli.commands import _handle_creative_stats
+    _handle_creative_stats(ctx.args, ctx.runtime)
     return 0
 
 
@@ -973,6 +1055,20 @@ COMMAND_DISPATCH_REGISTRY = {
     "sadd_run": _dispatch_rule("sadd_run", _handle_sadd_run_dispatch),
     "sadd_status": _dispatch_rule("sadd_status", _handle_sadd_status_dispatch),
     "sadd_resume": _dispatch_rule("sadd_resume", _handle_sadd_resume_dispatch),
+    # ── Innovation Catalyst Dispatch Rules ─────────────────────────────────────
+    "innovate_start": _dispatch_rule("innovate_start", _handle_innovate_start_dispatch),
+    "innovate_list": _dispatch_rule("innovate_list", _handle_innovate_list_dispatch),
+    "innovate_show": _dispatch_rule("innovate_show", _handle_innovate_show_dispatch),
+    "innovate_resume": _dispatch_rule("innovate_resume", _handle_innovate_resume_dispatch),
+    "innovate_export": _dispatch_rule("innovate_export", _handle_innovate_export_dispatch),
+    "innovate_techniques": _dispatch_rule("innovate_techniques", _handle_innovate_techniques_dispatch),
+    "innovate_to_goals": _dispatch_rule("innovate_to_goals", _handle_innovate_to_goals_dispatch),
+    "innovate_insights": _dispatch_rule("innovate_insights", _handle_innovate_insights_dispatch),
+    # ── Creative-AURA Integration Dispatch Rules ───────────────────────────────
+    "creative_solve": _dispatch_rule("creative_solve", _handle_creative_solve_dispatch),
+    "creative_patterns": _dispatch_rule("creative_patterns", _handle_creative_patterns_dispatch),
+    "creative_cross_pollinate": _dispatch_rule("creative_cross_pollinate", _handle_creative_cross_pollinate_dispatch),
+    "creative_stats": _dispatch_rule("creative_stats", _handle_creative_stats_dispatch),
     "interactive": _dispatch_rule("interactive", _handle_interactive_dispatch),
 }
 

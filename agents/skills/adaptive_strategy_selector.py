@@ -23,7 +23,7 @@ def _load_stats(path: Path) -> List[Dict]:
     try:
         if path.exists():
             return json.loads(path.read_text(encoding="utf-8"))
-    except Exception:
+    except (OSError, IOError, ValueError):
         pass
     return []
 
@@ -32,7 +32,7 @@ def _save_stats(path: Path, stats: List[Dict]) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(stats[-1000:], indent=2), encoding="utf-8")
-    except Exception:
+    except (OSError, IOError, ValueError):
         pass
 
 

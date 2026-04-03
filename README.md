@@ -3,6 +3,7 @@
 Developer entry points:
 
 - CLI reference (generated): `docs/CLI_REFERENCE.md`
+- **Innovation Catalyst guide**: `docs/INNOVATION_CATALYST.md` (structured brainstorming)
 - Integration map: `docs/INTEGRATION_MAP.md`
 - Development automation guide: `docs/DEVELOPMENT_AUTOMATION_GUIDE.md`
 - Operator prompt: `docs/AURA_OPERATOR_PROMPT.md`
@@ -17,6 +18,13 @@ Developer entry points:
 - Canonical runtime entrypoint: installed `aura` console script → `aura_cli.cli_main:main`
 - Developer shim: `main.py` (lightweight wrapper that delegates to `aura_cli.cli_main.main()`)
 - Shell wrapper: `run_aura.sh`
+
+Product boundary for the current release:
+
+- shipped surface: CLI (`aura`)
+- development-only shim: `main.py`
+- convenience wrapper: `run_aura.sh`
+- experimental / non-shipped: `vscode-extension`, `orchestrator_hub`, transport-mode/editor integration work
 
 ## Sweep Artifact Generator
 
@@ -54,6 +62,28 @@ Optional config file:
 - `./run_aura.sh goal status` passes canonical commands through unchanged.
 - `./run_aura.sh --help` shows wrapper-specific usage and alias help.
 
+## Innovation Catalyst
+
+Structured brainstorming with 8 proven techniques:
+
+```bash
+# Quick start - generate ideas for any problem
+python3 main.py innovate start "How to improve user onboarding?" --execute-phase divergence
+
+# List all sessions with progress
+python3 main.py innovate list
+
+# Export results to markdown
+python3 main.py innovate export <session_id> --format markdown
+
+# View available techniques
+python3 main.py innovate techniques
+```
+
+The Innovation Catalyst runs a 5-phase process (immersion → divergence → convergence → incubation → transformation) using techniques like SCAMPER, Six Thinking Hats, Mind Mapping, and more.
+
+See `docs/INNOVATION_CATALYST.md` for the full guide.
+
 ## CLI Maintenance
 
 When changing CLI commands, help text, parsing, or JSON output contracts:
@@ -67,6 +97,10 @@ When changing CLI commands, help text, parsing, or JSON output contracts:
    - `python3 scripts/generate_cli_reference.py --check`
 
 CI enforces the generated CLI docs and snapshot contracts via `.github/workflows/ci.yml`.
+
+## Experimental Editor Integration
+
+The VS Code/editor integration work is currently experimental and not part of the shipped product contract. In particular, the repo does not currently ship a supported `transport` backend for editor runtime integration. Treat editor/transport work as incubation until it is explicitly completed and reintroduced.
 
 ## GitHub Copilot CLI in this repo
 

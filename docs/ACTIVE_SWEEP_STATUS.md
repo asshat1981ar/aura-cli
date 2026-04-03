@@ -4,9 +4,9 @@ This file is the live audit, queue, and closeout surface for the current repo-wi
 
 ## Audit Summary
 
-Branch: `fix/restore-server-and-tests`  
-HEAD SHA: `b0128382b2d6277140996049572d41ecf937db74`  
-Target PR(s): `#294`
+Branch: `feat/sprint-s004`  
+HEAD SHA: `cdcaf666218c884aa9c1e6d0c8c180708466f4fb`  
+Target PR(s): `#307`
 
 Active error buckets:
 
@@ -36,16 +36,16 @@ Notes: keep all unrelated local worktree changes untouched; use focused commits 
 
 | Bucket | Owner | Status | Branch/SHA | Verification target | Notes |
 | --- | --- | --- | --- | --- | --- |
-| workflow/setup | main agent | resolved | `fix/restore-server-and-tests` / `b012838` | GitHub Actions setup passes and Claude workflow starts real steps | Broken Claude action pin and workflow gating issues fixed |
-| required CI lane | main agent | resolved | `fix/restore-server-and-tests` / `b012838` | `Python CI` green on current SHA | Python 3.10/macOS regression path fixed |
-| PR review blocker | main agent | resolved | `fix/restore-server-and-tests` / `b012838` | review-targeted tests and comment alignment verified | Sprint 2 integration review blockers addressed |
-| developer-surface drift | main agent | in_progress | `fix/restore-server-and-tests` / `b012838` | doc and prompt cross-reference verification | sweep templates and workflow alignment underway |
-| external blocker | main agent | none | `fix/restore-server-and-tests` / `b012838` | n/a | none currently identified |
+| workflow/setup | main agent | resolved | `feat/sprint-s004` / `cdcaf66` | GitHub Actions setup passes and Claude workflow starts real steps | Broken Claude action pin and workflow gating issues fixed |
+| required CI lane | main agent | resolved | `feat/sprint-s004` / `cdcaf66` | `Python CI` green on current SHA | Python 3.10/macOS regression path fixed |
+| PR review blocker | main agent | resolved | `feat/sprint-s004` / `cdcaf66` | review-targeted tests and comment alignment verified | Sprint 2 integration review blockers addressed |
+| developer-surface drift | main agent | in_progress | `feat/sprint-s004` / `cdcaf66` | doc and prompt cross-reference verification | sweep templates and workflow alignment underway |
+| external blocker | main agent | none | `feat/sprint-s004` / `cdcaf66` | n/a | none currently identified |
 
 ## Latest Closeout
 
-Branch: `fix/restore-server-and-tests`  
-HEAD SHA: `b0128382b2d6277140996049572d41ecf937db74`  
+Branch: `feat/sprint-s004`  
+HEAD SHA: `cdcaf666218c884aa9c1e6d0c8c180708466f4fb`  
 Bucket addressed: workflow/setup and required CI lanes  
 Files/surfaces changed: workflow YAML, workflow-engine tests, Sprint 2 integration tests  
 Verification performed: targeted pytest, local YAML validation, GitHub Actions polling on the pushed SHA  
@@ -54,6 +54,6 @@ Next highest-priority bucket: developer-surface drift
 
 PR-facing note:
 
-- comment or check addressed: PR `#294` CI failures and active review blockers
-- follow-up still needed: keep the active sweep artifact current if the branch scope expands beyond `#294`
+- comment or check addressed: PR `#307` CI failures and active review blockers
+- follow-up still needed: keep the active sweep artifact current if the branch scope expands beyond `#307`
 - reviewer summary artifact: `docs/ACTIVE_PR_REVIEWER_SUMMARY.md`

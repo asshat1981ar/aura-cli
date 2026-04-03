@@ -46,7 +46,7 @@ def _find_pydantic_models(source: str) -> List[Dict]:
                     if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
                         try:
                             ann = ast.unparse(item.annotation)
-                        except Exception:
+                        except (OSError, IOError, ValueError):
                             ann = "Any"
                         required = item.value is None
                         fields.append({"name": item.target.id, "type": ann, "required": required})

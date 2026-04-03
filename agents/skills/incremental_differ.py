@@ -108,7 +108,7 @@ def _git_diff_files(project_root: Path) -> Optional[str]:
             timeout=10,
         )
         return result.stdout if result.returncode == 0 else None
-    except Exception:
+    except (OSError, IOError, ValueError):
         return None
 
 

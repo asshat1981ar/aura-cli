@@ -27,7 +27,10 @@ from aura_cli.options import (
 
 
 _REQUIRED_SUBCOMMAND_PARENT_PATHS: set[tuple[str, ...]] = {
+    ("agent",),
+    ("creative",),
     ("goal",),
+    ("innovate",),
     ("mcp",),
     ("memory",),
     ("queue",),
@@ -399,6 +402,75 @@ def _customize_goal_resume(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--run", dest="run", action="store_true", help="Run the re-queued goal immediately.")
 
 
+def _customize_innovate_start(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("problem_statement", nargs="*", help="Problem statement for the innovation session.")
+    parser.add_argument("--techniques", dest="techniques", default="scamper,six_hats,mind_map", help="Comma-separated list of brainstorming techniques.")
+    parser.add_argument("--execute-phase", dest="execute_phase", choices=["immersion", "divergence", "convergence", "incubation", "transformation"], help="Execute a specific phase immediately.")
+    parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
+    parser.add_argument("--constraints", dest="constraints", help="JSON string with constraints (e.g., '{\"max_ideas\": 10}').")
+    parser.add_argument("--batch", dest="batch_file", help="Path to file with multiple problems (one per line).")
+
+
+def _customize_innovate_list(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--limit", type=int, default=20, help="Maximum number of sessions to list.")
+    parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
+    parser.add_argument("--status", dest="status", help="Filter sessions by status.")
+
+
+def _customize_innovate_show(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--session-id", dest="session_id", required=True, help="Session ID to display.")
+    parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
+
+
+def _customize_innovate_resume(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--session-id", dest="session_id", required=True, help="Session ID to resume.")
+    parser.add_argument("--phase", dest="phase", choices=["immersion", "divergence", "convergence", "incubation", "transformation"], help="Phase to resume from.")
+    parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
+
+
+def _customize_innovate_export(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--session-id", dest="session_id", required=True, help="Session ID to export.")
+    parser.add_argument("--format", dest="format", choices=["markdown", "json", "csv", "html"], default="markdown", help="Export format.")
+    parser.add_argument("--output", dest="output", help="Output file path (default: stdout).")
+
+
+def _customize_innovate_techniques(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(innovate_techniques=True)
+    parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
+
+
+def _customize_innovate_to_goals(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--session-id", dest="session_id", required=True, help="Session ID to convert ideas from.")
+    parser.add_argument("--preview", dest="preview", action="store_true", help="Show what would be created without adding goals.")
+    parser.add_argument("--max-goals", dest="max_goals", type=int, default=5, help="Maximum number of goals to create.")
+
+
+def _customize_innovate_insights(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--session-id", dest="session_id", help="Optional session ID for detailed insights.")
+    parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
+
+
+def _customize_creative_solve(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("problem", nargs="+", help="Problem description to solve.")
+    parser.add_argument("--techniques", dest="techniques", default="SCAMPER,RPE", help="Comma-separated list of creative techniques (SCAMPER, RPE, SixHats, AutoTRIZ).")
+    parser.add_argument("--domain", dest="domain", default="general", help="Problem domain for context.")
+    parser.add_argument("--max-ideas", dest="max_ideas", type=int, default=10, help="Maximum ideas to generate per technique.")
+
+
+def _customize_creative_patterns(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--domain", dest="domain", help="Filter patterns by domain.")
+
+
+def _customize_creative_cross_pollinate(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--from", dest="from_domain", required=True, help="Source domain to draw patterns from.")
+    parser.add_argument("--to", dest="to_domain", required=True, help="Target domain to apply patterns to.")
+    parser.add_argument("--top-k", dest="top_k", type=int, default=5, help="Number of analogies to show.")
+
+
+def _customize_creative_stats(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
+
+
 _PARSER_CUSTOMIZERS.update(
     {
         ("help",): _customize_help,
@@ -426,6 +498,18 @@ _PARSER_CUSTOMIZERS.update(
         ("sadd", "status"): _customize_sadd_status,
         ("sadd", "resume"): _customize_sadd_resume,
         ("goal", "resume"): _customize_goal_resume,
+        ("innovate", "start"): _customize_innovate_start,
+        ("innovate", "list"): _customize_innovate_list,
+        ("innovate", "show"): _customize_innovate_show,
+        ("innovate", "resume"): _customize_innovate_resume,
+        ("innovate", "export"): _customize_innovate_export,
+        ("innovate", "techniques"): _customize_innovate_techniques,
+        ("innovate", "to-goals"): _customize_innovate_to_goals,
+        ("innovate", "insights"): _customize_innovate_insights,
+        ("creative", "solve"): _customize_creative_solve,
+        ("creative", "patterns"): _customize_creative_patterns,
+        ("creative", "cross-pollinate"): _customize_creative_cross_pollinate,
+        ("creative", "stats"): _customize_creative_stats,
     }
 )
 

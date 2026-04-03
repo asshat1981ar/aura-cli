@@ -14,7 +14,7 @@ def _run_cmd(cmd: List[str], cwd: Path) -> Optional[str]:
     try:
         result = subprocess.run(cmd, cwd=str(cwd), capture_output=True, text=True, timeout=60)
         return result.stdout + result.stderr
-    except Exception:
+    except (OSError, IOError, ValueError):
         return None
 
 
@@ -28,7 +28,7 @@ def _heuristic_coverage(root: Path) -> Dict[str, Any]:
         try:
             src = f.read_text(encoding="utf-8", errors="replace")
             tree = _ast.parse(src)
-        except Exception:
+        except (OSError, IOError, ValueError):
             continue
         funcs = [n.name for n in _ast.walk(tree) if isinstance(n, (_ast.FunctionDef, _ast.AsyncFunctionDef))]
         rel = str(f.relative_to(root))
@@ -124,7 +124,7 @@ class TestCoverageAnalyzerSkill(SkillBase):
                     "meets_target": pct >= 80,
                     "method": "incremental",
                 }
-            except Exception:
+            except (OSError, IOError, ValueError):
                 pass
 
         return self._run({"project_root": project_root})
@@ -153,7 +153,7 @@ class TestCoverageAnalyzerSkill(SkillBase):
                 cov_json_path.unlink(missing_ok=True)
                 log_json("INFO", "test_coverage_analyzer_complete", details={"pct": pct, "method": "coverage.py"})
                 return {"coverage_pct": pct, "missing_files": missing_files, "untested_functions": [], "meets_target": pct >= min_target, "method": "coverage.py"}
-            except Exception:
+            except (OSError, IOError, ValueError):
                 pass
 
         # Fallback

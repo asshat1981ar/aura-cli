@@ -86,6 +86,23 @@ class ExecuteRequest(BaseModel):
     args: List[Any] = []
 
 
+class WebhookGoalRequest(BaseModel):
+    goal: str
+    priority: int = 5
+    dry_run: bool = False
+    # metadata carries pipeline-routing context from n8n:
+    # - complexity: "low" | "medium" | "high"
+    # - pipeline_run_id: str (trace ID from P1/P3)
+    # - quality_gate_critique: str (injected by P3 before AURA act phase)
+    metadata: Dict[str, Any] = {}
+
+
+class WebhookPlanReviewRequest(BaseModel):
+    task_bundle: Dict[str, Any]
+    goal: str
+    pipeline_run_id: str = ""
+
+
 def _current_project_root() -> Path:
     configured_root = os.getenv("AURA_PROJECT_ROOT")
     return Path(configured_root).resolve() if configured_root else PROJECT_ROOT.resolve()
@@ -576,3 +593,111 @@ async def execute(req: ExecuteRequest, _: None = Depends(require_auth)):
     if handler is None:
         raise HTTPException(status_code=404, detail=f"Tool '{req.tool_name}' not found")
     return await handler(req)
+
+
+# --- n8n pipeline integration webhooks ---
+
+# In-memory goal queue for webhook-submitted goals
+_webhook_goal_queue: Dict[str, Dict[str, Any]] = {}
+
+
+@app.post("/webhook/goal")
+async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth)) -> Dict:
+    """Enqueue a goal submitted by n8n (P1 fast lane or direct trigger)."""
+    goal_id = secrets.token_hex(12)
+    entry: Dict[str, Any] = {
+        "goal_id": goal_id,
+        "goal": req.goal,
+        "priority": req.priority,
+        "dry_run": req.dry_run,
+        "metadata": req.metadata,
+        "status": "queued",
+        "queued_at": time.time(),
+    }
+    _webhook_goal_queue[goal_id] = entry
+    log_json("INFO", "aura_webhook_goal_received", details={
+        "goal_id": goal_id,
+        "goal": req.goal[:200],
+        "pipeline_run_id": req.metadata.get("pipeline_run_id", ""),
+        "complexity": req.metadata.get("complexity", "unknown"),
+    })
+
+    # Fire-and-forget: run the cycle in background so n8n can poll /webhook/status
+    async def _run_cycle() -> None:
+        try:
+            _webhook_goal_queue[goal_id]["status"] = "running"
+            _webhook_goal_queue[goal_id]["started_at"] = time.time()
+            active_orchestrator = await _resolve_runtime_component("orchestrator")
+            result = await asyncio.to_thread(
+                active_orchestrator.run_cycle,
+                req.goal,
+            )
+            _webhook_goal_queue[goal_id].update({
+                "status": "done",
+                "result": result,
+                "completed_at": time.time(),
+            })
+        except Exception as exc:
+            _webhook_goal_queue[goal_id].update({
+                "status": "failed",
+                "error": str(exc),
+                "completed_at": time.time(),
+            })
+            log_json("WARN", "aura_webhook_goal_failed", details={"goal_id": goal_id, "error": str(exc)})
+
+    asyncio.create_task(_run_cycle())
+    return {"status": "queued", "goal_id": goal_id}
+
+
+@app.get("/webhook/status/{goal_id}")
+async def webhook_goal_status(goal_id: str, _: None = Depends(require_auth)) -> Dict:
+    """Poll the status of a webhook-submitted goal (used by n8n P1 fast lane)."""
+    entry = _webhook_goal_queue.get(goal_id)
+    if entry is None:
+        raise HTTPException(status_code=404, detail=f"Goal '{goal_id}' not found")
+    result: Dict[str, Any] = {
+        "goal_id": goal_id,
+        "status": entry["status"],
+        "goal": entry["goal"],
+        "queued_at": entry["queued_at"],
+    }
+    if entry["status"] == "done":
+        result["result"] = entry.get("result", {})
+        result["completed_at"] = entry.get("completed_at")
+    elif entry["status"] == "failed":
+        result["error"] = entry.get("error", "unknown error")
+        result["completed_at"] = entry.get("completed_at")
+    elif entry["status"] == "running":
+        result["started_at"] = entry.get("started_at")
+    return result
+
+
+@app.post("/webhook/plan-review")
+async def webhook_plan_review(req: WebhookPlanReviewRequest, _: None = Depends(require_auth)) -> Dict:
+    """Format a task bundle as a plan text for Dev Suite Quality Gate (P2) review.
+
+    Called by P3 Pipeline Coordinator before triggering AURA act phase.
+    Returns human-readable plan text that Dev Suite agents can critique.
+    """
+    plan_steps = req.task_bundle.get("plan", [])
+    if isinstance(plan_steps, str):
+        plan_text = plan_steps
+    elif isinstance(plan_steps, list):
+        plan_text = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan_steps))
+    else:
+        plan_text = str(plan_steps)
+
+    review_payload = {
+        "goal": req.goal,
+        "pipeline_run_id": req.pipeline_run_id,
+        "plan_text": plan_text,
+        "task_bundle_keys": list(req.task_bundle.keys()),
+        "file_targets": req.task_bundle.get("file_targets", []),
+        "critique": req.task_bundle.get("critique", ""),
+    }
+    log_json("INFO", "aura_webhook_plan_review_requested", details={
+        "goal": req.goal[:200],
+        "pipeline_run_id": req.pipeline_run_id,
+        "plan_steps": len(plan_steps) if isinstance(plan_steps, list) else 1,
+    })
+    return {"status": "ok", "review_payload": review_payload}

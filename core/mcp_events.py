@@ -118,7 +118,7 @@ class EventBus:
                     await callback(event)
                 else:
                     callback(event)
-            except Exception:
+            except (OSError, IOError, ValueError):
                 pass
 
         for queue in self._queues.values():
@@ -138,7 +138,7 @@ class EventBus:
             if not asyncio.iscoroutinefunction(callback):
                 try:
                     callback(event)
-                except Exception:
+                except (OSError, IOError, ValueError):
                     pass
 
     def create_sse_stream(self, stream_id: str | None = None) -> tuple[str, asyncio.Queue]:

@@ -55,7 +55,7 @@ def _profile_snippet(code: str, max_rows: int = 10) -> List[Dict]:
     try:
         pr.enable()
         exec(compile(code, "<profiled>", "exec"), {})  # noqa: S102
-    except Exception:
+    except (OSError, IOError, ValueError):
         pass
     finally:
         pr.disable()

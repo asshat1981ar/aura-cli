@@ -179,13 +179,13 @@ class SkillWeightAdapter:
                 if raw:
                     log_json("INFO", "skill_weights_l1_hit")
                     return json.loads(raw)
-            except Exception:
+            except (OSError, IOError, ValueError):
                 pass
         # L2: JSON file
         if self._path.exists():
             try:
                 return json.loads(self._path.read_text(encoding="utf-8"))
-            except Exception:
+            except (OSError, IOError, ValueError):
                 pass
         return {}
 

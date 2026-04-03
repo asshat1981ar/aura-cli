@@ -4,7 +4,7 @@ Provides type-safe failure classification and routing decisions
 for the AURA orchestration loop.
 """
 from enum import Enum, auto
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 
 class FailureAction(Enum):

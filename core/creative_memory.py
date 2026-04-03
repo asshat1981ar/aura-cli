@@ -9,7 +9,6 @@ import json
 from dataclasses import dataclass, field, asdict
 from typing import Dict, Any, List, Optional, Set
 from datetime import datetime
-from pathlib import Path
 
 from core.logging_utils import log_json
 from core.exceptions import RecallError, StorageError

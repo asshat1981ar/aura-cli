@@ -21,6 +21,7 @@ Commands:
   metrics      Show performance metrics
   sadd         Sub-Agent Driven Development
   innovate     Innovation Catalyst session management
+  creative     Creative-AURA unified problem solving
   agent        Agent SDK commands
 
 Examples:

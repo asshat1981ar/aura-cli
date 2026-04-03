@@ -28,6 +28,7 @@ from aura_cli.options import (
 
 _REQUIRED_SUBCOMMAND_PARENT_PATHS: set[tuple[str, ...]] = {
     ("agent",),
+    ("creative",),
     ("goal",),
     ("innovate",),
     ("mcp",),
@@ -413,21 +414,22 @@ def _customize_innovate_start(parser: argparse.ArgumentParser) -> None:
 def _customize_innovate_list(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--limit", type=int, default=20, help="Maximum number of sessions to list.")
     parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
+    parser.add_argument("--status", dest="status", help="Filter sessions by status.")
 
 
 def _customize_innovate_show(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("session_id", help="Session ID to display.")
+    parser.add_argument("--session-id", dest="session_id", required=True, help="Session ID to display.")
     parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
 
 
 def _customize_innovate_resume(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("session_id", help="Session ID to resume.")
+    parser.add_argument("--session-id", dest="session_id", required=True, help="Session ID to resume.")
     parser.add_argument("--phase", dest="phase", choices=["immersion", "divergence", "convergence", "incubation", "transformation"], help="Phase to resume from.")
     parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
 
 
 def _customize_innovate_export(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("session_id", help="Session ID to export.")
+    parser.add_argument("--session-id", dest="session_id", required=True, help="Session ID to export.")
     parser.add_argument("--format", dest="format", choices=["markdown", "json", "csv", "html"], default="markdown", help="Export format.")
     parser.add_argument("--output", dest="output", help="Output file path (default: stdout).")
 

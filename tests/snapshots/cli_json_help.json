@@ -706,8 +706,7 @@
       "description": "List all innovation sessions with their status and metrics.",
       "examples": [
         "python3 main.py innovate list",
-        "python3 main.py innovate list --status active",
-        "python3 main.py innovate list --json"
+        "python3 main.py innovate list --limit 10"
       ],
       "flags": [
         {
@@ -727,9 +726,7 @@
       "action": "innovate_show",
       "description": "Show detailed information about a specific innovation session.",
       "examples": [
-        "python3 main.py innovate show --session-id abc123",
-        "python3 main.py innovate show --session-id abc123 --show-ideas",
-        "python3 main.py innovate show --session-id abc123 --json"
+        "python3 main.py innovate show --session-id abc123"
       ],
       "flags": [
         {
@@ -853,6 +850,107 @@
     },
     {
       "action": null,
+      "description": "Use creative techniques combined with AURA implementation for end-to-end problem solving.",
+      "examples": [
+        "python3 main.py creative solve \"Reduce API latency\"",
+        "python3 main.py creative solve \"Add caching\" --techniques SCAMPER,RPE",
+        "python3 main.py creative patterns",
+        "python3 main.py creative cross-pollinate --from web --to mobile"
+      ],
+      "flags": [],
+      "legacy_flags": [],
+      "path": [
+        "creative"
+      ],
+      "requires_runtime": null,
+      "summary": "Creative-AURA unified problem solving"
+    },
+    {
+      "action": "creative_solve",
+      "description": "Generate ideas using creative techniques and implement the best one with AURA.",
+      "examples": [
+        "python3 main.py creative solve \"Improve performance\"",
+        "python3 main.py creative solve \"Add feature X\" --techniques SCAMPER,RPE,SixHats",
+        "python3 main.py creative solve \"Refactor module\" --domain architecture"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "creative",
+        "solve"
+      ],
+      "requires_runtime": true,
+      "summary": "Solve problem using creative + AURA approach"
+    },
+    {
+      "action": "creative_patterns",
+      "description": "View stored patterns and their success rates.",
+      "examples": [
+        "python3 main.py creative patterns",
+        "python3 main.py creative patterns --domain api_design"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "creative",
+        "patterns"
+      ],
+      "requires_runtime": true,
+      "summary": "List stored creative patterns"
+    },
+    {
+      "action": "creative_cross_pollinate",
+      "description": "Find patterns from one domain applicable to another.",
+      "examples": [
+        "python3 main.py creative cross-pollinate --from web --to mobile",
+        "python3 main.py creative cross-pollinate --from backend --to frontend"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "creative",
+        "cross-pollinate"
+      ],
+      "requires_runtime": true,
+      "summary": "Find cross-domain analogies"
+    },
+    {
+      "action": "creative_stats",
+      "description": "Display statistics about the creative system including success rates and pattern counts.",
+      "examples": [
+        "python3 main.py creative stats"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "creative",
+        "stats"
+      ],
+      "requires_runtime": true,
+      "summary": "Show creative system statistics"
+    },
+    {
+      "action": null,
       "description": "Commands for running goals via the Agent SDK meta-controller.",
       "examples": [],
       "flags": [],
@@ -864,21 +962,16 @@
       "summary": "Agent SDK commands"
     },
     {
-      "action": "agent_run",
+      "action": null,
       "description": "Execute a development goal using Claude-as-brain orchestration with dynamic tool/skill/workflow selection.",
       "examples": [],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
+      "flags": [],
       "legacy_flags": [],
       "path": [
         "agent",
         "run"
       ],
-      "requires_runtime": true,
+      "requires_runtime": null,
       "summary": "Run goal via Agent SDK meta-controller"
     }
   ],

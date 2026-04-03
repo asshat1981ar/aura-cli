@@ -5,7 +5,7 @@ This file is the live audit, queue, and closeout surface for the current repo-wi
 ## Audit Summary
 
 Branch: `feat/sprint-s004`  
-HEAD SHA: `d76e98823ae7e526ddfe07723385bb418ae22bf9`  
+HEAD SHA: `cdcaf666218c884aa9c1e6d0c8c180708466f4fb`  
 Target PR(s): `#307`
 
 Active error buckets:
@@ -36,16 +36,16 @@ Notes: keep all unrelated local worktree changes untouched; use focused commits 
 
 | Bucket | Owner | Status | Branch/SHA | Verification target | Notes |
 | --- | --- | --- | --- | --- | --- |
-| workflow/setup | main agent | resolved | `feat/sprint-s004` / `d76e988` | GitHub Actions setup passes and Claude workflow starts real steps | Broken Claude action pin and workflow gating issues fixed |
-| required CI lane | main agent | resolved | `feat/sprint-s004` / `d76e988` | `Python CI` green on current SHA | Python 3.10/macOS regression path fixed |
-| PR review blocker | main agent | resolved | `feat/sprint-s004` / `d76e988` | review-targeted tests and comment alignment verified | Sprint 2 integration review blockers addressed |
-| developer-surface drift | main agent | in_progress | `feat/sprint-s004` / `d76e988` | doc and prompt cross-reference verification | sweep templates and workflow alignment underway |
-| external blocker | main agent | none | `feat/sprint-s004` / `d76e988` | n/a | none currently identified |
+| workflow/setup | main agent | resolved | `feat/sprint-s004` / `cdcaf66` | GitHub Actions setup passes and Claude workflow starts real steps | Broken Claude action pin and workflow gating issues fixed |
+| required CI lane | main agent | resolved | `feat/sprint-s004` / `cdcaf66` | `Python CI` green on current SHA | Python 3.10/macOS regression path fixed |
+| PR review blocker | main agent | resolved | `feat/sprint-s004` / `cdcaf66` | review-targeted tests and comment alignment verified | Sprint 2 integration review blockers addressed |
+| developer-surface drift | main agent | in_progress | `feat/sprint-s004` / `cdcaf66` | doc and prompt cross-reference verification | sweep templates and workflow alignment underway |
+| external blocker | main agent | none | `feat/sprint-s004` / `cdcaf66` | n/a | none currently identified |
 
 ## Latest Closeout
 
 Branch: `feat/sprint-s004`  
-HEAD SHA: `d76e98823ae7e526ddfe07723385bb418ae22bf9`  
+HEAD SHA: `cdcaf666218c884aa9c1e6d0c8c180708466f4fb`  
 Bucket addressed: workflow/setup and required CI lanes  
 Files/surfaces changed: workflow YAML, workflow-engine tests, Sprint 2 integration tests  
 Verification performed: targeted pytest, local YAML validation, GitHub Actions polling on the pushed SHA  

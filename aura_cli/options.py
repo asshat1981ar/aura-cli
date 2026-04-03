@@ -340,8 +340,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         description="List all innovation sessions with their status and metrics.",
         examples=(
             "python3 main.py innovate list",
-            "python3 main.py innovate list --status active",
-            "python3 main.py innovate list --json",
+            "python3 main.py innovate list --limit 10",
         ),
     ),
     CommandSpec(
@@ -350,8 +349,6 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         description="Show detailed information about a specific innovation session.",
         examples=(
             "python3 main.py innovate show --session-id abc123",
-            "python3 main.py innovate show --session-id abc123 --show-ideas",
-            "python3 main.py innovate show --session-id abc123 --json",
         ),
     ),
     CommandSpec(
@@ -523,11 +520,12 @@ _ACTION_SMOKE_OVERRIDES: dict[str, tuple[str, ...]] = {
     "goal_add_run": ("goal", "add", "example-goal", "--run"),
     "sadd_run": ("sadd", "run", "--spec", "example-spec.md", "--dry-run"),
     "sadd_resume": ("sadd", "resume", "--session-id", "example-id"),
-    "innovate_show": ("innovate", "show", "example-id"),
-    "innovate_resume": ("innovate", "resume", "example-id"),
-    "innovate_export": ("innovate", "export", "example-id"),
+    "innovate_show": ("innovate", "show", "--session-id", "example-id"),
+    "innovate_resume": ("innovate", "resume", "--session-id", "example-id"),
+    "innovate_export": ("innovate", "export", "--session-id", "example-id"),
     "innovate_to_goals": ("innovate", "to-goals", "--session-id", "example-id"),
     "creative_solve": ("creative", "solve", "example-problem"),
+    "creative_cross_pollinate": ("creative", "cross-pollinate", "--from", "web", "--to", "mobile"),
 }
 
 _SMOKE_POSITIONAL_ARGS_BY_PATH: dict[tuple[str, ...], tuple[str, ...]] = {
@@ -623,6 +621,10 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("innovate", "techniques"): "innovate_techniques",
     ("innovate", "to-goals"): "innovate_to_goals",
     ("innovate", "insights"): "innovate_insights",
+    ("creative", "solve"): "creative_solve",
+    ("creative", "patterns"): "creative_patterns",
+    ("creative", "cross-pollinate"): "creative_cross_pollinate",
+    ("creative", "stats"): "creative_stats",
 }
 
 _LEGACY_PRIMARY_FLAGS: tuple[str, ...] = (

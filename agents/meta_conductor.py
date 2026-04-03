@@ -14,8 +14,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 from agents.schemas import (
-    InnovationPhase, InnovationSessionState, MetaConductorOutput,
-    InnovationOutput
+    InnovationPhase, InnovationSessionState
 )
 from agents.innovation_swarm import InnovationSwarm
 from core.logging_utils import log_json

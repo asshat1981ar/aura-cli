@@ -1,8 +1,11 @@
 {
   "action_spec_actions": [
-    "agent_run",
     "bootstrap",
     "contract_report",
+    "creative_cross_pollinate",
+    "creative_patterns",
+    "creative_solve",
+    "creative_stats",
     "diag",
     "doctor",
     "evolve",
@@ -51,6 +54,22 @@
     ],
     [
       "contract-report"
+    ],
+    [
+      "creative",
+      "cross-pollinate"
+    ],
+    [
+      "creative",
+      "patterns"
+    ],
+    [
+      "creative",
+      "solve"
+    ],
+    [
+      "creative",
+      "stats"
     ],
     [
       "diag"
@@ -171,9 +190,12 @@
   ],
   "customizers_on_non_leaf_paths": [],
   "dispatch_actions": [
-    "agent_run",
     "bootstrap",
     "contract_report",
+    "creative_cross_pollinate",
+    "creative_patterns",
+    "creative_solve",
+    "creative_stats",
     "diag",
     "doctor",
     "evolve",
@@ -218,9 +240,12 @@
   "extra_required_parent_paths": [],
   "failure_keys": [],
   "help_actions": [
-    "agent_run",
     "bootstrap",
     "contract_report",
+    "creative_cross_pollinate",
+    "creative_patterns",
+    "creative_solve",
+    "creative_stats",
     "diag",
     "doctor",
     "evolve",
@@ -273,6 +298,25 @@
     ],
     [
       "contract-report"
+    ],
+    [
+      "creative"
+    ],
+    [
+      "creative",
+      "cross-pollinate"
+    ],
+    [
+      "creative",
+      "patterns"
+    ],
+    [
+      "creative",
+      "solve"
+    ],
+    [
+      "creative",
+      "stats"
     ],
     [
       "diag"
@@ -433,6 +477,22 @@
       "contract-report"
     ],
     [
+      "creative",
+      "cross-pollinate"
+    ],
+    [
+      "creative",
+      "patterns"
+    ],
+    [
+      "creative",
+      "solve"
+    ],
+    [
+      "creative",
+      "stats"
+    ],
+    [
       "diag"
     ],
     [
@@ -566,6 +626,9 @@
       "agent"
     ],
     [
+      "creative"
+    ],
+    [
       "goal"
     ],
     [
@@ -603,6 +666,25 @@
     ],
     [
       "contract-report"
+    ],
+    [
+      "creative"
+    ],
+    [
+      "creative",
+      "cross-pollinate"
+    ],
+    [
+      "creative",
+      "patterns"
+    ],
+    [
+      "creative",
+      "solve"
+    ],
+    [
+      "creative",
+      "stats"
     ],
     [
       "diag"
@@ -753,6 +835,9 @@
       "agent"
     ],
     [
+      "creative"
+    ],
+    [
       "goal"
     ],
     [
@@ -793,6 +878,25 @@
     ],
     [
       "contract-report"
+    ],
+    [
+      "creative"
+    ],
+    [
+      "creative",
+      "cross-pollinate"
+    ],
+    [
+      "creative",
+      "patterns"
+    ],
+    [
+      "creative",
+      "solve"
+    ],
+    [
+      "creative",
+      "stats"
     ],
     [
       "diag"

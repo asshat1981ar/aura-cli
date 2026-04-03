@@ -6,7 +6,7 @@ This file is the live reviewer-facing summary for the current active sweep branc
 
 PR: `#307`  
 Branch: `feat/sprint-s004`  
-HEAD SHA: `d76e98823ae7e526ddfe07723385bb418ae22bf9`
+HEAD SHA: `cdcaf666218c884aa9c1e6d0c8c180708466f4fb`
 
 Description:
 
@@ -34,8 +34,8 @@ Testing Performed:
   - `python3 -m pytest -q tests/test_workflow_engine.py -k get_orchestrator`
   - `python3 -m pytest -q tests/integration/test_sprint2_integration.py`
 - broader CI/workflow verification:
-  - `Python CI` green on `d76e988`
-  - `Claude Code Review` green on `d76e988`
+  - `Python CI` green on `cdcaf66`
+  - `Claude Code Review` green on `cdcaf66`
 - anything intentionally not verified:
   - no additional broad runtime or repo-wide regression sweep beyond the repaired PR surfaces
 

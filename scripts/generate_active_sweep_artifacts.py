@@ -54,7 +54,7 @@ def _git_output(*args: str) -> str:
 
 
 def detect_branch() -> str:
-    return _git_output("rev-parse", "--abbrev-ref", "HEAD")
+    return os.environ.get("GITHUB_HEAD_REF") or _git_output("rev-parse", "--abbrev-ref", "HEAD")
 
 
 def detect_sha() -> str:

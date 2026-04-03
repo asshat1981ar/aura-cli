@@ -98,6 +98,7 @@ jobs:
         python scripts/generate_active_sweep_artifacts.py --check
       env:
         GITHUB_PR_NUMBER: ${{ github.event.pull_request.number }}
+        GITHUB_HEAD_REF: ${{ github.head_ref }}
         GITHUB_CHECKS: Python CI,Claude Code Review
         AURA_REVIEWER_COMPLETE: true
     - name: Verify CLI docs generator tests

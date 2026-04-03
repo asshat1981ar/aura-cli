@@ -346,10 +346,10 @@ class ReverseBrainstormingBot(BaseBrainstormingBot):
         
         # Stage 1: Generate "anti-solutions" (ways to cause the problem)
         anti_solutions = [
-            f"Make the problem worse by ignoring user needs",
-            f"Ensure failure by not testing anything",
-            f"Maximize confusion with poor documentation",
-            f"Guarantee delays with no planning",
+            "Make the problem worse by ignoring user needs",
+            "Ensure failure by not testing anything",
+            "Maximize confusion with poor documentation",
+            "Guarantee delays with no planning",
         ]
         
         for i, anti in enumerate(anti_solutions):
@@ -402,9 +402,9 @@ class WorstIdeaBot(BaseBrainstormingBot):
         for i, bad_idea in enumerate(self.WORST_IDEAS_TEMPLATES[:4]):
             # Transform the bad idea
             transformations = [
-                f"Free automated bug detection and fixes",
-                f"Comprehensive self-documenting code",
-                f"Zero-configuration intelligent defaults",
+                "Free automated bug detection and fixes",
+                "Comprehensive self-documenting code",
+                "Zero-configuration intelligent defaults",
             ]
             
             ideas.append(self._create_idea(

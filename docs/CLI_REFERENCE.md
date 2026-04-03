@@ -104,6 +104,13 @@ Known record codes:
   - [`aura innovate techniques`](#aura-innovate-techniques)
   - [`aura innovate to-goals`](#aura-innovate-to-goals)
   - [`aura innovate insights`](#aura-innovate-insights)
+- [`creative`](#creative)
+  - [`aura creative solve`](#aura-creative-solve)
+  - [`aura creative patterns`](#aura-creative-patterns)
+  - [`aura creative cross-pollinate`](#aura-creative-cross-pollinate)
+  - [`aura creative stats`](#aura-creative-stats)
+- [`agent`](#agent)
+  - [`aura agent run`](#aura-agent-run)
 
 ## `help`
 
@@ -599,8 +606,7 @@ List all innovation sessions with their status and metrics.
 
 Examples:
 - `python3 main.py innovate list`
-- `python3 main.py innovate list --status active`
-- `python3 main.py innovate list --json`
+- `python3 main.py innovate list --limit 10`
 
 ### `aura innovate show`
 
@@ -612,8 +618,6 @@ Show detailed information about a specific innovation session.
 
 Examples:
 - `python3 main.py innovate show --session-id abc123`
-- `python3 main.py innovate show --session-id abc123 --show-ideas`
-- `python3 main.py innovate show --session-id abc123 --json`
 
 ### `aura innovate resume`
 
@@ -676,6 +680,68 @@ Examples:
 - `python3 main.py innovate insights --session-id abc123`
 - `python3 main.py innovate insights --json`
 
+## `creative`
+
+### `aura creative`
+
+Creative-AURA unified problem solving
+
+Use creative techniques combined with AURA implementation for end-to-end problem solving.
+
+Examples:
+- `python3 main.py creative solve "Reduce API latency"`
+- `python3 main.py creative solve "Add caching" --techniques SCAMPER,RPE`
+- `python3 main.py creative patterns`
+- `python3 main.py creative cross-pollinate --from web --to mobile`
+
+### `aura creative solve`
+
+Solve problem using creative + AURA approach
+
+Generate ideas using creative techniques and implement the best one with AURA.
+
+`action`: `creative_solve` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py creative solve "Improve performance"`
+- `python3 main.py creative solve "Add feature X" --techniques SCAMPER,RPE,SixHats`
+- `python3 main.py creative solve "Refactor module" --domain architecture`
+
+### `aura creative patterns`
+
+List stored creative patterns
+
+View stored patterns and their success rates.
+
+`action`: `creative_patterns` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py creative patterns`
+- `python3 main.py creative patterns --domain api_design`
+
+### `aura creative cross-pollinate`
+
+Find cross-domain analogies
+
+Find patterns from one domain applicable to another.
+
+`action`: `creative_cross_pollinate` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py creative cross-pollinate --from web --to mobile`
+- `python3 main.py creative cross-pollinate --from backend --to frontend`
+
+### `aura creative stats`
+
+Show creative system statistics
+
+Display statistics about the creative system including success rates and pattern counts.
+
+`action`: `creative_stats` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py creative stats`
+
 ## `agent`
 
 ### `aura agent`
@@ -689,5 +755,3 @@ Commands for running goals via the Agent SDK meta-controller.
 Run goal via Agent SDK meta-controller
 
 Execute a development goal using Claude-as-brain orchestration with dynamic tool/skill/workflow selection.
-
-`action`: `agent_run` `requires_runtime`: `true`

@@ -12,12 +12,12 @@ from core.task_manager import TaskManager
 _meta_conductor = None
 
 
-def _get_meta_conductor(brain=None):
+def _get_meta_conductor(brain=None, use_llm: bool = True):
     """Get or create the shared MetaConductor instance."""
     global _meta_conductor
     if _meta_conductor is None:
         from agents.meta_conductor import MetaConductor
-        _meta_conductor = MetaConductor(brain=brain)
+        _meta_conductor = MetaConductor(brain=brain, use_llm=use_llm)
     elif brain is not None and _meta_conductor.brain is None:
         # Update brain if conductor exists but brain was added
         _meta_conductor.brain = brain
@@ -287,6 +287,13 @@ def _handle_innovate_start(args, runtime=None):
     
     # Get output format
     output_json = getattr(args, "json", False) or getattr(args, "output", "table") == "json"
+    use_llm = getattr(args, "use_llm", True)
+    
+    # Log LLM mode
+    if use_llm:
+        log_json("INFO", "llm_mode_enabled")
+    else:
+        log_json("INFO", "llm_mode_disabled", details={"reason": "user_flag"})
     
     # Get problems - either from args, batch file, or error
     problems = []
@@ -316,7 +323,7 @@ def _handle_innovate_start(args, runtime=None):
         return
     
     # Use shared conductor with brain
-    conductor = _get_meta_conductor(brain=brain)
+    conductor = _get_meta_conductor(brain=brain, use_llm=use_llm)
     
     # Process each problem
     sessions = []

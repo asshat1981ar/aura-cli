@@ -3,6 +3,8 @@ InnovationSwarm Agent - Multi-technique brainstorming orchestrator.
 
 This agent coordinates multiple brainstorming technique bots to generate
 diverse, novel ideas through the Innovation Catalyst methodology.
+
+Now with LLM-powered idea generation via OpenRouter.
 """
 
 import uuid
@@ -21,6 +23,9 @@ class InnovationSwarm:
     
     Implements the DIVERGENCE and CONVERGENCE phases of the Innovation
     Catalyst methodology, coordinating technique bots in parallel.
+    
+    Supports both LLM-powered generation (via OpenRouter) and template-based
+    fallback for offline/cost-sensitive scenarios.
     """
     
     capabilities = [
@@ -34,17 +39,30 @@ class InnovationSwarm:
     
     description = "Multi-technique brainstorming agent that generates diverse, novel ideas"
     
-    def __init__(self, brain=None, model=None):
+    def __init__(self, brain=None, model=None, llm_client=None, use_llm: bool = True):
         """
         Initialize the InnovationSwarm.
         
         Args:
             brain: Optional memory/brain instance for context
-            model: Optional model adapter for LLM interactions
+            model: Optional model adapter for LLM interactions (legacy)
+            llm_client: Optional LLM client for idea generation
+            use_llm: Whether to use LLM if available
         """
         self.brain = brain
         self.model = model
+        self.llm_client = llm_client
+        self.use_llm = use_llm
         self.session_id = None
+        
+        # Initialize LLM client if not provided but enabled
+        if self.use_llm and not self.llm_client:
+            try:
+                from agents.llm_brainstorming import get_llm_client
+                self.llm_client = get_llm_client()
+                log_json("INFO", "llm_client_initialized")
+            except Exception as e:
+                log_json("WARN", "llm_client_init_failed", details={"error": str(e)})
     
     def run(self, input_data: dict) -> dict:
         """
@@ -188,7 +206,7 @@ class InnovationSwarm:
         # Run each technique (sequential for now, could be parallel)
         for technique_name in techniques:
             try:
-                bot = get_bot(technique_name)
+                bot = get_bot(technique_name, llm_client=self.llm_client, use_llm=self.use_llm)
                 ideas = bot.generate(problem_statement, context)
                 
                 results[technique_name] = TechniqueResult(

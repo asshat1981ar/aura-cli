@@ -183,7 +183,7 @@ class CodeRAG:
                 similar = store.find_similar_failures(goal, limit=3)
                 for f in similar:
                     failures.append(f"Failed: {f['goal']} — Reason: {f['failure_reason']}")
-        except (OSError, IOError, ValueError):
+        except (ImportError, OSError, IOError, ValueError):
             pass
         return failures
 

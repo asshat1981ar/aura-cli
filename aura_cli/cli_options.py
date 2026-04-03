@@ -408,6 +408,8 @@ def _customize_innovate_start(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
     parser.add_argument("--constraints", dest="constraints", help="JSON string with constraints (e.g., '{\"max_ideas\": 10}').")
     parser.add_argument("--batch", dest="batch_file", help="Path to file with multiple problems (one per line).")
+    parser.add_argument("--use-llm", dest="use_llm", action="store_true", default=True, help="Use LLM for idea generation (default: True).")
+    parser.add_argument("--no-llm", dest="use_llm", action="store_false", help="Disable LLM and use template-based generation.")
 
 
 def _customize_innovate_list(parser: argparse.ArgumentParser) -> None:

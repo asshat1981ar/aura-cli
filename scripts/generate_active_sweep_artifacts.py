@@ -359,9 +359,29 @@ def write_text(path: Path, content: str) -> None:
     path.write_text(content, encoding="utf-8")
 
 
+def _normalize_for_check(text: str) -> str:
+    """Strip dynamic commit-SHA and branch fields before comparison.
+
+    The artifacts embed the HEAD SHA and branch name at generation time, which
+    differ between a local ``git commit`` and GitHub Actions' synthetic merge
+    commit.  Normalising these fields lets --check verify all stable content
+    without false-positives caused by the SHA changing on every push.
+    """
+    import re
+    # Collapse full 40-char SHAs and short 7-char hex abbreviations
+    text = re.sub(r"`[0-9a-f]{40}`", "`<SHA>`", text)
+    text = re.sub(r"`[0-9a-f]{7}`", "`<sha>`", text)
+    # Collapse branch names on the "Branch:" header line
+    text = re.sub(r"^(Branch: *)`[^`]+`", r"\1`<branch>`", text, flags=re.MULTILINE)
+    return text
+
+
 def _check_output(path: Path, rendered: str, label: str) -> list[str]:
     existing = path.read_text(encoding="utf-8") if path.exists() else None
     if existing == rendered:
+        return []
+    # Allow SHA / branch to differ (they are dynamic, commit-time values)
+    if existing is not None and _normalize_for_check(existing) == _normalize_for_check(rendered):
         return []
 
     lines = [f"{label} is out of date: {path}"]

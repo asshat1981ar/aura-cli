@@ -47,17 +47,19 @@ class MetaConductor:
         InnovationPhase.TRANSFORMATION
     ]
     
-    def __init__(self, brain=None, model=None):
+    def __init__(self, brain=None, model=None, use_llm: bool = True):
         """
         Initialize the MetaConductor.
         
         Args:
             brain: Optional memory/brain instance for context
-            model: Optional model adapter for LLM interactions
+            model: Optional model adapter for LLM interactions (legacy)
+            use_llm: Whether to use LLM for idea generation
         """
         self.brain = brain
         self.model = model
-        self.innovation_swarm = InnovationSwarm(brain=brain, model=model)
+        self.use_llm = use_llm
+        self.innovation_swarm = InnovationSwarm(brain=brain, model=model, use_llm=use_llm)
         self.active_sessions: Dict[str, InnovationSessionState] = {}
     
     def run(self, input_data: dict) -> dict:

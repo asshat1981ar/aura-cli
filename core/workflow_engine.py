@@ -28,6 +28,7 @@ import time
 import traceback
 import uuid
 import importlib
+import queue
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -247,6 +248,27 @@ def _wire_inputs(
 # Core execution logic
 # ---------------------------------------------------------------------------
 
+def _run_step_callable_with_timeout(fn: Callable[[], Any], timeout_s: float) -> tuple[bool, Any]:
+    """Run *fn* in a daemon thread and enforce a wall-clock timeout when requested."""
+    if timeout_s <= 0:
+        return True, fn()
+
+    result_queue: "queue.Queue[tuple[bool, Any]]" = queue.Queue(maxsize=1)
+
+    def _target() -> None:
+        try:
+            result_queue.put((True, fn()))
+        except Exception as exc:  # pragma: no cover - worker-side passthrough
+            result_queue.put((False, exc))
+
+    worker = threading.Thread(target=_target, daemon=True)
+    worker.start()
+    try:
+        return result_queue.get(timeout=timeout_s)
+    except queue.Empty:
+        raise TimeoutError(f"Step execution exceeded timeout of {timeout_s:.2f}s")
+
+
 def _execute_step(
     step: WorkflowStep,
     step_outputs: Dict[str, Dict],
@@ -271,17 +293,23 @@ def _execute_step(
     last_error: Optional[str] = None
     attempt = 0
 
+    timed_out = False
+
     for attempt in range(max(1, step.retry.max_attempts)):
         t0 = time.time()
         try:
-            if step.skill_name:
-                output = _run_skill(step.skill_name, inputs)
-            elif step.fn:
-                output = step.fn(inputs)
-            else:
-                output = {"error": f"Step '{step.name}' has no skill_name or fn."}
+            def _invoke() -> Any:
+                if step.skill_name:
+                    return _run_skill(step.skill_name, inputs)
+                if step.fn:
+                    return step.fn(inputs)
+                return {"error": f"Step '{step.name}' has no skill_name or fn."}
 
+            success, output = _run_step_callable_with_timeout(_invoke, step.timeout_s)
             elapsed = (time.time() - t0) * 1000
+
+            if not success:
+                raise output
 
             if isinstance(output, dict) and "error" in output:
                 last_error = output["error"]
@@ -297,6 +325,14 @@ def _execute_step(
                     elapsed_ms=elapsed,
                 )
 
+        except TimeoutError as exc:
+            elapsed = (time.time() - t0) * 1000
+            last_error = str(exc)
+            timed_out = True
+            log_json("WARN", "workflow_step_timeout", details={
+                "step": step.name, "attempt": attempt + 1, "timeout_s": step.timeout_s,
+            })
+            break
         except Exception as exc:
             elapsed = (time.time() - t0) * 1000
             last_error = f"{type(exc).__name__}: {exc}"
@@ -315,7 +351,7 @@ def _execute_step(
 
     return StepResult(
         step_name=step.name,
-        status="failed",
+        status="timeout" if timed_out else "failed",
         output={"error": last_error},
         attempts=attempt + 1,
         elapsed_ms=(time.time() - t0) * 1000,
@@ -451,7 +487,7 @@ class WorkflowEngine:
                     exc.step_outputs[step.name] = result.output
                 elif result.status == "skipped":
                     exc.step_outputs[step.name] = {}
-                elif result.status == "failed":
+                elif result.status in ("failed", "timeout"):
                     exc.total_retries_used += result.attempts - 1
                     # Check total retry budget
                     if wf.max_retries_total > 0 and exc.total_retries_used >= wf.max_retries_total:
@@ -460,12 +496,12 @@ class WorkflowEngine:
                         self._journal_execution(exc)
                         log_json("ERROR", "workflow_budget_exhausted", details={"exec_id": exc.id})
                         return
-                    # Single step failed — continue or abort
-                    exc.error = f"Step '{step.name}' failed: {result.error}"
+                    failure_kind = "timed out" if result.status == "timeout" else "failed"
+                    exc.error = f"Step '{step.name}' {failure_kind}: {result.error}"
                     exc.status = "failed"
                     self._journal_execution(exc)
                     log_json("ERROR", "workflow_execution_failed", details={
-                        "exec_id": exc.id, "step": step.name, "error": result.error
+                        "exec_id": exc.id, "step": step.name, "error": result.error, "result_status": result.status
                     })
                     return
 
@@ -482,6 +518,8 @@ class WorkflowEngine:
 
     def pause_execution(self, exec_id: str) -> None:
         exc = self._get_execution(exec_id)
+        if not exc:
+            raise KeyError(f"Execution '{exec_id}' not found.")
         if exc.is_terminal():
             raise ValueError(f"Execution {exec_id} is already terminal ({exc.status}).")
         exc.status = "paused"

@@ -445,7 +445,7 @@ class MetaConductor:
         # Also load from brain to get persisted sessions
         if self.brain:
             try:
-                from agents.schemas import InnovationPhase
+                from agents.schemas import InnovationOutput, InnovationPhase
                 brain_sessions = self.brain.list_innovation_sessions(status=status)
                 for data in brain_sessions:
                     if data['session_id'] not in self.active_sessions:
@@ -456,8 +456,10 @@ class MetaConductor:
                             current_phase=InnovationPhase(data['current_phase']),
                             phases_completed=[InnovationPhase(p) for p in data['phases_completed']],
                             techniques=data['techniques'],
+                            constraints=data.get('constraints', {}),
                             ideas_generated=data['ideas_generated'],
                             ideas_selected=data['ideas_selected'],
+                            output=InnovationOutput(**data['output_data']) if data.get('output_data') else None,
                         )
                         sessions.append(session)
                         self.active_sessions[data['session_id']] = session

@@ -571,8 +571,10 @@ class Brain:
                 'current_phase': row['current_phase'],
                 'phases_completed': json.loads(row['phases_completed']) if row['phases_completed'] else [],
                 'techniques': json.loads(row['techniques']) if row['techniques'] else [],
+                'constraints': json.loads(row['constraints']) if row['constraints'] else {},
                 'ideas_generated': row['ideas_generated'],
                 'ideas_selected': row['ideas_selected'],
+                'output_data': json.loads(row['output_data']) if row['output_data'] else None,
                 'created_at': row['created_at'],
                 'updated_at': row['updated_at'],
             })

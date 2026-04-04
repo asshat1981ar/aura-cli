@@ -67,7 +67,7 @@ class TestHierarchicalCoordinatorPlan:
     def test_plan_returns_three_tasks(self, _):
         config = _make_config()
         coordinator = HierarchicalCoordinatorAgent(config=config, lesson_store=_make_lesson_store())
-        tasks = asyncio.get_event_loop().run_until_complete(
+        tasks = asyncio.run(
             coordinator.plan("story-1", "Build a feature")
         )
         assert len(tasks) == 3
@@ -76,7 +76,7 @@ class TestHierarchicalCoordinatorPlan:
     def test_plan_roles_are_architect_coder_tester(self, _):
         config = _make_config()
         coordinator = HierarchicalCoordinatorAgent(config=config, lesson_store=_make_lesson_store())
-        tasks = asyncio.get_event_loop().run_until_complete(
+        tasks = asyncio.run(
             coordinator.plan("story-1", "some story")
         )
         roles = [t.role for t in tasks]
@@ -88,7 +88,7 @@ class TestHierarchicalCoordinatorPlan:
     def test_plan_dependency_chain(self, _):
         config = _make_config()
         coordinator = HierarchicalCoordinatorAgent(config=config, lesson_store=_make_lesson_store())
-        tasks = asyncio.get_event_loop().run_until_complete(
+        tasks = asyncio.run(
             coordinator.plan("story-1", "some story")
         )
         architect_id = tasks[0].task_id
@@ -106,7 +106,7 @@ class TestInvokeWorker:
             task_id="t1", title="t", role=AgentRole.CODER,
             story_id="s1", description="desc"
         )
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             coordinator._invoke_worker(task=task, context={}, workers={})
         )
         assert result.state == TaskState.FAILED
@@ -121,7 +121,7 @@ class TestInvokeWorker:
             story_id="s1", description="desc"
         )
         bad_worker = MagicMock(spec=[])  # no execute, no run
-        result = asyncio.get_event_loop().run_until_complete(
+        result = asyncio.run(
             coordinator._invoke_worker(task=task, context={}, workers={AgentRole.CODER: bad_worker})
         )
         assert result.state == TaskState.FAILED
@@ -136,7 +136,7 @@ class TestLessonsForCycle:
         )
         config = _make_config(learning_interval=1)
         coordinator = HierarchicalCoordinatorAgent(config=config, lesson_store=store)
-        lessons = asyncio.get_event_loop().run_until_complete(
+        lessons = asyncio.run(
             coordinator._lessons_for_cycle(1)
         )
         assert len(lessons) == 1
@@ -147,7 +147,7 @@ class TestLessonsForCycle:
         store = _make_lesson_store()
         config = _make_config(learning_interval=5)
         coordinator = HierarchicalCoordinatorAgent(config=config, lesson_store=store)
-        lessons = asyncio.get_event_loop().run_until_complete(
+        lessons = asyncio.run(
             coordinator._lessons_for_cycle(3)
         )
         assert lessons == []
@@ -170,7 +170,7 @@ class TestReflect:
             story_id="s1",
             debug_report=debug_report,
         )
-        lessons = asyncio.get_event_loop().run_until_complete(coordinator.reflect(report))
+        lessons = asyncio.run(coordinator.reflect(report))
         assert len(lessons) <= 3
         assert all(l.lesson in ["Fix A", "Fix B", "Fix C"] for l in lessons)
 
@@ -181,5 +181,5 @@ class TestReflect:
         injected = [CycleLesson(cycle_number=1, lesson="Lesson 1", source_task_id="t1")]
         coordinator = HierarchicalCoordinatorAgent(config=config, lesson_store=_make_lesson_store())
         report = CycleReport(cycle_number=1, story_id="s1", lessons_injected=injected)
-        lessons = asyncio.get_event_loop().run_until_complete(coordinator.reflect(report))
+        lessons = asyncio.run(coordinator.reflect(report))
         assert lessons == injected

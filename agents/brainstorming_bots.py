@@ -36,7 +36,7 @@ class BaseBrainstormingBot(ABC):
         """Return the technique key for LLM prompts."""
         pass
     
-    def _generate_template(self, task: str, context: str = "") -> List[Idea]:
+    def generate(self, task: str, context: str = "") -> List[Idea]:
         """
         Generate ideas using this technique.
         

@@ -89,7 +89,7 @@ jobs:
     - name: Install minimal test dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install pytest pydantic>=2.0
+        pip install pytest pydantic>=2.0 httpx>=0.24
     - name: Verify CLI docs are up to date
       run: |
         python scripts/generate_cli_reference.py --check

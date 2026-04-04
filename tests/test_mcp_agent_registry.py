@@ -168,8 +168,8 @@ class TestRegisterMcpAgents:
             {"name": "read_file", "description": "Read a file"},
         ])
 
-        with patch("core.mcp_agent_registry.MCPAsyncClient", return_value=mock_client):
-            asyncio.get_event_loop().run_until_complete(
+        with patch("core.mcp_client.MCPAsyncClient", return_value=mock_client):
+            asyncio.run(
                 registry.register_mcp_agents(server_config)
             )
 
@@ -187,8 +187,8 @@ class TestRegisterMcpAgents:
         mock_client = MagicMock()
         mock_client.get_tools = AsyncMock(side_effect=ConnectionError("refused"))
 
-        with patch("core.mcp_agent_registry.MCPAsyncClient", return_value=mock_client):
-            asyncio.get_event_loop().run_until_complete(
+        with patch("core.mcp_client.MCPAsyncClient", return_value=mock_client):
+            asyncio.run(
                 registry.register_mcp_agents(server_config)
             )
 

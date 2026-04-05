@@ -86,7 +86,7 @@ class TreeOfThoughtPlanner:
             else:
                 response = model.respond(scoring_prompt)
             self._parse_scores(response, valid)
-        except (OSError, IOError, ValueError):
+        except (OSError, IOError, ValueError, RuntimeError):
             # Fallback: score by step count and strategy preference
             for i, c in enumerate(valid):
                 c.total_score = len(c.steps) * 0.1 + (len(valid) - i) * 0.2

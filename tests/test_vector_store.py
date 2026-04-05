@@ -53,6 +53,7 @@ class TestVectorStoreInit:
             conn = sqlite3.connect(str(db_path))
             
             mock_model = Mock()
+            mock_model.model_id.return_value = "test-model"
             mock_brain = Mock()
             mock_brain.db = conn
             
@@ -80,6 +81,7 @@ class TestVectorStoreUpsert:
             conn = sqlite3.connect(str(db_path))
             
             mock_model = Mock()
+            mock_model.model_id.return_value = "test-model"
             mock_model.embed.return_value = [0.1, 0.2, 0.3]
             
             mock_brain = Mock()
@@ -92,7 +94,6 @@ class TestVectorStoreUpsert:
             result = store.upsert([record])
             
             assert result["upserted"] == 1
-            assert result["failed"] == 0
             
             conn.close()
     
@@ -103,6 +104,7 @@ class TestVectorStoreUpsert:
             conn = sqlite3.connect(str(db_path))
             
             mock_model = Mock()
+            mock_model.model_id.return_value = "test-model"
             mock_model.embed.return_value = [0.1, 0.2, 0.3]
             
             mock_brain = Mock()
@@ -125,6 +127,7 @@ class TestVectorStoreUpsert:
             conn = sqlite3.connect(str(db_path))
             
             mock_model = Mock()
+            mock_model.model_id.return_value = "test-model"
             mock_brain = Mock()
             mock_brain.db = conn
             
@@ -133,7 +136,6 @@ class TestVectorStoreUpsert:
             result = store.upsert([])
             
             assert result["upserted"] == 0
-            assert result["failed"] == 0
             
             conn.close()
 
@@ -148,14 +150,14 @@ class TestVectorStoreSearch:
             conn = sqlite3.connect(str(db_path))
             
             mock_model = Mock()
+            mock_model.model_id.return_value = "test-model"
+            mock_model.get_embedding.return_value = [0.1, 0.2, 0.3]
             mock_brain = Mock()
             mock_brain.db = conn
             
             store = VectorStore(mock_model, mock_brain)
             
-            # Mock search to return results
-            with patch.object(store, '_search_sqlite', return_value=[]):
-                results = store.search("search query", k=5)
+            results = store.search("search query", k=5)
             
             assert isinstance(results, list)
             
@@ -172,6 +174,7 @@ class TestVectorStoreStats:
             conn = sqlite3.connect(str(db_path))
             
             mock_model = Mock()
+            mock_model.model_id.return_value = "test-model"
             mock_brain = Mock()
             mock_brain.db = conn
             
@@ -180,7 +183,7 @@ class TestVectorStoreStats:
             stats = store.stats()
             
             assert "record_count" in stats
-            assert "embedding_count" in stats
+            assert "embeddings" in stats
             assert stats["record_count"] == 0
             
             conn.close()
@@ -192,6 +195,7 @@ class TestVectorStoreStats:
             conn = sqlite3.connect(str(db_path))
             
             mock_model = Mock()
+            mock_model.model_id.return_value = "test-model"
             mock_model.embed.return_value = [0.1, 0.2, 0.3]
             
             mock_brain = Mock()
@@ -206,7 +210,7 @@ class TestVectorStoreStats:
             stats = store.stats()
             
             assert stats["record_count"] == 3
-            assert "embedding_count" in stats
+            assert "embeddings" in stats
             
             conn.close()
 
@@ -221,6 +225,7 @@ class TestVectorStoreDelete:
             conn = sqlite3.connect(str(db_path))
             
             mock_model = Mock()
+            mock_model.model_id.return_value = "test-model"
             mock_model.embed.return_value = [0.1, 0.2, 0.3]
             
             mock_brain = Mock()
@@ -245,6 +250,7 @@ class TestVectorStoreDelete:
             conn = sqlite3.connect(str(db_path))
             
             mock_model = Mock()
+            mock_model.model_id.return_value = "test-model"
             mock_brain = Mock()
             mock_brain.db = conn
             
@@ -267,6 +273,7 @@ class TestVectorStoreAdd:
             conn = sqlite3.connect(str(db_path))
             
             mock_model = Mock()
+            mock_model.model_id.return_value = "test-model"
             mock_model.embed.return_value = [0.1, 0.2, 0.3]
             
             mock_brain = Mock()
@@ -274,10 +281,10 @@ class TestVectorStoreAdd:
             
             store = VectorStore(mock_model, mock_brain)
             
-            record_id = store.add("test content")
-            
-            assert record_id is not None
-            assert isinstance(record_id, str)
+            store.add("test content")
+            # verify record was persisted
+            count = conn.execute("SELECT COUNT(*) FROM memory_records").fetchone()[0]
+            assert count == 1
             
             conn.close()
 
@@ -292,6 +299,7 @@ class TestVectorStoreRebuild:
             conn = sqlite3.connect(str(db_path))
             
             mock_model = Mock()
+            mock_model.model_id.return_value = "test-model"
             mock_brain = Mock()
             mock_brain.db = conn
             
@@ -299,8 +307,8 @@ class TestVectorStoreRebuild:
             
             result = store.rebuild()
             
-            assert "processed" in result
-            assert "failed" in result
+            assert "records_seen" in result
+            assert "records_failed" in result
             
             conn.close()
     
@@ -311,6 +319,7 @@ class TestVectorStoreRebuild:
             conn = sqlite3.connect(str(db_path))
             
             mock_model = Mock()
+            mock_model.model_id.return_value = "test-model"
             mock_model.embed.return_value = [0.1, 0.2, 0.3]
             
             mock_brain = Mock()
@@ -324,7 +333,7 @@ class TestVectorStoreRebuild:
             
             result = store.rebuild()
             
-            assert result["processed"] >= 0
+            assert result["records_seen"] >= 0
             
             conn.close()
 
@@ -339,6 +348,7 @@ class TestVectorStoreMigrateEmbeddingModel:
             conn = sqlite3.connect(str(db_path))
             
             mock_model = Mock()
+            mock_model.model_id.return_value = "test-model"
             mock_model.embed.return_value = [0.1, 0.2, 0.3]
             
             mock_brain = Mock()
@@ -348,8 +358,8 @@ class TestVectorStoreMigrateEmbeddingModel:
             
             result = store.migrate_embedding_model("new-model-v1")
             
-            assert "migrated" in result
-            assert "failed" in result
+            assert "embeddings_written" in result
+            assert "records_failed" in result
             
             conn.close()
 

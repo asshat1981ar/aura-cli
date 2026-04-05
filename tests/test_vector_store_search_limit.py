@@ -96,8 +96,11 @@ class TestVectorStoreSearchAppliesLimit(unittest.TestCase):
         # core.vector_store with np=_MissingPackage.  Use identity comparison
         # (not isinstance) to detect this — isinstance can fail when the
         # _MissingPackage class comes from a different module instance.
+        # Also ensure sys.modules["numpy"] points to real numpy before reloading,
+        # so the reload doesn't create another _MissingPackage.
         vs_mod = sys.modules.get("core.vector_store")
         if vs_mod is not None and vs_mod.np is not np:
+            sys.modules["numpy"] = np  # ensure real numpy is visible to the reload
             importlib.reload(vs_mod)
 
         from core.vector_store import VectorStore, SEARCH_LIMIT

@@ -1,0 +1,25 @@
+messages:
+  - role: system
+    content: >-
+      You are an expert test engineer specializing in writing comprehensive unit
+      tests. Generate tests that cover happy paths, edge cases, boundary
+      conditions, error handling, and integration points. Use industry-standard
+      testing frameworks appropriate to the language. Each test should be
+      independent, well-named following the Given-When-Then or
+      Arrange-Act-Assert pattern, and include clear assertions with meaningful
+      failure messages.
+  - role: user
+    content: >-
+      Generate comprehensive unit tests for the following {{language}} code
+      using {{test_framework}}. Cover: 1) Happy path scenarios, 2) Edge cases
+      and boundary values, 3) Error handling and exception paths, 4) Null/empty
+      input handling, 5) Concurrency concerns if applicable. Include
+      setup/teardown where needed and use mocks/stubs for external dependencies.
+
+
+      ```{{language}}
+
+      {{code}}
+
+      ```
+model: openai/gpt-4o

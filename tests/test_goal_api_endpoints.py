@@ -125,7 +125,7 @@ class TestGoalCreateEndpoint(unittest.TestCase):
     def test_post_goal_empty_description_rejected(self):
         client = _make_client()
         resp = client.post("/api/goals", json={"description": "  "})
-        self.assertIn(resp.status_code, (422, 422))
+        self.assertEqual(resp.status_code, 422)
 
     def test_post_goal_missing_description_rejected(self):
         client = _make_client()
@@ -192,19 +192,21 @@ class TestGoalDeleteEndpoint(unittest.TestCase):
         client = _make_client()
         mock_gq = MagicMock()
         mock_gq.queue = deque(["goal A"])
-        mock_gq._in_flight = {}
+        mock_gq.in_flight_keys.return_value = []
+        mock_gq.cancel.return_value = "goal A"
         with patch("aura_cli.api_server.GOAL_QUEUE_AVAILABLE", True), \
              patch("aura_cli.api_server.GoalQueue", return_value=mock_gq):
             resp = client.delete("/api/goals/goal-q-0")
         self.assertEqual(resp.status_code, 200)
         self.assertTrue(resp.json()["success"])
+        mock_gq.cancel.assert_called_once_with(0)
 
     def test_delete_inflight_goal_returns_409(self):
         client = _make_client()
         desc = "running goal"
         mock_gq = MagicMock()
         mock_gq.queue = deque([])
-        mock_gq._in_flight = {desc: 1000.0}
+        mock_gq.in_flight_keys.return_value = [desc]
         inflight_id = f"goal-f-{hash(desc) & 0xFFFFFFFF}"
         with patch("aura_cli.api_server.GOAL_QUEUE_AVAILABLE", True), \
              patch("aura_cli.api_server.GoalQueue", return_value=mock_gq):
@@ -215,7 +217,7 @@ class TestGoalDeleteEndpoint(unittest.TestCase):
         client = _make_client()
         mock_gq = MagicMock()
         mock_gq.queue = deque(["other goal"])
-        mock_gq._in_flight = {}
+        mock_gq.in_flight_keys.return_value = []
         with patch("aura_cli.api_server.GOAL_QUEUE_AVAILABLE", True), \
              patch("aura_cli.api_server.GoalQueue", return_value=mock_gq):
             resp = client.delete("/api/goals/goal-q-999")
@@ -233,7 +235,8 @@ class TestGoalPrioritizeEndpoint(unittest.TestCase):
         client = _make_client()
         mock_gq = MagicMock()
         mock_gq.queue = deque(["goal A", "goal B", "goal C"])
-        mock_gq._in_flight = {}
+        mock_gq.in_flight_keys.return_value = []
+        mock_gq.promote.return_value = "goal B"
         with patch("aura_cli.api_server.GOAL_QUEUE_AVAILABLE", True), \
              patch("aura_cli.api_server.GoalQueue", return_value=mock_gq):
             resp = client.post("/api/goals/goal-q-1/prioritize")
@@ -241,12 +244,13 @@ class TestGoalPrioritizeEndpoint(unittest.TestCase):
         body = resp.json()
         self.assertTrue(body["success"])
         self.assertEqual(body["position"], 0)
+        mock_gq.promote.assert_called_once_with(1)
 
     def test_prioritize_already_front_returns_ok(self):
         client = _make_client()
         mock_gq = MagicMock()
         mock_gq.queue = deque(["goal A", "goal B"])
-        mock_gq._in_flight = {}
+        mock_gq.in_flight_keys.return_value = []
         with patch("aura_cli.api_server.GOAL_QUEUE_AVAILABLE", True), \
              patch("aura_cli.api_server.GoalQueue", return_value=mock_gq):
             resp = client.post("/api/goals/goal-q-0/prioritize")
@@ -259,7 +263,7 @@ class TestGoalPrioritizeEndpoint(unittest.TestCase):
         inflight_id = f"goal-f-{hash(desc) & 0xFFFFFFFF}"
         mock_gq = MagicMock()
         mock_gq.queue = deque([])
-        mock_gq._in_flight = {desc: 1000.0}
+        mock_gq.in_flight_keys.return_value = [desc]
         with patch("aura_cli.api_server.GOAL_QUEUE_AVAILABLE", True), \
              patch("aura_cli.api_server.GoalQueue", return_value=mock_gq):
             resp = client.post(f"/api/goals/{inflight_id}/prioritize")
@@ -269,7 +273,7 @@ class TestGoalPrioritizeEndpoint(unittest.TestCase):
         client = _make_client()
         mock_gq = MagicMock()
         mock_gq.queue = deque(["goal A"])
-        mock_gq._in_flight = {}
+        mock_gq.in_flight_keys.return_value = []
         with patch("aura_cli.api_server.GOAL_QUEUE_AVAILABLE", True), \
              patch("aura_cli.api_server.GoalQueue", return_value=mock_gq):
             resp = client.post("/api/goals/goal-q-999/prioritize")

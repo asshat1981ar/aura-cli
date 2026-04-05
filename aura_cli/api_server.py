@@ -56,6 +56,14 @@ class GoalCreate(BaseModel):
 
     model_config = {"json_schema_extra": {"example": {"description": "Refactor goal queue", "priority": 1, "max_cycles": 5}}}
 
+    @property
+    def stripped_description(self) -> str:
+        return self.description.strip()
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.description.strip():
+            raise ValueError("description must not be blank or whitespace-only")
+
 
 class GoalCycleRecord(BaseModel):
     """A single cycle record for a goal's execution history."""
@@ -476,21 +484,20 @@ async def get_goals(
 )
 async def create_goal(goal: GoalCreate, user: dict = Depends(get_current_user)):
     """Enqueue a new goal.  The goal is persisted immediately via :class:`GoalQueue`."""
-    if not goal.description.strip():
-        raise HTTPException(status_code=422, detail="description must not be empty")
+    description = goal.stripped_description
 
     if GOAL_QUEUE_AVAILABLE:
         try:
             gq = GoalQueue()
-            gq.add(goal.description)
+            gq.add(description)
         except Exception as exc:
             log_json("ERROR", "goal_add_failed", details={"error": str(exc)})
             raise HTTPException(status_code=500, detail=f"Failed to persist goal: {exc}") from exc
 
     now = datetime.utcnow().isoformat()
     new_goal: Dict[str, Any] = {
-        "id": f"goal-new-{hash(goal.description) & 0xFFFFFFFF}",
-        "description": goal.description,
+        "id": f"goal-new-{hash(description) & 0xFFFFFFFF}",
+        "description": description,
         "status": "pending",
         "priority": goal.priority,
         "created_at": now,
@@ -596,10 +603,9 @@ async def delete_goal(goal_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=503, detail="Goal queue unavailable")
 
     gq = GoalQueue()
-    queue_list = list(gq.queue)
 
     # Check if in-flight — cannot cancel
-    for desc in list(gq._in_flight.keys()):
+    for desc in gq.in_flight_keys():
         if _goal_id_for_inflight(desc) == goal_id:
             raise HTTPException(
                 status_code=409,
@@ -608,7 +614,7 @@ async def delete_goal(goal_id: str, user: dict = Depends(get_current_user)):
 
     # Find in queue
     target_idx: Optional[int] = None
-    for idx, desc in enumerate(queue_list):
+    for idx, desc in enumerate(gq.queue):
         if _goal_id_for_queued(idx, desc) == goal_id:
             target_idx = idx
             break
@@ -616,10 +622,7 @@ async def delete_goal(goal_id: str, user: dict = Depends(get_current_user)):
     if target_idx is None:
         raise HTTPException(status_code=404, detail=f"Pending goal '{goal_id}' not found in queue")
 
-    removed = queue_list.pop(target_idx)
-    from collections import deque
-    gq.queue = deque(queue_list)
-    gq._save_queue()
+    removed = gq.cancel(target_idx)
     log_json("INFO", "goal_cancelled_via_api", details={"goal_id": goal_id, "description": str(removed)[:120]})
 
     await manager.broadcast({"type": "goal_updated", "payload": {"id": goal_id, "status": "cancelled"}})
@@ -642,15 +645,14 @@ async def prioritize_goal(goal_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=503, detail="Goal queue unavailable")
 
     gq = GoalQueue()
-    queue_list = list(gq.queue)
 
     # Reject in-flight
-    for desc in list(gq._in_flight.keys()):
+    for desc in gq.in_flight_keys():
         if _goal_id_for_inflight(desc) == goal_id:
             raise HTTPException(status_code=409, detail="Goal is currently running; cannot reprioritize.")
 
     target_idx: Optional[int] = None
-    for idx, desc in enumerate(queue_list):
+    for idx, desc in enumerate(gq.queue):
         if _goal_id_for_queued(idx, desc) == goal_id:
             target_idx = idx
             break
@@ -661,12 +663,7 @@ async def prioritize_goal(goal_id: str, user: dict = Depends(get_current_user)):
     if target_idx == 0:
         return GoalPrioritizeResponse(success=True, id=goal_id, position=0, message="Goal is already at the front.")
 
-    # Move to front
-    promoted = queue_list.pop(target_idx)
-    queue_list.insert(0, promoted)
-    from collections import deque
-    gq.queue = deque(queue_list)
-    gq._save_queue()
+    promoted = gq.promote(target_idx)
     log_json("INFO", "goal_prioritized_via_api", details={"goal_id": goal_id, "description": str(promoted)[:120]})
 
     await manager.broadcast({"type": "goal_updated", "payload": {"id": goal_id, "position": 0}})

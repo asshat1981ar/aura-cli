@@ -14,11 +14,12 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, Request, Header, Body
+from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, Request, Header, Body, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 
 from core.logging_utils import log_json
 
@@ -40,6 +41,81 @@ try:
     AUTH_AVAILABLE = True
 except ImportError:
     AUTH_AVAILABLE = False
+
+
+# ---------------------------------------------------------------------------
+# Pydantic models for goal management API
+# ---------------------------------------------------------------------------
+
+class GoalCreate(BaseModel):
+    """Request body for enqueuing a new goal."""
+
+    description: str = Field(..., min_length=1, description="Natural-language goal description.")
+    priority: int = Field(1, ge=1, le=10, description="Priority level (1 = highest).")
+    max_cycles: int = Field(10, ge=1, description="Maximum loop cycles for this goal.")
+
+    model_config = {"json_schema_extra": {"example": {"description": "Refactor goal queue", "priority": 1, "max_cycles": 5}}}
+
+
+class GoalCycleRecord(BaseModel):
+    """A single cycle record for a goal's execution history."""
+
+    cycle: int
+    phase: Optional[str] = None
+    outcome: Optional[str] = None
+    duration_s: Optional[float] = None
+    timestamp: Optional[str] = None
+
+
+class GoalResponse(BaseModel):
+    """Response model for a queued/active/completed goal."""
+
+    id: str = Field(..., description="Unique stable goal identifier.")
+    description: str
+    status: str = Field(..., description="pending | running | completed | failed | cancelled")
+    priority: int = 1
+    created_at: str
+    updated_at: str
+    progress: int = Field(0, ge=0, le=100)
+    cycles: int = 0
+    max_cycles: int = 10
+
+    model_config = {"json_schema_extra": {"example": {"id": "goal-q-0", "description": "Refactor queue", "status": "pending", "priority": 1, "created_at": "2024-01-01T00:00:00", "updated_at": "2024-01-01T00:00:00", "progress": 0, "cycles": 0, "max_cycles": 10}}}
+
+
+class GoalDetailResponse(GoalResponse):
+    """Extended goal response that includes per-cycle execution history."""
+
+    history: List[GoalCycleRecord] = Field(default_factory=list, description="Per-cycle execution records.")
+
+
+class GoalPrioritizeResponse(BaseModel):
+    """Response after moving a goal to the front of the queue."""
+
+    success: bool
+    id: str
+    position: int = Field(0, description="New zero-based queue position (0 = front).")
+    message: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers for goal identity
+# ---------------------------------------------------------------------------
+
+def _goal_id_for_queued(index: int, description: str) -> str:
+    """Stable ID for a goal sitting in the queue at *index*."""
+    return f"goal-q-{index}"
+
+
+def _goal_id_for_inflight(description: str) -> str:
+    """Stable ID for an in-flight goal."""
+    return f"goal-f-{hash(description) & 0xFFFFFFFF}"
+
+
+def _goal_id_for_archived(description: str) -> str:
+    """Stable ID for a completed/archived goal."""
+    return f"goal-a-{hash(description) & 0xFFFFFFFF}"
+
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -363,56 +439,245 @@ async def login(credentials: dict):
         "user": user.to_dict(),
     }
 
-# Goals endpoints
-@app.get("/api/goals")
-async def get_goals(user: dict = Depends(get_current_user)):
-    """Get all goals from queue and archive."""
+# ---------------------------------------------------------------------------
+# Goals endpoints — full CRUD with Pydantic models
+# ---------------------------------------------------------------------------
+
+@app.get(
+    "/api/goals",
+    response_model=List[GoalResponse],
+    summary="List goals",
+    tags=["goals"],
+)
+async def get_goals(
+    status: Optional[str] = Query(None, description="Filter by status: pending, running, completed, failed"),
+    user: dict = Depends(get_current_user),
+):
+    """Return all goals from the queue and archive, optionally filtered by *status*.
+
+    - **pending** — goals waiting in the queue
+    - **running** — goals currently in-flight
+    - **completed / failed** — goals from the archive
+    """
     queue_data = get_goal_queue_data()
     archive = get_goal_archive()
     goals = format_goals_for_api(queue_data, archive)
+    if status:
+        goals = [g for g in goals if g.get("status") == status]
     return goals
 
-@app.post("/api/goals")
-async def create_goal(goal: dict, user: dict = Depends(get_current_user)):
-    """Create a new goal and add to queue."""
-    description = goal.get("description", "")
-    
-    # Add to actual goal queue if available
+
+@app.post(
+    "/api/goals",
+    response_model=GoalResponse,
+    status_code=201,
+    summary="Enqueue a new goal",
+    tags=["goals"],
+)
+async def create_goal(goal: GoalCreate, user: dict = Depends(get_current_user)):
+    """Enqueue a new goal.  The goal is persisted immediately via :class:`GoalQueue`."""
+    if not goal.description.strip():
+        raise HTTPException(status_code=422, detail="description must not be empty")
+
     if GOAL_QUEUE_AVAILABLE:
         try:
             gq = GoalQueue()
-            gq.add(description)
-        except Exception as e:
-            log_json("ERROR", "goal_add_failed", {"error": str(e)})
-    
-    new_goal = {
-        "id": f"goal-new-{hash(description) & 0xFFFFFFFF}",
-        "description": description,
+            gq.add(goal.description)
+        except Exception as exc:
+            log_json("ERROR", "goal_add_failed", details={"error": str(exc)})
+            raise HTTPException(status_code=500, detail=f"Failed to persist goal: {exc}") from exc
+
+    now = datetime.utcnow().isoformat()
+    new_goal: Dict[str, Any] = {
+        "id": f"goal-new-{hash(goal.description) & 0xFFFFFFFF}",
+        "description": goal.description,
         "status": "pending",
-        "priority": goal.get("priority", 1),
-        "created_at": datetime.utcnow().isoformat(),
-        "updated_at": datetime.utcnow().isoformat(),
+        "priority": goal.priority,
+        "created_at": now,
+        "updated_at": now,
         "progress": 0,
         "cycles": 0,
-        "max_cycles": 10,
+        "max_cycles": goal.max_cycles,
     }
-    
-    await manager.broadcast({
-        "type": "goal_created",
-        "payload": new_goal,
-    })
-    
+    await manager.broadcast({"type": "goal_created", "payload": new_goal})
     return new_goal
 
+
+@app.get(
+    "/api/goals/{goal_id}",
+    response_model=GoalDetailResponse,
+    summary="Get goal detail",
+    tags=["goals"],
+)
+async def get_goal_detail(goal_id: str, user: dict = Depends(get_current_user)):
+    """Return a single goal by ID, including its per-cycle execution history when available."""
+    queue_data = get_goal_queue_data()
+    archive = get_goal_archive()
+
+    # Search queued goals
+    for idx, desc in enumerate(queue_data.get("queue", [])):
+        if _goal_id_for_queued(idx, desc) == goal_id:
+            now = datetime.utcnow().isoformat()
+            return {
+                "id": goal_id,
+                "description": desc,
+                "status": "pending",
+                "priority": 1,
+                "created_at": now,
+                "updated_at": now,
+                "progress": 0,
+                "cycles": 0,
+                "max_cycles": 10,
+                "history": [],
+            }
+
+    # Search in-flight goals
+    for desc, ts in queue_data.get("in_flight", {}).items():
+        if _goal_id_for_inflight(desc) == goal_id:
+            created = datetime.fromtimestamp(ts).isoformat() if ts else datetime.utcnow().isoformat()
+            return {
+                "id": goal_id,
+                "description": desc,
+                "status": "running",
+                "priority": 1,
+                "created_at": created,
+                "updated_at": datetime.utcnow().isoformat(),
+                "progress": 50,
+                "cycles": 1,
+                "max_cycles": 10,
+                "history": [],
+            }
+
+    # Search archive
+    for entry in archive:
+        goal_val = entry.get("goal", {})
+        desc = goal_val if isinstance(goal_val, str) else str(goal_val)
+        if _goal_id_for_archived(desc) == goal_id:
+            ts = entry.get("timestamp", datetime.utcnow().isoformat())
+            raw_history = entry.get("history", [])
+            history = [
+                GoalCycleRecord(
+                    cycle=i + 1,
+                    phase=rec.get("phase"),
+                    outcome=rec.get("outcome"),
+                    duration_s=rec.get("duration_s"),
+                    timestamp=rec.get("timestamp"),
+                )
+                for i, rec in enumerate(raw_history)
+            ]
+            return {
+                "id": goal_id,
+                "description": desc,
+                "status": entry.get("status", "completed"),
+                "priority": 1,
+                "created_at": ts,
+                "updated_at": ts,
+                "progress": 100,
+                "cycles": entry.get("cycles", len(history)),
+                "max_cycles": 10,
+                "history": [h.model_dump() for h in history],
+            }
+
+    raise HTTPException(status_code=404, detail=f"Goal '{goal_id}' not found")
+
+
+@app.delete(
+    "/api/goals/{goal_id}",
+    summary="Cancel a pending goal",
+    tags=["goals"],
+)
+async def delete_goal(goal_id: str, user: dict = Depends(get_current_user)):
+    """Remove a *pending* goal from the queue.
+
+    Returns **404** if the goal is not found and **409** if it is already
+    in-flight (cannot be cancelled without interrupting the running loop).
+    """
+    if not GOAL_QUEUE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Goal queue unavailable")
+
+    gq = GoalQueue()
+    queue_list = list(gq.queue)
+
+    # Check if in-flight — cannot cancel
+    for desc in list(gq._in_flight.keys()):
+        if _goal_id_for_inflight(desc) == goal_id:
+            raise HTTPException(
+                status_code=409,
+                detail="Goal is currently running and cannot be cancelled. Wait for it to finish or restart the AURA process.",
+            )
+
+    # Find in queue
+    target_idx: Optional[int] = None
+    for idx, desc in enumerate(queue_list):
+        if _goal_id_for_queued(idx, desc) == goal_id:
+            target_idx = idx
+            break
+
+    if target_idx is None:
+        raise HTTPException(status_code=404, detail=f"Pending goal '{goal_id}' not found in queue")
+
+    removed = queue_list.pop(target_idx)
+    from collections import deque
+    gq.queue = deque(queue_list)
+    gq._save_queue()
+    log_json("INFO", "goal_cancelled_via_api", details={"goal_id": goal_id, "description": str(removed)[:120]})
+
+    await manager.broadcast({"type": "goal_updated", "payload": {"id": goal_id, "status": "cancelled"}})
+    return {"success": True, "id": goal_id, "description": removed}
+
+
+@app.post(
+    "/api/goals/{goal_id}/prioritize",
+    response_model=GoalPrioritizeResponse,
+    summary="Move a goal to the front of the queue",
+    tags=["goals"],
+)
+async def prioritize_goal(goal_id: str, user: dict = Depends(get_current_user)):
+    """Promote a pending goal to position 0 (front of the queue).
+
+    Returns **404** if the goal is not found, **409** if it is already
+    in-flight, and **200** with ``position=0`` if already at the front.
+    """
+    if not GOAL_QUEUE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Goal queue unavailable")
+
+    gq = GoalQueue()
+    queue_list = list(gq.queue)
+
+    # Reject in-flight
+    for desc in list(gq._in_flight.keys()):
+        if _goal_id_for_inflight(desc) == goal_id:
+            raise HTTPException(status_code=409, detail="Goal is currently running; cannot reprioritize.")
+
+    target_idx: Optional[int] = None
+    for idx, desc in enumerate(queue_list):
+        if _goal_id_for_queued(idx, desc) == goal_id:
+            target_idx = idx
+            break
+
+    if target_idx is None:
+        raise HTTPException(status_code=404, detail=f"Pending goal '{goal_id}' not found in queue")
+
+    if target_idx == 0:
+        return GoalPrioritizeResponse(success=True, id=goal_id, position=0, message="Goal is already at the front.")
+
+    # Move to front
+    promoted = queue_list.pop(target_idx)
+    queue_list.insert(0, promoted)
+    from collections import deque
+    gq.queue = deque(queue_list)
+    gq._save_queue()
+    log_json("INFO", "goal_prioritized_via_api", details={"goal_id": goal_id, "description": str(promoted)[:120]})
+
+    await manager.broadcast({"type": "goal_updated", "payload": {"id": goal_id, "position": 0}})
+    return GoalPrioritizeResponse(success=True, id=goal_id, position=0, message="Goal moved to front of queue.")
+
+
 @app.post("/api/goals/{goal_id}/cancel")
-async def cancel_goal(goal_id: str, user: dict = Depends(get_current_user)):
-    """Cancel a running goal."""
-    # Note: Actual cancellation would require modifying the goal queue
-    await manager.broadcast({
-        "type": "goal_updated",
-        "payload": {"id": goal_id, "status": "failed"},
-    })
-    return {"success": True}
+async def cancel_goal_legacy(goal_id: str, user: dict = Depends(get_current_user)):
+    """Cancel a goal (legacy alias for DELETE /api/goals/{goal_id})."""
+    return await delete_goal(goal_id, user)
+
 
 # Agents endpoints
 @app.get("/api/agents")

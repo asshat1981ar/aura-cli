@@ -82,6 +82,10 @@ Known record codes:
 - [`mcp`](#mcp)
   - [`aura mcp tools`](#aura-mcp-tools)
   - [`aura mcp call`](#aura-mcp-call)
+  - [`aura mcp status`](#aura-mcp-status)
+  - [`aura mcp restart`](#aura-mcp-restart)
+- [`beads`](#beads)
+  - [`aura beads schemas`](#aura-beads-schemas)
 - [`scaffold`](#scaffold)
 - [`evolve`](#evolve)
 - [`queue`](#queue)
@@ -396,6 +400,52 @@ Legacy flags:
 Examples:
 - `python3 main.py mcp call limits`
 - `python3 main.py mcp call tail_logs --args '{"lines": 10}'`
+
+### `aura mcp status`
+
+Show MCP server health dashboard
+
+Query all registered MCP servers and render a Rich table showing server name, endpoint URL, health status, last heartbeat, average response latency, and tool count.
+
+`action`: `mcp_status` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py mcp status`
+
+### `aura mcp restart`
+
+Restart / validate an MCP server
+
+Trigger a manual health validation pass for a named MCP server. Pass the server config-name (e.g. 'dev_tools', 'skills').
+
+`action`: `mcp_restart` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py mcp restart dev_tools`
+- `python3 main.py mcp restart skills`
+
+## `beads`
+
+### `aura beads`
+
+BEADS contract commands
+
+Inspect and validate BEADS schema contracts.
+
+Examples:
+- `python3 main.py beads schemas`
+
+### `aura beads schemas`
+
+List registered BEADS schemas
+
+Print a table of all BEADS schema contracts registered in .beads/. Includes schema version, TypedDict names, and interaction count.
+
+`action`: `beads_schemas` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py beads schemas`
+- `python3 main.py beads schemas --json`
 
 ## `scaffold`
 

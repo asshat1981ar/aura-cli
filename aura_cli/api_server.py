@@ -427,6 +427,110 @@ async def get_agent_logs(agent_id: str, user: dict = Depends(get_current_user)):
     agent_logs = [t for t in telemetry if t.get("agent_name") == agent_id]
     return agent_logs[:50]  # Last 50 entries
 
+@app.get("/api/agents/{agent_id}/metrics")
+async def get_agent_metrics(agent_id: str, user: dict = Depends(get_current_user)):
+    """Get detailed metrics for a specific agent."""
+    telemetry = get_telemetry_data()
+    agent_telemetry = [t for t in telemetry if t.get("agent_name") == agent_id]
+    
+    if not agent_telemetry:
+        return {
+            "agent_id": agent_id,
+            "total_executions": 0,
+            "success_rate": 0,
+            "avg_latency_ms": 0,
+            "total_tokens": 0,
+            "errors": 0
+        }
+    
+    total = len(agent_telemetry)
+    successes = len([t for t in agent_telemetry if t.get("status") == "success"])
+    errors = len([t for t in agent_telemetry if t.get("status") == "error"])
+    latencies = [t.get("latency", 0) for t in agent_telemetry if t.get("latency")]
+    tokens = [t.get("tokens", 0) for t in agent_telemetry if t.get("tokens")]
+    
+    return {
+        "agent_id": agent_id,
+        "total_executions": total,
+        "success_rate": round(successes / total * 100, 1) if total > 0 else 0,
+        "avg_latency_ms": round(sum(latencies) / len(latencies), 2) if latencies else 0,
+        "total_tokens": sum(tokens),
+        "errors": errors,
+        "last_execution": agent_telemetry[-1].get("timestamp") if agent_telemetry else None
+    }
+
+@app.get("/api/agents/{agent_id}/history")
+async def get_agent_history(agent_id: str, limit: int = 20, user: dict = Depends(get_current_user)):
+    """Get execution history for an agent."""
+    telemetry = get_telemetry_data()
+    agent_history = [t for t in telemetry if t.get("agent_name") == agent_id]
+    return agent_history[:limit]
+
+@app.post("/api/agents/{agent_id}/pause")
+async def pause_agent(agent_id: str, user: dict = Depends(get_current_user)):
+    """Pause an agent (simulated)."""
+    log_json("INFO", "agent_pause_requested", {"agent_id": agent_id})
+    await manager.broadcast({
+        "type": "agent_paused",
+        "agent_id": agent_id,
+        "timestamp": datetime.utcnow().isoformat()
+    })
+    return {"success": True, "agent_id": agent_id, "status": "paused"}
+
+@app.post("/api/agents/{agent_id}/resume")
+async def resume_agent(agent_id: str, user: dict = Depends(get_current_user)):
+    """Resume a paused agent (simulated)."""
+    log_json("INFO", "agent_resume_requested", {"agent_id": agent_id})
+    await manager.broadcast({
+        "type": "agent_resumed",
+        "agent_id": agent_id,
+        "timestamp": datetime.utcnow().isoformat()
+    })
+    return {"success": True, "agent_id": agent_id, "status": "active"}
+
+@app.post("/api/agents/{agent_id}/restart")
+async def restart_agent(agent_id: str, user: dict = Depends(get_current_user)):
+    """Restart an agent (simulated)."""
+    log_json("INFO", "agent_restart_requested", {"agent_id": agent_id})
+    await manager.broadcast({
+        "type": "agent_restarted",
+        "agent_id": agent_id,
+        "timestamp": datetime.utcnow().isoformat()
+    })
+    return {"success": True, "agent_id": agent_id, "status": "restarting"}
+
+@app.get("/api/agents/overview")
+async def get_agents_overview(user: dict = Depends(get_current_user)):
+    """Get comprehensive overview of all agents."""
+    agents = get_agents_from_registry()
+    telemetry = get_telemetry_data()
+    
+    overview = []
+    for agent in agents:
+        agent_id = agent.get("id", "unknown")
+        agent_telemetry = [t for t in telemetry if t.get("agent_name") == agent_id]
+        
+        total = len(agent_telemetry)
+        successes = len([t for t in agent_telemetry if t.get("status") == "success"])
+        
+        overview.append({
+            "id": agent_id,
+            "name": agent.get("name", agent_id),
+            "type": agent.get("type", "unknown"),
+            "status": agent.get("status", "idle"),
+            "capabilities": agent.get("capabilities", []),
+            "metrics": {
+                "total_executions": total,
+                "success_rate": round(successes / total * 100, 1) if total > 0 else 0,
+                "avg_latency_ms": round(
+                    sum(t.get("latency", 0) for t in agent_telemetry) / total, 2
+                ) if total > 0 else 0
+            },
+            "last_active": agent_telemetry[-1].get("timestamp") if agent_telemetry else None
+        })
+    
+    return overview
+
 # Telemetry endpoint
 @app.get("/api/telemetry")
 async def get_telemetry(user: dict = Depends(get_current_user)):
@@ -806,6 +910,150 @@ async def activate_workflow(workflow_id: str, user: dict = Depends(get_current_u
 async def deactivate_workflow(workflow_id: str, user: dict = Depends(get_current_user)):
     """Deactivate a workflow."""
     return {"success": True, "workflow_id": workflow_id, "active": False}
+
+# ============================================================================
+# MCP Server Endpoints
+# ============================================================================
+
+MCP_CONFIG_PATH = Path("/home/westonaaron675/aura-cli/.mcp.json")
+
+# In-memory MCP tool cache (would be populated by actual MCP server discovery)
+mcp_tools_cache: Dict[str, List[Dict]] = {}
+
+@app.get("/api/mcp/servers")
+async def get_mcp_servers(user: dict = Depends(get_current_user)):
+    """Get all configured MCP servers."""
+    try:
+        if not MCP_CONFIG_PATH.exists():
+            return []
+        
+        config = json.loads(MCP_CONFIG_PATH.read_text())
+        servers = []
+        
+        for name, server_config in config.get("mcpServers", {}).items():
+            server_info = {
+                "id": name,
+                "name": name.replace("-", " ").replace("_", " ").title(),
+                "type": server_config.get("type", "stdio"),
+                "status": "connected",  # Simulated for now
+                "tools_count": len(mcp_tools_cache.get(name, [])),
+                "config": {
+                    "command": server_config.get("command"),
+                    "args": server_config.get("args", [])[:2] if server_config.get("args") else [],
+                    "url": server_config.get("url"),
+                }
+            }
+            servers.append(server_info)
+        
+        return sorted(servers, key=lambda x: x["name"])
+    except Exception as e:
+        log_json("ERROR", "api_server_error", details={"msg": f"Error loading MCP config: {e}"})
+        return []
+
+@app.get("/api/mcp/servers/{server_id}/tools")
+async def get_mcp_tools(server_id: str, user: dict = Depends(get_current_user)):
+    """Get tools available from an MCP server."""
+    # Simulated tool definitions for common MCP servers
+    tool_catalog = {
+        "filesystem": [
+            {"name": "read_file", "description": "Read contents of a file", "parameters": {"path": {"type": "string", "description": "File path"}}},
+            {"name": "write_file", "description": "Write content to a file", "parameters": {"path": {"type": "string"}, "content": {"type": "string"}}},
+            {"name": "list_directory", "description": "List contents of a directory", "parameters": {"path": {"type": "string"}}},
+            {"name": "search_files", "description": "Search for files matching a pattern", "parameters": {"pattern": {"type": "string"}}},
+        ],
+        "brave-search": [
+            {"name": "web_search", "description": "Search the web using Brave", "parameters": {"query": {"type": "string", "description": "Search query"}}},
+            {"name": "local_search", "description": "Search for local businesses", "parameters": {"query": {"type": "string"}, "location": {"type": "string"}}},
+        ],
+        "github": [
+            {"name": "search_repositories", "description": "Search GitHub repositories", "parameters": {"query": {"type": "string"}}},
+            {"name": "get_file_contents", "description": "Get contents of a repository file", "parameters": {"owner": {"type": "string"}, "repo": {"type": "string"}, "path": {"type": "string"}}},
+            {"name": "create_issue", "description": "Create a GitHub issue", "parameters": {"owner": {"type": "string"}, "repo": {"type": "string"}, "title": {"type": "string"}, "body": {"type": "string"}}},
+        ],
+        "memory": [
+            {"name": "add_memory", "description": "Store a memory", "parameters": {"content": {"type": "string"}, "tags": {"type": "array"}}},
+            {"name": "search_memories", "description": "Search stored memories", "parameters": {"query": {"type": "string"}}},
+            {"name": "get_memory", "description": "Get a specific memory by ID", "parameters": {"id": {"type": "string"}}},
+        ],
+        "sequential-thinking": [
+            {"name": "think", "description": "Perform sequential thinking", "parameters": {"thought": {"type": "string"}, "thought_number": {"type": "number"}, "total_thoughts": {"type": "number"}}},
+        ],
+        "playwright": [
+            {"name": "browser_navigate", "description": "Navigate to a URL", "parameters": {"url": {"type": "string"}}},
+            {"name": "browser_click", "description": "Click an element", "parameters": {"selector": {"type": "string"}}},
+            {"name": "browser_screenshot", "description": "Take a screenshot", "parameters": {"path": {"type": "string"}}},
+            {"name": "browser_get_text", "description": "Get text content from page", "parameters": {}},
+        ],
+        "puppeteer": [
+            {"name": "puppeteer_navigate", "description": "Navigate to a URL", "parameters": {"url": {"type": "string"}}},
+            {"name": "puppeteer_screenshot", "description": "Take a screenshot", "parameters": {"path": {"type": "string"}}},
+            {"name": "puppeteer_click", "description": "Click an element", "parameters": {"selector": {"type": "string"}}},
+        ],
+        "context7": [
+            {"name": "search_code", "description": "Search code with Context7", "parameters": {"query": {"type": "string"}, "language": {"type": "string"}}},
+        ],
+        "n8n-mcp": [
+            {"name": "list_workflows", "description": "List n8n workflows", "parameters": {}},
+            {"name": "execute_workflow", "description": "Execute an n8n workflow", "parameters": {"workflow_id": {"type": "string"}, "data": {"type": "object"}}},
+            {"name": "get_execution_status", "description": "Get workflow execution status", "parameters": {"execution_id": {"type": "string"}}},
+        ],
+        "aura-dev-tools": [
+            {"name": "run_tests", "description": "Run test suite", "parameters": {"pattern": {"type": "string"}}},
+            {"name": "lint_code", "description": "Run linter", "parameters": {"path": {"type": "string"}}},
+            {"name": "format_code", "description": "Format code", "parameters": {"path": {"type": "string"}}},
+        ],
+        "aura-skills": [
+            {"name": "list_skills", "description": "List available skills", "parameters": {}},
+            {"name": "load_skill", "description": "Load a skill", "parameters": {"skill_name": {"type": "string"}}},
+            {"name": "execute_skill", "description": "Execute a skill", "parameters": {"skill_name": {"type": "string"}, "parameters": {"type": "object"}}},
+        ],
+        "everything": [
+            {"name": "echo", "description": "Echo a message", "parameters": {"message": {"type": "string"}}},
+            {"name": "add", "description": "Add two numbers", "parameters": {"a": {"type": "number"}, "b": {"type": "number"}}},
+        ],
+    }
+    
+    tools = tool_catalog.get(server_id, [])
+    return {"server_id": server_id, "tools": tools}
+
+@app.post("/api/mcp/servers/{server_id}/tools/{tool_name}/execute")
+async def execute_mcp_tool(server_id: str, tool_name: str, payload: dict = Body(default={})):
+    """Execute an MCP tool."""
+    execution_id = str(uuid.uuid4())
+    log_json("INFO", "mcp_tool_execute", {"server_id": server_id, "tool_name": tool_name, "execution_id": execution_id})
+    
+    # Simulate execution
+    await asyncio.sleep(0.5)
+    
+    result = {
+        "execution_id": execution_id,
+        "server_id": server_id,
+        "tool_name": tool_name,
+        "status": "success",
+        "result": payload,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    
+    await manager.broadcast({
+        "type": "mcp_tool_executed",
+        "server_id": server_id,
+        "tool_name": tool_name,
+        "execution_id": execution_id,
+        "timestamp": datetime.utcnow().isoformat()
+    })
+    
+    return result
+
+@app.get("/api/mcp/servers/{server_id}/status")
+async def get_mcp_server_status(server_id: str, user: dict = Depends(get_current_user)):
+    """Get MCP server connection status."""
+    return {
+        "server_id": server_id,
+        "status": "connected",
+        "uptime": "2h 15m",
+        "last_ping": datetime.utcnow().isoformat(),
+        "tools_available": True
+    }
 
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")

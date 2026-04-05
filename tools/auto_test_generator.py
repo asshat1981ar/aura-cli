@@ -15,12 +15,11 @@ Example:
 
 import argparse
 import json
-import os
 import re
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional
 from datetime import datetime
 
 # Add parent directory to path for imports
@@ -251,7 +250,6 @@ class AutoTestGenerator:
         """
         test_cases = []
         function_name = gap["function_name"]
-        docstring = self._extract_docstring(source_code)
         
         # Check for common patterns in the code
         has_error_handling = "try:" in source_code or "raise" in source_code
@@ -308,24 +306,16 @@ class AutoTestGenerator:
     ) -> str:
         """Generate actual Python test code."""
         function_name = gap["function_name"]
-        file_path = gap["file_path"]
-        module_path = file_path.replace("/", ".").replace(".py", "")
         is_async = func_sig.get("is_async", False)
-        
-        # Generate imports
-        imports = [
-            "import pytest",
-            f"from {module_path} import {function_name}"
-        ]
         
         # Generate test code
         test_code_lines = [f"def {test_case['name']}():"]
-        test_code_lines.append(f'    \"\"\"')
+        test_code_lines.append('    \"\"\"')
         test_code_lines.append(f'    {test_case["description"]}')
         test_code_lines.append(f'    Gap ID: {gap["id"]}')
         test_code_lines.append(f'    Severity: {gap["severity"]}')
         test_code_lines.append(f'    Impact Score: {gap["impact_score"]}')
-        test_code_lines.append(f'    \"\"\"')
+        test_code_lines.append('    \"\"\"')
         test_code_lines.append("")
         
         # Arrange
@@ -676,7 +666,7 @@ def main():
         for file_path in written_files:
             print(f"   - {file_path}")
         
-        print(f"\n📊 Summary:")
+        print("\n📊 Summary:")
         print(f"   Total suites: {report['total_suites']}")
         print(f"   Total tests: {report['total_tests']}")
         print(f"   Coverage gaps processed: {report['coverage_gaps_processed']}")

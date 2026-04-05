@@ -37,6 +37,7 @@ class TestResolveProjectRoot:
             
             assert result == Path.cwd()
     
+    @patch.dict(os.environ, {"AURA_SKIP_CHDIR": "0"})
     @patch('os.chdir')
     def test_default_resolution(self, mock_chdir):
         """Test default project root resolution."""
@@ -275,7 +276,7 @@ class TestMain:
         
         assert result == 2
         # Should print JSON
-        printed_args = [call for call in mock_print.call_args_list]
+        printed_args = list(mock_print.call_args_list)
         assert len(printed_args) > 0
     
     @patch('aura_cli.entrypoint._resolve_project_root')

@@ -69,6 +69,16 @@ class GoalQueue:
             self.queue.appendleft(goal)
         self._save_queue()
 
+    @staticmethod
+    def _goal_key(goal) -> str:
+        """Return a stable string key for *goal* usable as a dict key."""
+        if isinstance(goal, str):
+            return goal
+        try:
+            return json.dumps(goal, sort_keys=True, default=str)
+        except Exception:
+            return str(goal)
+
     def next(self):
         """
         Retrieves the next goal from the front of the queue and moves it to
@@ -82,7 +92,7 @@ class GoalQueue:
         """
         if self.queue:
             goal = self.queue.popleft()
-            self._in_flight[goal] = time.time()
+            self._in_flight[self._goal_key(goal)] = time.time()
             self._save_queue()
             return goal
 
@@ -112,8 +122,9 @@ class GoalQueue:
         Args:
             goal: The goal that finished successfully.
         """
-        if goal in self._in_flight:
-            del self._in_flight[goal]
+        key = self._goal_key(goal)
+        if key in self._in_flight:
+            del self._in_flight[key]
             self._save_queue()
             log_json("INFO", "goal_completed", details={"goal": str(goal)[:120]})
         else:
@@ -125,8 +136,9 @@ class GoalQueue:
         Args:
             goal: The goal that failed and should be retried.
         """
-        if goal in self._in_flight:
-            del self._in_flight[goal]
+        key = self._goal_key(goal)
+        if key in self._in_flight:
+            del self._in_flight[key]
         self.queue.appendleft(goal)
         self._save_queue()
         log_json("INFO", "goal_requeued_after_failure", details={"goal": str(goal)[:120]})

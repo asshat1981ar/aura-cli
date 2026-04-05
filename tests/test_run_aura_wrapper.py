@@ -66,7 +66,10 @@ def test_wrapper_add_uses_real_goal_add_path_without_heavy_runtime_startup():
         )
 
         assert result.returncode == 0
-        assert json.loads(queue_path.read_text(encoding="utf-8")) == ["Wrapper smoke goal"]
+        raw = json.loads(queue_path.read_text(encoding="utf-8"))
+        # Support both old list format and new {queue, in_flight} format
+        goals = raw if isinstance(raw, list) else raw.get("queue", raw)
+        assert goals == ["Wrapper smoke goal"]
         assert "vector_store_initialized" not in result.stderr
         assert "background_sync_started" not in result.stderr
 

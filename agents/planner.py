@@ -124,7 +124,7 @@ class PlannerAgent:
                 }
             }
             
-        except (json.JSONDecodeError, ValidationError) as e:
+        except (json.JSONDecodeError, ValidationError, TypeError, KeyError) as e:
             log_json("WARN", "planner_structured_parse_failed", details={
                 "error": str(e),
                 "response_snippet": response[:200]

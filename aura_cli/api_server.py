@@ -266,7 +266,7 @@ async def broadcast_updates():
             archive = get_goal_archive()
             goals = format_goals_for_api(queue_data, archive)
             agents = get_agents_from_registry()
-            telemetry = get_telemetry_data()
+            get_telemetry_data()  # called for side effects
             
             # Calculate stats
             pending = len([g for g in goals if g["status"] == "pending"])
@@ -325,7 +325,7 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         auth = get_auth_manager()
         user = auth.get_current_user(credentials.credentials)
         return user.to_dict()
-    except Exception as e:
+    except Exception:
         # Fall back to anonymous on error
         return {"username": "anonymous", "role": "admin"}
 

@@ -93,15 +93,15 @@ class TestVectorStoreSearchAppliesLimit(unittest.TestCase):
         import numpy as np
 
         # Guard: a previous test (test_optional_dependency_guards) may have left
-        # core.vector_store with np=_MissingPackage.  On Python 3.10, mock.patch
-        # propagates the resulting ImportError instead of catching it as an
-        # AttributeError, which causes a spurious failure.  Reload the module so
-        # it re-imports numpy now that it is available in sys.modules.
+        # core.vector_store with np=_MissingPackage.  Use identity comparison
+        # (not isinstance) to detect this — isinstance can fail when the
+        # _MissingPackage class comes from a different module instance.
+        # Also ensure sys.modules["numpy"] points to real numpy before reloading,
+        # so the reload doesn't create another _MissingPackage.
         vs_mod = sys.modules.get("core.vector_store")
-        if vs_mod is not None:
-            from core.vector_store import _MissingPackage as _MP
-            if isinstance(vs_mod.np, _MP):
-                importlib.reload(vs_mod)
+        if vs_mod is not None and vs_mod.np is not np:
+            sys.modules["numpy"] = np  # ensure real numpy is visible to the reload
+            importlib.reload(vs_mod)
 
         from core.vector_store import VectorStore, SEARCH_LIMIT
 

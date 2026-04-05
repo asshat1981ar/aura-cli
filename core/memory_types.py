@@ -14,10 +14,18 @@ class _MissingPackage:
         self._name = name
 
     def __getattr__(self, attr: str) -> None:
-        raise ImportError(f"Optional dependency '{self._name}' is required for this operation.")
+        # Raise AttributeError so that getattr(obj, name, default) falls back
+        # to the default correctly.  Python's getattr() only suppresses
+        # AttributeError, not ImportError, making ImportError here break
+        # unittest.mock.patch on Python 3.10.
+        raise AttributeError(
+            f"Optional dependency '{self._name}' is required for this operation."
+        )
 
     def __call__(self, *args: object, **kwargs: object) -> None:
-        raise ImportError(f"Optional dependency '{self._name}' is required for this operation.")
+        raise ImportError(
+            f"Optional dependency '{self._name}' is required for this operation."
+        )
 
 
 try:

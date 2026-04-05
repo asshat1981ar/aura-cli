@@ -1,0 +1,154 @@
+{
+  "generated_at": "/home/westonaaron675/aura-cli",
+  "project_root": "/home/westonaaron675/aura-cli",
+  "statistics": {
+    "total_gaps": 47,
+    "filtered_gaps": 47,
+    "files_affected": 12,
+    "severity_breakdown": {
+      "critical": 3,
+      "high": 8,
+      "medium": 18,
+      "low": 18
+    },
+    "average_complexity": 8.5,
+    "average_impact": 52.3
+  },
+  "gaps": [
+    {
+      "id": "gap_0001",
+      "file_path": "core/orchestrator.py",
+      "function_name": "run_simulation",
+      "line_number": 245,
+      "complexity": 18,
+      "impact_score": 92.5,
+      "severity": "critical",
+      "reason": "Large untested function",
+      "lines_of_code": 45,
+      "callers": ["run_cycle", "plan_phase"],
+      "dependencies": ["SimulationEngine", "OutcomeAnalyzer"]
+    },
+    {
+      "id": "gap_0002",
+      "file_path": "core/knowledge/base.py",
+      "function_name": "_generate_embedding",
+      "line_number": 128,
+      "complexity": 15,
+      "impact_score": 88.0,
+      "severity": "critical",
+      "reason": "Private method needs testing",
+      "lines_of_code": 32,
+      "callers": ["add", "query"],
+      "dependencies": ["EmbeddingProvider"]
+    },
+    {
+      "id": "gap_0003",
+      "file_path": "agents/adversarial/agent.py",
+      "function_name": "_run_strategies",
+      "line_number": 89,
+      "complexity": 12,
+      "impact_score": 85.5,
+      "severity": "high",
+      "reason": "Complex branching untested",
+      "lines_of_code": 38,
+      "callers": ["critique"],
+      "dependencies": ["StrategyRegistry"]
+    },
+    {
+      "id": "gap_0004",
+      "file_path": "core/voting/engine.py",
+      "function_name": "_collect_votes",
+      "line_number": 156,
+      "complexity": 14,
+      "impact_score": 82.0,
+      "severity": "high",
+      "reason": "Async complexity untested",
+      "lines_of_code": 41,
+      "callers": ["vote"],
+      "dependencies": ["ModelAdapter"]
+    },
+    {
+      "id": "gap_0005",
+      "file_path": "core/orchestrator.py",
+      "function_name": "attach_enhanced_features",
+      "line_number": 89,
+      "complexity": 9,
+      "impact_score": 78.5,
+      "severity": "high",
+      "reason": "Integration point untested",
+      "lines_of_code": 28,
+      "callers": ["__init__"],
+      "dependencies": ["SimulationEngine", "KnowledgeBase"]
+    },
+    {
+      "id": "gap_0006",
+      "file_path": "simulation/engine.py",
+      "function_name": "_generate_scenarios",
+      "line_number": 201,
+      "complexity": 11,
+      "impact_score": 76.0,
+      "severity": "high",
+      "reason": "Scenario generation logic untested",
+      "lines_of_code": 35,
+      "callers": ["run_simulation"],
+      "dependencies": []
+    },
+    {
+      "id": "gap_0007",
+      "file_path": "core/knowledge/store.py",
+      "function_name": "semantic_search",
+      "line_number": 178,
+      "complexity": 13,
+      "impact_score": 74.5,
+      "severity": "high",
+      "reason": "Search algorithm untested",
+      "lines_of_code": 39,
+      "callers": ["query"],
+      "dependencies": ["VectorStore"]
+    },
+    {
+      "id": "gap_0008",
+      "file_path": "agents/adversarial/agent.py",
+      "function_name": "_synthesize_critiques",
+      "line_number": 134,
+      "complexity": 10,
+      "impact_score": 71.0,
+      "severity": "high",
+      "reason": "Result aggregation untested",
+      "lines_of_code": 26,
+      "callers": ["critique"],
+      "dependencies": []
+    },
+    {
+      "id": "gap_0009",
+      "file_path": "core/orchestrator.py",
+      "function_name": "_dispatch_task",
+      "line_number": 312,
+      "complexity": 16,
+      "impact_score": 68.5,
+      "severity": "medium",
+      "reason": "Async dispatch logic",
+      "lines_of_code": 52,
+      "callers": ["run_cycle"],
+      "dependencies": ["AsyncRunner"]
+    },
+    {
+      "id": "gap_0010",
+      "file_path": "core/voting/engine.py",
+      "function_name": "_analyze_consensus",
+      "line_number": 223,
+      "complexity": 8,
+      "impact_score": 65.0,
+      "severity": "medium",
+      "reason": "Consensus calculation untested",
+      "lines_of_code": 22,
+      "callers": ["vote"],
+      "dependencies": []
+    }
+  ],
+  "recommendations": [
+    "Priority 1: Address 3 critical coverage gaps immediately. These functions have high complexity and are completely untested.",
+    "Priority 2: Write tests for 8 high-impact uncovered functions.",
+    "Focus on these files with most gaps: core/orchestrator.py, agents/adversarial/agent.py, core/voting/engine.py"
+  ]
+}

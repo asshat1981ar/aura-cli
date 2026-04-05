@@ -552,5 +552,66 @@ class TestSaddResumeDispatch(unittest.TestCase):
         mock_store.update_status.assert_not_called()
 
 
+class TestSessionCoordinatorN8NEvents(unittest.TestCase):
+    def setUp(self):
+        self.spec = _make_spec([WorkstreamSpec(id="ws_a", title="A", goal_text="Do A")])
+        self.brain = MagicMock()
+        self.orchestrator_factory = MagicMock()
+
+    def test_run_emits_n8n_lifecycle_events(self):
+        def runner_fn(ws_spec, dep_ctx):
+            return _completed_result(ws_spec.id)
+
+        with patch("core.sadd.session_coordinator.load_n8n_config", return_value=_types.SimpleNamespace(enabled=True)):
+            with patch("core.sadd.session_coordinator.SubAgentRunner") as MockRunner:
+                mock_instance = MagicMock()
+                mock_instance.run.return_value = _completed_result("ws_a")
+                MockRunner.return_value = mock_instance
+
+                coord = SessionCoordinator(
+                    self.spec,
+                    self.orchestrator_factory,
+                    self.brain,
+                    config=SessionConfig(retry_failed=False),
+                )
+                coord._emit_n8n_event_async = MagicMock()
+
+                report = coord.run()
+
+        self.assertEqual(report.completed, 1)
+        event_types = [call.args[0] for call in coord._emit_n8n_event_async.call_args_list]
+        self.assertEqual(
+            event_types,
+            [
+                "sadd.session.started",
+                "sadd.workstream.started",
+                "sadd.workstream.completed",
+                "sadd.session.completed",
+            ],
+        )
+
+    def test_run_emits_failed_terminal_event_when_workstream_fails(self):
+        with patch("core.sadd.session_coordinator.load_n8n_config", return_value=_types.SimpleNamespace(enabled=True)):
+            with patch("core.sadd.session_coordinator.SubAgentRunner") as MockRunner:
+                mock_instance = MagicMock()
+                mock_instance.run.return_value = _failed_result("ws_a")
+                MockRunner.return_value = mock_instance
+
+                coord = SessionCoordinator(
+                    self.spec,
+                    self.orchestrator_factory,
+                    self.brain,
+                    config=SessionConfig(retry_failed=False),
+                )
+                coord._emit_n8n_event_async = MagicMock()
+
+                report = coord.run()
+
+        self.assertEqual(report.failed, 1)
+        event_types = [call.args[0] for call in coord._emit_n8n_event_async.call_args_list]
+        self.assertIn("sadd.workstream.failed", event_types)
+        self.assertEqual(event_types[-1], "sadd.session.failed")
+
+
 if __name__ == "__main__":
     unittest.main()

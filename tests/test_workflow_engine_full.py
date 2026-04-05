@@ -116,6 +116,24 @@ def test_execute_step_retry_failure():
     assert res.attempts == 2
     assert "kaboom" in res.error
 
+
+
+def test_execute_step_timeout():
+    def slow_fn(_inputs):
+        time.sleep(0.05)
+        return {"ok": True}
+
+    step = WorkflowStep(name="slow", fn=slow_fn, timeout_s=0.01)
+    res = _execute_step(step, {}, {})
+
+    assert res.status == "timeout"
+    assert "timeout" in (res.error or "").lower()
+
+
+def test_engine_pause_missing_execution_raises_keyerror(engine):
+    with pytest.raises(KeyError):
+        engine.pause_execution("missing-exec")
+
 # ---------------------------------------------------------------------------
 # Integration Tests: WorkflowEngine
 # ---------------------------------------------------------------------------

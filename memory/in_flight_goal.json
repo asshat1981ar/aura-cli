@@ -1,6 +1,0 @@
-{
-  "goal": "Investigate test count drop: 1645 -> 10",
-  "started_at": "2026-03-31T05:58:26.760530+00:00",
-  "cycle_limit": 10,
-  "phase": "ingest"
-}

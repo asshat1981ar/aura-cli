@@ -18,8 +18,6 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from core.logging_utils import log_json
-from core.goal_queue import GoalQueue
-from core.goal_archive import GoalArchive
 
 try:
     from core.auth import init_auth, get_auth_manager, UserRole
@@ -346,7 +344,7 @@ except RuntimeError:
 @app.post("/api/github/webhook")
 async def github_webhook(request: Request, x_github_event: str = Header(None), x_hub_signature_256: str = Header(None)):
     """Handle GitHub App webhook events."""
-    from aura_cli.github_integration import get_github_app, GitHubIntegrationError
+    from aura_cli.github_integration import get_github_app
     
     body = await request.body()
     

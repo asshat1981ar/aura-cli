@@ -27,7 +27,9 @@ from aura_cli.options import (
 
 
 _REQUIRED_SUBCOMMAND_PARENT_PATHS: set[tuple[str, ...]] = {
+    ("agent",),
     ("goal",),
+    ("innovate",),
     ("mcp",),
     ("memory",),
     ("queue",),
@@ -406,6 +408,8 @@ def _customize_innovate_start(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
     parser.add_argument("--constraints", dest="constraints", help="JSON string with constraints (e.g., '{\"max_ideas\": 10}').")
     parser.add_argument("--batch", dest="batch_file", help="Path to file with multiple problems (one per line).")
+    parser.add_argument("--use-llm", dest="use_llm", action="store_true", default=True, help="Use LLM for idea generation (default: True).")
+    parser.add_argument("--no-llm", dest="use_llm", action="store_false", help="Disable LLM and use template-based generation.")
 
 
 def _customize_innovate_list(parser: argparse.ArgumentParser) -> None:
@@ -414,18 +418,18 @@ def _customize_innovate_list(parser: argparse.ArgumentParser) -> None:
 
 
 def _customize_innovate_show(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("session_id", help="Session ID to display.")
+    parser.add_argument("--session-id", dest="session_id", required=True, help="Session ID to display.")
     parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
 
 
 def _customize_innovate_resume(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("session_id", help="Session ID to resume.")
+    parser.add_argument("--session-id", dest="session_id", required=True, help="Session ID to resume.")
     parser.add_argument("--phase", dest="phase", choices=["immersion", "divergence", "convergence", "incubation", "transformation"], help="Phase to resume from.")
     parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
 
 
 def _customize_innovate_export(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("session_id", help="Session ID to export.")
+    parser.add_argument("--session-id", dest="session_id", required=True, help="Session ID to export.")
     parser.add_argument("--format", dest="format", choices=["markdown", "json", "csv", "html"], default="markdown", help="Export format.")
     parser.add_argument("--output", dest="output", help="Output file path (default: stdout).")
 

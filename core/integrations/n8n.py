@@ -30,13 +30,44 @@ class N8NEvent:
         }
 
 
+def _nested_dict(config: dict[str, Any] | None, *keys: str) -> dict[str, Any]:
+    node: Any = config or {}
+    for key in keys:
+        if not isinstance(node, dict):
+            return {}
+        node = node.get(key, {})
+    return node if isinstance(node, dict) else {}
+
+
 def load_n8n_config(config: dict[str, Any] | None = None) -> N8NIntegrationConfig:
-    integrations = (config or {}).get("integrations", {})
-    n8n = integrations.get("n8n", {}) if isinstance(integrations, dict) else {}
-    webhook_url = os.getenv("AURA_N8N_WEBHOOK_URL", str(n8n.get("webhook_url", "")))
-    auth_header = os.getenv("AURA_N8N_AUTH_HEADER", str(n8n.get("auth_header", "")))
-    enabled = str(os.getenv("AURA_N8N_ENABLED", str(n8n.get("enabled", False)))).lower() in {"1", "true", "yes", "on"}
-    timeout_raw = os.getenv("AURA_N8N_TIMEOUT_SECONDS", str(n8n.get("timeout_seconds", 10.0)))
+    integrations_n8n = _nested_dict(config, "integrations", "n8n")
+    connector_n8n = _nested_dict(config, "n8n_connector")
+
+    webhook_default = str(
+        integrations_n8n.get(
+            "webhook_url",
+            connector_n8n.get("notification_webhook", ""),
+        )
+    )
+    auth_default = str(
+        integrations_n8n.get(
+            "auth_header",
+            connector_n8n.get("auth_header", ""),
+        )
+    )
+    enabled_default = integrations_n8n.get(
+        "enabled",
+        connector_n8n.get("enabled", False),
+    )
+    timeout_default = integrations_n8n.get(
+        "timeout_seconds",
+        connector_n8n.get("timeout_seconds", 10.0),
+    )
+
+    webhook_url = os.getenv("AURA_N8N_WEBHOOK_URL", webhook_default)
+    auth_header = os.getenv("AURA_N8N_AUTH_HEADER", auth_default)
+    enabled = str(os.getenv("AURA_N8N_ENABLED", str(enabled_default))).lower() in {"1", "true", "yes", "on"}
+    timeout_raw = os.getenv("AURA_N8N_TIMEOUT_SECONDS", str(timeout_default))
     try:
         timeout_seconds = float(timeout_raw)
     except (TypeError, ValueError):

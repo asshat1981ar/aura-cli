@@ -4,9 +4,9 @@ This file is the live audit, queue, and closeout surface for the current repo-wi
 
 ## Audit Summary
 
-Branch: `feat/sprint-s004`  
-HEAD SHA: `d76e98823ae7e526ddfe07723385bb418ae22bf9`  
-Target PR(s): `#307`
+Branch: `fix/ci-workflow-sha-pins`  
+HEAD SHA: `56d44ff5b024f6ccc29574db92aacf6de02557c7`  
+Target PR(s): `#395`
 
 Active error buckets:
 
@@ -36,16 +36,16 @@ Notes: keep all unrelated local worktree changes untouched; use focused commits 
 
 | Bucket | Owner | Status | Branch/SHA | Verification target | Notes |
 | --- | --- | --- | --- | --- | --- |
-| workflow/setup | main agent | resolved | `feat/sprint-s004` / `d76e988` | GitHub Actions setup passes and Claude workflow starts real steps | Broken Claude action pin and workflow gating issues fixed |
-| required CI lane | main agent | resolved | `feat/sprint-s004` / `d76e988` | `Python CI` green on current SHA | Python 3.10/macOS regression path fixed |
-| PR review blocker | main agent | resolved | `feat/sprint-s004` / `d76e988` | review-targeted tests and comment alignment verified | Sprint 2 integration review blockers addressed |
-| developer-surface drift | main agent | in_progress | `feat/sprint-s004` / `d76e988` | doc and prompt cross-reference verification | sweep templates and workflow alignment underway |
-| external blocker | main agent | none | `feat/sprint-s004` / `d76e988` | n/a | none currently identified |
+| workflow/setup | main agent | resolved | `fix/ci-workflow-sha-pins` / `56d44ff` | GitHub Actions setup passes and Claude workflow starts real steps | Broken Claude action pin and workflow gating issues fixed |
+| required CI lane | main agent | resolved | `fix/ci-workflow-sha-pins` / `56d44ff` | `Python CI` green on current SHA | Python 3.10/macOS regression path fixed |
+| PR review blocker | main agent | resolved | `fix/ci-workflow-sha-pins` / `56d44ff` | review-targeted tests and comment alignment verified | Sprint 2 integration review blockers addressed |
+| developer-surface drift | main agent | in_progress | `fix/ci-workflow-sha-pins` / `56d44ff` | doc and prompt cross-reference verification | sweep templates and workflow alignment underway |
+| external blocker | main agent | none | `fix/ci-workflow-sha-pins` / `56d44ff` | n/a | none currently identified |
 
 ## Latest Closeout
 
-Branch: `feat/sprint-s004`  
-HEAD SHA: `d76e98823ae7e526ddfe07723385bb418ae22bf9`  
+Branch: `fix/ci-workflow-sha-pins`  
+HEAD SHA: `56d44ff5b024f6ccc29574db92aacf6de02557c7`  
 Bucket addressed: workflow/setup and required CI lanes  
 Files/surfaces changed: workflow YAML, workflow-engine tests, Sprint 2 integration tests  
 Verification performed: targeted pytest, local YAML validation, GitHub Actions polling on the pushed SHA  
@@ -54,6 +54,6 @@ Next highest-priority bucket: developer-surface drift
 
 PR-facing note:
 
-- comment or check addressed: PR `#307` CI failures and active review blockers
-- follow-up still needed: keep the active sweep artifact current if the branch scope expands beyond `#307`
+- comment or check addressed: PR `#395` CI failures and active review blockers
+- follow-up still needed: keep the active sweep artifact current if the branch scope expands beyond `#395`
 - reviewer summary artifact: `docs/ACTIVE_PR_REVIEWER_SUMMARY.md`

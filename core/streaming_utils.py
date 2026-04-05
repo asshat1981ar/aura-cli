@@ -3,8 +3,7 @@
 Prevents memory exhaustion when processing files larger than 1MB.
 """
 from pathlib import Path
-from typing import Iterator, Union, TextIO
-import io
+from typing import Iterator, Union
 
 
 # Default chunk size: 8KB (good balance between memory and I/O)

@@ -9,9 +9,8 @@ from __future__ import annotations
 import json
 import logging
 import tempfile
-from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 

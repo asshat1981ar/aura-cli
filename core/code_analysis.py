@@ -1,7 +1,7 @@
 import os
 import ast
 from dataclasses import dataclass
-from typing import List, Set, Dict, Any
+from typing import List, Set, Dict
 
 @dataclass
 class DuplicationMetrics:

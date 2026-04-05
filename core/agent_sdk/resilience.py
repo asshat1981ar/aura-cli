@@ -8,10 +8,9 @@ import asyncio
 import logging
 import random
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, auto
-from functools import wraps
-from typing import Any, Callable, Dict, List, Optional, TypeVar, Union
+from typing import Any, Callable, Dict, Optional, TypeVar, Union
 
 logger = logging.getLogger(__name__)
 
@@ -73,7 +72,7 @@ class CircuitBreaker:
             )
             await self._record_success()
             return result
-        except Exception as e:
+        except Exception:
             await self._record_failure()
             raise
     

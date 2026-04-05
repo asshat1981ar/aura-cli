@@ -10,10 +10,9 @@ Provides distributed caching for:
 from __future__ import annotations
 
 import hashlib
-import json
 import pickle
 from functools import wraps
-from typing import Any, Callable, Optional, TypeVar, Union
+from typing import Any, Callable, Optional, TypeVar
 
 from core.logging_utils import log_json
 

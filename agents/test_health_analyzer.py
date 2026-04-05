@@ -1,6 +1,6 @@
 import json
 import logging
-from typing import Dict, List, Any
+from typing import Dict, Any
 
 class TestHealthAnalyzer:
     def __init__(self, log_file: str = "test_framework.log"):

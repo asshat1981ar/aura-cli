@@ -92,7 +92,7 @@ class TestDivergencePhase(unittest.TestCase):
         bot_a = _make_mock_bot("tech_a", _make_ideas(3, technique="tech_a"))
         bot_b = _make_mock_bot("tech_b", _make_ideas(2, technique="tech_b"))
 
-        def _get_bot_side_effect(name):
+        def _get_bot_side_effect(name, **kwargs):
             return {"tech_a": bot_a, "tech_b": bot_b}[name]
 
         mock_get_bot.side_effect = _get_bot_side_effect
@@ -119,7 +119,7 @@ class TestDivergencePhase(unittest.TestCase):
 
         good_bot = _make_mock_bot("good_tech", _make_ideas(4, technique="good_tech"))
 
-        def _get_bot_side_effect(name):
+        def _get_bot_side_effect(name, **kwargs):
             return {"bad_tech": bad_bot, "good_tech": good_bot}[name]
 
         mock_get_bot.side_effect = _get_bot_side_effect

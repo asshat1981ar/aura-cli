@@ -22,7 +22,7 @@ class DuplicateCodeReducer:
                         with open(path, 'r') as f:
                             tree = ast.parse(f.read())
                         file_asts[path] = tree
-                    except:
+                    except Exception:
                         continue
         
         # Compare ASTs for structural similarities
@@ -83,7 +83,7 @@ class DuplicateCodeReducer:
 
 def main():
     reducer = DuplicateCodeReducer("./")
-    duplicates = reducer.analyze_codebase()
+    reducer.analyze_codebase()
     abstractions = reducer.propose_abstractions()
     
     for abstraction in abstractions:

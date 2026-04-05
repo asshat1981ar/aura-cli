@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 from dataclasses import dataclass
 from typing import List, Dict
 
@@ -71,29 +71,29 @@ def test_debt_metric_tracking():
     
     metrics = tracker.track_debt_metrics(hotspot)
     
-    assert metrics['test_coverage_delta'] == 0.05
+    assert abs(metrics['test_coverage_delta'] - 0.05) < 1e-9
     assert metrics['complexity_delta'] == -2
     assert metrics['bug_trend'] == -1
 
 @pytest.mark.integration
 def test_end_to_end_tracking():
     tracker = TestDebtTracker()
-    
+
     # Mock static analysis setup
-    with patch('some.static.analysis.tool') as mock_tool:
-        mock_tool.analyze.return_value = {
-            'file2.py': {
-                'coverage': 0.55,
-                'complexity': 25,
-                'bugs': 8,
-                'changes_per_month': 12.0
-            }
+    mock_tool = Mock()
+    mock_tool.analyze.return_value = {
+        'file2.py': {
+            'coverage': 0.55,
+            'complexity': 25,
+            'bugs': 8,
+            'changes_per_month': 12.0
         }
-        
-        tracker.static_analysis_tool = mock_tool
-        hotspots = tracker.identify_hotspots('/fake/path')
-        
-        # Verify tracking workflow
-        for hotspot in hotspots:
-            metrics = tracker.track_debt_metrics(hotspot)
-            assert all(isinstance(v, (int, float)) for v in metrics.values())
+    }
+
+    tracker.static_analysis_tool = mock_tool
+    hotspots = tracker.identify_hotspots('/fake/path')
+
+    # Verify tracking workflow
+    for hotspot in hotspots:
+        metrics = tracker.track_debt_metrics(hotspot)
+        assert all(isinstance(v, (int, float)) for v in metrics.values())

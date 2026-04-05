@@ -14,8 +14,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 from agents.schemas import (
-    InnovationPhase, InnovationSessionState, MetaConductorOutput,
-    InnovationOutput
+    InnovationPhase, InnovationSessionState
 )
 from agents.innovation_swarm import InnovationSwarm
 from core.logging_utils import log_json
@@ -48,17 +47,19 @@ class MetaConductor:
         InnovationPhase.TRANSFORMATION
     ]
     
-    def __init__(self, brain=None, model=None):
+    def __init__(self, brain=None, model=None, use_llm: bool = True):
         """
         Initialize the MetaConductor.
         
         Args:
             brain: Optional memory/brain instance for context
-            model: Optional model adapter for LLM interactions
+            model: Optional model adapter for LLM interactions (legacy)
+            use_llm: Whether to use LLM for idea generation
         """
         self.brain = brain
         self.model = model
-        self.innovation_swarm = InnovationSwarm(brain=brain, model=model)
+        self.use_llm = use_llm
+        self.innovation_swarm = InnovationSwarm(brain=brain, model=model, use_llm=use_llm)
         self.active_sessions: Dict[str, InnovationSessionState] = {}
     
     def run(self, input_data: dict) -> dict:
@@ -444,7 +445,7 @@ class MetaConductor:
         # Also load from brain to get persisted sessions
         if self.brain:
             try:
-                from agents.schemas import InnovationPhase
+                from agents.schemas import InnovationOutput, InnovationPhase
                 brain_sessions = self.brain.list_innovation_sessions(status=status)
                 for data in brain_sessions:
                     if data['session_id'] not in self.active_sessions:
@@ -455,8 +456,10 @@ class MetaConductor:
                             current_phase=InnovationPhase(data['current_phase']),
                             phases_completed=[InnovationPhase(p) for p in data['phases_completed']],
                             techniques=data['techniques'],
+                            constraints=data.get('constraints', {}),
                             ideas_generated=data['ideas_generated'],
                             ideas_selected=data['ideas_selected'],
+                            output=InnovationOutput(**data['output_data']) if data.get('output_data') else None,
                         )
                         sessions.append(session)
                         self.active_sessions[data['session_id']] = session

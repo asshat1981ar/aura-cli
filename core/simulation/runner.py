@@ -8,7 +8,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from core.logging_utils import log_json
 from core.simulation.scenario import Scenario, ScenarioOutcome

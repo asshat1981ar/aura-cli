@@ -5,7 +5,6 @@ import sqlite3
 import threading
 import time
 from contextlib import contextmanager
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 

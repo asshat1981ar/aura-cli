@@ -103,7 +103,8 @@ class AdversarialLearner:
         )
         
         # Update average severity
-        severity_scores = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+        # severity_scores dict is documented here for reference:
+        # {"critical": 4, "high": 3, "medium": 2, "low": 1}
         # This is simplified - would track actual distribution in production
         
         stats.last_updated = time.time()

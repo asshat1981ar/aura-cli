@@ -4,7 +4,7 @@ import math
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from core.knowledge.base import KnowledgeCategory, KnowledgeEntry
+from core.knowledge.base import KnowledgeEntry
 from core.logging_utils import log_json
 
 
@@ -233,7 +233,7 @@ class KnowledgeConsolidator:
         
         # Start with each entry as its own cluster
         clusters: List[Set[str]] = [{e.entry_id} for e in entries]
-        entry_map = {e.entry_id: e for e in entries}
+        _entry_map = {e.entry_id: e for e in entries}  # noqa: F841
         
         # Iteratively merge closest clusters
         while True:

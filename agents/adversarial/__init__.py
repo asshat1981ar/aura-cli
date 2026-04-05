@@ -1,6 +1,6 @@
 """Adversarial Agent for red-team critique and stress testing."""
 
-from agents.adversarial.agent import AdversarialAgent, AdversarialCritique, AdversarialStrategy, TargetType
+from agents.adversarial.agent import AdversarialAgent, AdversarialCritique, AdversarialStrategy, Finding, StrategyResult, TargetType
 from agents.adversarial.strategies import (
     DevilsAdvocateStrategy,
     EdgeCaseHunterStrategy,
@@ -19,6 +19,8 @@ __all__ = [
     "AdversarialAgent",
     "AdversarialCritique",
     "AdversarialStrategy",
+    "Finding",
+    "StrategyResult",
     "TargetType",
     "DevilsAdvocateStrategy",
     "EdgeCaseHunterStrategy",

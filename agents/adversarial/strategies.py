@@ -1,8 +1,9 @@
 """Adversarial strategies for red-team critique."""
 
 import re
+import time
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from agents.adversarial.agent import Finding, StrategyResult, TargetType
 from core.logging_utils import log_json

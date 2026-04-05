@@ -56,6 +56,7 @@ class ScenarioOutcome:
     error_message: Optional[str] = None
     artifacts: Dict[str, Any] = field(default_factory=dict)
     logs: List[str] = field(default_factory=list)
+    parameter_overrides: Dict[str, Any] = field(default_factory=dict)
 
 
 class ScenarioRegistry:

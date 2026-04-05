@@ -1,13 +1,17 @@
 """Voting engine for multi-LLM consensus decisions."""
+from __future__ import annotations
 
 import asyncio
 import time
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from core.logging_utils import log_json
+
+if TYPE_CHECKING:
+    from core.voting.consensus import ConsensusAnalysis
 
 
 class VotingStrategy(Enum):

@@ -1,13 +1,15 @@
 """Core simulation orchestrator for running parallel "what-if" scenarios."""
+from __future__ import annotations
 
 import asyncio
 import time
 import uuid
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Dict, List, Optional
 
 from core.logging_utils import log_json
+from core.simulation.outcome_analyzer import Insight
+from core.simulation.scenario import Scenario, ScenarioOutcome
 
 
 @dataclass

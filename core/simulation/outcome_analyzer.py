@@ -3,7 +3,7 @@
 import math
 import statistics
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from core.logging_utils import log_json
 from core.simulation.scenario import ScenarioOutcome
@@ -120,7 +120,7 @@ class OutcomeAnalyzer:
             
             min_val = min(values)
             max_val = max(values)
-            range_val = max_val - min_val
+            _range_val = max_val - min_val  # noqa: F841
             
             # Compare with baseline if available
             if baseline and metric in baseline:

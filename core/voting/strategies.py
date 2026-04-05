@@ -1,8 +1,6 @@
 """Voting strategies for aggregating LLM votes."""
 
-import math
 from collections import defaultdict
-from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Optional
 
 from core.logging_utils import log_json

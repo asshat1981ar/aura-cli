@@ -88,7 +88,21 @@ class TestVectorStoreSearchAppliesLimit(unittest.TestCase):
         We do this by counting how many rows are passed to the numpy scoring loop,
         which we intercept by patching numpy.frombuffer.
         """
+        import sys
+        import importlib
         import numpy as np
+
+        # Guard: a previous test (test_optional_dependency_guards) may have left
+        # core.vector_store with np=_MissingPackage.  On Python 3.10, mock.patch
+        # propagates the resulting ImportError instead of catching it as an
+        # AttributeError, which causes a spurious failure.  Reload the module so
+        # it re-imports numpy now that it is available in sys.modules.
+        vs_mod = sys.modules.get("core.vector_store")
+        if vs_mod is not None:
+            from core.vector_store import _MissingPackage as _MP
+            if isinstance(vs_mod.np, _MP):
+                importlib.reload(vs_mod)
+
         from core.vector_store import VectorStore, SEARCH_LIMIT
 
         with tempfile.TemporaryDirectory() as tmp:

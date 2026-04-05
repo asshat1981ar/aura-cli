@@ -7,7 +7,7 @@ def execute_api_command(api_key: Optional[str], command: str) -> str:
     if not api_key:
         raise ValueError('API key must be provided.')
     try:
-        result = run(command, shell=True, check=True, capture_output=True, env={'API_KEY': api_key})
+        result = run(command.split(), shell=False, check=True, capture_output=True, env={'API_KEY': api_key})
         return result.stdout.decode('utf-8')
     except CalledProcessError as e:
         raise RuntimeError(f'Command failed with exit code {e.returncode}: {e.stderr.decode()}')

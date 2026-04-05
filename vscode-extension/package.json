@@ -1,0 +1,21 @@
+{
+  "name": "aura-cli-vscode",
+  "displayName": "AURA CLI",
+  "description": "VS Code extension for AURA autonomous development loop",
+  "version": "0.1.0",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "aura.runGoal",
+        "title": "AURA: Run Goal"
+      },
+      {
+        "command": "aura.status",
+        "title": "AURA: Show Status"
+      }
+    ]
+  }
+}

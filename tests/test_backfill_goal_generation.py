@@ -49,11 +49,11 @@ def test_orchestrator_enqueues_backfill_goals(mock_agents, tmp_path):
         
         orchestrator.run_cycle("Implement new feature")
         
-        # Verify that a goal was enqueued for the gap
+        # Verify that a goal was enqueued for the gap (may not be the last call)
         mock_goal_queue.add.assert_called()
-        args, _ = mock_goal_queue.add.call_args
-        assert "backfill" in args[0].lower()
-        assert "core/critical.py" in args[0]
+        all_calls = [call[0][0] for call in mock_goal_queue.add.call_args_list]
+        backfill_calls = [g for g in all_calls if "backfill" in g.lower() and "core/critical.py" in g]
+        assert backfill_calls, f"No backfill goal for core/critical.py found in calls: {all_calls}"
 
 def test_orchestrator_skips_backfill_when_disabled(mock_agents, tmp_path):
     mock_goal_queue = MagicMock()

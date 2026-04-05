@@ -1,0 +1,27 @@
+name: ChatGPT CodeReviewer
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+jobs:
+  chatgpt-review:
+    if: ${{ !github.event.pull_request.head.repo.fork }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: ChatGPT CodeReviewer
+        uses: anc95/ChatGPT-CodeReview@v1.0.23
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          LANGUAGE: English
+          OPENAI_API_ENDPOINT: https://api.openai.com/v1
+          MODEL: gpt-4o
+          top_p: 1
+          temperature: 1
+          max_tokens: 10000
+          MAX_PATCH_LENGTH: 10000

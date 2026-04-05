@@ -15,6 +15,9 @@ import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
+from core.config_manager import config as aura_config
+from core.integrations.n8n import N8NEvent, N8NIntegrationConfig, emit_n8n_event, load_n8n_config
+from core.logging_utils import log_json
 from core.sadd.sub_agent_runner import SubAgentRunner
 from core.sadd.types import (
     DesignSpec,
@@ -80,6 +83,7 @@ class SessionCoordinator:
         config: SessionConfig = SessionConfig(),
         session_store: Any = None,
         mcp_bridge: Optional["MCPToolBridge"] = None,
+        n8n_config: Optional[N8NIntegrationConfig] = None,
     ) -> None:
         self._spec = design_spec
         self._orchestrator_factory = orchestrator_factory
@@ -93,6 +97,7 @@ class SessionCoordinator:
         self._retried: set[str] = set()
         self._store = session_store
         self._mcp_bridge = mcp_bridge
+        self._n8n_config = n8n_config or load_n8n_config(aura_config.show_config())
 
     # ------------------------------------------------------------------
     # Public API
@@ -115,6 +120,18 @@ class SessionCoordinator:
         if self._store:
             self._store.create_session(self._spec, self._config, self._session_id)
             self._store.update_status(self._session_id, "running")
+
+        self._emit_n8n_event_async(
+            "sadd.session.started",
+            {
+                "session_id": self._session_id,
+                "pipeline_run_id": self._session_id,
+                "title": self._spec.title,
+                "total_workstreams": len(self._spec.workstreams),
+                "max_parallel": self._config.max_parallel,
+                "dry_run": self._config.dry_run,
+            },
+        )
 
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self._config.max_parallel,
@@ -173,6 +190,19 @@ class SessionCoordinator:
             except (OSError, IOError) as e:
                 self._logger.debug("Could not save session report: %s", e)
 
+        terminal_event = "sadd.session.failed" if report.failed or report.skipped else "sadd.session.completed"
+        self._emit_n8n_event_async(
+            terminal_event,
+            {
+                "session_id": self._session_id,
+                "pipeline_run_id": self._session_id,
+                "title": self._spec.title,
+                "completed": report.completed,
+                "failed": report.failed,
+                "skipped": report.skipped,
+                "elapsed_s": report.elapsed_s,
+            },
+        )
         print(f"✅ SADD session complete — {report.completed}/{report.total_workstreams} workstreams succeeded")
         return report
 
@@ -226,6 +256,17 @@ class SessionCoordinator:
             except (OSError, IOError) as e:
                 self._logger.debug("Could not update session status for resume: %s", e)
 
+        self._emit_n8n_event_async(
+            "sadd.session.resumed",
+            {
+                "session_id": self._session_id,
+                "pipeline_run_id": self._session_id,
+                "title": self._spec.title,
+                "completed": len(completed_results),
+                "remaining": len(remaining),
+            },
+        )
+
         with concurrent.futures.ThreadPoolExecutor(
             max_workers=self._config.max_parallel,
         ) as executor:
@@ -278,6 +319,19 @@ class SessionCoordinator:
             except (OSError, IOError) as e:
                 self._logger.debug("Could not save session report: %s", e)
 
+        terminal_event = "sadd.session.failed" if report.failed or report.skipped else "sadd.session.completed"
+        self._emit_n8n_event_async(
+            terminal_event,
+            {
+                "session_id": self._session_id,
+                "pipeline_run_id": self._session_id,
+                "title": self._spec.title,
+                "completed": report.completed,
+                "failed": report.failed,
+                "skipped": report.skipped,
+                "elapsed_s": report.elapsed_s,
+            },
+        )
         print(
             f"✅ SADD resume complete — {report.completed}/{report.total_workstreams} workstreams succeeded"
         )
@@ -323,6 +377,19 @@ class SessionCoordinator:
             if dep_id in self._results:
                 context_from_dependencies[dep_id] = self._results[dep_id]
 
+        self._emit_n8n_event_async(
+            "sadd.workstream.started",
+            {
+                "session_id": self._session_id,
+                "pipeline_run_id": self._session_id,
+                "workstream_id": ws_id,
+                "title": node.spec.title,
+                "depends_on": list(node.spec.depends_on),
+                "estimated_cycles": node.spec.estimated_cycles,
+                "dry_run": self._config.dry_run,
+            },
+        )
+
         runner = SubAgentRunner(
             workstream=node,
             orchestrator_factory=self._orchestrator_factory,
@@ -355,6 +422,20 @@ class SessionCoordinator:
         )
         print(f"✅ [{ws_id}] Done: {self._graph.get_node(ws_id).spec.title} ({result.elapsed_s:.1f}s)")
         self._checkpoint_and_log(ws_id, "workstream_completed")
+        self._emit_n8n_event_async(
+            "sadd.workstream.completed",
+            {
+                "session_id": self._session_id,
+                "pipeline_run_id": self._session_id,
+                "workstream_id": ws_id,
+                "title": self._graph.get_node(ws_id).spec.title,
+                "cycles_used": result.cycles_used,
+                "elapsed_s": result.elapsed_s,
+                "changed_files": list(result.changed_files),
+                "verification_summary": result.verification_summary,
+                "stop_reason": result.stop_reason,
+            },
+        )
 
     def _handle_failure(
         self,
@@ -378,6 +459,15 @@ class SessionCoordinator:
                 node.status = "running"
                 node.started_at = time.time()
 
+            self._emit_n8n_event_async(
+                "sadd.workstream.retrying",
+                {
+                    "session_id": self._session_id,
+                    "pipeline_run_id": self._session_id,
+                    "workstream_id": ws_id,
+                    "error": result.error or "unknown error",
+                },
+            )
             future = executor.submit(self._execute_workstream, ws_id)
             futures[future] = ws_id
             return
@@ -395,6 +485,44 @@ class SessionCoordinator:
             for f in futures:
                 f.cancel()
         self._checkpoint_and_log(ws_id, "workstream_failed")
+        self._emit_n8n_event_async(
+            "sadd.workstream.failed",
+            {
+                "session_id": self._session_id,
+                "pipeline_run_id": self._session_id,
+                "workstream_id": ws_id,
+                "title": self._graph.get_node(ws_id).spec.title,
+                "error": result.error or "unknown error",
+                "cycles_used": result.cycles_used,
+                "elapsed_s": result.elapsed_s,
+                "stop_reason": result.stop_reason,
+            },
+        )
+
+    def _emit_n8n_event_async(self, event_type: str, payload: Dict[str, Any]) -> None:
+        """Emit an n8n event from a background thread so SADD never blocks on webhooks."""
+        if not self._n8n_config.enabled:
+            return
+
+        event = N8NEvent(event_type=event_type, payload=payload)
+        thread = threading.Thread(target=self._emit_n8n_event, args=(event,), daemon=True)
+        thread.start()
+
+    def _emit_n8n_event(self, event: N8NEvent) -> None:
+        """Send one n8n event and swallow failures after logging."""
+        try:
+            result = emit_n8n_event(event, self._n8n_config)
+            if result.get("status") not in {"ok", "disabled"}:
+                log_json("WARN", "sadd_n8n_event_emit_failed", details={
+                    "event_type": event.event_type,
+                    "status": result.get("status", "unknown"),
+                    "reason": result.get("reason", ""),
+                })
+        except Exception as exc:  # pragma: no cover - defensive only
+            log_json("WARN", "sadd_n8n_event_emit_failed", details={
+                "event_type": event.event_type,
+                "reason": str(exc),
+            })
 
     # ------------------------------------------------------------------
     # Internal — persistence helpers

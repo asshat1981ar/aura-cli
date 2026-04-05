@@ -217,7 +217,7 @@ class ContextGraph:
         try:
             # PageRank often requires scipy for performance
             centrality = nx.pagerank(G, weight='weight')
-        except (OSError, IOError, ValueError):
+        except (ImportError, OSError, IOError, ValueError):
             # Fallback to degree centrality (no extra dependencies)
             log_json("INFO", "pagerank_failed_fallback_to_degree")
             centrality = nx.degree_centrality(G)

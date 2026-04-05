@@ -4,6 +4,8 @@ Brainstorming Technique Bots for the Innovation Catalyst framework.
 Each bot implements a specific creative thinking methodology to generate
 ideas from different perspectives. These are used by InnovationSwarm
 to create diverse idea pools during the divergence phase.
+
+Now with LLM support via OpenRouter auto-routing.
 """
 
 import random
@@ -11,13 +13,16 @@ from typing import List, Dict, Any
 from abc import ABC, abstractmethod
 
 from agents.schemas import Idea
+from core.logging_utils import log_json
 
 
 class BaseBrainstormingBot(ABC):
     """Abstract base class for all brainstorming technique bots."""
     
-    def __init__(self):
+    def __init__(self, llm_client=None, use_llm: bool = True):
         self.capabilities = ["brainstorming", "idea_generation", "creativity"]
+        self.llm_client = llm_client
+        self.use_llm = use_llm
     
     @property
     @abstractmethod
@@ -25,9 +30,17 @@ class BaseBrainstormingBot(ABC):
         """Return the name of this brainstorming technique."""
         pass
     
+    @property
     @abstractmethod
+    def technique_key(self) -> str:
+        """Return the technique key for LLM prompts."""
+        pass
+    
     def generate(self, task: str, context: str = "") -> List[Idea]:
-        """Generate ideas using this technique.
+        """
+        Generate ideas using this technique.
+        
+        Tries LLM first if enabled and available, falls back to template generation.
         
         Args:
             task: The problem statement or challenge
@@ -36,6 +49,43 @@ class BaseBrainstormingBot(ABC):
         Returns:
             List of Idea objects
         """
+        # Try LLM first if enabled
+        if self.use_llm and self.llm_client:
+            try:
+                from agents.llm_brainstorming import TECHNIQUE_PROMPTS
+                
+                technique_config = TECHNIQUE_PROMPTS.get(
+                    self.technique_key, 
+                    {"name": self.technique_name}
+                )
+                
+                ideas = self.llm_client.generate_ideas(
+                    problem=task,
+                    technique=self.technique_key,
+                    technique_config=technique_config,
+                    context=context,
+                    use_cache=True
+                )
+                
+                if ideas:
+                    log_json("INFO", "llm_ideas_generated", details={
+                        "technique": self.technique_key,
+                        "count": len(ideas)
+                    })
+                    return ideas
+                    
+            except Exception as e:
+                log_json("WARN", "llm_generation_failed", details={
+                    "technique": self.technique_key,
+                    "error": str(e)
+                })
+        
+        # Fall back to template generation
+        return self._generate_template(task, context)
+    
+    @abstractmethod
+    def _generate_template(self, task: str, context: str = "") -> List[Idea]:
+        """Generate ideas using template-based approach (fallback)."""
         pass
     
     def _create_idea(self, description: str, novelty: float = 0.5, 
@@ -79,8 +129,12 @@ class SCAMPERBot(BaseBrainstormingBot):
     def technique_name(self) -> str:
         return "SCAMPER"
     
-    def generate(self, task: str, context: str = "") -> List[Idea]:
-        """Generate ideas using the SCAMPER framework."""
+    @property
+    def technique_key(self) -> str:
+        return "scamper"
+    
+    def _generate_template(self, task: str, context: str = "") -> List[Idea]:
+        """Generate ideas using the SCAMPER framework (template fallback)."""
         ideas = []
         
         for action, prompt in self.PROMPTS.items():
@@ -97,7 +151,8 @@ class SCAMPERBot(BaseBrainstormingBot):
                     metadata={
                         "scamper_action": action,
                         "prompt": prompt,
-                        "variation": i + 1
+                        "variation": i + 1,
+                        "source": "template"
                     }
                 )
                 ideas.append(idea)
@@ -165,7 +220,11 @@ class SixThinkingHatsBot(BaseBrainstormingBot):
     def technique_name(self) -> str:
         return "Six Thinking Hats"
     
-    def generate(self, task: str, context: str = "") -> List[Idea]:
+    @property
+    def technique_key(self) -> str:
+        return "six_hats"
+    
+    def _generate_template(self, task: str, context: str = "") -> List[Idea]:
         """Generate ideas from each thinking hat perspective."""
         ideas = []
         
@@ -270,7 +329,11 @@ class MindMappingBot(BaseBrainstormingBot):
     def technique_name(self) -> str:
         return "Mind Mapping"
     
-    def generate(self, task: str, context: str = "") -> List[Idea]:
+    @property
+    def technique_key(self) -> str:
+        return "mind_map"
+    
+    def _generate_template(self, task: str, context: str = "") -> List[Idea]:
         """Generate ideas using mind mapping structure."""
         ideas = []
         
@@ -340,16 +403,20 @@ class ReverseBrainstormingBot(BaseBrainstormingBot):
     def technique_name(self) -> str:
         return "Reverse Brainstorming"
     
-    def generate(self, task: str, context: str = "") -> List[Idea]:
+    @property
+    def technique_key(self) -> str:
+        return "reverse"
+    
+    def _generate_template(self, task: str, context: str = "") -> List[Idea]:
         """Generate by inverting the problem."""
         ideas = []
         
         # Stage 1: Generate "anti-solutions" (ways to cause the problem)
         anti_solutions = [
-            f"Make the problem worse by ignoring user needs",
-            f"Ensure failure by not testing anything",
-            f"Maximize confusion with poor documentation",
-            f"Guarantee delays with no planning",
+            "Make the problem worse by ignoring user needs",
+            "Ensure failure by not testing anything",
+            "Maximize confusion with poor documentation",
+            "Guarantee delays with no planning",
         ]
         
         for i, anti in enumerate(anti_solutions):
@@ -363,7 +430,8 @@ class ReverseBrainstormingBot(BaseBrainstormingBot):
                     "stage": "reversed",
                     "anti_solution": anti,
                     "transformation": "inverted",
-                    "variation": i + 1
+                    "variation": i + 1,
+                        "source": "template"
                 }
             ))
         
@@ -395,16 +463,20 @@ class WorstIdeaBot(BaseBrainstormingBot):
     def technique_name(self) -> str:
         return "Worst Idea"
     
-    def generate(self, task: str, context: str = "") -> List[Idea]:
+    @property
+    def technique_key(self) -> str:
+        return "worst_idea"
+    
+    def _generate_template(self, task: str, context: str = "") -> List[Idea]:
         """Generate terrible ideas, then transform them."""
         ideas = []
         
         for i, bad_idea in enumerate(self.WORST_IDEAS_TEMPLATES[:4]):
             # Transform the bad idea
             transformations = [
-                f"Free automated bug detection and fixes",
-                f"Comprehensive self-documenting code",
-                f"Zero-configuration intelligent defaults",
+                "Free automated bug detection and fixes",
+                "Comprehensive self-documenting code",
+                "Zero-configuration intelligent defaults",
             ]
             
             ideas.append(self._create_idea(
@@ -416,7 +488,8 @@ class WorstIdeaBot(BaseBrainstormingBot):
                     "stage": "bad_to_good",
                     "bad_idea": bad_idea,
                     "transformation": "inverted",
-                    "variation": i + 1
+                    "variation": i + 1,
+                        "source": "template"
                 }
             ))
         
@@ -450,7 +523,11 @@ class LotusBlossomBot(BaseBrainstormingBot):
     def technique_name(self) -> str:
         return "Lotus Blossom"
     
-    def generate(self, task: str, context: str = "") -> List[Idea]:
+    @property
+    def technique_key(self) -> str:
+        return "lotus"
+    
+    def _generate_template(self, task: str, context: str = "") -> List[Idea]:
         """Generate lotus blossom structure."""
         ideas = []
         
@@ -522,7 +599,11 @@ class StarBrainstormingBot(BaseBrainstormingBot):
     def technique_name(self) -> str:
         return "Star Brainstorming"
     
-    def generate(self, task: str, context: str = "") -> List[Idea]:
+    @property
+    def technique_key(self) -> str:
+        return "star"
+    
+    def _generate_template(self, task: str, context: str = "") -> List[Idea]:
         """Generate radiating ideas from central star."""
         ideas = []
         
@@ -585,7 +666,11 @@ class BIABot(BaseBrainstormingBot):
     def technique_name(self) -> str:
         return "Bisociative Association"
     
-    def generate(self, task: str, context: str = "") -> List[Idea]:
+    @property
+    def technique_key(self) -> str:
+        return "bia"
+    
+    def _generate_template(self, task: str, context: str = "") -> List[Idea]:
         """Create bisociative connections between domains."""
         ideas = []
         
@@ -638,11 +723,13 @@ BRAINSTORMING_BOTS = {
 }
 
 
-def get_bot(technique: str) -> BaseBrainstormingBot:
+def get_bot(technique: str, llm_client=None, use_llm: bool = True) -> BaseBrainstormingBot:
     """Get a brainstorming bot by technique name.
     
     Args:
         technique: Technique identifier (e.g., 'scamper', 'six_hats', 'mind_map')
+        llm_client: Optional LLM client for LLM-powered generation
+        use_llm: Whether to use LLM (if available) or template fallback
         
     Returns:
         Instantiated bot for the technique
@@ -653,7 +740,7 @@ def get_bot(technique: str) -> BaseBrainstormingBot:
     bot_class = BRAINSTORMING_BOTS.get(technique.lower())
     if not bot_class:
         raise ValueError(f"Unknown technique: {technique}. Available: {list(BRAINSTORMING_BOTS.keys())}")
-    return bot_class()
+    return bot_class(llm_client=llm_client, use_llm=use_llm)
 
 
 def list_techniques() -> List[str]:

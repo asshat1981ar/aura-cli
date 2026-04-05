@@ -73,7 +73,7 @@ class TestMetaConductorInit(unittest.TestCase):
         self.assertIsNone(conductor.model)
         self.assertIsInstance(conductor.active_sessions, dict)
         self.assertEqual(len(conductor.active_sessions), 0)
-        mock_swarm_cls.assert_called_once_with(brain=None, model=None)
+        mock_swarm_cls.assert_called_once_with(brain=None, model=None, use_llm=True)
 
     @patch("agents.meta_conductor.log_json")
     @patch("agents.meta_conductor.InnovationSwarm")
@@ -86,7 +86,7 @@ class TestMetaConductorInit(unittest.TestCase):
 
         self.assertIs(conductor.brain, brain)
         self.assertIs(conductor.model, model)
-        mock_swarm_cls.assert_called_once_with(brain=brain, model=model)
+        mock_swarm_cls.assert_called_once_with(brain=brain, model=model, use_llm=True)
 
     @patch("agents.meta_conductor.log_json")
     @patch("agents.meta_conductor.InnovationSwarm")
@@ -453,6 +453,31 @@ class TestListSessions(unittest.TestCase):
         statuses = {s.status for s in all_sessions}
         self.assertIn("active", statuses)
         self.assertIn("completed", statuses)
+
+
+    def test_list_from_brain_hydrates_output_scores(self):
+        brain = MagicMock()
+        brain.list_innovation_sessions.return_value = [{
+            "session_id": "persist01",
+            "problem_statement": "Persisted problem",
+            "status": "completed",
+            "current_phase": InnovationPhase.TRANSFORMATION.value,
+            "phases_completed": [InnovationPhase.DIVERGENCE.value, InnovationPhase.CONVERGENCE.value],
+            "techniques": ["SCAMPER"],
+            "constraints": {"selection_ratio": 0.2},
+            "ideas_generated": 5,
+            "ideas_selected": 2,
+            "output_data": _make_innovation_output(session_id="persist01").model_dump(),
+        }]
+        from agents.meta_conductor import MetaConductor
+        conductor = MetaConductor(brain=brain)
+
+        sessions = conductor.list_sessions()
+
+        self.assertEqual(len(sessions), 1)
+        self.assertIsNotNone(sessions[0].output)
+        self.assertEqual(sessions[0].output.novelty_score, 0.75)
+        self.assertEqual(sessions[0].constraints["selection_ratio"], 0.2)
 
 
 # ---------------------------------------------------------------------------

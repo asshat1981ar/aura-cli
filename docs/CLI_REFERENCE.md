@@ -601,8 +601,8 @@ List all innovation sessions with their status and metrics.
 
 Examples:
 - `python3 main.py innovate list`
-- `python3 main.py innovate list --status active`
-- `python3 main.py innovate list --json`
+- `python3 main.py innovate list --limit 10`
+- `python3 main.py innovate list --output json`
 
 ### `aura innovate show`
 
@@ -614,8 +614,7 @@ Show detailed information about a specific innovation session.
 
 Examples:
 - `python3 main.py innovate show --session-id abc123`
-- `python3 main.py innovate show --session-id abc123 --show-ideas`
-- `python3 main.py innovate show --session-id abc123 --json`
+- `python3 main.py innovate show --session-id abc123 --output json`
 
 ### `aura innovate resume`
 
@@ -679,6 +678,12 @@ Examples:
 - `python3 main.py innovate insights --json`
 
 ## `agent`
+
+### `aura agent`
+
+Agent SDK commands
+
+Commands for the Agent SDK meta-controller.
 
 ### `aura agent run`
 

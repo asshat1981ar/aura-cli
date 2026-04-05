@@ -352,7 +352,8 @@ class Brain:
         cached = self._recall_cache.get(key)
         if cached and (time.time() - cached[1]) < self._cache_ttl:
             return cached[0]
-        rows = self.db.execute("SELECT content FROM memory ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        with self._lock:
+            rows = self.db.execute("SELECT content FROM memory ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         result = [r[0] for r in reversed(rows)]
         self._recall_cache[key] = (result, time.time())
         return result
@@ -372,13 +373,15 @@ class Brain:
         max_chars = max_tokens * 4
         # Fetch enough recent rows to fill the budget; double for safety margin
         est_limit = min(max_chars // 10 + 200, 5000)
-        rows = self.db.execute("SELECT content FROM memory ORDER BY id DESC LIMIT ?", (est_limit,)).fetchall()
+        with self._lock:
+            rows = self.db.execute("SELECT content FROM memory ORDER BY id DESC LIMIT ?", (est_limit,)).fetchall()
         entries = [r[0] for r in reversed(rows)]
         return self.compress_to_budget(entries, max_tokens)
 
     def count_memories(self) -> int:
         """Return total memory entry count using a fast COUNT(*) query."""
-        row = self.db.execute("SELECT COUNT(*) FROM memory").fetchone()
+        with self._lock:
+            row = self.db.execute("SELECT COUNT(*) FROM memory").fetchone()
         return row[0] if row else 0
 
     def add_weakness(self, weakness_description: str):
@@ -387,7 +390,8 @@ class Brain:
             self.db.commit()
 
     def recall_weaknesses(self) -> list[str]:
-        rows = self.db.execute("SELECT description FROM weaknesses ORDER BY timestamp DESC").fetchall()
+        with self._lock:
+            rows = self.db.execute("SELECT description FROM weaknesses ORDER BY timestamp DESC").fetchall()
         return [r[0] for r in rows]
 
     def reflect(self):
@@ -571,8 +575,10 @@ class Brain:
                 'current_phase': row['current_phase'],
                 'phases_completed': json.loads(row['phases_completed']) if row['phases_completed'] else [],
                 'techniques': json.loads(row['techniques']) if row['techniques'] else [],
+                'constraints': json.loads(row['constraints']) if row['constraints'] else {},
                 'ideas_generated': row['ideas_generated'],
                 'ideas_selected': row['ideas_selected'],
+                'output_data': json.loads(row['output_data']) if row['output_data'] else None,
                 'created_at': row['created_at'],
                 'updated_at': row['updated_at'],
             })

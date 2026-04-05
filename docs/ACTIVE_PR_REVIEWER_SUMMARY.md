@@ -4,9 +4,9 @@ This file is the live reviewer-facing summary for the current active sweep branc
 
 ## PR Reviewer Summary
 
-PR: `#307`  
-Branch: `feat/sprint-s004`  
-HEAD SHA: `d76e98823ae7e526ddfe07723385bb418ae22bf9`
+PR: `#395`  
+Branch: `fix/ci-workflow-sha-pins`  
+HEAD SHA: `56d44ff5b024f6ccc29574db92aacf6de02557c7`
 
 Description:
 
@@ -34,8 +34,8 @@ Testing Performed:
   - `python3 -m pytest -q tests/test_workflow_engine.py -k get_orchestrator`
   - `python3 -m pytest -q tests/integration/test_sprint2_integration.py`
 - broader CI/workflow verification:
-  - `Python CI` green on `d76e988`
-  - `Claude Code Review` green on `d76e988`
+  - `Python CI` green on `56d44ff`
+  - `Claude Code Review` green on `56d44ff`
 - anything intentionally not verified:
   - no additional broad runtime or repo-wide regression sweep beyond the repaired PR surfaces
 
@@ -43,5 +43,5 @@ Reviewer Notes:
 
 - remaining risks: adjacent developer-surface documentation may continue to evolve, but the active PR blocker set is clear
 - external blockers, if any: none currently identified
-- follow-up still needed: update this summary if the branch scope expands or new review comments appear on PR `#307`
+- follow-up still needed: update this summary if the branch scope expands or new review comments appear on PR `#395`
 - reviewer-complete: yes, for the currently known CI and review blocker set

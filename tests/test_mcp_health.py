@@ -52,9 +52,7 @@ class TestCheckMcpHealth:
         with patch("core.mcp_health.config") as mock_config, \
              patch("core.mcp_health.MCPAsyncClient", return_value=mock_client):
             mock_config.get_mcp_server_port.return_value = 8001
-            result = asyncio.get_event_loop().run_until_complete(
-                check_mcp_health("github")
-            )
+            result = asyncio.run(check_mcp_health("github"))
 
         assert result["name"] == "github"
         assert result["status"] == "healthy"
@@ -66,9 +64,7 @@ class TestCheckMcpHealth:
              patch("core.mcp_health.MCPAsyncClient", side_effect=ConnectionError("refused")), \
              patch("core.mcp_health.log_json"):
             mock_config.get_mcp_server_port.return_value = 8002
-            result = asyncio.get_event_loop().run_until_complete(
-                check_mcp_health("slack")
-            )
+            result = asyncio.run(check_mcp_health("slack"))
 
         assert result["name"] == "slack"
         assert result["status"] == "unhealthy"
@@ -79,8 +75,6 @@ class TestCheckMcpHealth:
              patch("core.mcp_health.MCPAsyncClient", side_effect=TimeoutError("timed out")), \
              patch("core.mcp_health.log_json"):
             mock_config.get_mcp_server_port.return_value = 8003
-            result = asyncio.get_event_loop().run_until_complete(
-                check_mcp_health("sentry")
-            )
+            result = asyncio.run(check_mcp_health("sentry"))
 
         assert "timed out" in result["error"]

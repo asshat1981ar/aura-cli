@@ -155,9 +155,9 @@ messages:
       task:
 
 
-      TASK: {{Extend the A2A router with BEADS schema validation on message
-      payloads, add disk-backed persistence using memory compaction patterns,
-      and create CLI commands for inspecting conversation threads}}
+      TASK: {{Build FastAPI REST endpoints in core/api_server.py for inspecting
+      A2A conversation threads, querying dead-letter queues, and viewing routing
+      metrics with proper Pydantic response models}}
 
       TARGET MODULE/AREA: {{Python}}
 
@@ -221,4 +221,4 @@ messages:
 
 
 
-model: openai/gpt-5-chat
+model: xai/grok-3

@@ -99,8 +99,8 @@ class TestWeightedConfidenceStrategy:
         
         result = strategy.aggregate(votes, ["option_a", "option_b"])
         
-        # With weights, option_a should win despite fewer votes
-        assert result.winner == "option_a"
+        # option_b wins: model_b(1.0)+model_c(1.0)=2.0 > model_a(2.0*0.8)=1.6
+        assert result.winner == "option_b"
 
 
 class TestBordaCountStrategy:

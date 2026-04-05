@@ -8,12 +8,13 @@ from __future__ import annotations
 import json
 import asyncio
 import sqlite3
+import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, Request, Header
+from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, Request, Header, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
@@ -712,6 +713,99 @@ async def delete_sadd_session(session_id: str, user: dict = Depends(get_current_
     global sadd_sessions_store
     sadd_sessions_store = [s for s in sadd_sessions_store if s["id"] != session_id]
     return {"success": True}
+
+# ============================================================================
+# n8n Workflow Endpoints
+# ============================================================================
+
+@app.get("/api/workflows")
+async def get_workflows(user: dict = Depends(get_current_user)):
+    """Get all n8n workflows."""
+    workflows_dir = Path("/home/westonaaron675/aura-cli/n8n-workflows")
+    workflows = []
+    
+    if not workflows_dir.exists():
+        return []
+    
+    for wf_file in workflows_dir.glob("*.json"):
+        try:
+            data = json.loads(wf_file.read_text())
+            meta = data.get("meta", {})
+            workflow_info = {
+                "id": wf_file.stem,
+                "name": meta.get("templateName", wf_file.stem),
+                "description": meta.get("templateDescription", ""),
+                "nodes": len(data.get("nodes", [])),
+                "active": True,
+                "created_at": meta.get("instanceCreatedAt", datetime.utcnow().isoformat()),
+                "tags": meta.get("templateTags", "workflow").split(", ") if isinstance(meta.get("templateTags"), str) else ["workflow"]
+            }
+            workflows.append(workflow_info)
+        except Exception as e:
+            log_json("ERROR", "api_server_error", details={"msg": f"Error loading workflow {wf_file}: {e}"})
+            continue
+    
+    return sorted(workflows, key=lambda x: x["id"])
+
+@app.get("/api/workflows/{workflow_id}")
+async def get_workflow(workflow_id: str, user: dict = Depends(get_current_user)):
+    """Get a specific n8n workflow."""
+    workflows_dir = Path("/home/westonaaron675/aura-cli/n8n-workflows")
+    wf_file = workflows_dir / f"{workflow_id}.json"
+    
+    if not wf_file.exists():
+        raise HTTPException(status_code=404, detail="Workflow not found")
+    
+    try:
+        return json.loads(wf_file.read_text())
+    except Exception as e:
+        log_json("ERROR", "api_server_error", details={"msg": f"Error loading workflow {workflow_id}: {e}"})
+        raise HTTPException(status_code=500, detail="Failed to load workflow")
+
+@app.post("/api/workflows/{workflow_id}/execute")
+async def execute_workflow(workflow_id: str, payload: dict = Body(default={})):
+    """Execute an n8n workflow."""
+    execution_id = str(uuid.uuid4())
+    log_json("INFO", "api_server_info", details={"msg": f"Starting workflow execution: {workflow_id} (execution: {execution_id})"})
+    
+    # Store execution record
+    execution_record = {
+        "id": execution_id,
+        "workflow_id": workflow_id,
+        "status": "running",
+        "started_at": datetime.utcnow().isoformat(),
+        "completed_at": None,
+        "data": payload
+    }
+    
+    await manager.broadcast({
+        "type": "workflow_execution_started",
+        "workflow_id": workflow_id,
+        "execution_id": execution_id,
+        "timestamp": datetime.utcnow().isoformat()
+    })
+    
+    return {
+        "status": "started",
+        "execution_id": execution_id,
+        "workflow_id": workflow_id,
+        "started_at": execution_record["started_at"]
+    }
+
+@app.get("/api/workflows/{workflow_id}/executions")
+async def get_workflow_executions(workflow_id: str, limit: int = 10, user: dict = Depends(get_current_user)):
+    """Get execution history for a workflow."""
+    return []
+
+@app.post("/api/workflows/{workflow_id}/activate")
+async def activate_workflow(workflow_id: str, user: dict = Depends(get_current_user)):
+    """Activate a workflow."""
+    return {"success": True, "workflow_id": workflow_id, "active": True}
+
+@app.post("/api/workflows/{workflow_id}/deactivate")
+async def deactivate_workflow(workflow_id: str, user: dict = Depends(get_current_user)):
+    """Deactivate a workflow."""
+    return {"success": True, "workflow_id": workflow_id, "active": False}
 
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")

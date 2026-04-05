@@ -1,8 +1,7 @@
 """LLM Voting System for multi-model consensus decisions."""
 
-from core.voting.engine import VotingEngine, VoteConfig, VoteResult, Vote
+from core.voting.engine import VotingEngine, VoteConfig, VoteResult, Vote, VotingStrategy
 from core.voting.strategies import (
-    VotingStrategy,
     SimpleMajorityStrategy,
     WeightedConfidenceStrategy,
     ExpertPanelStrategy,

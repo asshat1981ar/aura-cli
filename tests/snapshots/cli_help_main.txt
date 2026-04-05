@@ -1,67 +1,33 @@
-usage: aura [-h] [--version] [--json-help] [--json] [--dry-run] [--decompose]
-            [--model MODEL] [--anthropic-api-key ANTHROPIC_API_KEY] [--beads]
-            [--no-beads] [--beads-required] [--beads-optional] [--explain]
-            [--max-cycles MAX_CYCLES] [--add-goal ADD_GOAL] [--run-goals]
-            [--status] [--goal GOAL] [--workflow-goal WORKFLOW_GOAL]
-            [--workflow-max-cycles WORKFLOW_MAX_CYCLES] [--mcp-tools]
-            [--mcp-call MCP_CALL] [--mcp-args MCP_ARGS] [--diag] [--bootstrap]
-            [--scaffold SCAFFOLD] [--scaffold-desc SCAFFOLD_DESC] [--evolve]
-            COMMAND ...
+AURA CLI
 
-positional arguments:
-  COMMAND
-    bootstrap           Create default config
-    config              Show effective config
-    contract-report     Print CLI contract report
-    diag                MCP diagnostics snapshot
-    doctor              Run system diagnostics
-    evolve              Run innovation workflow
-    goal                Goal queue operations
-    help                Show CLI help
-    logs                Stream AURA logs
-    mcp                 MCP HTTP client commands
-    memory              Semantic memory operations
-    metrics             Show performance metrics
-    queue               Goal queue management
-    readiness           Check V2 runtime readiness
-    sadd                Sub-Agent Driven Development
-    scaffold            Scaffold a project
-    studio              Launch AURA Studio
-    watch               Launch TUI monitor
-    workflow            Workflow operations
+Commands:
+  help         Show CLI help
+  doctor       Run system diagnostics
+  readiness    Check V2 runtime readiness
+  bootstrap    Create default config
+  config       Show effective config
+  contract-report Print CLI contract report
+  diag         MCP diagnostics snapshot
+  logs         Stream AURA logs
+  watch        Launch TUI monitor
+  studio       Launch AURA Studio
+  goal         Goal queue operations
+  workflow     Workflow operations
+  mcp          MCP HTTP client commands
+  beads        BEADS contract commands
+  scaffold     Scaffold a project
+  evolve       Run innovation workflow
+  queue        Goal queue management
+  memory       Semantic memory operations
+  metrics      Show performance metrics
+  sadd         Sub-Agent Driven Development
+  innovate     Innovation Catalyst session management
+  agent        Agent SDK commands
 
-options:
-  -h, --help            show this help message and exit
-  --version             show program's version number and exit
-  --json-help           Emit machine-readable CLI help schema.
-  --json                Output machine-readable JSON where supported.
-  --dry-run             Do not apply filesystem changes.
-  --decompose           Enable task decomposition mode.
-  --model MODEL         Override model name for this run.
-  --anthropic-api-key ANTHROPIC_API_KEY
-                        Override Anthropic API key for this run.
-  --beads               Enable BEADS gating for this invocation.
-  --no-beads            Disable BEADS gating for this invocation.
-  --beads-required      Require BEADS to allow execution for this invocation.
-  --beads-optional      Enable BEADS without making it a hard gate for this
-                        invocation.
-  --explain             Print decision log for one-off goal runs.
-  --max-cycles MAX_CYCLES
-                        Maximum loop cycles for one-off runs.
-  --add-goal ADD_GOAL   Legacy: add a goal to the queue.
-  --run-goals           Legacy: run queued goals.
-  --status              Legacy: show goal status.
-  --goal GOAL           Legacy: run one goal immediately.
-  --workflow-goal WORKFLOW_GOAL
-                        Legacy: workflow goal text.
-  --workflow-max-cycles WORKFLOW_MAX_CYCLES
-                        Legacy: workflow max cycles.
-  --mcp-tools           Legacy: list MCP tools.
-  --mcp-call MCP_CALL   Legacy: MCP tool name to call.
-  --mcp-args MCP_ARGS   Legacy: JSON args for MCP call.
-  --diag                Legacy: run MCP diagnostics.
-  --bootstrap           Legacy: bootstrap config.
-  --scaffold SCAFFOLD   Legacy: scaffold template name.
-  --scaffold-desc SCAFFOLD_DESC
-                        Legacy: scaffold description.
-  --evolve              Legacy: run innovation workflow.
+Examples:
+  python3 main.py goal add "Refactor queue" --run
+  python3 main.py mcp tools
+  python3 main.py help goal add
+
+Legacy flat flags remain supported but are deprecated.
+

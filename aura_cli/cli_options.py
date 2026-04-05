@@ -28,6 +28,7 @@ from aura_cli.options import (
 
 _REQUIRED_SUBCOMMAND_PARENT_PATHS: set[tuple[str, ...]] = {
     ("agent",),
+    ("beads",),
     ("goal",),
     ("innovate",),
     ("mcp",),
@@ -286,6 +287,21 @@ def _customize_mcp_call(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--args", dest="mcp_args", help="JSON arguments for the MCP tool.")
 
 
+def _customize_mcp_status(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(mcp_status=True)
+
+
+def _customize_mcp_restart(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "mcp_server",
+        help="Config name of the MCP server to validate (e.g. dev_tools, skills).",
+    )
+
+
+def _customize_beads_schemas(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(beads_schemas=True)
+
+
 def _customize_diag(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(diag=True)
 
@@ -465,6 +481,9 @@ _PARSER_CUSTOMIZERS.update(
         ("workflow", "run"): _customize_workflow_run,
         ("mcp", "tools"): _customize_mcp_tools,
         ("mcp", "call"): _customize_mcp_call,
+        ("mcp", "status"): _customize_mcp_status,
+        ("mcp", "restart"): _customize_mcp_restart,
+        ("beads", "schemas"): _customize_beads_schemas,
         ("scaffold",): _customize_scaffold,
         ("evolve",): _customize_evolve,
         ("logs",): _customize_logs,

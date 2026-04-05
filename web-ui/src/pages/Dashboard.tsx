@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Target,
   Bot,
@@ -8,10 +8,12 @@ import {
   XCircle,
   TrendingUp,
   Zap,
+  Wifi,
+  WifiOff,
 } from 'lucide-react'
 import { StatsCard } from '../components/StatsCard'
-import { useGoalStore } from '../stores/goalStore'
-import { useAgentStore } from '../stores/agentStore'
+import { useGoalStore, useGoalWebSocket } from '../stores/goalStore'
+import { useAgentStore, useAgentWebSocket } from '../stores/agentStore'
 import {
   GoalTrendChart,
   AgentPerformanceChart,
@@ -19,7 +21,7 @@ import {
   ExecutionTimeChart,
 } from '../components/Charts'
 
-// Generate mock trend data
+// Generate mock trend data for initial display
 function generateTrendData() {
   const data = []
   const today = new Date()
@@ -49,18 +51,39 @@ function generateExecutionData() {
 }
 
 export function Dashboard() {
-  const { goals, fetchGoals } = useGoalStore()
-  const { agents, fetchAgents } = useAgentStore()
+  const { goals, fetchGoals, wsConnected: goalsWsConnected } = useGoalStore()
+  const { agents, fetchAgents, wsConnected: agentsWsConnected } = useAgentStore()
+  const [stats, setStats] = useState<any>(null)
+  const [isLoadingStats, setIsLoadingStats] = useState(true)
 
+  // Initialize WebSocket connections
+  useGoalWebSocket()
+  useAgentWebSocket()
+
+  // Fetch initial data
   useEffect(() => {
     fetchGoals()
     fetchAgents()
-    const interval = setInterval(() => {
-      fetchGoals()
-      fetchAgents()
-    }, 5000)
+    fetchStats()
+    
+    // Refresh stats every 10 seconds
+    const interval = setInterval(fetchStats, 10000)
     return () => clearInterval(interval)
   }, [fetchGoals, fetchAgents])
+
+  async function fetchStats() {
+    try {
+      const response = await fetch('/api/stats')
+      if (response.ok) {
+        const data = await response.json()
+        setStats(data)
+      }
+    } catch (error) {
+      console.error('Failed to fetch stats:', error)
+    } finally {
+      setIsLoadingStats(false)
+    }
+  }
 
   const pendingGoals = goals.filter((g) => g.status === 'pending').length
   const runningGoals = goals.filter((g) => g.status === 'running').length
@@ -76,7 +99,7 @@ export function Dashboard() {
   const agentPerformanceData = useMemo(
     () =>
       agents.map((agent) => ({
-        name: agent.name.split(' ')[0], // First name only
+        name: agent.name.split(' ')[0],
         tasks: agent.stats.tasks_completed,
       })),
     [agents]
@@ -97,6 +120,8 @@ export function Dashboard() {
         ) / agents.length
       : 0
 
+  const wsConnected = goalsWsConnected || agentsWsConnected
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -106,11 +131,51 @@ export function Dashboard() {
             Overview of your AURA system status and activity.
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          Live updates
+        <div className="flex items-center gap-4">
+          {/* WebSocket Connection Status */}
+          <div className={`flex items-center gap-2 text-sm ${wsConnected ? 'text-green-600' : 'text-amber-600'}`}>
+            {wsConnected ? (
+              <>
+                <Wifi className="w-4 h-4" />
+                <span>Live</span>
+              </>
+            ) : (
+              <>
+                <WifiOff className="w-4 h-4" />
+                <span>Reconnecting...</span>
+              </>
+            )}
+          </div>
+          
+          {/* Live indicator */}
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div className={`w-2 h-2 rounded-full animate-pulse ${wsConnected ? 'bg-green-500' : 'bg-amber-500'}`} />
+            {wsConnected ? 'Real-time updates' : 'Polling mode'}
+          </div>
         </div>
       </div>
+
+      {/* Stats from API */}
+      {stats && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="bg-card border rounded-xl p-4">
+            <div className="text-sm text-muted-foreground">Avg Latency</div>
+            <div className="text-2xl font-bold">{stats.telemetry?.avg_latency_ms?.toFixed(0) || 'N/A'} ms</div>
+          </div>
+          <div className="bg-card border rounded-xl p-4">
+            <div className="text-sm text-muted-foreground">Active Agents</div>
+            <div className="text-2xl font-bold">{stats.agents?.active || 0}</div>
+          </div>
+          <div className="bg-card border rounded-xl p-4">
+            <div className="text-sm text-muted-foreground">Total Records</div>
+            <div className="text-2xl font-bold">{stats.telemetry?.total_records || 0}</div>
+          </div>
+          <div className="bg-card border rounded-xl p-4">
+            <div className="text-sm text-muted-foreground">System Load</div>
+            <div className="text-2xl font-bold">{stats.system?.cpu_percent?.toFixed(1) || 'N/A'}%</div>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard

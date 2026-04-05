@@ -255,6 +255,7 @@ class TestAgentRegistryIntegration(unittest.TestCase):
             "monitoring", "notification", "telemetry", "self_correction",
             "code_search", "investigation", "root_cause_analysis",
             "mcp_discovery", "mcp_health", "autogen_group_chat",
+            "meta_conductor", "innovation_swarm",
         }
         self.assertEqual(set(agents.keys()), expected)
 

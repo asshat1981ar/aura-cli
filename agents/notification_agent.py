@@ -6,6 +6,7 @@ HTTP when the MCP server is not available.
 from __future__ import annotations
 
 import time
+import requests
 from typing import Dict, List, Optional
 
 
@@ -88,7 +89,6 @@ class NotificationAgentAdapter:
         args = self._build_args(channel, message, severity, metadata)
 
         try:
-            import requests
             response = requests.post(
                 f"{self._mcp_url}/call",
                 json={"tool_name": tool_name, "args": args},

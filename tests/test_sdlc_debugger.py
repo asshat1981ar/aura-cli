@@ -48,7 +48,7 @@ class TestPlan:
         agent = SDLCDebuggerAgent()
         task = _make_task()
         result = _make_result("fail")
-        plan = asyncio.get_event_loop().run_until_complete(agent.plan(task, result))
+        plan = asyncio.run(agent.plan(task, result))
         assert len(plan) == 4
         assert all(isinstance(s, str) for s in plan)
 
@@ -60,7 +60,7 @@ class TestExecute:
     def _run(self, summary: str, error: str = "") -> DebugReport:
         task = _make_task()
         result = _make_result(summary, error)
-        return asyncio.get_event_loop().run_until_complete(self.agent.execute(task, result))
+        return asyncio.run(self.agent.execute(task, result))
 
     @patch("agents.sdlc_debugger.log_json")
     def test_implementation_lens_on_exception(self, _):
@@ -122,8 +122,8 @@ class TestReflect:
         agent = SDLCDebuggerAgent()
         task = _make_task()
         result = _make_result("SyntaxError: x")
-        report = asyncio.get_event_loop().run_until_complete(agent.execute(task, result))
-        lessons = asyncio.get_event_loop().run_until_complete(agent.reflect(report))
+        report = asyncio.run(agent.execute(task, result))
+        lessons = asyncio.run(agent.reflect(report))
         assert isinstance(lessons, list)
         assert len(lessons) >= 1
         assert all(isinstance(l, str) for l in lessons)
@@ -135,7 +135,7 @@ class TestBuildRecoveryPlan:
         agent = SDLCDebuggerAgent()
         task = _make_task("my-task")
         result = _make_result("exception")
-        report = asyncio.get_event_loop().run_until_complete(agent.execute(task, result))
+        report = asyncio.run(agent.execute(task, result))
         assert any("Re-state acceptance criteria" in step for step in report.recovery_plan)
 
     @patch("agents.sdlc_debugger.log_json")
@@ -143,5 +143,5 @@ class TestBuildRecoveryPlan:
         agent = SDLCDebuggerAgent()
         task = _make_task()
         result = _make_result("exception")
-        report = asyncio.get_event_loop().run_until_complete(agent.execute(task, result))
+        report = asyncio.run(agent.execute(task, result))
         assert any("tester validation" in step for step in report.recovery_plan)

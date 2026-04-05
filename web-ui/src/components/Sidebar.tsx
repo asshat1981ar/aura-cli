@@ -5,12 +5,20 @@ import {
   Bot,
   FileText,
   Settings,
+  MessageSquare,
+  Code2,
+  Workflow,
+  BarChart3,
 } from 'lucide-react'
 
 const navItems = [
   { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
+  { path: '/chat', icon: MessageSquare, label: 'AI Chat' },
+  { path: '/editor', icon: Code2, label: 'Editor' },
   { path: '/goals', icon: Target, label: 'Goals' },
   { path: '/agents', icon: Bot, label: 'Agents' },
+  { path: '/sadd', icon: Workflow, label: 'SADD' },
+  { path: '/coverage', icon: BarChart3, label: 'Coverage' },
   { path: '/logs', icon: FileText, label: 'Logs' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ]
@@ -18,7 +26,7 @@ const navItems = [
 export function Sidebar() {
   return (
     <aside className="w-64 min-h-[calc(100vh-4rem)] border-r bg-card">
-      <nav className="p-4 space-y-2">
+      <nav className="p-4 space-y-1">
         {navItems.map((item) => (
           <NavLink
             key={item.path}

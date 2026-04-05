@@ -476,6 +476,243 @@ async def get_stats(user: dict = Depends(get_current_user)):
         },
     }
 
+# Chat endpoints
+@app.post("/api/chat")
+async def chat_endpoint(request: dict, user: dict = Depends(get_current_user)):
+    """Handle chat messages with agents."""
+    message = request.get("message", "")
+    agent = request.get("agent", "planner")
+    session_id = request.get("session_id", "")
+    
+    # Import and use the agent
+    try:
+        from agents.registry import default_agents
+        from core.model_adapter import ModelAdapter
+        from memory.brain import Brain
+        
+        brain = Brain(Path("."))
+        model = ModelAdapter()
+        agents = default_agents(brain, model)
+        
+        # Find the requested agent or use planner as fallback
+        agent_instance = agents.get(agent) or agents.get("planner")
+        
+        if agent_instance:
+            # Execute the agent with the message
+            result = await agent_instance.run(message) if hasattr(agent_instance, 'run') else {"response": f"Agent {agent} received: {message}"}
+            
+            # Broadcast to WebSocket clients
+            await manager.broadcast({
+                "type": "chat_message",
+                "payload": {
+                    "session_id": session_id,
+                    "role": "assistant",
+                    "content": result.get("response", str(result)),
+                    "agent": agent,
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            })
+            
+            return {
+                "response": result.get("response", str(result)),
+                "metadata": {
+                    "model": getattr(result, 'model', 'unknown'),
+                    "tokens": getattr(result, 'tokens_used', 0),
+                }
+            }
+        else:
+            return {"response": f"Agent '{agent}' not found. Available agents will be listed."}
+            
+    except Exception as e:
+        return {"response": f"Error processing message: {str(e)}"}
+
+# File endpoints
+@app.get("/api/files/tree")
+async def get_file_tree(path: str = "", user: dict = Depends(get_current_user)):
+    """Get file tree for the given path."""
+    try:
+        from pathlib import Path as PathLib
+        
+        base_path = PathLib("/home/westonaaron675/aura-cli")
+        target_path = base_path / path if path else base_path
+        
+        if not str(target_path).startswith(str(base_path)):
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        def build_tree(p: PathLib, depth: int = 0) -> list:
+            if depth > 3:  # Limit depth
+                return []
+            
+            items = []
+            try:
+                for item in sorted(p.iterdir()):
+                    if item.name.startswith('.') or item.name in ['node_modules', '__pycache__', '.git']:
+                        continue
+                    
+                    node = {
+                        "name": item.name,
+                        "path": str(item.relative_to(base_path)),
+                        "type": "directory" if item.is_dir() else "file",
+                    }
+                    
+                    if item.is_dir() and depth < 3:
+                        node["children"] = build_tree(item, depth + 1)
+                    
+                    items.append(node)
+            except PermissionError:
+                pass
+            
+            return items
+        
+        return build_tree(target_path)
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/files/content")
+async def get_file_content(path: str, user: dict = Depends(get_current_user)):
+    """Get content of a file."""
+    try:
+        from pathlib import Path as PathLib
+        
+        base_path = PathLib("/home/westonaaron675/aura-cli")
+        file_path = base_path / path
+        
+        if not str(file_path.resolve()).startswith(str(base_path.resolve())):
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+        
+        if file_path.is_dir():
+            raise HTTPException(status_code=400, detail="Path is a directory")
+        
+        # Limit file size to 1MB
+        if file_path.stat().st_size > 1024 * 1024:
+            raise HTTPException(status_code=413, detail="File too large")
+        
+        content = file_path.read_text(encoding='utf-8', errors='replace')
+        return {"content": content, "path": path}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/files/save")
+async def save_file(request: dict, user: dict = Depends(get_current_user)):
+    """Save content to a file."""
+    try:
+        from pathlib import Path as PathLib
+        
+        base_path = PathLib("/home/westonaaron675/aura-cli")
+        path = request.get("path", "")
+        content = request.get("content", "")
+        
+        file_path = base_path / path
+        
+        if not str(file_path.resolve()).startswith(str(base_path.resolve())):
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Create parent directories if needed
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        file_path.write_text(content, encoding='utf-8')
+        
+        return {"success": True, "path": path}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# SADD endpoints
+sadd_sessions_store: List[Dict[str, Any]] = []
+
+@app.get("/api/sadd/sessions")
+async def get_sadd_sessions(user: dict = Depends(get_current_user)):
+    """Get all SADD sessions."""
+    return sadd_sessions_store
+
+@app.post("/api/sadd/sessions")
+async def create_sadd_session(request: dict, user: dict = Depends(get_current_user)):
+    """Create a new SADD session."""
+    session = {
+        "id": f"sadd-{len(sadd_sessions_store) + 1}",
+        "title": request.get("title", "Untitled Session"),
+        "design_spec": request.get("design_spec", ""),
+        "status": "idle",
+        "workstreams": [],
+        "created_at": datetime.utcnow().isoformat(),
+        "updated_at": datetime.utcnow().isoformat(),
+        "artifacts": [],
+    }
+    sadd_sessions_store.insert(0, session)
+    return session
+
+@app.post("/api/sadd/sessions/{session_id}/start")
+async def start_sadd_session(session_id: str, user: dict = Depends(get_current_user)):
+    """Start a SADD session."""
+    for session in sadd_sessions_store:
+        if session["id"] == session_id:
+            session["status"] = "running"
+            session["updated_at"] = datetime.utcnow().isoformat()
+            
+            # Initialize workstreams from design spec
+            # This is a simplified version - real implementation would parse the spec
+            session["workstreams"] = [
+                {
+                    "id": f"ws-{i}",
+                    "name": f"Workstream {i+1}",
+                    "description": "Auto-generated from design spec",
+                    "status": "pending",
+                    "dependencies": [],
+                    "artifacts": [],
+                    "progress": 0,
+                }
+                for i in range(3)
+            ]
+            
+            return {"success": True}
+    
+    raise HTTPException(status_code=404, detail="Session not found")
+
+@app.post("/api/sadd/sessions/{session_id}/pause")
+async def pause_sadd_session(session_id: str, user: dict = Depends(get_current_user)):
+    """Pause a SADD session."""
+    for session in sadd_sessions_store:
+        if session["id"] == session_id:
+            session["status"] = "paused"
+            session["updated_at"] = datetime.utcnow().isoformat()
+            return {"success": True}
+    
+    raise HTTPException(status_code=404, detail="Session not found")
+
+@app.post("/api/sadd/sessions/{session_id}/resume")
+async def resume_sadd_session(session_id: str, user: dict = Depends(get_current_user)):
+    """Resume a SADD session."""
+    for session in sadd_sessions_store:
+        if session["id"] == session_id:
+            session["status"] = "running"
+            session["updated_at"] = datetime.utcnow().isoformat()
+            return {"success": True}
+    
+    raise HTTPException(status_code=404, detail="Session not found")
+
+@app.post("/api/sadd/sessions/{session_id}/stop")
+async def stop_sadd_session(session_id: str, user: dict = Depends(get_current_user)):
+    """Stop a SADD session."""
+    for session in sadd_sessions_store:
+        if session["id"] == session_id:
+            session["status"] = "failed"
+            session["updated_at"] = datetime.utcnow().isoformat()
+            return {"success": True}
+    
+    raise HTTPException(status_code=404, detail="Session not found")
+
+@app.delete("/api/sadd/sessions/{session_id}")
+async def delete_sadd_session(session_id: str, user: dict = Depends(get_current_user)):
+    """Delete a SADD session."""
+    global sadd_sessions_store
+    sadd_sessions_store = [s for s in sadd_sessions_store if s["id"] != session_id]
+    return {"success": True}
+
 # WebSocket endpoint for real-time updates
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

@@ -29,9 +29,9 @@ class TestMissingPackage:
     """Test _MissingPackage placeholder class."""
     
     def test_getattr_raises(self):
-        """Test attribute access raises ImportError."""
+        """Test attribute access raises AttributeError (so getattr(obj, name, default) works)."""
         missing = _MissingPackage("test_package")
-        with pytest.raises(ImportError) as exc_info:
+        with pytest.raises(AttributeError) as exc_info:
             missing.some_attribute
         assert "test_package" in str(exc_info.value)
     

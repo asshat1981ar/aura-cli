@@ -88,74 +88,71 @@ class TestVectorStoreSearchAppliesLimit(unittest.TestCase):
         We do this by counting how many rows are passed to the numpy scoring loop,
         which we intercept by patching numpy.frombuffer.
         """
-        import sys
-        import importlib
         import numpy as np
-
-        # Guard: a previous test (test_optional_dependency_guards) may have left
-        # core.vector_store with np=_MissingPackage.  On Python 3.10, mock.patch
-        # propagates the resulting ImportError instead of catching it as an
-        # AttributeError, which causes a spurious failure.  Reload the module so
-        # it re-imports numpy now that it is available in sys.modules.
-        vs_mod = sys.modules.get("core.vector_store")
-        if vs_mod is not None:
-            from core.vector_store import _MissingPackage as _MP
-            if isinstance(vs_mod.np, _MP):
-                importlib.reload(vs_mod)
-
+        import core.vector_store as vs_mod
         from core.vector_store import VectorStore, SEARCH_LIMIT
 
-        with tempfile.TemporaryDirectory() as tmp:
-            brain = _make_brain(tmp)
-            adapter = _make_model_adapter(dims=4)
-            vs = VectorStore(model_adapter=adapter, brain=brain)
+        # Use patch.object to force real numpy into core.vector_store for the
+        # duration of this test.  A previous test (test_optional_dependency_guards)
+        # may have left core.vector_store.np = _MissingPackage.  The string-form
+        # patch("core.vector_store.np.frombuffer") fails on Python 3.10 in that
+        # state because mock.patch raises AttributeError when it can't find the
+        # attribute.  patch.object(vs_mod, "np", np) bypasses that entirely.
+        with patch.object(vs_mod, "np", np):
+            with tempfile.TemporaryDirectory() as tmp:
+                brain = _make_brain(tmp)
+                adapter = _make_model_adapter(dims=4)
+                vs = VectorStore(model_adapter=adapter, brain=brain)
 
-            dims = 4
-            embedding_blob = np.ones(dims, dtype=np.float32).tobytes()
-            now = 1_700_000_000.0
-            import uuid
-            import hashlib
+                dims = 4
+                embedding_blob = np.ones(dims, dtype=np.float32).tobytes()
+                now = 1_700_000_000.0
+                import uuid
+                import hashlib
 
-            # Insert SEARCH_LIMIT + 50 rows directly so we exceed the cap
-            rows = []
-            for i in range(SEARCH_LIMIT + 50):
-                rid = uuid.uuid4().hex
-                content = f"entry-{i}"
-                content_hash = hashlib.sha256(content.encode()).hexdigest()
-                rows.append((rid, content, "test", None, now, now, None, None,
-                              "[]", 1.0, 0, "test-model", dims, content_hash, embedding_blob))
+                # Insert SEARCH_LIMIT + 50 rows directly so we exceed the cap
+                rows = []
+                for i in range(SEARCH_LIMIT + 50):
+                    rid = uuid.uuid4().hex
+                    content = f"entry-{i}"
+                    content_hash = hashlib.sha256(content.encode()).hexdigest()
+                    rows.append((rid, content, "test", None, now, now, None, None,
+                                  "[]", 1.0, 0, "test-model", dims, content_hash, embedding_blob))
 
-            brain.db.executemany(
-                """INSERT INTO memory_records
-                   (id, content, source_type, source_ref, created_at, updated_at,
-                    goal_id, agent_name, tags, importance, token_count,
-                    embedding_model, embedding_dims, content_hash, embedding)
-                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                rows,
-            )
-            emb_rows = [(r[0], "test-model", dims, embedding_blob) for r in rows]
-            brain.db.executemany(
-                "INSERT INTO embeddings (record_id, model_id, dims, data) VALUES (?,?,?,?)",
-                emb_rows,
-            )
-            brain.db.commit()
+                brain.db.executemany(
+                    """INSERT INTO memory_records
+                       (id, content, source_type, source_ref, created_at, updated_at,
+                        goal_id, agent_name, tags, importance, token_count,
+                        embedding_model, embedding_dims, content_hash, embedding)
+                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                    rows,
+                )
+                emb_rows = [(r[0], "test-model", dims, embedding_blob) for r in rows]
+                brain.db.executemany(
+                    "INSERT INTO embeddings (record_id, model_id, dims, data) VALUES (?,?,?,?)",
+                    emb_rows,
+                )
+                brain.db.commit()
 
-            frombuffer_call_count = [0]
-            original_frombuffer = np.frombuffer
+                frombuffer_call_count = [0]
+                original_frombuffer = np.frombuffer
 
-            def counting_frombuffer(buf, dtype=None):
-                frombuffer_call_count[0] += 1
-                return original_frombuffer(buf, dtype=dtype)
+                def counting_frombuffer(buf, dtype=None):
+                    frombuffer_call_count[0] += 1
+                    return original_frombuffer(buf, dtype=dtype)
 
-            with patch("core.vector_store.np.frombuffer", side_effect=counting_frombuffer):
-                vs.search("test query", k=5)
+                # Patch frombuffer on the real numpy module object directly.
+                # This is reliable on all Python versions because we already
+                # pinned core.vector_store.np = real numpy via patch.object above.
+                with patch.object(np, "frombuffer", side_effect=counting_frombuffer):
+                    vs.search("test query", k=5)
 
-            self.assertLessEqual(
-                frombuffer_call_count[0],
-                SEARCH_LIMIT,
-                f"search() should process at most SEARCH_LIMIT={SEARCH_LIMIT} candidates "
-                f"from the DB, but np.frombuffer was called {frombuffer_call_count[0]} times",
-            )
+                self.assertLessEqual(
+                    frombuffer_call_count[0],
+                    SEARCH_LIMIT,
+                    f"search() should process at most SEARCH_LIMIT={SEARCH_LIMIT} candidates "
+                    f"from the DB, but np.frombuffer was called {frombuffer_call_count[0]} times",
+                )
 
 
 if __name__ == "__main__":

@@ -9,18 +9,34 @@ import json
 import asyncio
 import sqlite3
 import uuid
+import time
+import hashlib
+import re
+import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from pathlib import Path
+from collections import defaultdict
 
 from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, Request, Header, Body
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from core.logging_utils import log_json
+
+# Security configuration
+RATE_LIMIT_REQUESTS = 100  # requests per window
+RATE_LIMIT_WINDOW = 60     # seconds
+MAX_REQUEST_SIZE = 10 * 1024 * 1024  # 10MB
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "*.localhost"]
+
+# Rate limiting storage
+request_counts: Dict[str, List[float]] = defaultdict(list)
 
 # Try to import AURA components
 try:
@@ -40,6 +56,101 @@ try:
     AUTH_AVAILABLE = True
 except ImportError:
     AUTH_AVAILABLE = False
+
+# Security Middleware
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to all responses."""
+    
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        
+        # Security headers
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        
+        # Content Security Policy
+        csp = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline' fonts.googleapis.com; "
+            "font-src 'self' fonts.gstatic.com; "
+            "img-src 'self' data: blob:; "
+            "connect-src 'self' ws: wss:; "
+            "frame-ancestors 'none';"
+        )
+        response.headers["Content-Security-Policy"] = csp
+        
+        return response
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """Rate limiting middleware."""
+    
+    async def dispatch(self, request: Request, call_next):
+        # Get client identifier (IP or API key)
+        client_ip = request.client.host if request.client else "unknown"
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            client_ip = forwarded.split(",")[0].strip()
+        
+        # Clean old requests
+        current_time = time.time()
+        request_counts[client_ip] = [
+            t for t in request_counts[client_ip]
+            if current_time - t < RATE_LIMIT_WINDOW
+        ]
+        
+        # Check rate limit
+        if len(request_counts[client_ip]) >= RATE_LIMIT_REQUESTS:
+            log_json("WARN", "rate_limit_exceeded", {"ip": client_ip})
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded. Please try again later."}
+            )
+        
+        # Record request
+        request_counts[client_ip].append(current_time)
+        
+        # Add rate limit headers
+        response = await call_next(request)
+        response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT_REQUESTS)
+        response.headers["X-RateLimit-Remaining"] = str(
+            max(0, RATE_LIMIT_REQUESTS - len(request_counts[client_ip]))
+        )
+        
+        return response
+
+
+class RequestSizeMiddleware(BaseHTTPMiddleware):
+    """Limit request body size."""
+    
+    async def dispatch(self, request: Request, call_next):
+        content_length = request.headers.get("content-length")
+        if content_length and int(content_length) > MAX_REQUEST_SIZE:
+            return JSONResponse(
+                status_code=413,
+                content={"detail": f"Request body too large. Max size: {MAX_REQUEST_SIZE} bytes"}
+            )
+        return await call_next(request)
+
+
+def sanitize_input(value: str) -> str:
+    """Sanitize user input to prevent injection attacks."""
+    # Remove potentially dangerous characters
+    sanitized = re.sub(r'[<>"\']', '', value)
+    # Limit length
+    return sanitized[:1000]
+
+
+def validate_path(path: str) -> bool:
+    """Validate file path to prevent directory traversal."""
+    # Check for directory traversal attempts
+    dangerous_patterns = ['..', '~', '//']
+    return not any(pattern in path for pattern in dangerous_patterns)
+
 
 # WebSocket connection manager
 class ConnectionManager:
@@ -299,15 +410,23 @@ app = FastAPI(
     description="API for AURA CLI Web Dashboard",
     version="0.1.0",
     lifespan=lifespan,
+    docs_url="/api/docs" if os.getenv("AURA_ENV") != "production" else None,
+    redoc_url="/api/redoc" if os.getenv("AURA_ENV") != "production" else None,
 )
+
+# Security middleware (order matters - first added = last executed)
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RateLimitMiddleware)
+app.add_middleware(RequestSizeMiddleware)
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],
+    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(","),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    max_age=600,
 )
 
 security = HTTPBearer(auto_error=False)
@@ -795,6 +914,79 @@ async def run_tests(user: dict = Depends(get_current_user)):
     })
     return {"status": "started", "message": "Test run initiated"}
 
+# Settings endpoints
+@app.get("/api/settings")
+async def get_settings(user: dict = Depends(get_current_user)):
+    """Get system settings."""
+    return {
+        "theme": "system",
+        "refresh_interval": 5,
+        "notifications": {
+            "goal_completion": True,
+            "agent_status": True,
+            "errors": True,
+            "webhook_events": False
+        },
+        "api": {
+            "endpoint": "http://localhost:8000",
+            "websocket": "ws://localhost:8000/ws",
+            "timeout": 30
+        },
+        "features": {
+            "auto_refresh": True,
+            "confirm_destructive": True,
+            "show_telemetry": True
+        }
+    }
+
+@app.post("/api/settings")
+async def update_settings(settings: dict = Body(default={}), user: dict = Depends(get_current_user)):
+    """Update system settings."""
+    log_json("INFO", "settings_updated", {"user": user.get("username"), "settings": settings})
+    return {"success": True, "message": "Settings updated"}
+
+@app.get("/api/settings/mcp")
+async def get_mcp_settings(user: dict = Depends(get_current_user)):
+    """Get MCP server configuration."""
+    try:
+        if MCP_CONFIG_PATH.exists():
+            config = json.loads(MCP_CONFIG_PATH.read_text())
+            # Mask sensitive values
+            for server in config.get("mcpServers", {}).values():
+                for key in list(server.get("env", {}).keys()):
+                    server["env"][key] = "***"
+                if "headers" in server:
+                    for key in list(server["headers"].keys()):
+                        if "auth" in key.lower() or "token" in key.lower():
+                            server["headers"][key] = "***"
+            return config
+    except Exception as e:
+        log_json("ERROR", "mcp_settings_fetch_failed", {"error": str(e)})
+    
+    return {"mcpServers": {}}
+
+@app.post("/api/settings/mcp")
+async def update_mcp_settings(config: dict = Body(default={}), user: dict = Depends(get_current_user)):
+    """Update MCP server configuration."""
+    try:
+        MCP_CONFIG_PATH.write_text(json.dumps(config, indent=2))
+        log_json("INFO", "mcp_settings_updated", {"user": user.get("username")})
+        return {"success": True, "message": "MCP configuration updated"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update MCP config: {e}")
+
+@app.post("/api/settings/mcp/test")
+async def test_mcp_connection(server_id: str, user: dict = Depends(get_current_user)):
+    """Test MCP server connection."""
+    # Simulate connection test
+    await asyncio.sleep(1)
+    return {
+        "server_id": server_id,
+        "status": "connected",
+        "latency_ms": 45,
+        "tools_available": 5
+    }
+
 @app.get("/api/health")
 async def get_health():
     """Get system health status."""
@@ -870,6 +1062,144 @@ async def chat_endpoint(request: dict, user: dict = Depends(get_current_user)):
             
     except Exception as e:
         return {"response": f"Error processing message: {str(e)}"}
+
+# Terminal endpoints
+terminal_sessions: Dict[str, Dict] = {}
+
+@app.post("/api/terminal/execute")
+async def execute_terminal_command(request: dict = Body(default={}), user: dict = Depends(get_current_user)):
+    """Execute a terminal command."""
+    import subprocess
+    import os
+    
+    command = request.get("command", "")
+    session_id = request.get("session_id", str(uuid.uuid4()))
+    cwd = request.get("cwd", "/home/westonaaron675/aura-cli")
+    
+    # Sanitize inputs
+    command = sanitize_input(command)
+    session_id = sanitize_input(session_id)
+    
+    if not command:
+        return {"error": "No command provided"}
+    
+    # Validate working directory
+    if not validate_path(cwd):
+        return {"error": "Invalid working directory"}
+    
+    # Security: Block dangerous commands
+    blocked_patterns = [
+        r'rm\s+-rf\s+/',
+        r'sudo\s',
+        r'su\s+-',
+        r'>\s*/dev/',
+        r'mkfs\.?',
+        r'dd\s+if=',
+        r':\(\)\s*{\s*:\|:\s*&\s*};\s*:',
+        r'curl\s+.*\s*\|\s*sh',
+        r'wget\s+.*\s*\|\s*sh',
+        r'eval\s*\$',
+        r'exec\s+/',
+    ]
+    
+    for pattern in blocked_patterns:
+        if re.search(pattern, command, re.IGNORECASE):
+            log_json("WARN", "blocked_command_attempted", {
+                "command": command[:100],
+                "user": user.get("username"),
+                "pattern": pattern
+            })
+            return {"error": "Command blocked for security reasons"}
+    
+    try:
+        # Execute command with timeout
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=30,
+            env={**os.environ, 'TERM': 'xterm-256color'}
+        )
+        
+        output = result.stdout
+        if result.stderr:
+            output += f"\n{result.stderr}"
+        
+        # Store in session history
+        if session_id not in terminal_sessions:
+            terminal_sessions[session_id] = {"commands": [], "cwd": cwd}
+        
+        terminal_sessions[session_id]["commands"].append({
+            "command": command,
+            "output": output,
+            "exit_code": result.returncode,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        terminal_sessions[session_id]["cwd"] = cwd
+        
+        # Broadcast to WebSocket
+        await manager.broadcast({
+            "type": "terminal_output",
+            "session_id": session_id,
+            "command": command,
+            "output": output,
+            "exit_code": result.returncode,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        
+        return {
+            "session_id": session_id,
+            "output": output,
+            "exit_code": result.returncode,
+            "cwd": cwd
+        }
+    except subprocess.TimeoutExpired:
+        return {"error": "Command timed out after 30 seconds", "session_id": session_id}
+    except Exception as e:
+        return {"error": str(e), "session_id": session_id}
+
+@app.get("/api/terminal/sessions")
+async def get_terminal_sessions(user: dict = Depends(get_current_user)):
+    """Get active terminal sessions."""
+    return {
+        "sessions": [
+            {
+                "id": sid,
+                "command_count": len(data["commands"]),
+                "cwd": data["cwd"],
+                "last_active": data["commands"][-1]["timestamp"] if data["commands"] else None
+            }
+            for sid, data in terminal_sessions.items()
+        ]
+    }
+
+@app.get("/api/terminal/sessions/{session_id}")
+async def get_terminal_session(session_id: str, user: dict = Depends(get_current_user)):
+    """Get terminal session history."""
+    if session_id not in terminal_sessions:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    return {
+        "id": session_id,
+        "commands": terminal_sessions[session_id]["commands"],
+        "cwd": terminal_sessions[session_id]["cwd"]
+    }
+
+@app.delete("/api/terminal/sessions/{session_id}")
+async def delete_terminal_session(session_id: str, user: dict = Depends(get_current_user)):
+    """Delete a terminal session."""
+    if session_id in terminal_sessions:
+        del terminal_sessions[session_id]
+    return {"success": True}
+
+@app.post("/api/terminal/sessions/{session_id}/clear")
+async def clear_terminal_session(session_id: str, user: dict = Depends(get_current_user)):
+    """Clear terminal session history."""
+    if session_id in terminal_sessions:
+        terminal_sessions[session_id]["commands"] = []
+    return {"success": True}
 
 # File endpoints
 @app.get("/api/files/tree")

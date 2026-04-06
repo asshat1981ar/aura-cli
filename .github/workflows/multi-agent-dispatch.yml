@@ -298,6 +298,23 @@ jobs:
             echo "Claude agent skipped: CLAUDE_CODE_OAUTH_TOKEN is not configured." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: 'Notify user when Claude is unavailable'
+        if: steps.claude-auth.outputs.available == 'false'
+        uses: 'actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea' # v7
+        with:
+          script: |
+            const issueNumber = context.payload.issue?.number || context.payload.pull_request?.number;
+            if (!issueNumber) {
+              core.info('No issue or pull request number found; skipping Claude unavailable comment.');
+              return;
+            }
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: "Claude is currently unavailable for this workflow run because `CLAUDE_CODE_OAUTH_TOKEN` is not configured. Please ask a repository maintainer to configure the secret, or try another available agent."
+            });
       - name: 'Checkout repository'
         if: steps.claude-auth.outputs.available == 'true'
         uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # v4

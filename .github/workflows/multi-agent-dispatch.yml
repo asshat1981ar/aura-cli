@@ -38,7 +38,12 @@ jobs:
           contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
             github.event.comment.author_association ||
             github.event.review.author_association  ||
-            github.event.issue.author_association)
+            github.event.issue.author_association) &&
+          (
+            startsWith(github.event.comment.body || github.event.review.body || '', '@gemini-cli') ||
+            startsWith(github.event.comment.body || github.event.review.body || '', '@claude') ||
+            startsWith(github.event.comment.body || github.event.review.body || '', '@kimi')
+          )
         )
       }}
     runs-on: 'ubuntu-latest'

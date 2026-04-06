@@ -1,0 +1,438 @@
+name: '🤖 Multi-Agent Dispatch (Gemini · Claude · Kimi)'
+
+# Triggers on issue/PR comments that mention @gemini-cli, @claude, or @kimi.
+# Gemini CLI acts as the self-prompting orchestrator and can delegate
+# sub-tasks to Claude and Kimi agents.
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request_review:
+    types: [submitted]
+  issues:
+    types: [opened, reopened]
+  pull_request:
+    types: [opened]
+
+defaults:
+  run:
+    shell: 'bash'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dispatch — parse the event body and decide which agent(s) to invoke
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  dispatch:
+    if: |-
+      ${{
+        (
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.fork == false
+        ) || (
+          github.event_name == 'issues' &&
+          contains(fromJSON('["opened","reopened"]'), github.event.action)
+        ) || (
+          github.event.sender.type == 'User' &&
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+            github.event.comment.author_association ||
+            github.event.review.author_association  ||
+            github.event.issue.author_association)
+        )
+      }}
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'read'
+      issues: 'write'
+      pull-requests: 'write'
+    outputs:
+      agent:            '${{ steps.parse.outputs.agent }}'
+      command:          '${{ steps.parse.outputs.command }}'
+      additional_context: '${{ steps.parse.outputs.additional_context }}'
+      issue_number:     '${{ github.event.pull_request.number || github.event.issue.number }}'
+
+    steps:
+      - name: 'Mint identity token'
+        id: 'mint_identity_token'
+        if: '${{ vars.APP_ID }}'
+        uses: 'actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf' # ratchet:actions/create-github-app-token@v2
+        with:
+          app-id: '${{ vars.APP_ID }}'
+          private-key: '${{ secrets.APP_PRIVATE_KEY }}'
+          permission-contents: 'read'
+          permission-issues: 'write'
+          permission-pull-requests: 'write'
+
+      - name: 'Parse agent and command'
+        id: 'parse'
+        uses: 'actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea' # ratchet:actions/github-script@v7
+        env:
+          EVENT_TYPE: '${{ github.event_name }}.${{ github.event.action }}'
+          REQUEST: '${{ github.event.comment.body || github.event.review.body || github.event.issue.body || github.event.pull_request.body }}'
+        with:
+          script: |
+            const eventType = process.env.EVENT_TYPE;
+            const request   = (process.env.REQUEST || '').trim();
+
+            // Automatic routing for new PRs / issues
+            if (eventType === 'pull_request.opened') {
+              core.setOutput('agent',   'gemini');
+              core.setOutput('command', 'review');
+              return;
+            }
+            if (['issues.opened','issues.reopened'].includes(eventType)) {
+              core.setOutput('agent',   'gemini');
+              core.setOutput('command', 'triage');
+              return;
+            }
+
+            // Explicit @agent routing in comments / reviews
+            const patterns = [
+              { re: /^@gemini-cli\b/,  agent: 'gemini' },
+              { re: /^@claude\b/,      agent: 'claude' },
+              { re: /^@kimi\b/,        agent: 'kimi'   },
+            ];
+
+            for (const { re, agent } of patterns) {
+              if (re.test(request)) {
+                const context = request.replace(re, '').trim();
+                core.setOutput('agent',              agent);
+                core.setOutput('additional_context', context);
+                core.setOutput('command',            'invoke');
+                return;
+              }
+            }
+
+            core.setOutput('agent',   'none');
+            core.setOutput('command', 'fallthrough');
+
+      - name: 'Acknowledge request'
+        if: steps.parse.outputs.command != 'fallthrough'
+        env:
+          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
+          ISSUE_NUMBER: '${{ github.event.pull_request.number || github.event.issue.number }}'
+          AGENT:        '${{ steps.parse.outputs.agent }}'
+          REPOSITORY:   '${{ github.repository }}'
+        run: |-
+          EMOJI="🤖"
+          case "$AGENT" in
+            gemini) EMOJI="✨ Gemini" ;;
+            claude) EMOJI="🧠 Claude" ;;
+            kimi)   EMOJI="🌙 Kimi"   ;;
+          esac
+          gh issue comment "${ISSUE_NUMBER}" \
+            --body "${EMOJI}: Hi @${{ github.actor }}, I've received your request and I'm working on it now! Track my progress [in the logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})." \
+            --repo "${REPOSITORY}"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Gemini Agent — run-gemini-cli@v0.1.21 with self-prompting orchestration
+  # ───────────────────────────────────────────────────────────────────────────
+  gemini-agent:
+    needs: 'dispatch'
+    if: |-
+      ${{ needs.dispatch.outputs.agent == 'gemini' }}
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 30
+    permissions:
+      contents: 'write'
+      id-token: 'write'
+      issues: 'write'
+      pull-requests: 'write'
+
+    steps:
+      - name: 'Mint identity token'
+        id: 'mint_identity_token'
+        if: '${{ vars.APP_ID }}'
+        uses: 'actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf' # ratchet:actions/create-github-app-token@v2
+        with:
+          app-id: '${{ vars.APP_ID }}'
+          private-key: '${{ secrets.APP_PRIVATE_KEY }}'
+          permission-contents: 'write'
+          permission-issues: 'write'
+          permission-pull-requests: 'write'
+
+      - name: 'Checkout Code'
+        uses: 'actions/checkout@v4' # ratchet:exclude
+
+      - name: 'Run Gemini CLI'
+        id: 'run_gemini'
+        uses: 'google-github-actions/run-gemini-cli@9dbec29a20fab3f35017a40ad0eb798a257d4d51' # v0.1.21
+        env:
+          TITLE:              '${{ github.event.pull_request.title || github.event.issue.title }}'
+          DESCRIPTION:        '${{ github.event.pull_request.body  || github.event.issue.body  }}'
+          EVENT_NAME:         '${{ github.event_name }}'
+          GITHUB_TOKEN:       '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
+          IS_PULL_REQUEST:    '${{ !!github.event.pull_request }}'
+          ISSUE_NUMBER:       '${{ github.event.pull_request.number || github.event.issue.number }}'
+          REPOSITORY:         '${{ github.repository }}'
+          ADDITIONAL_CONTEXT: '${{ needs.dispatch.outputs.additional_context }}'
+          COMMAND:            '${{ needs.dispatch.outputs.command }}'
+        with:
+          gcp_location:                '${{ vars.GOOGLE_CLOUD_LOCATION }}'
+          gcp_project_id:              '${{ vars.GOOGLE_CLOUD_PROJECT }}'
+          gcp_service_account:         '${{ vars.SERVICE_ACCOUNT_EMAIL }}'
+          gcp_workload_identity_provider: '${{ vars.GCP_WIF_PROVIDER }}'
+          gemini_api_key:              '${{ secrets.GEMINI_API_KEY }}'
+          gemini_cli_version:          '${{ vars.GEMINI_CLI_VERSION }}'
+          gemini_debug:                '${{ fromJSON(vars.GEMINI_DEBUG || vars.ACTIONS_STEP_DEBUG || false) }}'
+          gemini_model:                '${{ vars.GEMINI_MODEL }}'
+          google_api_key:              '${{ secrets.GOOGLE_API_KEY }}'
+          use_gemini_code_assist:      '${{ vars.GOOGLE_GENAI_USE_GCA }}'
+          use_vertex_ai:               '${{ vars.GOOGLE_GENAI_USE_VERTEXAI }}'
+          upload_artifacts:            '${{ vars.UPLOAD_ARTIFACTS }}'
+          workflow_name:               'multi-agent-dispatch'
+          settings: |-
+            {
+              "model": {
+                "maxSessionTurns": 30
+              },
+              "telemetry": {
+                "enabled": true,
+                "target": "local",
+                "outfile": ".gemini/telemetry.log"
+              },
+              "mcpServers": {
+                "github": {
+                  "command": "docker",
+                  "args": [
+                    "run", "-i", "--rm",
+                    "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+                    "ghcr.io/github/github-mcp-server:v0.27.0"
+                  ],
+                  "includeTools": [
+                    "add_issue_comment",
+                    "create_branch",
+                    "create_or_update_file",
+                    "create_pull_request",
+                    "delete_file",
+                    "get_commit",
+                    "get_file_contents",
+                    "issue_read",
+                    "list_commits",
+                    "list_issues",
+                    "list_pull_requests",
+                    "pull_request_read",
+                    "push_files",
+                    "search_code",
+                    "search_issues",
+                    "search_pull_requests"
+                  ],
+                  "env": {
+                    "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+                  }
+                }
+              },
+              "tools": {
+                "core": [
+                  "run_shell_command(cat)",
+                  "run_shell_command(echo)",
+                  "run_shell_command(grep)",
+                  "run_shell_command(head)",
+                  "run_shell_command(tail)"
+                ]
+              }
+            }
+          # Self-prompting system prompt: Gemini acts as the orchestrator and
+          # may delegate sub-tasks to Claude or Kimi by mentioning them in its
+          # issue/PR comment (e.g. "@claude please review the security changes").
+          prompt: |
+            You are the primary orchestrator agent for the AURA multi-agent system.
+            Your role is to analyse the request and, where appropriate, break the
+            work into specialised sub-tasks that are best handled by one of the
+            following peer agents — each invocable by mentioning their handle in a
+            new GitHub issue or PR comment:
+
+            • @gemini-cli  — code review, triage, general engineering tasks
+            • @claude       — deep code understanding, refactoring, security review
+            • @kimi         — research, summarisation, multi-lingual support
+
+            Current event  : ${{ env.EVENT_NAME }}
+            Command        : ${{ env.COMMAND }}
+            Issue / PR #   : ${{ env.ISSUE_NUMBER }}
+            Additional ctx : ${{ env.ADDITIONAL_CONTEXT }}
+
+            Steps:
+            1. Read the title and description of the issue or PR.
+            2. Perform the requested action (${{ env.COMMAND }}) yourself where
+               you have sufficient context.
+            3. For any sub-task better suited to Claude or Kimi, post a new
+               comment on the same issue/PR addressed to that agent (e.g.
+               "@claude please audit the security of the changes in this PR").
+            4. Summarise your own findings and any delegated tasks in a final
+               comment.
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Claude Agent — Anthropic Claude Code Action
+  # ───────────────────────────────────────────────────────────────────────────
+  claude-agent:
+    needs: 'dispatch'
+    if: |-
+      ${{ needs.dispatch.outputs.agent == 'claude' }}
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 30
+    permissions:
+      contents: 'read'
+      pull-requests: 'write'
+      issues: 'write'
+      id-token: 'write'
+      actions: 'read'
+
+    steps:
+      - name: 'Check Claude auth availability'
+        id: 'claude-auth'
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}'
+        run: |
+          if [ -n "$CLAUDE_CODE_OAUTH_TOKEN" ]; then
+            echo "available=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Claude agent skipped: CLAUDE_CODE_OAUTH_TOKEN is not configured." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: 'Checkout repository'
+        if: steps.claude-auth.outputs.available == 'true'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # v4
+        with:
+          fetch-depth: 1
+
+      - name: 'Run Claude Code'
+        if: steps.claude-auth.outputs.available == 'true'
+        id: 'claude'
+        uses: 'anthropics/claude-code-action@4c558f148f3d64afc1df27bfdae39dcc0353c906' # v1
+        with:
+          claude_code_oauth_token: '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}'
+          additional_permissions: |
+            actions: read
+          # If the comment body contained extra text after @claude, use it;
+          # otherwise let Claude infer from the issue/PR context.
+          prompt: '${{ needs.dispatch.outputs.additional_context }}'
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Kimi Agent — Moonshot AI via OpenAI-compatible REST API
+  # ───────────────────────────────────────────────────────────────────────────
+  kimi-agent:
+    needs: 'dispatch'
+    if: |-
+      ${{ needs.dispatch.outputs.agent == 'kimi' }}
+    runs-on: 'ubuntu-latest'
+    timeout-minutes: 15
+    permissions:
+      contents: 'read'
+      issues: 'write'
+      pull-requests: 'write'
+
+    steps:
+      - name: 'Checkout repository'
+        uses: 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' # v4
+        with:
+          fetch-depth: 1
+
+      - name: 'Check Kimi auth availability'
+        id: 'kimi-auth'
+        env:
+          MOONSHOT_API_KEY: '${{ secrets.MOONSHOT_API_KEY }}'
+        run: |
+          if [ -n "$MOONSHOT_API_KEY" ]; then
+            echo "available=true"  >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Kimi agent skipped: MOONSHOT_API_KEY is not configured." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: 'Run Kimi (Moonshot AI)'
+        id: 'kimi'
+        if: steps.kimi-auth.outputs.available == 'true'
+        env:
+          MOONSHOT_API_KEY:   '${{ secrets.MOONSHOT_API_KEY }}'
+          GITHUB_TOKEN:       '${{ secrets.GITHUB_TOKEN }}'
+          ISSUE_NUMBER:       '${{ needs.dispatch.outputs.issue_number }}'
+          REPOSITORY:         '${{ github.repository }}'
+          ADDITIONAL_CONTEXT: '${{ needs.dispatch.outputs.additional_context }}'
+          TITLE:              '${{ github.event.pull_request.title || github.event.issue.title }}'
+          DESCRIPTION:        '${{ github.event.pull_request.body  || github.event.issue.body  }}'
+        run: |
+          # Build the user message from available context
+          USER_MSG="Repository: ${REPOSITORY}
+          Issue/PR #${ISSUE_NUMBER}: ${TITLE}
+
+          Description:
+          ${DESCRIPTION}
+
+          Additional request:
+          ${ADDITIONAL_CONTEXT}"
+
+          # Call Moonshot AI (Kimi) — OpenAI-compatible endpoint
+          RESPONSE=$(curl -sS https://api.moonshot.cn/v1/chat/completions \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer ${MOONSHOT_API_KEY}" \
+            -d "$(jq -n \
+              --arg msg "$USER_MSG" \
+              '{
+                model: "moonshot-v1-8k",
+                messages: [
+                  {
+                    role: "system",
+                    content: "You are Kimi, a helpful AI assistant specialising in research, summarisation, and multi-lingual support. Provide a concise, actionable response to the GitHub issue or PR below."
+                  },
+                  {role: "user", content: $msg}
+                ],
+                temperature: 0.3,
+                max_tokens: 1024
+              }')")
+
+          # Extract reply text
+          REPLY=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // "Kimi returned no content."')
+
+          # Post reply as a comment
+          COMMENT_BODY="🌙 **Kimi (Moonshot AI):**
+
+          ${REPLY}
+
+          ---
+          _Powered by [Moonshot AI](https://moonshot.cn) — [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})_"
+
+          gh issue comment "${ISSUE_NUMBER}" \
+            --body "$COMMENT_BODY" \
+            --repo "${REPOSITORY}"
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # Fallthrough — report when no agent matched or an upstream job failed
+  # ───────────────────────────────────────────────────────────────────────────
+  fallthrough:
+    needs: [dispatch, gemini-agent, claude-agent, kimi-agent]
+    if: |-
+      ${{ always() && !cancelled() && (failure() || needs.dispatch.outputs.agent == 'none') }}
+    runs-on: 'ubuntu-latest'
+    permissions:
+      contents: 'read'
+      issues: 'write'
+      pull-requests: 'write'
+
+    steps:
+      - name: 'Mint identity token'
+        id: 'mint_identity_token'
+        if: '${{ vars.APP_ID }}'
+        uses: 'actions/create-github-app-token@29824e69f54612133e76f7eaac726eef6c875baf' # ratchet:actions/create-github-app-token@v2
+        with:
+          app-id: '${{ vars.APP_ID }}'
+          private-key: '${{ secrets.APP_PRIVATE_KEY }}'
+          permission-contents: 'read'
+          permission-issues: 'write'
+          permission-pull-requests: 'write'
+
+      - name: 'Post fallthrough comment'
+        env:
+          GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
+          ISSUE_NUMBER: '${{ needs.dispatch.outputs.issue_number }}'
+          REPOSITORY:   '${{ github.repository }}'
+        run: |-
+          gh issue comment "${ISSUE_NUMBER}" \
+            --body "🤖 I'm sorry @${{ github.actor }}, but I was unable to process your request. Please [see the logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
+
+          **Available agents:**
+          - \`@gemini-cli\` — code review, triage, engineering tasks
+          - \`@claude\`      — deep code understanding, refactoring, security
+          - \`@kimi\`        — research, summarisation, multi-lingual support" \
+            --repo "${REPOSITORY}"

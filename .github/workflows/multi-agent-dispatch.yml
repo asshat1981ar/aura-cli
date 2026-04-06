@@ -465,9 +465,13 @@ jobs:
       - name: 'Post fallthrough comment'
         env:
           GITHUB_TOKEN: '${{ steps.mint_identity_token.outputs.token || secrets.GITHUB_TOKEN || github.token }}'
-          ISSUE_NUMBER: '${{ needs.dispatch.outputs.issue_number }}'
+          ISSUE_NUMBER: '${{ github.event.pull_request.number || github.event.issue.number || needs.dispatch.outputs.issue_number }}'
           REPOSITORY:   '${{ github.repository }}'
         run: |-
+          if [[ -z "${ISSUE_NUMBER}" ]]; then
+            echo "No issue or pull request number available; skipping fallthrough comment."
+            exit 0
+          fi
           gh issue comment "${ISSUE_NUMBER}" \
             --body "🤖 I'm sorry @${{ github.actor }}, but I was unable to process your request. Please [see the logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
 

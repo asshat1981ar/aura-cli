@@ -54,7 +54,6 @@ export function Dashboard() {
   const { goals, fetchGoals, wsConnected: goalsWsConnected } = useGoalStore()
   const { agents, fetchAgents, wsConnected: agentsWsConnected } = useAgentStore()
   const [stats, setStats] = useState<any>(null)
-  const [isLoadingStats, setIsLoadingStats] = useState(true)
 
   // Initialize WebSocket connections
   useGoalWebSocket()
@@ -80,8 +79,6 @@ export function Dashboard() {
       }
     } catch (error) {
       console.error('Failed to fetch stats:', error)
-    } finally {
-      setIsLoadingStats(false)
     }
   }
 
@@ -100,13 +97,13 @@ export function Dashboard() {
     () =>
       agents.map((agent) => ({
         name: agent.name.split(' ')[0],
-        tasks: agent.stats.tasks_completed,
+        tasks: agent.stats?.tasks_completed || agent.metrics?.total_executions || 0,
       })),
     [agents]
   )
 
   const totalTasks = agents.reduce(
-    (sum, a) => sum + a.stats.tasks_completed,
+    (sum, a) => sum + (a.stats?.tasks_completed || a.metrics?.total_executions || 0),
     0
   )
   const avgSuccessRate =
@@ -114,8 +111,9 @@ export function Dashboard() {
       ? agents.reduce(
           (sum, a) =>
             sum +
-            (a.stats.tasks_completed /
-              (a.stats.tasks_completed + a.stats.tasks_failed || 1)),
+            ((a.stats?.tasks_completed || a.metrics?.total_executions || 0) /
+              ((a.stats?.tasks_completed || a.metrics?.total_executions || 0) + 
+               (a.stats?.tasks_failed || a.metrics?.errors || 0) || 1)),
           0
         ) / agents.length
       : 0
@@ -330,7 +328,7 @@ export function Dashboard() {
                 <div>
                   <p className="font-medium">{agent.name}</p>
                   <p className="text-xs text-muted-foreground">
-                    {agent.current_task || 'No active task'}
+                    {agent.current_task || agent.description || 'No active task'}
                   </p>
                 </div>
               </div>
@@ -339,7 +337,7 @@ export function Dashboard() {
                   {agent.status}
                 </span>
                 <span className="text-xs text-muted-foreground">
-                  {agent.stats.tasks_completed} tasks
+                  {agent.stats?.tasks_completed || agent.metrics?.total_executions || 0} tasks
                 </span>
               </div>
             </div>

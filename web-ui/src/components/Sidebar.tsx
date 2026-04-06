@@ -9,6 +9,9 @@ import {
   Code2,
   Workflow,
   BarChart3,
+  GitBranch,
+  Puzzle,
+  Terminal
 } from 'lucide-react'
 
 const navItems = [
@@ -18,6 +21,9 @@ const navItems = [
   { path: '/goals', icon: Target, label: 'Goals' },
   { path: '/agents', icon: Bot, label: 'Agents' },
   { path: '/sadd', icon: Workflow, label: 'SADD' },
+  { path: '/workflows', icon: GitBranch, label: 'Workflows' },
+  { path: '/mcp', icon: Puzzle, label: 'MCP Tools' },
+  { path: '/terminal', icon: Terminal, label: 'Terminal' },
   { path: '/coverage', icon: BarChart3, label: 'Coverage' },
   { path: '/logs', icon: FileText, label: 'Logs' },
   { path: '/settings', icon: Settings, label: 'Settings' },

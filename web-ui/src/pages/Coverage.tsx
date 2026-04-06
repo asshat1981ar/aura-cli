@@ -3,20 +3,17 @@ import {
   Shield,
   AlertTriangle,
   CheckCircle,
-  TrendingUp,
-  FileCode,
-  GitBranch,
   AlertCircle,
   Search,
   Filter,
-  Download,
   RefreshCw,
+  Play,
+  Clock,
+  CheckSquare
 } from 'lucide-react'
 import {
   ResponsiveContainer,
   Treemap,
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -24,173 +21,12 @@ import {
   BarChart,
   Bar,
   Cell,
+  PieChart,
+  Pie
 } from 'recharts'
 import { StatsCard } from '../components/StatsCard'
-
-// Coverage data types
-interface CoverageGap {
-  id: string
-  file_path: string
-  function_name: string
-  line_number: number
-  complexity: number
-  impact_score: number
-  severity: 'critical' | 'high' | 'medium' | 'low'
-  reason: string
-}
-
-interface ModuleCoverage {
-  name: string
-  path: string
-  coverage: number
-  lines_total: number
-  lines_covered: number
-  functions_total: number
-  functions_covered: number
-  children?: ModuleCoverage[]
-}
-
-interface TrendData {
-  date: string
-  coverage: number
-  files_covered: number
-  total_files: number
-}
-
-// Generate mock coverage gaps
-function generateCoverageGaps(): CoverageGap[] {
-  const files = [
-    'core/orchestrator.py',
-    'agents/coder.py',
-    'core/mcp_client.py',
-    'agents/planner.py',
-    'core/verification.py',
-    'agents/debugger.py',
-    'core/code_analysis.py',
-    'memory/store.py',
-    'agents/critic.py',
-    'core/policy.py',
-  ]
-  
-  const functions = [
-    'run_cycle',
-    'process_task',
-    'validate_output',
-    'generate_plan',
-    'apply_changes',
-    'analyze_error',
-    'extract_symbols',
-    'query_memory',
-    'critique_plan',
-    'evaluate_policy',
-  ]
-  
-  const severities: ('critical' | 'high' | 'medium' | 'low')[] = ['critical', 'high', 'high', 'medium', 'medium', 'medium', 'low', 'low', 'low', 'low']
-  
-  return Array.from({ length: 20 }, (_, i) => ({
-    id: `gap_${i + 1}`,
-    file_path: files[i % files.length],
-    function_name: `${functions[i % functions.length]}_${Math.floor(i / 10) + 1}`,
-    line_number: Math.floor(Math.random() * 500) + 1,
-    complexity: Math.floor(Math.random() * 20) + 1,
-    impact_score: Math.random() * 100,
-    severity: severities[i % severities.length],
-    reason: ['Untested branch', 'Missing edge case', 'No error handling test', 'Integration not tested'][i % 4],
-  })).sort((a, b) => b.impact_score - a.impact_score)
-}
-
-// Generate mock module coverage data
-function generateModuleCoverage(): ModuleCoverage[] {
-  return [
-    {
-      name: 'core',
-      path: 'core',
-      coverage: 78.5,
-      lines_total: 12500,
-      lines_covered: 9813,
-      functions_total: 850,
-      functions_covered: 667,
-      children: [
-        { name: 'orchestrator', path: 'core/orchestrator.py', coverage: 82.3, lines_total: 2100, lines_covered: 1728, functions_total: 45, functions_covered: 37 },
-        { name: 'mcp_client', path: 'core/mcp_client.py', coverage: 65.2, lines_total: 890, lines_covered: 580, functions_total: 32, functions_covered: 21 },
-        { name: 'verification', path: 'core/verification.py', coverage: 91.5, lines_total: 650, lines_covered: 595, functions_total: 28, functions_covered: 26 },
-        { name: 'policy', path: 'core/policy.py', coverage: 88.1, lines_total: 420, lines_covered: 370, functions_total: 22, functions_covered: 19 },
-        { name: 'code_analysis', path: 'core/code_analysis.py', coverage: 71.4, lines_total: 1200, lines_covered: 857, functions_total: 48, functions_covered: 34 },
-      ]
-    },
-    {
-      name: 'agents',
-      path: 'agents',
-      coverage: 72.8,
-      lines_total: 8900,
-      lines_covered: 6480,
-      functions_total: 620,
-      functions_covered: 451,
-      children: [
-        { name: 'coder', path: 'agents/coder.py', coverage: 76.9, lines_total: 1500, lines_covered: 1154, functions_total: 38, functions_covered: 29 },
-        { name: 'planner', path: 'agents/planner.py', coverage: 81.2, lines_total: 980, lines_covered: 796, functions_total: 25, functions_covered: 20 },
-        { name: 'debugger', path: 'agents/debugger.py', coverage: 58.3, lines_total: 720, lines_covered: 420, functions_total: 28, functions_covered: 16 },
-        { name: 'critic', path: 'agents/critic.py', coverage: 85.7, lines_total: 650, lines_covered: 557, functions_total: 22, functions_covered: 19 },
-      ]
-    },
-    {
-      name: 'memory',
-      path: 'memory',
-      coverage: 85.2,
-      lines_total: 3200,
-      lines_covered: 2726,
-      functions_total: 180,
-      functions_covered: 153,
-      children: [
-        { name: 'store', path: 'memory/store.py', coverage: 88.5, lines_total: 890, lines_covered: 788, functions_total: 45, functions_covered: 40 },
-        { name: 'brain', path: 'memory/brain.py', coverage: 82.1, lines_total: 1200, lines_covered: 985, functions_total: 68, functions_covered: 56 },
-      ]
-    },
-    {
-      name: 'web-ui',
-      path: 'web-ui',
-      coverage: 45.3,
-      lines_total: 5600,
-      lines_covered: 2537,
-      functions_total: 340,
-      functions_covered: 154,
-    },
-    {
-      name: 'tests',
-      path: 'tests',
-      coverage: 92.1,
-      lines_total: 4200,
-      lines_covered: 3868,
-      functions_total: 280,
-      functions_covered: 258,
-    },
-  ]
-}
-
-// Generate trend data
-function generateTrendData(): TrendData[] {
-  const data: TrendData[] = []
-  const today = new Date()
-  let coverage = 68.5
-  
-  for (let i = 30; i >= 0; i--) {
-    const date = new Date(today)
-    date.setDate(date.getDate() - i)
-    
-    // Simulate gradual improvement
-    coverage += Math.random() * 1.5 - 0.3
-    coverage = Math.min(Math.max(coverage, 65), 85)
-    
-    data.push({
-      date: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      coverage: parseFloat(coverage.toFixed(1)),
-      files_covered: Math.floor(coverage * 50),
-      total_files: 4120,
-    })
-  }
-  
-  return data
-}
+import { useCoverageStore } from '../stores/coverageStore'
+import { cn } from '@/lib/utils'
 
 // Treemap custom node
 function TreemapNode({ depth, x, y, width, height, name, coverage }: any) {
@@ -243,54 +79,73 @@ function TreemapNode({ depth, x, y, width, height, name, coverage }: any) {
   return null
 }
 
+const SEVERITY_CONFIG = {
+  critical: { color: 'text-red-500 bg-red-500/10', icon: AlertCircle },
+  high: { color: 'text-orange-500 bg-orange-500/10', icon: AlertTriangle },
+  medium: { color: 'text-yellow-500 bg-yellow-500/10', icon: Shield },
+  low: { color: 'text-blue-500 bg-blue-500/10', icon: CheckCircle }
+}
+
 export function Coverage() {
-  const [coverageGaps, setCoverageGaps] = useState<CoverageGap[]>([])
-  const [moduleCoverage, setModuleCoverage] = useState<ModuleCoverage[]>([])
-  const [trendData, setTrendData] = useState<TrendData[]>([])
-  const [loading, setLoading] = useState(true)
+  const { 
+    coverage, 
+    gaps, 
+    tests, 
+    modules, 
+    isLoading, 
+    refreshAll, 
+    runTests 
+  } = useCoverageStore()
+  
   const [filterSeverity, setFilterSeverity] = useState<string>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [runningTests, setRunningTests] = useState(false)
 
   useEffect(() => {
-    // Simulate fetching coverage data
-    const fetchData = () => {
-      setCoverageGaps(generateCoverageGaps())
-      setModuleCoverage(generateModuleCoverage())
-      setTrendData(generateTrendData())
-      setLoading(false)
-    }
-    
-    fetchData()
-    
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchData, 30000)
+    refreshAll()
+    const interval = setInterval(refreshAll, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, [refreshAll])
+
+  const handleRunTests = async () => {
+    setRunningTests(true)
+    await runTests()
+    setTimeout(() => {
+      refreshAll()
+      setRunningTests(false)
+    }, 5000)
+  }
 
   const stats = useMemo(() => {
-    const totalLines = moduleCoverage.reduce((sum, m) => sum + m.lines_total, 0)
-    const coveredLines = moduleCoverage.reduce((sum, m) => sum + m.lines_covered, 0)
-    const overallCoverage = totalLines > 0 ? (coveredLines / totalLines) * 100 : 0
+    if (!coverage || !tests) {
+      return {
+        overallCoverage: 0,
+        totalFiles: 0,
+        uncoveredFunctions: 0,
+        criticalGaps: 0,
+        highGaps: 0,
+        testPassRate: 0,
+        testDuration: 0
+      }
+    }
     
-    const criticalGaps = coverageGaps.filter(g => g.severity === 'critical').length
-    const highGaps = coverageGaps.filter(g => g.severity === 'high').length
-    
-    const avgComplexity = coverageGaps.length > 0
-      ? coverageGaps.reduce((sum, g) => sum + g.complexity, 0) / coverageGaps.length
-      : 0
+    const criticalGaps = gaps.filter(g => g.severity === 'critical').length
+    const highGaps = gaps.filter(g => g.severity === 'high').length
+    const testPassRate = tests.total > 0 ? (tests.passed / tests.total) * 100 : 0
     
     return {
-      overallCoverage: overallCoverage.toFixed(1),
-      totalFiles: moduleCoverage.reduce((sum, m) => sum + (m.children?.length || 1), 0),
-      uncoveredFunctions: coverageGaps.length,
+      overallCoverage: coverage.overall,
+      totalFiles: Object.keys(coverage.files).length,
+      uncoveredFunctions: gaps.length,
       criticalGaps,
       highGaps,
-      avgComplexity: avgComplexity.toFixed(1),
+      testPassRate,
+      testDuration: tests.duration
     }
-  }, [coverageGaps, moduleCoverage])
+  }, [coverage, gaps, tests])
 
   const filteredGaps = useMemo(() => {
-    let filtered = coverageGaps
+    let filtered = gaps
     
     if (filterSeverity !== 'all') {
       filtered = filtered.filter(g => g.severity === filterSeverity)
@@ -304,11 +159,11 @@ export function Coverage() {
       )
     }
     
-    return filtered.slice(0, 10) // Top 10
-  }, [coverageGaps, filterSeverity, searchQuery])
+    return filtered.slice(0, 10)
+  }, [gaps, filterSeverity, searchQuery])
 
   const treemapData = useMemo(() => {
-    return moduleCoverage.map(m => ({
+    return modules.map(m => ({
       name: m.name,
       size: m.lines_total,
       coverage: m.coverage,
@@ -318,29 +173,18 @@ export function Coverage() {
         coverage: c.coverage,
       }))
     }))
-  }, [moduleCoverage])
+  }, [modules])
 
-  const getSeverityColor = (severity: string) => {
-    switch (severity) {
-      case 'critical': return 'text-red-500 bg-red-500/10'
-      case 'high': return 'text-orange-500 bg-orange-500/10'
-      case 'medium': return 'text-yellow-500 bg-yellow-500/10'
-      case 'low': return 'text-blue-500 bg-blue-500/10'
-      default: return 'text-gray-500 bg-gray-500/10'
-    }
-  }
+  const testStatusData = useMemo(() => {
+    if (!tests) return []
+    return [
+      { name: 'Passed', value: tests.passed, color: '#22c55e' },
+      { name: 'Failed', value: tests.failed, color: '#ef4444' },
+      { name: 'Skipped', value: tests.skipped, color: '#eab308' }
+    ]
+  }, [tests])
 
-  const getSeverityIcon = (severity: string) => {
-    switch (severity) {
-      case 'critical': return <AlertCircle className="w-4 h-4" />
-      case 'high': return <AlertTriangle className="w-4 h-4" />
-      case 'medium': return <Shield className="w-4 h-4" />
-      case 'low': return <CheckCircle className="w-4 h-4" />
-      default: return <Shield className="w-4 h-4" />
-    }
-  }
-
-  if (loading) {
+  if (isLoading && !coverage) {
     return (
       <div className="flex items-center justify-center h-full">
         <RefreshCw className="w-8 h-8 animate-spin text-primary" />
@@ -349,26 +193,34 @@ export function Coverage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Coverage Dashboard</h1>
+          <h1 className="text-3xl font-bold flex items-center gap-2">
+            <Shield className="w-8 h-8 text-primary" />
+            Coverage & Quality Dashboard
+          </h1>
           <p className="text-muted-foreground mt-1">
-            Test coverage analysis and gap identification
+            Test coverage analysis, quality metrics, and gap identification
           </p>
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => window.location.reload()}
-            className="flex items-center gap-2 px-4 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-colors"
+            onClick={() => refreshAll()}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-2 border rounded-lg hover:bg-accent transition-colors disabled:opacity-50"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors">
-            <Download className="w-4 h-4" />
-            Export Report
+          <button
+            onClick={handleRunTests}
+            disabled={runningTests}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
+          >
+            <Play className={`w-4 h-4 ${runningTests ? 'animate-pulse' : ''}`} />
+            {runningTests ? 'Running...' : 'Run Tests'}
           </button>
         </div>
       </div>
@@ -377,7 +229,7 @@ export function Coverage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard
           title="Overall Coverage"
-          value={`${stats.overallCoverage}%`}
+          value={`${stats.overallCoverage.toFixed(1)}%`}
           description={`${stats.totalFiles} files analyzed`}
           icon={Shield}
           trend={{ value: 5.2, isPositive: true }}
@@ -390,24 +242,24 @@ export function Coverage() {
           trend={{ value: 3, isPositive: false }}
         />
         <StatsCard
-          title="Avg Complexity"
-          value={stats.avgComplexity}
-          description="Of uncovered functions"
-          icon={GitBranch}
+          title="Test Pass Rate"
+          value={`${stats.testPassRate.toFixed(1)}%`}
+          description={`${tests?.passed || 0} of ${tests?.total || 0} tests passed`}
+          icon={CheckSquare}
+          trend={{ value: 1.2, isPositive: true }}
         />
         <StatsCard
-          title="Lines Covered"
-          value={`${(parseFloat(stats.overallCoverage) * 50).toFixed(0)}K`}
-          description="Out of ~200K total lines"
-          icon={FileCode}
-          trend={{ value: 2.8, isPositive: true }}
+          title="Test Duration"
+          value={`${stats.testDuration.toFixed(1)}s`}
+          description="Last test run"
+          icon={Clock}
         />
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Coverage Heatmap */}
-        <div className="bg-card rounded-xl border border-border p-6">
+        <div className="lg:col-span-2 bg-card rounded-xl border p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold">Coverage Heatmap</h3>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -436,58 +288,47 @@ export function Coverage() {
           </div>
         </div>
 
-        {/* Coverage Trend */}
-        <div className="bg-card rounded-xl border border-border p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Coverage Trend (30 Days)</h3>
-            <div className="flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-green-500" />
-              <span className="text-sm text-green-500">+5.2%</span>
-            </div>
-          </div>
-          <div className="h-[300px]">
+        {/* Test Status */}
+        <div className="bg-card rounded-xl border p-6">
+          <h3 className="text-lg font-semibold mb-4">Test Status</h3>
+          <div className="h-[200px]">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={trendData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-                  tickMargin={8}
-                  interval={4}
-                />
-                <YAxis
-                  tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
-                  domain={[60, 90]}
-                  tickFormatter={(value) => `${value}%`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--card)',
-                    border: '1px solid var(--border)',
-                    borderRadius: '8px',
-                  }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="coverage"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 6 }}
-                />
-              </LineChart>
+              <PieChart>
+                <Pie
+                  data={testStatusData}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {testStatusData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
             </ResponsiveContainer>
+          </div>
+          <div className="flex justify-center gap-4 mt-4">
+            {testStatusData.map((item) => (
+              <div key={item.name} className="flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
+                <span className="text-xs text-muted-foreground">{item.name}: {item.value}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
 
       {/* Coverage Gaps Table */}
-      <div className="bg-card rounded-xl border border-border p-6">
+      <div className="bg-card rounded-xl border p-6">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h3 className="text-lg font-semibold">Top 10 Uncovered Functions</h3>
+            <h3 className="text-lg font-semibold">Coverage Gaps</h3>
             <p className="text-sm text-muted-foreground">
-              Functions with highest impact scores requiring test coverage
+              Functions requiring test coverage, sorted by impact score
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -499,7 +340,7 @@ export function Coverage() {
                 placeholder="Search functions..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-4 py-2 bg-secondary rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-primary"
+                className="pl-9 pr-4 py-2 bg-muted rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-primary"
               />
             </div>
             
@@ -509,7 +350,7 @@ export function Coverage() {
               <select
                 value={filterSeverity}
                 onChange={(e) => setFilterSeverity(e.target.value)}
-                className="px-3 py-2 bg-secondary rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="px-3 py-2 bg-muted rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary"
               >
                 <option value="all">All Severities</option>
                 <option value="critical">Critical</option>
@@ -524,7 +365,7 @@ export function Coverage() {
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
-              <tr className="border-b border-border">
+              <tr className="border-b">
                 <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Severity</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Function</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">File</th>
@@ -535,48 +376,52 @@ export function Coverage() {
               </tr>
             </thead>
             <tbody>
-              {filteredGaps.map((gap) => (
-                <tr
-                  key={gap.id}
-                  className="border-b border-border last:border-0 hover:bg-secondary/50 transition-colors"
-                >
-                  <td className="py-3 px-4">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${getSeverityColor(gap.severity)}`}>
-                      {getSeverityIcon(gap.severity)}
-                      {gap.severity}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 font-medium">{gap.function_name}</td>
-                  <td className="py-3 px-4 text-sm text-muted-foreground font-mono">{gap.file_path}</td>
-                  <td className="py-3 px-4 text-center text-sm">{gap.line_number}</td>
-                  <td className="py-3 px-4 text-center">
-                    <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-medium ${
-                      gap.complexity > 15 ? 'bg-red-500/10 text-red-500' :
-                      gap.complexity > 10 ? 'bg-yellow-500/10 text-yellow-500' :
-                      'bg-green-500/10 text-green-500'
-                    }`}>
-                      {gap.complexity}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <div className="w-16 h-2 bg-secondary rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${
-                            gap.impact_score > 80 ? 'bg-red-500' :
-                            gap.impact_score > 60 ? 'bg-orange-500' :
-                            gap.impact_score > 40 ? 'bg-yellow-500' :
-                            'bg-blue-500'
-                          }`}
-                          style={{ width: `${gap.impact_score}%` }}
-                        />
+              {filteredGaps.map((gap) => {
+                const config = SEVERITY_CONFIG[gap.severity]
+                const Icon = config.icon
+                return (
+                  <tr
+                    key={gap.id}
+                    className="border-b last:border-0 hover:bg-muted/50 transition-colors"
+                  >
+                    <td className="py-3 px-4">
+                      <span className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium", config.color)}>
+                        <Icon className="w-3 h-3" />
+                        {gap.severity}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 font-medium">{gap.function_name}</td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground font-mono">{gap.file_path}</td>
+                    <td className="py-3 px-4 text-center text-sm">{gap.line_number}</td>
+                    <td className="py-3 px-4 text-center">
+                      <span className={cn("inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-medium",
+                        gap.complexity > 15 ? 'bg-red-500/10 text-red-500' :
+                        gap.complexity > 10 ? 'bg-yellow-500/10 text-yellow-500' :
+                        'bg-green-500/10 text-green-500'
+                      )}>
+                        {gap.complexity}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <div className="w-16 h-2 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className={cn("h-full rounded-full",
+                              gap.impact_score > 80 ? 'bg-red-500' :
+                              gap.impact_score > 60 ? 'bg-orange-500' :
+                              gap.impact_score > 40 ? 'bg-yellow-500' :
+                              'bg-blue-500'
+                            )}
+                            style={{ width: `${gap.impact_score}%` }}
+                          />
+                        </div>
+                        <span className="text-sm font-medium">{gap.impact_score.toFixed(0)}</span>
                       </div>
-                      <span className="text-sm font-medium">{gap.impact_score.toFixed(0)}</span>
-                    </div>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-muted-foreground">{gap.reason}</td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground">{gap.reason}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -591,38 +436,38 @@ export function Coverage() {
       </div>
 
       {/* Module Breakdown */}
-      <div className="bg-card rounded-xl border border-border p-6">
+      <div className="bg-card rounded-xl border p-6">
         <h3 className="text-lg font-semibold mb-4">Module Coverage Breakdown</h3>
         <div className="h-[250px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
-              data={moduleCoverage}
+              data={modules}
               layout="vertical"
               margin={{ left: 20, right: 30, top: 10, bottom: 10 }}
             >
-              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+              <CartesianGrid strokeDasharray="3 3" horizontal={false} />
               <XAxis
                 type="number"
                 domain={[0, 100]}
                 tickFormatter={(value) => `${value}%`}
-                tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }}
+                tick={{ fontSize: 11 }}
               />
               <YAxis
                 type="category"
                 dataKey="name"
-                tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }}
+                tick={{ fontSize: 12 }}
                 width={80}
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: 'var(--card)',
+                  backgroundColor: 'var(--background)',
                   border: '1px solid var(--border)',
                   borderRadius: '8px',
                 }}
                 formatter={(value: number) => [`${value.toFixed(1)}%`, 'Coverage']}
               />
               <Bar dataKey="coverage" radius={[0, 4, 4, 0]}>
-                {moduleCoverage.map((entry, index) => (
+                {modules.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
                     fill={

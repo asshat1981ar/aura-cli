@@ -365,6 +365,20 @@ jobs:
             echo "Kimi agent skipped: MOONSHOT_API_KEY is not configured." >> "$GITHUB_STEP_SUMMARY"
           fi
 
+      - name: 'Notify requester Kimi is unavailable'
+        if: steps.kimi-auth.outputs.available == 'false'
+        env:
+          GITHUB_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+          ISSUE_NUMBER: '${{ needs.dispatch.outputs.issue_number }}'
+          REPOSITORY:   '${{ github.repository }}'
+        run: |
+          curl -sS \
+            -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/$REPOSITORY/issues/$ISSUE_NUMBER/comments" \
+            -d '{"body":"Kimi is currently unavailable for this repository because the `MOONSHOT_API_KEY` secret is not configured. Please ask a maintainer to enable it or use another available agent."}'
       - name: 'Run Kimi (Moonshot AI)'
         id: 'kimi'
         if: steps.kimi-auth.outputs.available == 'true'

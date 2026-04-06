@@ -3,6 +3,8 @@
 Developer entry points:
 
 - CLI reference (generated): `docs/CLI_REFERENCE.md`
+- **Web UI Dashboard**: `http://localhost:8000` (see [Web UI Guide](docs/WEB_UI_GUIDE.md))
+- **API Documentation**: [docs/API.md](docs/API.md)
 - **Innovation Catalyst guide**: `docs/INNOVATION_CATALYST.md` (structured brainstorming)
 - Integration map: `docs/INTEGRATION_MAP.md`
 - Development automation guide: `docs/DEVELOPMENT_AUTOMATION_GUIDE.md`
@@ -21,10 +23,59 @@ Developer entry points:
 
 Product boundary for the current release:
 
-- shipped surface: CLI (`aura`)
+- shipped surface: CLI (`aura`) + **Web UI Dashboard**
 - development-only shim: `main.py`
 - convenience wrapper: `run_aura.sh`
+- web interface: React-based dashboard at `web-ui/`
 - experimental / non-shipped: `vscode-extension`, `orchestrator_hub`, transport-mode/editor integration work
+
+## Web UI Dashboard
+
+AURA now includes a comprehensive web-based dashboard for monitoring and controlling the system:
+
+```bash
+# Start the API server (serves the web UI)
+python3 -m aura_cli.api_server
+
+# Access the dashboard
+open http://localhost:8000
+```
+
+### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Dashboard** | Real-time system overview with key metrics |
+| **AI Chat** | Multi-agent chat interface with history |
+| **Code Editor** | Monaco-based editor with file tree browser |
+| **Goal Queue** | Visual goal management and tracking |
+| **Agent Observatory** | Real-time agent monitoring with lifecycle controls |
+| **SADD Manager** | Design decomposition and workstream visualization |
+| **n8n Workflows** | Visual workflow editor and execution |
+| **MCP Tools** | Execute tools from 12 configured MCP servers |
+| **Terminal** | Integrated multi-session shell console |
+| **Coverage** | Test coverage analysis and quality metrics |
+| **Logs & Telemetry** | Real-time logs with filtering and search |
+| **Settings** | Full configuration panel with MCP management |
+
+### Architecture
+
+- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS
+- **Backend**: FastAPI with WebSocket support
+- **State**: Zustand for client-side state management
+- **Charts**: Recharts for data visualization
+- **Icons**: Lucide React
+
+### Performance
+
+The Web UI is optimized for production:
+- Code splitting with lazy loading (75% bundle reduction)
+- Service Worker for offline caching
+- Request deduplication and SWR pattern
+- Virtual scrolling for large lists
+- Web Vitals monitoring
+
+See [docs/WEB_UI_GUIDE.md](docs/WEB_UI_GUIDE.md) for detailed usage instructions and [docs/API.md](docs/API.md) for API documentation.
 
 ## Sweep Artifact Generator
 

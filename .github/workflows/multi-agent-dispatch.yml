@@ -197,9 +197,7 @@ jobs:
                 "maxSessionTurns": 30
               },
               "telemetry": {
-                "enabled": true,
-                "target": "local",
-                "outfile": ".gemini/telemetry.log"
+                "enabled": false
               },
               "mcpServers": {
                 "github": {

@@ -1,6 +1,9 @@
 import { ReactNode } from 'react'
 import { Sidebar } from './Sidebar'
 import { Header } from './Header'
+import { CommandPalette } from './CommandPalette'
+import { ToastContainer } from './Toast'
+import { KeyboardShortcuts } from './KeyboardShortcuts'
 
 interface LayoutProps {
   children: ReactNode
@@ -16,6 +19,9 @@ export function Layout({ children }: LayoutProps) {
           {children}
         </main>
       </div>
+      <CommandPalette />
+      <ToastContainer />
+      <KeyboardShortcuts />
     </div>
   )
 }

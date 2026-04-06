@@ -87,7 +87,9 @@ jobs:
               return;
             }
 
-            // Explicit @agent routing in comments / reviews
+            // Explicit @agent routing in comments / reviews.
+            // Note: the user-facing handle is '@gemini-cli' but the internal
+            // routing key is 'gemini' (without the '-cli' suffix).
             const patterns = [
               { re: /^@gemini-cli\b/,  agent: 'gemini' },
               { re: /^@claude\b/,      agent: 'claude' },
@@ -364,7 +366,8 @@ jobs:
           ${ADDITIONAL_CONTEXT}"
 
           # Call Moonshot AI (Kimi) — OpenAI-compatible endpoint
-          RESPONSE=$(curl -sS https://api.moonshot.cn/v1/chat/completions \
+          HTTP_STATUS=$(curl -sS -o /tmp/kimi_response.json -w "%{http_code}" \
+            https://api.moonshot.cn/v1/chat/completions \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer ${MOONSHOT_API_KEY}" \
             -d "$(jq -n \
@@ -381,9 +384,24 @@ jobs:
                 temperature: 0.3,
                 max_tokens: 1024
               }')")
+          RESPONSE=$(cat /tmp/kimi_response.json)
 
-          # Extract reply text
-          REPLY=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // "Kimi returned no content."')
+          # Check HTTP status and surface API errors clearly
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            API_ERROR=$(echo "$RESPONSE" | jq -r '.error.message // "unknown error"')
+            echo "Kimi API returned HTTP ${HTTP_STATUS}: ${API_ERROR}" >&2
+            REPLY="⚠️ Kimi API error (HTTP ${HTTP_STATUS}): ${API_ERROR}"
+          elif echo "$RESPONSE" | jq -e '.error' >/dev/null 2>&1; then
+            API_ERROR=$(echo "$RESPONSE" | jq -r '.error.message // "unknown error"')
+            echo "Kimi API error: ${API_ERROR}" >&2
+            REPLY="⚠️ Kimi API error: ${API_ERROR}"
+          else
+            # Extract reply text
+            REPLY=$(echo "$RESPONSE" | jq -r '.choices[0].message.content // empty')
+            if [ -z "$REPLY" ]; then
+              REPLY="Kimi returned no content."
+            fi
+          fi
 
           # Post reply as a comment
           COMMENT_BODY="🌙 **Kimi (Moonshot AI):**

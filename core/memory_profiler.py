@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import gc
-import sys
 import tracemalloc
 from typing import Dict, Any, List, Optional, Callable
 from contextlib import contextmanager
@@ -168,14 +167,14 @@ def profile_memory(operation_name: str):
     profiler = get_profiler()
     gc.collect()  # Clean up before measurement
     
-    snapshot_before = profiler.take_snapshot()
+    profiler.take_snapshot()  # registers baseline for compare_snapshots
     start_time = time.time()
     
     try:
         yield
     finally:
         gc.collect()
-        snapshot_after = profiler.take_snapshot()
+        profiler.take_snapshot()  # registers post-op snapshot for comparison
         elapsed = time.time() - start_time
         
         comparison = profiler.compare_snapshots(-2, -1)

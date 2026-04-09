@@ -1,28 +1,28 @@
 {
   "feature": {
     "dependency_analyzer": {
-      "ema": 0.9917916226554928,
-      "runs": 34,
+      "ema": 0.9963578993652376,
+      "runs": 39,
       "suspended": false
     },
     "symbol_indexer": {
-      "ema": 0.8525545487386994,
-      "runs": 34,
+      "ema": 0.8550275296589012,
+      "runs": 39,
       "suspended": false
     },
     "complexity_scorer": {
-      "ema": 0.9937349323101222,
-      "runs": 34,
+      "ema": 0.9972201561828292,
+      "runs": 39,
       "suspended": false
     },
     "architecture_validator": {
-      "ema": 0.6292356895917458,
-      "runs": 34,
+      "ema": 0.6329986395364587,
+      "runs": 39,
       "suspended": false
     },
     "api_contract_validator": {
-      "ema": 0.7953862762681704,
-      "runs": 34,
+      "ema": 0.7979528662697798,
+      "runs": 39,
       "suspended": false
     }
   },
@@ -55,45 +55,45 @@
   },
   "default": {
     "linter_enforcer": {
-      "ema": 0.7526118883786248,
-      "runs": 138,
+      "ema": 0.7823114112492529,
+      "runs": 143,
       "suspended": false
     },
     "symbol_indexer": {
-      "ema": 0.8002367636713272,
-      "runs": 138,
+      "ema": 0.8318138504862749,
+      "runs": 143,
       "suspended": false
     },
     "ast_analyzer": {
-      "ema": 0.8889999994147848,
-      "runs": 125,
+      "ema": 0.8889999997403367,
+      "runs": 130,
       "suspended": false
     }
   },
   "refactor": {
     "tech_debt_quantifier": {
-      "ema": 0.8550485554088699,
-      "runs": 30,
+      "ema": 0.9356842739803662,
+      "runs": 35,
       "suspended": false
     },
     "complexity_scorer": {
-      "ema": 0.9450631493394398,
-      "runs": 30,
+      "ema": 0.9756242275098903,
+      "runs": 35,
       "suspended": false
     },
     "code_clone_detector": {
-      "ema": 0.9119029627957012,
-      "runs": 30,
+      "ema": 0.9609108765769425,
+      "runs": 35,
       "suspended": false
     },
     "refactoring_advisor": {
-      "ema": 0.9915654718353043,
-      "runs": 30,
+      "ema": 0.9962575550448937,
+      "runs": 35,
       "suspended": false
     },
     "symbol_indexer": {
-      "ema": 0.7054484116054123,
-      "runs": 30,
+      "ema": 0.789755755111508,
+      "runs": 35,
       "suspended": false
     }
   }

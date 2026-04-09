@@ -1,1002 +1,13 @@
 {
-  "commands": [
-    {
-      "action": "help",
-      "description": "Show top-level help or help for a specific command path.",
-      "examples": [
-        "python3 main.py help",
-        "python3 main.py help goal add"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "help"
-      ],
-      "requires_runtime": false,
-      "summary": "Show CLI help"
-    },
-    {
-      "action": "doctor",
-      "description": "Run the AURA doctor checks for local environment health.",
-      "examples": [
-        "python3 main.py doctor"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "doctor"
-      ],
-      "requires_runtime": false,
-      "summary": "Run system diagnostics"
-    },
-    {
-      "action": "readiness",
-      "description": "Validate async runtime and MCP registry health.",
-      "examples": [
-        "python3 main.py readiness"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "readiness"
-      ],
-      "requires_runtime": true,
-      "summary": "Check V2 runtime readiness"
-    },
-    {
-      "action": "bootstrap",
-      "description": "Bootstrap local configuration files for AURA.",
-      "examples": [
-        "python3 main.py bootstrap"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [
-        "--bootstrap"
-      ],
-      "path": [
-        "bootstrap"
-      ],
-      "requires_runtime": false,
-      "summary": "Create default config"
-    },
-    {
-      "action": "show_config",
-      "description": "Print the resolved effective runtime configuration.",
-      "examples": [
-        "python3 main.py config"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "config"
-      ],
-      "requires_runtime": false,
-      "summary": "Show effective config"
-    },
-    {
-      "action": "contract_report",
-      "description": "Print aggregated parser/help/schema/dispatch contract checks as JSON.",
-      "examples": [
-        "python3 main.py contract-report --check",
-        "python3 main.py contract-report --compact"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "contract-report"
-      ],
-      "requires_runtime": false,
-      "summary": "Print CLI contract report"
-    },
-    {
-      "action": "diag",
-      "description": "Fetch MCP health, metrics, limits, and recent logs via HTTP.",
-      "examples": [
-        "python3 main.py diag"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [
-        "--diag"
-      ],
-      "path": [
-        "diag"
-      ],
-      "requires_runtime": false,
-      "summary": "MCP diagnostics snapshot"
-    },
-    {
-      "action": "logs",
-      "description": "Tail or follow logs from stdin or a file.",
-      "examples": [
-        "python3 main.py logs --tail 50",
-        "python3 main.py logs --file memory/aura.log --follow"
-      ],
-      "flags": [],
-      "legacy_flags": [],
-      "path": [
-        "logs"
-      ],
-      "requires_runtime": false,
-      "summary": "Stream AURA logs"
-    },
-    {
-      "action": "watch",
-      "description": "Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.",
-      "examples": [
-        "python3 main.py watch",
-        "python3 main.py watch --autonomous"
-      ],
-      "flags": [],
-      "legacy_flags": [],
-      "path": [
-        "watch"
-      ],
-      "requires_runtime": true,
-      "summary": "Launch TUI monitor"
-    },
-    {
-      "action": "studio",
-      "description": "Launch the rich real-time dashboard. Use --autonomous to start the goal loop.",
-      "examples": [
-        "python3 main.py studio",
-        "python3 main.py studio --autonomous"
-      ],
-      "flags": [],
-      "legacy_flags": [],
-      "path": [
-        "studio"
-      ],
-      "requires_runtime": true,
-      "summary": "Launch AURA Studio"
-    },
-    {
-      "action": null,
-      "description": "Manage queued goals and run one-off goals.",
-      "examples": [
-        "python3 main.py goal status",
-        "python3 main.py goal add \"Refactor queue\""
-      ],
-      "flags": [],
-      "legacy_flags": [],
-      "path": [
-        "goal"
-      ],
-      "requires_runtime": null,
-      "summary": "Goal queue operations"
-    },
-    {
-      "action": "goal_add",
-      "description": "Add a goal, optionally running the queue immediately.",
-      "examples": [
-        "python3 main.py goal add \"Fix tests\"",
-        "python3 main.py goal add \"Fix tests\" --run"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [
-        "--add-goal",
-        "--run-goals"
-      ],
-      "path": [
-        "goal",
-        "add"
-      ],
-      "requires_runtime": true,
-      "summary": "Add a goal to the queue"
-    },
-    {
-      "action": "goal_run",
-      "description": "Run the goal queue through the autonomous loop.",
-      "examples": [
-        "python3 main.py goal run --dry-run"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [
-        "--run-goals"
-      ],
-      "path": [
-        "goal",
-        "run"
-      ],
-      "requires_runtime": true,
-      "summary": "Run queued goals"
-    },
-    {
-      "action": "goal_status",
-      "description": "Show queued and completed goals.",
-      "examples": [
-        "python3 main.py goal status",
-        "python3 main.py goal status --json"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [
-        "--status"
-      ],
-      "path": [
-        "goal",
-        "status"
-      ],
-      "requires_runtime": true,
-      "summary": "Show queue status"
-    },
-    {
-      "action": "goal_once",
-      "description": "Run a single goal directly without queueing it.",
-      "examples": [
-        "python3 main.py goal once \"Summarize repo\"",
-        "python3 main.py goal once \"Refactor core\" --max-cycles 3"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [
-        "--goal"
-      ],
-      "path": [
-        "goal",
-        "once"
-      ],
-      "requires_runtime": true,
-      "summary": "Run a one-off goal"
-    },
-    {
-      "action": "goal_resume",
-      "description": "Re-queue a goal that was interrupted mid-execution due to a crash or process kill. Reads memory/in_flight_goal.json written by the goal run loop. Use --run to immediately execute the re-queued goal.",
-      "examples": [
-        "python3 main.py goal resume",
-        "python3 main.py goal resume --run"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "goal",
-        "resume"
-      ],
-      "requires_runtime": false,
-      "summary": "Resume an interrupted goal"
-    },
-    {
-      "action": null,
-      "description": "Run orchestrated workflow goals with explicit cycle limits.",
-      "examples": [
-        "python3 main.py workflow run \"Summarize repo\""
-      ],
-      "flags": [],
-      "legacy_flags": [],
-      "path": [
-        "workflow"
-      ],
-      "requires_runtime": null,
-      "summary": "Workflow operations"
-    },
-    {
-      "action": "workflow_run",
-      "description": "Run the orchestrator loop for a single workflow goal.",
-      "examples": [
-        "python3 main.py workflow run \"Summarize repo\" --max-cycles 3"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [
-        "--workflow-goal"
-      ],
-      "path": [
-        "workflow",
-        "run"
-      ],
-      "requires_runtime": true,
-      "summary": "Run a workflow goal"
-    },
-    {
-      "action": null,
-      "description": "Inspect and call MCP tools from the CLI.",
-      "examples": [
-        "python3 main.py mcp tools"
-      ],
-      "flags": [],
-      "legacy_flags": [],
-      "path": [
-        "mcp"
-      ],
-      "requires_runtime": null,
-      "summary": "MCP HTTP client commands"
-    },
-    {
-      "action": "mcp_tools",
-      "description": "List tools exposed by the MCP HTTP server.",
-      "examples": [
-        "python3 main.py mcp tools"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [
-        "--mcp-tools"
-      ],
-      "path": [
-        "mcp",
-        "tools"
-      ],
-      "requires_runtime": false,
-      "summary": "List MCP tools"
-    },
-    {
-      "action": "mcp_call",
-      "description": "Invoke an MCP tool with optional JSON args.",
-      "examples": [
-        "python3 main.py mcp call limits",
-        "python3 main.py mcp call tail_logs --args '{\"lines\": 10}'"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [
-        "--mcp-call"
-      ],
-      "path": [
-        "mcp",
-        "call"
-      ],
-      "requires_runtime": false,
-      "summary": "Call an MCP tool"
-    },
-    {
-      "action": "mcp_status",
-      "description": "Query all registered MCP servers and render a Rich table showing server name, endpoint URL, health status, last heartbeat, average response latency, and tool count.",
-      "examples": [
-        "python3 main.py mcp status"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "mcp",
-        "status"
-      ],
-      "requires_runtime": false,
-      "summary": "Show MCP server health dashboard"
-    },
-    {
-      "action": "mcp_restart",
-      "description": "Trigger a manual health validation pass for a named MCP server. Pass the server config-name (e.g. 'dev_tools', 'skills').",
-      "examples": [
-        "python3 main.py mcp restart dev_tools",
-        "python3 main.py mcp restart skills"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "mcp",
-        "restart"
-      ],
-      "requires_runtime": false,
-      "summary": "Restart / validate an MCP server"
-    },
-    {
-      "action": null,
-      "description": "Inspect and validate BEADS schema contracts.",
-      "examples": [
-        "python3 main.py beads schemas"
-      ],
-      "flags": [],
-      "legacy_flags": [],
-      "path": [
-        "beads"
-      ],
-      "requires_runtime": null,
-      "summary": "BEADS contract commands"
-    },
-    {
-      "action": "beads_schemas",
-      "description": "Print a table of all BEADS schema contracts registered in .beads/. Includes schema version, TypedDict names, and interaction count.",
-      "examples": [
-        "python3 main.py beads schemas",
-        "python3 main.py beads schemas --json"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "beads",
-        "schemas"
-      ],
-      "requires_runtime": false,
-      "summary": "List registered BEADS schemas"
-    },
-    {
-      "action": "scaffold",
-      "description": "Run the scaffolder agent for a named project type.",
-      "examples": [
-        "python3 main.py scaffold demo --desc \"small demo app\"",
-        "python3 main.py scaffold demo --json"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [
-        "--scaffold"
-      ],
-      "path": [
-        "scaffold"
-      ],
-      "requires_runtime": true,
-      "summary": "Scaffold a project"
-    },
-    {
-      "action": "evolve",
-      "description": "Run the innovation workflow and optional queue-backed implementation loop for AURA core.",
-      "examples": [
-        "python3 main.py evolve",
-        "python3 main.py evolve --json",
-        "python3 main.py evolve --queue-only --proposal-limit 3 --focus research"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [
-        "--evolve"
-      ],
-      "path": [
-        "evolve"
-      ],
-      "requires_runtime": true,
-      "summary": "Run innovation workflow"
-    },
-    {
-      "action": null,
-      "description": "List, add, or clear goals in the autonomous queue.",
-      "examples": [
-        "python3 main.py queue list",
-        "python3 main.py queue list --json"
-      ],
-      "flags": [],
-      "legacy_flags": [],
-      "path": [
-        "queue"
-      ],
-      "requires_runtime": null,
-      "summary": "Goal queue management"
-    },
-    {
-      "action": "queue_list",
-      "description": "Show all pending and completed goals.",
-      "examples": [
-        "python3 main.py queue list",
-        "python3 main.py queue list --json"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "queue",
-        "list"
-      ],
-      "requires_runtime": true,
-      "summary": "List queued goals"
-    },
-    {
-      "action": "queue_clear",
-      "description": "Remove all pending goals from the queue.",
-      "examples": [
-        "python3 main.py queue clear",
-        "python3 main.py queue clear --json"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "queue",
-        "clear"
-      ],
-      "requires_runtime": true,
-      "summary": "Clear the goal queue"
-    },
-    {
-      "action": null,
-      "description": "Search or browse through the AURA brain.",
-      "examples": [
-        "python3 main.py memory search \"workflow engine\"",
-        "python3 main.py memory search \"workflow engine\" --json"
-      ],
-      "flags": [],
-      "legacy_flags": [],
-      "path": [
-        "memory"
-      ],
-      "requires_runtime": null,
-      "summary": "Semantic memory operations"
-    },
-    {
-      "action": "memory_search",
-      "description": "Perform a semantic search over brain entries.",
-      "examples": [
-        "python3 main.py memory search \"workflow engine\"",
-        "python3 main.py memory search \"workflow engine\" --json"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "memory",
-        "search"
-      ],
-      "requires_runtime": true,
-      "summary": "Search semantic memory"
-    },
-    {
-      "action": "memory_reindex",
-      "description": "Rebuild semantic memory embeddings for the active model and force a project sync.",
-      "examples": [
-        "python3 main.py memory reindex",
-        "python3 main.py memory reindex --json"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "memory",
-        "reindex"
-      ],
-      "requires_runtime": true,
-      "summary": "Rebuild semantic memory embeddings"
-    },
-    {
-      "action": "metrics_show",
-      "description": "Display cycle success rates and timing stats.",
-      "examples": [
-        "python3 main.py metrics",
-        "python3 main.py metrics --json"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "metrics"
-      ],
-      "requires_runtime": true,
-      "summary": "Show performance metrics"
-    },
-    {
-      "action": null,
-      "description": "Decompose a design spec into parallel workstreams and execute via sub-agents.",
-      "examples": [
-        "python3 main.py sadd run --spec design.md --dry-run",
-        "python3 main.py sadd run --spec design.md --max-parallel 3"
-      ],
-      "flags": [],
-      "legacy_flags": [],
-      "path": [
-        "sadd"
-      ],
-      "requires_runtime": null,
-      "summary": "Sub-Agent Driven Development"
-    },
-    {
-      "action": "sadd_run",
-      "description": "Parse a design spec and execute workstreams. Use --dry-run to preview decomposition only.",
-      "examples": [
-        "python3 main.py sadd run --spec design.md --dry-run",
-        "python3 main.py sadd run --spec design.md --max-parallel 2 --max-cycles 3"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "sadd",
-        "run"
-      ],
-      "requires_runtime": true,
-      "summary": "Run a SADD session"
-    },
-    {
-      "action": "sadd_status",
-      "description": "Show status of recent SADD sessions or a specific session.",
-      "examples": [
-        "python3 main.py sadd status",
-        "python3 main.py sadd status --session-id <id>"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "sadd",
-        "status"
-      ],
-      "requires_runtime": false,
-      "summary": "Show SADD session status"
-    },
-    {
-      "action": "sadd_resume",
-      "description": "Resume an interrupted SADD session from its last checkpoint.",
-      "examples": [
-        "python3 main.py sadd resume --session-id <id>"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "sadd",
-        "resume"
-      ],
-      "requires_runtime": true,
-      "summary": "Resume a SADD session"
-    },
-    {
-      "action": null,
-      "description": "Start, list, and manage innovation sessions using brainstorming techniques.",
-      "examples": [
-        "python3 main.py innovate start \"How to improve X?\"",
-        "python3 main.py innovate list",
-        "python3 main.py innovate show --session-id abc123"
-      ],
-      "flags": [],
-      "legacy_flags": [],
-      "path": [
-        "innovate"
-      ],
-      "requires_runtime": null,
-      "summary": "Innovation Catalyst session management"
-    },
-    {
-      "action": "innovate_start",
-      "description": "Start a new innovation session with the Innovation Catalyst framework.",
-      "examples": [
-        "python3 main.py innovate start \"How to improve code review?\"",
-        "python3 main.py innovate start \"Reduce bugs\" --techniques scamper,six_hats",
-        "python3 main.py innovate start \"Improve UX\" --execute-phase divergence"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "innovate",
-        "start"
-      ],
-      "requires_runtime": true,
-      "summary": "Start a new innovation session"
-    },
-    {
-      "action": "innovate_list",
-      "description": "List all innovation sessions with their status and metrics.",
-      "examples": [
-        "python3 main.py innovate list",
-        "python3 main.py innovate list --limit 10",
-        "python3 main.py innovate list --output json"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "innovate",
-        "list"
-      ],
-      "requires_runtime": true,
-      "summary": "List innovation sessions"
-    },
-    {
-      "action": "innovate_show",
-      "description": "Show detailed information about a specific innovation session.",
-      "examples": [
-        "python3 main.py innovate show --session-id abc123",
-        "python3 main.py innovate show --session-id abc123 --output json"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "innovate",
-        "show"
-      ],
-      "requires_runtime": true,
-      "summary": "Show session details"
-    },
-    {
-      "action": "innovate_resume",
-      "description": "Resume an innovation session at a specific phase.",
-      "examples": [
-        "python3 main.py innovate resume --session-id abc123",
-        "python3 main.py innovate resume --session-id abc123 --phase convergence"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "innovate",
-        "resume"
-      ],
-      "requires_runtime": true,
-      "summary": "Resume an innovation session"
-    },
-    {
-      "action": "innovate_export",
-      "description": "Export innovation session results to markdown or JSON.",
-      "examples": [
-        "python3 main.py innovate export --session-id abc123 --format markdown",
-        "python3 main.py innovate export --session-id abc123 --output report.md"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "innovate",
-        "export"
-      ],
-      "requires_runtime": true,
-      "summary": "Export session results"
-    },
-    {
-      "action": "innovate_techniques",
-      "description": "Show all available brainstorming techniques with descriptions.",
-      "examples": [
-        "python3 main.py innovate techniques",
-        "python3 main.py innovate techniques --json"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "innovate",
-        "techniques"
-      ],
-      "requires_runtime": false,
-      "summary": "List available brainstorming techniques"
-    },
-    {
-      "action": "innovate_to_goals",
-      "description": "Convert selected ideas from an innovation session to goals in the queue.",
-      "examples": [
-        "python3 main.py innovate to-goals --session-id abc123",
-        "python3 main.py innovate to-goals --session-id abc123 --preview"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "innovate",
-        "to-goals"
-      ],
-      "requires_runtime": true,
-      "summary": "Convert selected ideas to goals"
-    },
-    {
-      "action": "innovate_insights",
-      "description": "Display analytics about innovation sessions including trends, technique effectiveness, and idea quality metrics.",
-      "examples": [
-        "python3 main.py innovate insights",
-        "python3 main.py innovate insights --session-id abc123",
-        "python3 main.py innovate insights --json"
-      ],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "innovate",
-        "insights"
-      ],
-      "requires_runtime": true,
-      "summary": "Show innovation analytics and insights"
-    },
-    {
-      "action": null,
-      "description": "Commands for the Agent SDK meta-controller.",
-      "examples": [],
-      "flags": [],
-      "legacy_flags": [],
-      "path": [
-        "agent"
-      ],
-      "requires_runtime": null,
-      "summary": "Agent SDK commands"
-    },
-    {
-      "action": "agent_run",
-      "description": "Execute a development goal using Claude-as-brain orchestration with dynamic tool/skill/workflow selection.",
-      "examples": [],
-      "flags": [
-        {
-          "name": "--json",
-          "summary": "Output JSON instead of text"
-        }
-      ],
-      "legacy_flags": [],
-      "path": [
-        "agent",
-        "run"
-      ],
-      "requires_runtime": true,
-      "summary": "Run goal via Agent SDK meta-controller"
-    }
-  ],
-  "deterministic": true,
+  "version": 3,
   "generated_by": "aura_cli.options.help_schema",
+  "deterministic": true,
   "json_contracts": {
-    "cli_errors": {
-      "description": "Structured CLI JSON error payloads for parse and help-topic failures.",
-      "inclusion_rule": "Returned as the top-level JSON payload when `--json` is used and an error occurs.",
-      "optional_fields": [
-        "usage"
-      ],
-      "record_codes": [
-        {
-          "code": "cli_parse_error",
-          "description": "CLI argument parsing or validation failed.",
-          "status": "error"
-        },
-        {
-          "code": "unknown_command_help_topic",
-          "description": "Help topic path was not recognized.",
-          "status": "error"
-        }
-      ],
-      "record_fields": [
-        "status",
-        "code",
-        "message"
-      ],
-      "version": 1
-    },
     "cli_warnings": {
-      "description": "Structured CLI warnings attached to JSON outputs when legacy flags are used.",
       "field": "cli_warnings",
+      "version": 1,
+      "description": "Structured CLI warnings attached to JSON outputs when legacy flags are used.",
       "inclusion_rule": "Present when a parsed invocation emits structured warning records and the command outputs JSON.",
-      "record_codes": [
-        {
-          "category": "deprecation",
-          "code": "legacy_cli_flags_deprecated",
-          "description": "Legacy flat CLI flags were used and mapped to a canonical command.",
-          "phase": "compatibility"
-        }
-      ],
       "record_fields": [
         "code",
         "message",
@@ -1006,8 +17,997 @@
         "legacy_flags",
         "phase"
       ],
-      "version": 1
+      "record_codes": [
+        {
+          "code": "legacy_cli_flags_deprecated",
+          "category": "deprecation",
+          "phase": "compatibility",
+          "description": "Legacy flat CLI flags were used and mapped to a canonical command."
+        }
+      ]
+    },
+    "cli_errors": {
+      "version": 1,
+      "description": "Structured CLI JSON error payloads for parse and help-topic failures.",
+      "inclusion_rule": "Returned as the top-level JSON payload when `--json` is used and an error occurs.",
+      "record_fields": [
+        "status",
+        "code",
+        "message"
+      ],
+      "optional_fields": [
+        "usage"
+      ],
+      "record_codes": [
+        {
+          "code": "cli_parse_error",
+          "status": "error",
+          "description": "CLI argument parsing or validation failed."
+        },
+        {
+          "code": "unknown_command_help_topic",
+          "status": "error",
+          "description": "Help topic path was not recognized."
+        }
+      ]
     }
   },
-  "version": 3
+  "commands": [
+    {
+      "path": [
+        "help"
+      ],
+      "summary": "Show CLI help",
+      "description": "Show top-level help or help for a specific command path.",
+      "examples": [
+        "python3 main.py help",
+        "python3 main.py help goal add"
+      ],
+      "legacy_flags": [],
+      "action": "help",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "doctor"
+      ],
+      "summary": "Run system diagnostics",
+      "description": "Run the AURA doctor checks for local environment health.",
+      "examples": [
+        "python3 main.py doctor"
+      ],
+      "legacy_flags": [],
+      "action": "doctor",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "readiness"
+      ],
+      "summary": "Check V2 runtime readiness",
+      "description": "Validate async runtime and MCP registry health.",
+      "examples": [
+        "python3 main.py readiness"
+      ],
+      "legacy_flags": [],
+      "action": "readiness",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "bootstrap"
+      ],
+      "summary": "Create default config",
+      "description": "Bootstrap local configuration files for AURA.",
+      "examples": [
+        "python3 main.py bootstrap"
+      ],
+      "legacy_flags": [
+        "--bootstrap"
+      ],
+      "action": "bootstrap",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "config"
+      ],
+      "summary": "Show effective config",
+      "description": "Print the resolved effective runtime configuration.",
+      "examples": [
+        "python3 main.py config"
+      ],
+      "legacy_flags": [],
+      "action": "show_config",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "contract-report"
+      ],
+      "summary": "Print CLI contract report",
+      "description": "Print aggregated parser/help/schema/dispatch contract checks as JSON.",
+      "examples": [
+        "python3 main.py contract-report --check",
+        "python3 main.py contract-report --compact"
+      ],
+      "legacy_flags": [],
+      "action": "contract_report",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "diag"
+      ],
+      "summary": "MCP diagnostics snapshot",
+      "description": "Fetch MCP health, metrics, limits, and recent logs via HTTP.",
+      "examples": [
+        "python3 main.py diag"
+      ],
+      "legacy_flags": [
+        "--diag"
+      ],
+      "action": "diag",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "logs"
+      ],
+      "summary": "Stream AURA logs",
+      "description": "Tail or follow logs from stdin or a file.",
+      "examples": [
+        "python3 main.py logs --tail 50",
+        "python3 main.py logs --file memory/aura.log --follow"
+      ],
+      "legacy_flags": [],
+      "action": "logs",
+      "requires_runtime": false,
+      "flags": []
+    },
+    {
+      "path": [
+        "watch"
+      ],
+      "summary": "Launch TUI monitor",
+      "description": "Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.",
+      "examples": [
+        "python3 main.py watch",
+        "python3 main.py watch --autonomous"
+      ],
+      "legacy_flags": [],
+      "action": "watch",
+      "requires_runtime": true,
+      "flags": []
+    },
+    {
+      "path": [
+        "studio"
+      ],
+      "summary": "Launch AURA Studio",
+      "description": "Launch the rich real-time dashboard. Use --autonomous to start the goal loop.",
+      "examples": [
+        "python3 main.py studio",
+        "python3 main.py studio --autonomous"
+      ],
+      "legacy_flags": [],
+      "action": "studio",
+      "requires_runtime": true,
+      "flags": []
+    },
+    {
+      "path": [
+        "goal"
+      ],
+      "summary": "Goal queue operations",
+      "description": "Manage queued goals and run one-off goals.",
+      "examples": [
+        "python3 main.py goal status",
+        "python3 main.py goal add \"Refactor queue\""
+      ],
+      "legacy_flags": [],
+      "action": null,
+      "requires_runtime": null,
+      "flags": []
+    },
+    {
+      "path": [
+        "goal",
+        "add"
+      ],
+      "summary": "Add a goal to the queue",
+      "description": "Add a goal, optionally running the queue immediately.",
+      "examples": [
+        "python3 main.py goal add \"Fix tests\"",
+        "python3 main.py goal add \"Fix tests\" --run"
+      ],
+      "legacy_flags": [
+        "--add-goal",
+        "--run-goals"
+      ],
+      "action": "goal_add",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "goal",
+        "run"
+      ],
+      "summary": "Run queued goals",
+      "description": "Run the goal queue through the autonomous loop.",
+      "examples": [
+        "python3 main.py goal run --dry-run"
+      ],
+      "legacy_flags": [
+        "--run-goals"
+      ],
+      "action": "goal_run",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "goal",
+        "status"
+      ],
+      "summary": "Show queue status",
+      "description": "Show queued and completed goals.",
+      "examples": [
+        "python3 main.py goal status",
+        "python3 main.py goal status --json"
+      ],
+      "legacy_flags": [
+        "--status"
+      ],
+      "action": "goal_status",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "goal",
+        "once"
+      ],
+      "summary": "Run a one-off goal",
+      "description": "Run a single goal directly without queueing it.",
+      "examples": [
+        "python3 main.py goal once \"Summarize repo\"",
+        "python3 main.py goal once \"Refactor core\" --max-cycles 3"
+      ],
+      "legacy_flags": [
+        "--goal"
+      ],
+      "action": "goal_once",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "goal",
+        "resume"
+      ],
+      "summary": "Resume an interrupted goal",
+      "description": "Re-queue a goal that was interrupted mid-execution due to a crash or process kill. Reads memory/in_flight_goal.json written by the goal run loop. Use --run to immediately execute the re-queued goal.",
+      "examples": [
+        "python3 main.py goal resume",
+        "python3 main.py goal resume --run"
+      ],
+      "legacy_flags": [],
+      "action": "goal_resume",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "workflow"
+      ],
+      "summary": "Workflow operations",
+      "description": "Run orchestrated workflow goals with explicit cycle limits.",
+      "examples": [
+        "python3 main.py workflow run \"Summarize repo\""
+      ],
+      "legacy_flags": [],
+      "action": null,
+      "requires_runtime": null,
+      "flags": []
+    },
+    {
+      "path": [
+        "workflow",
+        "run"
+      ],
+      "summary": "Run a workflow goal",
+      "description": "Run the orchestrator loop for a single workflow goal.",
+      "examples": [
+        "python3 main.py workflow run \"Summarize repo\" --max-cycles 3"
+      ],
+      "legacy_flags": [
+        "--workflow-goal"
+      ],
+      "action": "workflow_run",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "mcp"
+      ],
+      "summary": "Repo-local MCP commands",
+      "description": "Inspect and call MCP servers configured in the repo-local MCP config.",
+      "examples": [
+        "python3 main.py mcp tools"
+      ],
+      "legacy_flags": [],
+      "action": null,
+      "requires_runtime": null,
+      "flags": []
+    },
+    {
+      "path": [
+        "mcp",
+        "tools"
+      ],
+      "summary": "List MCP tools",
+      "description": "List servers and tools exposed by the repo-local MCP config.",
+      "examples": [
+        "python3 main.py mcp tools"
+      ],
+      "legacy_flags": [
+        "--mcp-tools"
+      ],
+      "action": "mcp_tools",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "mcp",
+        "call"
+      ],
+      "summary": "Call an MCP tool",
+      "description": "Invoke a repo-local MCP server/tool target with optional JSON args.",
+      "examples": [
+        "python3 main.py mcp call filesystem/read_file --args '{\"path\":\"README.md\"}'",
+        "python3 main.py mcp call sqlite/query --args '{\"sql\":\"select 1\"}'"
+      ],
+      "legacy_flags": [
+        "--mcp-call"
+      ],
+      "action": "mcp_call",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "mcp",
+        "status"
+      ],
+      "summary": "Show MCP server health dashboard",
+      "description": "Query all registered MCP servers and render a Rich table showing server name, endpoint URL, health status, last heartbeat, average response latency, and tool count.",
+      "examples": [
+        "python3 main.py mcp status"
+      ],
+      "legacy_flags": [],
+      "action": "mcp_status",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "mcp",
+        "restart"
+      ],
+      "summary": "Restart / validate an MCP server",
+      "description": "Trigger a manual health validation pass for a named MCP server. Pass the server config-name (e.g. 'dev_tools', 'skills').",
+      "examples": [
+        "python3 main.py mcp restart dev_tools",
+        "python3 main.py mcp restart skills"
+      ],
+      "legacy_flags": [],
+      "action": "mcp_restart",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "beads"
+      ],
+      "summary": "BEADS contract commands",
+      "description": "Inspect and validate BEADS schema contracts.",
+      "examples": [
+        "python3 main.py beads schemas"
+      ],
+      "legacy_flags": [],
+      "action": null,
+      "requires_runtime": null,
+      "flags": []
+    },
+    {
+      "path": [
+        "beads",
+        "schemas"
+      ],
+      "summary": "List registered BEADS schemas",
+      "description": "Print a table of all BEADS schema contracts registered in .beads/. Includes schema version, TypedDict names, and interaction count.",
+      "examples": [
+        "python3 main.py beads schemas",
+        "python3 main.py beads schemas --json"
+      ],
+      "legacy_flags": [],
+      "action": "beads_schemas",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "scaffold"
+      ],
+      "summary": "Scaffold a project",
+      "description": "Run the scaffolder agent for a named project type.",
+      "examples": [
+        "python3 main.py scaffold demo --desc \"small demo app\"",
+        "python3 main.py scaffold demo --json"
+      ],
+      "legacy_flags": [
+        "--scaffold"
+      ],
+      "action": "scaffold",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "evolve"
+      ],
+      "summary": "Run innovation workflow",
+      "description": "Run the innovation workflow and optional queue-backed implementation loop for AURA core.",
+      "examples": [
+        "python3 main.py evolve",
+        "python3 main.py evolve --json",
+        "python3 main.py evolve --queue-only --proposal-limit 3 --focus research"
+      ],
+      "legacy_flags": [
+        "--evolve"
+      ],
+      "action": "evolve",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "queue"
+      ],
+      "summary": "Goal queue management",
+      "description": "List, add, or clear goals in the autonomous queue.",
+      "examples": [
+        "python3 main.py queue list",
+        "python3 main.py queue list --json"
+      ],
+      "legacy_flags": [],
+      "action": null,
+      "requires_runtime": null,
+      "flags": []
+    },
+    {
+      "path": [
+        "queue",
+        "list"
+      ],
+      "summary": "List queued goals",
+      "description": "Show all pending and completed goals.",
+      "examples": [
+        "python3 main.py queue list",
+        "python3 main.py queue list --json"
+      ],
+      "legacy_flags": [],
+      "action": "queue_list",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "queue",
+        "clear"
+      ],
+      "summary": "Clear the goal queue",
+      "description": "Remove all pending goals from the queue.",
+      "examples": [
+        "python3 main.py queue clear",
+        "python3 main.py queue clear --json"
+      ],
+      "legacy_flags": [],
+      "action": "queue_clear",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "memory"
+      ],
+      "summary": "Semantic memory operations",
+      "description": "Search or browse through the AURA brain.",
+      "examples": [
+        "python3 main.py memory search \"workflow engine\"",
+        "python3 main.py memory search \"workflow engine\" --json"
+      ],
+      "legacy_flags": [],
+      "action": null,
+      "requires_runtime": null,
+      "flags": []
+    },
+    {
+      "path": [
+        "memory",
+        "search"
+      ],
+      "summary": "Search semantic memory",
+      "description": "Perform a semantic search over brain entries.",
+      "examples": [
+        "python3 main.py memory search \"workflow engine\"",
+        "python3 main.py memory search \"workflow engine\" --json"
+      ],
+      "legacy_flags": [],
+      "action": "memory_search",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "memory",
+        "reindex"
+      ],
+      "summary": "Rebuild semantic memory embeddings",
+      "description": "Rebuild semantic memory embeddings for the active model and force a project sync.",
+      "examples": [
+        "python3 main.py memory reindex",
+        "python3 main.py memory reindex --json"
+      ],
+      "legacy_flags": [],
+      "action": "memory_reindex",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "metrics"
+      ],
+      "summary": "Show performance metrics",
+      "description": "Display cycle success rates and timing stats.",
+      "examples": [
+        "python3 main.py metrics",
+        "python3 main.py metrics --json"
+      ],
+      "legacy_flags": [],
+      "action": "metrics_show",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "sadd"
+      ],
+      "summary": "Sub-Agent Driven Development",
+      "description": "Decompose a design spec into parallel workstreams and execute via sub-agents.",
+      "examples": [
+        "python3 main.py sadd run --spec design.md --dry-run",
+        "python3 main.py sadd run --spec design.md --max-parallel 3"
+      ],
+      "legacy_flags": [],
+      "action": null,
+      "requires_runtime": null,
+      "flags": []
+    },
+    {
+      "path": [
+        "sadd",
+        "run"
+      ],
+      "summary": "Run a SADD session",
+      "description": "Parse a design spec and execute workstreams. Use --dry-run to preview decomposition only.",
+      "examples": [
+        "python3 main.py sadd run --spec design.md --dry-run",
+        "python3 main.py sadd run --spec design.md --max-parallel 2 --max-cycles 3"
+      ],
+      "legacy_flags": [],
+      "action": "sadd_run",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "sadd",
+        "status"
+      ],
+      "summary": "Show SADD session status",
+      "description": "Show status of recent SADD sessions or a specific session.",
+      "examples": [
+        "python3 main.py sadd status",
+        "python3 main.py sadd status --session-id <id>"
+      ],
+      "legacy_flags": [],
+      "action": "sadd_status",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "sadd",
+        "resume"
+      ],
+      "summary": "Resume a SADD session",
+      "description": "Resume an interrupted SADD session from its last checkpoint.",
+      "examples": [
+        "python3 main.py sadd resume --session-id <id>"
+      ],
+      "legacy_flags": [],
+      "action": "sadd_resume",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "innovate"
+      ],
+      "summary": "Innovation Catalyst session management",
+      "description": "Start, list, and manage innovation sessions using brainstorming techniques.",
+      "examples": [
+        "python3 main.py innovate start \"How to improve X?\"",
+        "python3 main.py innovate list",
+        "python3 main.py innovate show --session-id abc123"
+      ],
+      "legacy_flags": [],
+      "action": null,
+      "requires_runtime": null,
+      "flags": []
+    },
+    {
+      "path": [
+        "innovate",
+        "start"
+      ],
+      "summary": "Start a new innovation session",
+      "description": "Start a new innovation session with the Innovation Catalyst framework.",
+      "examples": [
+        "python3 main.py innovate start \"How to improve code review?\"",
+        "python3 main.py innovate start \"Reduce bugs\" --techniques scamper,six_hats",
+        "python3 main.py innovate start \"Improve UX\" --execute-phase divergence"
+      ],
+      "legacy_flags": [],
+      "action": "innovate_start",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "innovate",
+        "list"
+      ],
+      "summary": "List innovation sessions",
+      "description": "List all innovation sessions with their status and metrics.",
+      "examples": [
+        "python3 main.py innovate list",
+        "python3 main.py innovate list --limit 10",
+        "python3 main.py innovate list --output json"
+      ],
+      "legacy_flags": [],
+      "action": "innovate_list",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "innovate",
+        "show"
+      ],
+      "summary": "Show session details",
+      "description": "Show detailed information about a specific innovation session.",
+      "examples": [
+        "python3 main.py innovate show --session-id abc123",
+        "python3 main.py innovate show --session-id abc123 --output json"
+      ],
+      "legacy_flags": [],
+      "action": "innovate_show",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "innovate",
+        "resume"
+      ],
+      "summary": "Resume an innovation session",
+      "description": "Resume an innovation session at a specific phase.",
+      "examples": [
+        "python3 main.py innovate resume --session-id abc123",
+        "python3 main.py innovate resume --session-id abc123 --phase convergence"
+      ],
+      "legacy_flags": [],
+      "action": "innovate_resume",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "innovate",
+        "export"
+      ],
+      "summary": "Export session results",
+      "description": "Export innovation session results to markdown or JSON.",
+      "examples": [
+        "python3 main.py innovate export --session-id abc123 --format markdown",
+        "python3 main.py innovate export --session-id abc123 --output report.md"
+      ],
+      "legacy_flags": [],
+      "action": "innovate_export",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "innovate",
+        "techniques"
+      ],
+      "summary": "List available brainstorming techniques",
+      "description": "Show all available brainstorming techniques with descriptions.",
+      "examples": [
+        "python3 main.py innovate techniques",
+        "python3 main.py innovate techniques --json"
+      ],
+      "legacy_flags": [],
+      "action": "innovate_techniques",
+      "requires_runtime": false,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "innovate",
+        "to-goals"
+      ],
+      "summary": "Convert selected ideas to goals",
+      "description": "Convert selected ideas from an innovation session to goals in the queue.",
+      "examples": [
+        "python3 main.py innovate to-goals --session-id abc123",
+        "python3 main.py innovate to-goals --session-id abc123 --preview"
+      ],
+      "legacy_flags": [],
+      "action": "innovate_to_goals",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "innovate",
+        "insights"
+      ],
+      "summary": "Show innovation analytics and insights",
+      "description": "Display analytics about innovation sessions including trends, technique effectiveness, and idea quality metrics.",
+      "examples": [
+        "python3 main.py innovate insights",
+        "python3 main.py innovate insights --session-id abc123",
+        "python3 main.py innovate insights --json"
+      ],
+      "legacy_flags": [],
+      "action": "innovate_insights",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    },
+    {
+      "path": [
+        "agent"
+      ],
+      "summary": "Agent SDK commands",
+      "description": "Commands for the Agent SDK meta-controller.",
+      "examples": [],
+      "legacy_flags": [],
+      "action": null,
+      "requires_runtime": null,
+      "flags": []
+    },
+    {
+      "path": [
+        "agent",
+        "run"
+      ],
+      "summary": "Run goal via Agent SDK meta-controller",
+      "description": "Execute a development goal using Claude-as-brain orchestration with dynamic tool/skill/workflow selection.",
+      "examples": [],
+      "legacy_flags": [],
+      "action": "agent_run",
+      "requires_runtime": true,
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ]
+    }
+  ]
 }

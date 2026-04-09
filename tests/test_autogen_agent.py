@@ -24,6 +24,7 @@ class TestAutoGenGroupChatAgent(unittest.TestCase):
         from agents.autogen_agent import AutoGenGroupChatAgent
         brain = MagicMock()
         agent = AutoGenGroupChatAgent(brain=brain, model=MagicMock())
+        agent._autogen_available = True
         with patch.object(agent, "_conduct_group_chat", return_value={
             "conversation": "test", "decisions": [],
         }):

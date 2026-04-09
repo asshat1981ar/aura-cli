@@ -10,24 +10,42 @@ from datetime import datetime
 from core.logging_utils import log_json
 
 
-class _AgentStub:
-    """Placeholder for unimplemented external agent."""
-    @classmethod
-    def analyze_architecture(cls, *args: Any, **kwargs: Any) -> Dict[str, Any]:
-        return {}
+def _get_agent(name: str) -> Any:
+    """Resolve a registered agent by name, falling back to a no-op stub."""
+    try:
+        from core.mcp_agent_registry import agent_registry
+        spec = agent_registry.get(name)
+        if spec:
+            return spec
+    except Exception:
+        pass
 
-    @classmethod
-    def assess_capabilities(cls, *args: Any, **kwargs: Any) -> Dict[str, Any]:
-        return {}
+    class _Stub:
+        @classmethod
+        def analyze_architecture(cls, *a: Any, **kw: Any) -> Dict[str, Any]:
+            return {}
 
-    @classmethod
-    def create_execution_plan(cls, *args: Any, **kwargs: Any) -> Dict[str, Any]:
-        return {}
+        @classmethod
+        def assess_capabilities(cls, *a: Any, **kw: Any) -> Dict[str, Any]:
+            return {}
+
+        @classmethod
+        def create_execution_plan(cls, *a: Any, **kw: Any) -> Dict[str, Any]:
+            return {}
+
+    return _Stub
 
 
-PythonAgent = _AgentStub
-TypeScriptAgent = _AgentStub
-CodeSearchAgent = _AgentStub
+def _lazy_python_agent() -> Any:
+    return _get_agent("python_agent")
+
+
+def _lazy_typescript_agent() -> Any:
+    return _get_agent("typescript_agent")
+
+
+def _lazy_code_search_agent() -> Any:
+    return _get_agent("code_search")
 
 
 def create_multi_agent_workflow():
@@ -48,14 +66,14 @@ def create_multi_agent_workflow():
     """
     # Step 1: Analyze Current Project Architecture
     python_analysis_tools = ['pylint', 'mypy', 'bandit']
-    python_results = PythonAgent.analyze_architecture(python_analysis_tools)
+    python_results = _lazy_python_agent().analyze_architecture(python_analysis_tools)
 
     # Step 2: Assess Typescript Capabilities
     typescript_analysis_metrics = ['dependency metrics', 'code complexity']
-    typescript_results = TypeScriptAgent.assess_capabilities(typescript_analysis_metrics)
+    typescript_results = _lazy_typescript_agent().assess_capabilities(typescript_analysis_metrics)
 
     # Step 3: Create Execution Plan with CodeSearchAgent
-    execution_plan = CodeSearchAgent.create_execution_plan(python_results, typescript_results)
+    execution_plan = _lazy_code_search_agent().create_execution_plan(python_results, typescript_results)
 
     # Step 4: Predict Potential Failure Modes
     failure_modes_analysis = predict_failure_modes(python_results)

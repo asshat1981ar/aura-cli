@@ -1,9 +1,7 @@
 from pathlib import Path
 import os
 
-
-class ConfigurationError(Exception):
-    pass
+from core.exceptions import ConfigurationError  # noqa: F401
 
 
 def validate_api_key(api_key: str) -> None:

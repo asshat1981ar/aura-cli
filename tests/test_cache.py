@@ -141,7 +141,19 @@ class TestInvalidateCache:
         count = invalidate_cache(pattern=None)
         assert count >= 1
 
-    def test_invalidate_with_pattern_returns_zero(self):
-        # Pattern matching not implemented — returns 0
-        count = invalidate_cache(pattern="some:*")
+    def test_invalidate_with_pattern(self):
+        cache = get_cache()
+        cache.clear()
+        cache.set("skill_dispatch:bugfix:lint", "v1")
+        cache.set("skill_dispatch:bugfix:test", "v2")
+        cache.set("ingest:context", "v3")
+        count = invalidate_cache(pattern="skill_dispatch:*")
+        assert count == 2
+        assert cache.get("ingest:context") == "v3"
+
+    def test_invalidate_with_pattern_no_match(self):
+        cache = get_cache()
+        cache.clear()
+        cache.set("key1", "v1")
+        count = invalidate_cache(pattern="nonexistent:*")
         assert count == 0

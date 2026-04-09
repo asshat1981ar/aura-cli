@@ -2,12 +2,8 @@ import os
 import re
 from pathlib import Path
 from typing import List, Union
-from core.exceptions import AuraError
+from core.exceptions import SecurityError  # noqa: F401
 from core.config_manager import config
-
-class SecurityError(AuraError):
-    """Raised when a security boundary is violated."""
-    pass
 
 # Hardcoded safe commands for AURA
 BASE_ALLOWED_COMMANDS = {

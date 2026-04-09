@@ -237,7 +237,12 @@ def invalidate_cache(pattern: Optional[str] = None) -> int:
         count = cache.get_stats()["size"]
         cache.clear()
         return count
-    
-    # Pattern matching not implemented for simplicity
-    # Would need to iterate and match keys
-    return 0
+
+    import fnmatch
+    keys_to_delete = [
+        key for key in list(cache._cache.keys())
+        if fnmatch.fnmatch(key, pattern)
+    ]
+    for key in keys_to_delete:
+        cache.delete(key)
+    return len(keys_to_delete)

@@ -64,6 +64,11 @@ FALLBACK_CAPABILITIES: dict[str, list[str]] = {
     "documentation":       ["doc_generation", "readme", "inline_docs", "commenting", "documentation"],
     "innovation_swarm":    ["innovation", "brainstorming", "divergence", "convergence", "creativity", "ideation"],
     "meta_conductor":      ["innovation", "orchestration", "facilitation", "design_thinking", "session_management"],
+    "applicator":          ["apply", "file_write", "patch", "code_apply"],
+    "tester":              ["testing", "test_generation", "test_execution"],
+    "scaffolder":          ["scaffolding", "project_setup", "boilerplate"],
+    "sdlc_debugger":       ["sdlc", "pipeline_debug", "ci_debug"],
+    "technical_debt":      ["technical_debt", "hotspot", "quality", "debt_tracking"],
 }
 
 
@@ -111,6 +116,12 @@ _AGENT_MODULE_MAP: dict[str, tuple[str, str]] = {
     "mcp_health":          ("agents.mcp_health_agent",    "MCPHealthAgent"),
     "innovation_swarm":    ("agents.innovation_swarm",    "InnovationSwarm"),
     "meta_conductor":      ("agents.meta_conductor",      "MetaConductor"),
+    "debugging":           ("agents.debugger",            "DebuggerAgent"),
+    "applicator":          ("agents.applicator",          "ApplicatorAgent"),
+    "tester":              ("agents.tester",              "TesterAgent"),
+    "scaffolder":          ("agents.scaffolder",          "ScaffolderAgent"),
+    "sdlc_debugger":       ("agents.sdlc_debugger",      "SDLCDebuggerAgent"),
+    "technical_debt":      ("agents.technical_debt_agent", "TechnicalDebtAgent"),
 }
 
 
@@ -585,6 +596,12 @@ def default_agents(brain, model, context_manager=None, skills=None, health_monit
     MCPHealthAgent = _lazy_import("mcp_health")
     InnovationSwarm = _lazy_import("innovation_swarm")
     MetaConductor = _lazy_import("meta_conductor")
+    DebuggerAgent = _lazy_import("debugging")
+    ApplicatorAgent = _lazy_import("applicator")
+    TesterAgent = _lazy_import("tester")
+    ScaffolderAgent = _lazy_import("scaffolder")
+    SDLCDebuggerAgent = _lazy_import("sdlc_debugger")
+    TechnicalDebtAgent = _lazy_import("technical_debt")
 
     sandbox_agent = SandboxAgent(brain, timeout=30)
     planner = PlannerAdapter(PlannerAgent(brain, model))
@@ -617,6 +634,13 @@ def default_agents(brain, model, context_manager=None, skills=None, health_monit
         "mcp_health": MCPHealthAgent(),
         "innovation_swarm": InnovationSwarm(brain=brain, model=model),
         "meta_conductor": MetaConductor(brain=brain, model=model),
+        # Newly registered specialized agents
+        "debugging": DebuggerAgent(brain, model),
+        "applicator": ApplicatorAgent(brain),
+        "tester": TesterAgent(brain, model, sandbox_agent),
+        "scaffolder": ScaffolderAgent(brain, model),
+        "sdlc_debugger": SDLCDebuggerAgent(),
+        "technical_debt": TechnicalDebtAgent(),
     }
 
     from agents.autogen_agent import AutoGenGroupChatAgent

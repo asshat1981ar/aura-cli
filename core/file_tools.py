@@ -28,19 +28,13 @@ import re # Added for _aura_clean_json
 import json # Added for _aura_safe_loads
 from core.logging_utils import log_json
 
-# Custom Exception for FileTools
-class FileToolsError(Exception):
-    """Base exception for FileTools operations."""
-    pass
-
-class OldCodeNotFoundError(FileToolsError):
-    """Exception raised when old_code is not found in the file."""
-    pass
-
-
-class MismatchOverwriteBlockedError(OldCodeNotFoundError):
-    """Raised when mismatch-overwrite fallback is disabled by caller policy."""
-    pass
+# Canonical exception hierarchy lives in core.exceptions.
+# Re-exported here for backward compatibility.
+from core.exceptions import (  # noqa: F401
+    FileToolsError,
+    OldCodeNotFoundError,
+    MismatchOverwriteBlockedError,
+)
 
 
 MISMATCH_OVERWRITE_BLOCK_POLICY = "explicit_overwrite_file_required"

@@ -3,10 +3,9 @@ import logging
 from pathlib import Path
 from dataclasses import dataclass
 
-logger = logging.getLogger(__name__)
+from core.exceptions import ConfigurationError  # noqa: F401
 
-class ConfigurationError(Exception):
-    pass
+logger = logging.getLogger(__name__)
 
 @dataclass
 class ServiceConfig:

@@ -56,6 +56,7 @@ from core.mcp_agent_registry import agent_registry
 from core.mcp_client import MCPAsyncClient
 from memory.controller import memory_controller, MemoryTier
 from core.phase_dispatcher import PhaseDispatcher
+from core.cache import get_cache
 
 MAX_SANDBOX_RETRIES = 3
 
@@ -1388,20 +1389,30 @@ class LoopOrchestrator:
         t0 = time.time()
         skill_context: Dict = {}
         if self.skills and pipeline_cfg.skill_set:
-            active_skills = {k: self.skills[k] for k in pipeline_cfg.skill_set if k in self.skills}
-            # Check skill correlation for suggested additions
-            if self.skill_correlation:
-                try:
-                    base_skill_names = list(active_skills.keys())
-                    suggestions = self.skill_correlation.suggest_skills(base_skill_names, goal_type)
-                    for suggested_name, corr_score in suggestions:
-                        if suggested_name in self.skills and suggested_name not in active_skills:
-                            active_skills[suggested_name] = self.skills[suggested_name]
-                            log_json("INFO", "skill_correlation_added", details={"skill": suggested_name, "correlation": round(corr_score, 3)})
-                except (TypeError, KeyError):
-                    pass
+            # Check cache for identical skill dispatch inputs
+            cache = get_cache()
+            skill_set_key = ",".join(sorted(pipeline_cfg.skill_set))
+            cache_key = f"skill_dispatch:{goal_type}:{skill_set_key}"
+            cached = cache.get(cache_key)
+            if cached is not None:
+                log_json("DEBUG", "skill_dispatch_cache_hit", details={"goal_type": goal_type})
+                skill_context = cached
+            else:
+                active_skills = {k: self.skills[k] for k in pipeline_cfg.skill_set if k in self.skills}
+                # Check skill correlation for suggested additions
+                if self.skill_correlation:
+                    try:
+                        base_skill_names = list(active_skills.keys())
+                        suggestions = self.skill_correlation.suggest_skills(base_skill_names, goal_type)
+                        for suggested_name, corr_score in suggestions:
+                            if suggested_name in self.skills and suggested_name not in active_skills:
+                                active_skills[suggested_name] = self.skills[suggested_name]
+                                log_json("INFO", "skill_correlation_added", details={"skill": suggested_name, "correlation": round(corr_score, 3)})
+                    except (TypeError, KeyError):
+                        pass
 
-            skill_context = dispatch_skills(goal_type, active_skills, str(self.project_root))
+                skill_context = dispatch_skills(goal_type, active_skills, str(self.project_root))
+                cache.set(cache_key, skill_context, ttl=600)  # 10 min TTL
         phase_outputs["skill_context"] = skill_context
         self._notify_ui("on_phase_complete", "skill_dispatch", (time.monotonic() - t0) * 1000)
         return skill_context
@@ -1706,6 +1717,8 @@ class LoopOrchestrator:
         if context_injection:
             phase_outputs["context_injection"] = context_injection
         self.confidence_router.reset()
+        # Clear agent result cache at cycle start to avoid stale data
+        get_cache().clear()
         self._notify_ui("on_cycle_start", goal)
 
         bead_id = self._parse_bead_id(goal)

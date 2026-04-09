@@ -35,6 +35,16 @@ class NullByteInjectionError(FileToolsError):
     pass
 
 
+class OldCodeNotFoundError(FileToolsError):
+    """Exception raised when old_code is not found in the file."""
+    pass
+
+
+class MismatchOverwriteBlockedError(OldCodeNotFoundError):
+    """Raised when mismatch-overwrite fallback is disabled by caller policy."""
+    pass
+
+
 # MCP/Network Exceptions
 class MCPError(AURAError):
     """Base exception for MCP-related errors."""

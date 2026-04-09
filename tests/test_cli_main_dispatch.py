@@ -875,6 +875,31 @@ class TestCLIMainDispatch(unittest.TestCase):
         self.assertEqual(mock_call.call_args_list, [call("limits", '{"x":1}'), call("limits", '{"x":1}')])
         runtime_factory.assert_not_called()
 
+    def test_cmd_mcp_tools_delegates_to_repo_local_mcp_cli(self):
+        with patch("aura_cli.mcp_cli.main", return_value=7) as mock_main:
+            code = cli_main.cmd_mcp_tools()
+
+        self.assertEqual(code, 7)
+        mock_main.assert_called_once_with([])
+
+    def test_cmd_mcp_call_delegates_to_repo_local_mcp_cli(self):
+        with patch("aura_cli.mcp_cli.main", return_value=9) as mock_main:
+            code = cli_main.cmd_mcp_call("filesystem/read_file", '{"path":"README.md"}')
+
+        self.assertEqual(code, 9)
+        mock_main.assert_called_once_with(["filesystem/read_file", '{"path":"README.md"}'])
+
+    def test_mcp_dispatch_propagates_nonzero_exit_codes(self):
+        runtime_factory = MagicMock()
+
+        with patch("aura_cli.cli_main.cmd_mcp_tools", return_value=4):
+            code, out, err, _ = self._dispatch(["mcp", "tools"], runtime_factory=runtime_factory)
+
+        self.assertEqual(code, 4)
+        self.assertEqual(out, "")
+        self.assertEqual(err, "")
+        runtime_factory.assert_not_called()
+
     def test_legacy_mcp_call_json_output_matches_snapshot(self):
         runtime_factory = MagicMock()
 

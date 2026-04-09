@@ -1,0 +1,31 @@
+# serializer version: 1
+# name: TestDPoPGoldenStructure.test_proof_header_structure
+  dict({
+    'alg': 'ES256',
+    'jwk_crv': 'P-256',
+    'jwk_kty': 'EC',
+    'typ': 'dpop+jwt',
+  })
+# ---
+# name: TestDPoPGoldenStructure.test_proof_is_three_parts
+  dict({
+    'parts': 3,
+    'pattern': 'base64url.base64url.base64url',
+    'separator': '.',
+  })
+# ---
+# name: TestDPoPGoldenStructure.test_proof_payload_structure_no_token
+  dict({
+    'htm': 'POST',
+    'htu': 'https://api.aura.example.com/v1/instances',
+    'iat': 1712678400,
+  })
+# ---
+# name: TestDPoPGoldenStructure.test_proof_payload_with_token
+  dict({
+    'ath': 'P4ojPsOHZTKstTWZilK68egjvqSCZl3R7N6DYRak0kE',
+    'htm': 'DELETE',
+    'htu': 'https://api.aura.example.com/v1/instances/abc-123',
+    'iat': 1712678400,
+  })
+# ---

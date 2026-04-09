@@ -74,6 +74,18 @@ Example: `feat: add retry logic to agent orchestrator`
 - Add tests for any new functionality
 - Ensure all existing tests pass before submitting a PR
 
+### Updating Golden File Snapshots
+
+If you intentionally change CLI output, DPoP proof structure, or CredentialStore
+messages, update the snapshots:
+
+```bash
+pytest tests/security/test_golden_*.py --snapshot-update
+```
+
+Review the diff in `tests/security/__snapshots__/` carefully before committing —
+unexpected snapshot changes indicate a regression.
+
 ## Submitting a Pull Request
 
 1. Push your branch to your fork

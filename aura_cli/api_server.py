@@ -9,34 +9,19 @@ import json
 import asyncio
 import sqlite3
 import uuid
-import time
-import hashlib
-import re
-import os
 from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from pathlib import Path
-from collections import defaultdict
 
-from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, Request, Header, Body
+from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, Request, Header, Body, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
 
 from core.logging_utils import log_json
-
-# Security configuration
-RATE_LIMIT_REQUESTS = 100  # requests per window
-RATE_LIMIT_WINDOW = 60     # seconds
-MAX_REQUEST_SIZE = 10 * 1024 * 1024  # 10MB
-ALLOWED_HOSTS = ["localhost", "127.0.0.1", "*.localhost"]
-
-# Rate limiting storage
-request_counts: Dict[str, List[float]] = defaultdict(list)
 
 # Try to import AURA components
 try:
@@ -57,99 +42,87 @@ try:
 except ImportError:
     AUTH_AVAILABLE = False
 
-# Security Middleware
-class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """Add security headers to all responses."""
-    
-    async def dispatch(self, request: Request, call_next):
-        response = await call_next(request)
-        
-        # Security headers
-        response.headers["X-Content-Type-Options"] = "nosniff"
-        response.headers["X-Frame-Options"] = "DENY"
-        response.headers["X-XSS-Protection"] = "1; mode=block"
-        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
-        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
-        
-        # Content Security Policy
-        csp = (
-            "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
-            "style-src 'self' 'unsafe-inline' fonts.googleapis.com; "
-            "font-src 'self' fonts.gstatic.com; "
-            "img-src 'self' data: blob:; "
-            "connect-src 'self' ws: wss:; "
-            "frame-ancestors 'none';"
-        )
-        response.headers["Content-Security-Policy"] = csp
-        
-        return response
+
+# ---------------------------------------------------------------------------
+# Pydantic models for goal management API
+# ---------------------------------------------------------------------------
+
+class GoalCreate(BaseModel):
+    """Request body for enqueuing a new goal."""
+
+    description: str = Field(..., min_length=1, description="Natural-language goal description.")
+    priority: int = Field(1, ge=1, le=10, description="Priority level (1 = highest).")
+    max_cycles: int = Field(10, ge=1, description="Maximum loop cycles for this goal.")
+
+    model_config = {"json_schema_extra": {"example": {"description": "Refactor goal queue", "priority": 1, "max_cycles": 5}}}
+
+    @property
+    def stripped_description(self) -> str:
+        return self.description.strip()
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.description.strip():
+            raise ValueError("description must not be blank or whitespace-only")
 
 
-class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Rate limiting middleware."""
-    
-    async def dispatch(self, request: Request, call_next):
-        # Get client identifier (IP or API key)
-        client_ip = request.client.host if request.client else "unknown"
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            client_ip = forwarded.split(",")[0].strip()
-        
-        # Clean old requests
-        current_time = time.time()
-        request_counts[client_ip] = [
-            t for t in request_counts[client_ip]
-            if current_time - t < RATE_LIMIT_WINDOW
-        ]
-        
-        # Check rate limit
-        if len(request_counts[client_ip]) >= RATE_LIMIT_REQUESTS:
-            log_json("WARN", "rate_limit_exceeded", {"ip": client_ip})
-            return JSONResponse(
-                status_code=429,
-                content={"detail": "Rate limit exceeded. Please try again later."}
-            )
-        
-        # Record request
-        request_counts[client_ip].append(current_time)
-        
-        # Add rate limit headers
-        response = await call_next(request)
-        response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT_REQUESTS)
-        response.headers["X-RateLimit-Remaining"] = str(
-            max(0, RATE_LIMIT_REQUESTS - len(request_counts[client_ip]))
-        )
-        
-        return response
+class GoalCycleRecord(BaseModel):
+    """A single cycle record for a goal's execution history."""
+
+    cycle: int
+    phase: Optional[str] = None
+    outcome: Optional[str] = None
+    duration_s: Optional[float] = None
+    timestamp: Optional[str] = None
 
 
-class RequestSizeMiddleware(BaseHTTPMiddleware):
-    """Limit request body size."""
-    
-    async def dispatch(self, request: Request, call_next):
-        content_length = request.headers.get("content-length")
-        if content_length and int(content_length) > MAX_REQUEST_SIZE:
-            return JSONResponse(
-                status_code=413,
-                content={"detail": f"Request body too large. Max size: {MAX_REQUEST_SIZE} bytes"}
-            )
-        return await call_next(request)
+class GoalResponse(BaseModel):
+    """Response model for a queued/active/completed goal."""
+
+    id: str = Field(..., description="Unique stable goal identifier.")
+    description: str
+    status: str = Field(..., description="pending | running | completed | failed | cancelled")
+    priority: int = 1
+    created_at: str
+    updated_at: str
+    progress: int = Field(0, ge=0, le=100)
+    cycles: int = 0
+    max_cycles: int = 10
+
+    model_config = {"json_schema_extra": {"example": {"id": "goal-q-0", "description": "Refactor queue", "status": "pending", "priority": 1, "created_at": "2024-01-01T00:00:00", "updated_at": "2024-01-01T00:00:00", "progress": 0, "cycles": 0, "max_cycles": 10}}}
 
 
-def sanitize_input(value: str) -> str:
-    """Sanitize user input to prevent injection attacks."""
-    # Remove potentially dangerous characters
-    sanitized = re.sub(r'[<>"\']', '', value)
-    # Limit length
-    return sanitized[:1000]
+class GoalDetailResponse(GoalResponse):
+    """Extended goal response that includes per-cycle execution history."""
+
+    history: List[GoalCycleRecord] = Field(default_factory=list, description="Per-cycle execution records.")
 
 
-def validate_path(path: str) -> bool:
-    """Validate file path to prevent directory traversal."""
-    # Check for directory traversal attempts
-    dangerous_patterns = ['..', '~', '//']
-    return not any(pattern in path for pattern in dangerous_patterns)
+class GoalPrioritizeResponse(BaseModel):
+    """Response after moving a goal to the front of the queue."""
+
+    success: bool
+    id: str
+    position: int = Field(0, description="New zero-based queue position (0 = front).")
+    message: str = ""
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers for goal identity
+# ---------------------------------------------------------------------------
+
+def _goal_id_for_queued(index: int, description: str) -> str:
+    """Stable ID for a goal sitting in the queue at *index*."""
+    return f"goal-q-{index}"
+
+
+def _goal_id_for_inflight(description: str) -> str:
+    """Stable ID for an in-flight goal."""
+    return f"goal-f-{hash(description) & 0xFFFFFFFF}"
+
+
+def _goal_id_for_archived(description: str) -> str:
+    """Stable ID for a completed/archived goal."""
+    return f"goal-a-{hash(description) & 0xFFFFFFFF}"
 
 
 # WebSocket connection manager
@@ -410,23 +383,15 @@ app = FastAPI(
     description="API for AURA CLI Web Dashboard",
     version="0.1.0",
     lifespan=lifespan,
-    docs_url="/api/docs" if os.getenv("AURA_ENV") != "production" else None,
-    redoc_url="/api/redoc" if os.getenv("AURA_ENV") != "production" else None,
 )
-
-# Security middleware (order matters - first added = last executed)
-app.add_middleware(SecurityHeadersMiddleware)
-app.add_middleware(RateLimitMiddleware)
-app.add_middleware(RequestSizeMiddleware)
 
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173").split(","),
+    allow_origins=["http://localhost:3000", "http://localhost:5173"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
-    max_age=600,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 security = HTTPBearer(auto_error=False)
@@ -482,56 +447,234 @@ async def login(credentials: dict):
         "user": user.to_dict(),
     }
 
-# Goals endpoints
-@app.get("/api/goals")
-async def get_goals(user: dict = Depends(get_current_user)):
-    """Get all goals from queue and archive."""
+# ---------------------------------------------------------------------------
+# Goals endpoints — full CRUD with Pydantic models
+# ---------------------------------------------------------------------------
+
+@app.get(
+    "/api/goals",
+    response_model=List[GoalResponse],
+    summary="List goals",
+    tags=["goals"],
+)
+async def get_goals(
+    status: Optional[str] = Query(None, description="Filter by status: pending, running, completed, failed"),
+    user: dict = Depends(get_current_user),
+):
+    """Return all goals from the queue and archive, optionally filtered by *status*.
+
+    - **pending** — goals waiting in the queue
+    - **running** — goals currently in-flight
+    - **completed / failed** — goals from the archive
+    """
     queue_data = get_goal_queue_data()
     archive = get_goal_archive()
     goals = format_goals_for_api(queue_data, archive)
+    if status:
+        goals = [g for g in goals if g.get("status") == status]
     return goals
 
-@app.post("/api/goals")
-async def create_goal(goal: dict, user: dict = Depends(get_current_user)):
-    """Create a new goal and add to queue."""
-    description = goal.get("description", "")
-    
-    # Add to actual goal queue if available
+
+@app.post(
+    "/api/goals",
+    response_model=GoalResponse,
+    status_code=201,
+    summary="Enqueue a new goal",
+    tags=["goals"],
+)
+async def create_goal(goal: GoalCreate, user: dict = Depends(get_current_user)):
+    """Enqueue a new goal.  The goal is persisted immediately via :class:`GoalQueue`."""
+    description = goal.stripped_description
+
     if GOAL_QUEUE_AVAILABLE:
         try:
             gq = GoalQueue()
             gq.add(description)
-        except Exception as e:
-            log_json("ERROR", "goal_add_failed", {"error": str(e)})
-    
-    new_goal = {
+        except Exception as exc:
+            log_json("ERROR", "goal_add_failed", details={"error": str(exc)})
+            raise HTTPException(status_code=500, detail=f"Failed to persist goal: {exc}") from exc
+
+    now = datetime.utcnow().isoformat()
+    new_goal: Dict[str, Any] = {
         "id": f"goal-new-{hash(description) & 0xFFFFFFFF}",
         "description": description,
         "status": "pending",
-        "priority": goal.get("priority", 1),
-        "created_at": datetime.utcnow().isoformat(),
-        "updated_at": datetime.utcnow().isoformat(),
+        "priority": goal.priority,
+        "created_at": now,
+        "updated_at": now,
         "progress": 0,
         "cycles": 0,
-        "max_cycles": 10,
+        "max_cycles": goal.max_cycles,
     }
-    
-    await manager.broadcast({
-        "type": "goal_created",
-        "payload": new_goal,
-    })
-    
+    await manager.broadcast({"type": "goal_created", "payload": new_goal})
     return new_goal
 
+
+@app.get(
+    "/api/goals/{goal_id}",
+    response_model=GoalDetailResponse,
+    summary="Get goal detail",
+    tags=["goals"],
+)
+async def get_goal_detail(goal_id: str, user: dict = Depends(get_current_user)):
+    """Return a single goal by ID, including its per-cycle execution history when available."""
+    queue_data = get_goal_queue_data()
+    archive = get_goal_archive()
+
+    # Search queued goals
+    for idx, desc in enumerate(queue_data.get("queue", [])):
+        if _goal_id_for_queued(idx, desc) == goal_id:
+            now = datetime.utcnow().isoformat()
+            return {
+                "id": goal_id,
+                "description": desc,
+                "status": "pending",
+                "priority": 1,
+                "created_at": now,
+                "updated_at": now,
+                "progress": 0,
+                "cycles": 0,
+                "max_cycles": 10,
+                "history": [],
+            }
+
+    # Search in-flight goals
+    for desc, ts in queue_data.get("in_flight", {}).items():
+        if _goal_id_for_inflight(desc) == goal_id:
+            created = datetime.fromtimestamp(ts).isoformat() if ts else datetime.utcnow().isoformat()
+            return {
+                "id": goal_id,
+                "description": desc,
+                "status": "running",
+                "priority": 1,
+                "created_at": created,
+                "updated_at": datetime.utcnow().isoformat(),
+                "progress": 50,
+                "cycles": 1,
+                "max_cycles": 10,
+                "history": [],
+            }
+
+    # Search archive
+    for entry in archive:
+        goal_val = entry.get("goal", {})
+        desc = goal_val if isinstance(goal_val, str) else str(goal_val)
+        if _goal_id_for_archived(desc) == goal_id:
+            ts = entry.get("timestamp", datetime.utcnow().isoformat())
+            raw_history = entry.get("history", [])
+            history = [
+                GoalCycleRecord(
+                    cycle=i + 1,
+                    phase=rec.get("phase"),
+                    outcome=rec.get("outcome"),
+                    duration_s=rec.get("duration_s"),
+                    timestamp=rec.get("timestamp"),
+                )
+                for i, rec in enumerate(raw_history)
+            ]
+            return {
+                "id": goal_id,
+                "description": desc,
+                "status": entry.get("status", "completed"),
+                "priority": 1,
+                "created_at": ts,
+                "updated_at": ts,
+                "progress": 100,
+                "cycles": entry.get("cycles", len(history)),
+                "max_cycles": 10,
+                "history": [h.model_dump() for h in history],
+            }
+
+    raise HTTPException(status_code=404, detail=f"Goal '{goal_id}' not found")
+
+
+@app.delete(
+    "/api/goals/{goal_id}",
+    summary="Cancel a pending goal",
+    tags=["goals"],
+)
+async def delete_goal(goal_id: str, user: dict = Depends(get_current_user)):
+    """Remove a *pending* goal from the queue.
+
+    Returns **404** if the goal is not found and **409** if it is already
+    in-flight (cannot be cancelled without interrupting the running loop).
+    """
+    if not GOAL_QUEUE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Goal queue unavailable")
+
+    gq = GoalQueue()
+
+    # Check if in-flight — cannot cancel
+    for desc in gq.in_flight_keys():
+        if _goal_id_for_inflight(desc) == goal_id:
+            raise HTTPException(
+                status_code=409,
+                detail="Goal is currently running and cannot be cancelled. Wait for it to finish or restart the AURA process.",
+            )
+
+    # Find in queue
+    target_idx: Optional[int] = None
+    for idx, desc in enumerate(gq.queue):
+        if _goal_id_for_queued(idx, desc) == goal_id:
+            target_idx = idx
+            break
+
+    if target_idx is None:
+        raise HTTPException(status_code=404, detail=f"Pending goal '{goal_id}' not found in queue")
+
+    removed = gq.cancel(target_idx)
+    log_json("INFO", "goal_cancelled_via_api", details={"goal_id": goal_id, "description": str(removed)[:120]})
+
+    await manager.broadcast({"type": "goal_updated", "payload": {"id": goal_id, "status": "cancelled"}})
+    return {"success": True, "id": goal_id, "description": removed}
+
+
+@app.post(
+    "/api/goals/{goal_id}/prioritize",
+    response_model=GoalPrioritizeResponse,
+    summary="Move a goal to the front of the queue",
+    tags=["goals"],
+)
+async def prioritize_goal(goal_id: str, user: dict = Depends(get_current_user)):
+    """Promote a pending goal to position 0 (front of the queue).
+
+    Returns **404** if the goal is not found, **409** if it is already
+    in-flight, and **200** with ``position=0`` if already at the front.
+    """
+    if not GOAL_QUEUE_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Goal queue unavailable")
+
+    gq = GoalQueue()
+
+    # Reject in-flight
+    for desc in gq.in_flight_keys():
+        if _goal_id_for_inflight(desc) == goal_id:
+            raise HTTPException(status_code=409, detail="Goal is currently running; cannot reprioritize.")
+
+    target_idx: Optional[int] = None
+    for idx, desc in enumerate(gq.queue):
+        if _goal_id_for_queued(idx, desc) == goal_id:
+            target_idx = idx
+            break
+
+    if target_idx is None:
+        raise HTTPException(status_code=404, detail=f"Pending goal '{goal_id}' not found in queue")
+
+    if target_idx == 0:
+        return GoalPrioritizeResponse(success=True, id=goal_id, position=0, message="Goal is already at the front.")
+
+    promoted = gq.promote(target_idx)
+    log_json("INFO", "goal_prioritized_via_api", details={"goal_id": goal_id, "description": str(promoted)[:120]})
+
+    await manager.broadcast({"type": "goal_updated", "payload": {"id": goal_id, "position": 0}})
+    return GoalPrioritizeResponse(success=True, id=goal_id, position=0, message="Goal moved to front of queue.")
+
+
 @app.post("/api/goals/{goal_id}/cancel")
-async def cancel_goal(goal_id: str, user: dict = Depends(get_current_user)):
-    """Cancel a running goal."""
-    # Note: Actual cancellation would require modifying the goal queue
-    await manager.broadcast({
-        "type": "goal_updated",
-        "payload": {"id": goal_id, "status": "failed"},
-    })
-    return {"success": True}
+async def cancel_goal_legacy(goal_id: str, user: dict = Depends(get_current_user)):
+    """Cancel a goal (legacy alias for DELETE /api/goals/{goal_id})."""
+    return await delete_goal(goal_id, user)
+
 
 # Agents endpoints
 @app.get("/api/agents")
@@ -914,79 +1057,6 @@ async def run_tests(user: dict = Depends(get_current_user)):
     })
     return {"status": "started", "message": "Test run initiated"}
 
-# Settings endpoints
-@app.get("/api/settings")
-async def get_settings(user: dict = Depends(get_current_user)):
-    """Get system settings."""
-    return {
-        "theme": "system",
-        "refresh_interval": 5,
-        "notifications": {
-            "goal_completion": True,
-            "agent_status": True,
-            "errors": True,
-            "webhook_events": False
-        },
-        "api": {
-            "endpoint": "http://localhost:8000",
-            "websocket": "ws://localhost:8000/ws",
-            "timeout": 30
-        },
-        "features": {
-            "auto_refresh": True,
-            "confirm_destructive": True,
-            "show_telemetry": True
-        }
-    }
-
-@app.post("/api/settings")
-async def update_settings(settings: dict = Body(default={}), user: dict = Depends(get_current_user)):
-    """Update system settings."""
-    log_json("INFO", "settings_updated", {"user": user.get("username"), "settings": settings})
-    return {"success": True, "message": "Settings updated"}
-
-@app.get("/api/settings/mcp")
-async def get_mcp_settings(user: dict = Depends(get_current_user)):
-    """Get MCP server configuration."""
-    try:
-        if MCP_CONFIG_PATH.exists():
-            config = json.loads(MCP_CONFIG_PATH.read_text())
-            # Mask sensitive values
-            for server in config.get("mcpServers", {}).values():
-                for key in list(server.get("env", {}).keys()):
-                    server["env"][key] = "***"
-                if "headers" in server:
-                    for key in list(server["headers"].keys()):
-                        if "auth" in key.lower() or "token" in key.lower():
-                            server["headers"][key] = "***"
-            return config
-    except Exception as e:
-        log_json("ERROR", "mcp_settings_fetch_failed", {"error": str(e)})
-    
-    return {"mcpServers": {}}
-
-@app.post("/api/settings/mcp")
-async def update_mcp_settings(config: dict = Body(default={}), user: dict = Depends(get_current_user)):
-    """Update MCP server configuration."""
-    try:
-        MCP_CONFIG_PATH.write_text(json.dumps(config, indent=2))
-        log_json("INFO", "mcp_settings_updated", {"user": user.get("username")})
-        return {"success": True, "message": "MCP configuration updated"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to update MCP config: {e}")
-
-@app.post("/api/settings/mcp/test")
-async def test_mcp_connection(server_id: str, user: dict = Depends(get_current_user)):
-    """Test MCP server connection."""
-    # Simulate connection test
-    await asyncio.sleep(1)
-    return {
-        "server_id": server_id,
-        "status": "connected",
-        "latency_ms": 45,
-        "tools_available": 5
-    }
-
 @app.get("/api/health")
 async def get_health():
     """Get system health status."""
@@ -1062,144 +1132,6 @@ async def chat_endpoint(request: dict, user: dict = Depends(get_current_user)):
             
     except Exception as e:
         return {"response": f"Error processing message: {str(e)}"}
-
-# Terminal endpoints
-terminal_sessions: Dict[str, Dict] = {}
-
-@app.post("/api/terminal/execute")
-async def execute_terminal_command(request: dict = Body(default={}), user: dict = Depends(get_current_user)):
-    """Execute a terminal command."""
-    import subprocess
-    import os
-    
-    command = request.get("command", "")
-    session_id = request.get("session_id", str(uuid.uuid4()))
-    cwd = request.get("cwd", "/home/westonaaron675/aura-cli")
-    
-    # Sanitize inputs
-    command = sanitize_input(command)
-    session_id = sanitize_input(session_id)
-    
-    if not command:
-        return {"error": "No command provided"}
-    
-    # Validate working directory
-    if not validate_path(cwd):
-        return {"error": "Invalid working directory"}
-    
-    # Security: Block dangerous commands
-    blocked_patterns = [
-        r'rm\s+-rf\s+/',
-        r'sudo\s',
-        r'su\s+-',
-        r'>\s*/dev/',
-        r'mkfs\.?',
-        r'dd\s+if=',
-        r':\(\)\s*{\s*:\|:\s*&\s*};\s*:',
-        r'curl\s+.*\s*\|\s*sh',
-        r'wget\s+.*\s*\|\s*sh',
-        r'eval\s*\$',
-        r'exec\s+/',
-    ]
-    
-    for pattern in blocked_patterns:
-        if re.search(pattern, command, re.IGNORECASE):
-            log_json("WARN", "blocked_command_attempted", {
-                "command": command[:100],
-                "user": user.get("username"),
-                "pattern": pattern
-            })
-            return {"error": "Command blocked for security reasons"}
-    
-    try:
-        # Execute command with timeout
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            cwd=cwd,
-            timeout=30,
-            env={**os.environ, 'TERM': 'xterm-256color'}
-        )
-        
-        output = result.stdout
-        if result.stderr:
-            output += f"\n{result.stderr}"
-        
-        # Store in session history
-        if session_id not in terminal_sessions:
-            terminal_sessions[session_id] = {"commands": [], "cwd": cwd}
-        
-        terminal_sessions[session_id]["commands"].append({
-            "command": command,
-            "output": output,
-            "exit_code": result.returncode,
-            "timestamp": datetime.utcnow().isoformat()
-        })
-        terminal_sessions[session_id]["cwd"] = cwd
-        
-        # Broadcast to WebSocket
-        await manager.broadcast({
-            "type": "terminal_output",
-            "session_id": session_id,
-            "command": command,
-            "output": output,
-            "exit_code": result.returncode,
-            "timestamp": datetime.utcnow().isoformat()
-        })
-        
-        return {
-            "session_id": session_id,
-            "output": output,
-            "exit_code": result.returncode,
-            "cwd": cwd
-        }
-    except subprocess.TimeoutExpired:
-        return {"error": "Command timed out after 30 seconds", "session_id": session_id}
-    except Exception as e:
-        return {"error": str(e), "session_id": session_id}
-
-@app.get("/api/terminal/sessions")
-async def get_terminal_sessions(user: dict = Depends(get_current_user)):
-    """Get active terminal sessions."""
-    return {
-        "sessions": [
-            {
-                "id": sid,
-                "command_count": len(data["commands"]),
-                "cwd": data["cwd"],
-                "last_active": data["commands"][-1]["timestamp"] if data["commands"] else None
-            }
-            for sid, data in terminal_sessions.items()
-        ]
-    }
-
-@app.get("/api/terminal/sessions/{session_id}")
-async def get_terminal_session(session_id: str, user: dict = Depends(get_current_user)):
-    """Get terminal session history."""
-    if session_id not in terminal_sessions:
-        raise HTTPException(status_code=404, detail="Session not found")
-    
-    return {
-        "id": session_id,
-        "commands": terminal_sessions[session_id]["commands"],
-        "cwd": terminal_sessions[session_id]["cwd"]
-    }
-
-@app.delete("/api/terminal/sessions/{session_id}")
-async def delete_terminal_session(session_id: str, user: dict = Depends(get_current_user)):
-    """Delete a terminal session."""
-    if session_id in terminal_sessions:
-        del terminal_sessions[session_id]
-    return {"success": True}
-
-@app.post("/api/terminal/sessions/{session_id}/clear")
-async def clear_terminal_session(session_id: str, user: dict = Depends(get_current_user)):
-    """Clear terminal session history."""
-    if session_id in terminal_sessions:
-        terminal_sessions[session_id]["commands"] = []
-    return {"success": True}
 
 # File endpoints
 @app.get("/api/files/tree")

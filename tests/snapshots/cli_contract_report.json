@@ -1,6 +1,7 @@
 {
   "action_spec_actions": [
     "agent_run",
+    "beads_schemas",
     "bootstrap",
     "contract_report",
     "diag",
@@ -25,6 +26,8 @@
     "json_help",
     "logs",
     "mcp_call",
+    "mcp_restart",
+    "mcp_status",
     "mcp_tools",
     "memory_reindex",
     "memory_search",
@@ -46,6 +49,10 @@
   "actions_with_undocumented_legacy_flags": [],
   "command_specs_with_unknown_legacy_flags": [],
   "customizer_paths": [
+    [
+      "beads",
+      "schemas"
+    ],
     [
       "bootstrap"
     ],
@@ -122,6 +129,14 @@
     ],
     [
       "mcp",
+      "restart"
+    ],
+    [
+      "mcp",
+      "status"
+    ],
+    [
+      "mcp",
       "tools"
     ],
     [
@@ -172,6 +187,7 @@
   "customizers_on_non_leaf_paths": [],
   "dispatch_actions": [
     "agent_run",
+    "beads_schemas",
     "bootstrap",
     "contract_report",
     "diag",
@@ -196,6 +212,8 @@
     "json_help",
     "logs",
     "mcp_call",
+    "mcp_restart",
+    "mcp_status",
     "mcp_tools",
     "memory_reindex",
     "memory_search",
@@ -219,6 +237,7 @@
   "failure_keys": [],
   "help_actions": [
     "agent_run",
+    "beads_schemas",
     "bootstrap",
     "contract_report",
     "diag",
@@ -240,6 +259,8 @@
     "innovate_to_goals",
     "logs",
     "mcp_call",
+    "mcp_restart",
+    "mcp_status",
     "mcp_tools",
     "memory_reindex",
     "memory_search",
@@ -264,6 +285,13 @@
     [
       "agent",
       "run"
+    ],
+    [
+      "beads"
+    ],
+    [
+      "beads",
+      "schemas"
     ],
     [
       "bootstrap"
@@ -353,6 +381,14 @@
     [
       "mcp",
       "call"
+    ],
+    [
+      "mcp",
+      "restart"
+    ],
+    [
+      "mcp",
+      "status"
     ],
     [
       "mcp",
@@ -424,6 +460,10 @@
       "run"
     ],
     [
+      "beads",
+      "schemas"
+    ],
+    [
       "bootstrap"
     ],
     [
@@ -502,6 +542,14 @@
     [
       "mcp",
       "call"
+    ],
+    [
+      "mcp",
+      "restart"
+    ],
+    [
+      "mcp",
+      "status"
     ],
     [
       "mcp",
@@ -566,6 +614,9 @@
       "agent"
     ],
     [
+      "beads"
+    ],
+    [
       "goal"
     ],
     [
@@ -594,6 +645,13 @@
     [
       "agent",
       "run"
+    ],
+    [
+      "beads"
+    ],
+    [
+      "beads",
+      "schemas"
     ],
     [
       "bootstrap"
@@ -683,6 +741,14 @@
     [
       "mcp",
       "call"
+    ],
+    [
+      "mcp",
+      "restart"
+    ],
+    [
+      "mcp",
+      "status"
     ],
     [
       "mcp",
@@ -753,6 +819,9 @@
       "agent"
     ],
     [
+      "beads"
+    ],
+    [
       "goal"
     ],
     [
@@ -784,6 +853,13 @@
     [
       "agent",
       "run"
+    ],
+    [
+      "beads"
+    ],
+    [
+      "beads",
+      "schemas"
     ],
     [
       "bootstrap"
@@ -873,6 +949,14 @@
     [
       "mcp",
       "call"
+    ],
+    [
+      "mcp",
+      "restart"
+    ],
+    [
+      "mcp",
+      "status"
     ],
     [
       "mcp",

@@ -992,6 +992,173 @@ def _handle_innovate_insights_dispatch(ctx: DispatchContext) -> int:
     return 0
 
 
+def _handle_mcp_status_dispatch(ctx: DispatchContext) -> int:
+    """Render a real-time Rich health dashboard for all registered MCP servers."""
+    import asyncio
+
+    from core.mcp_health import check_all_mcp_health, get_health_summary
+    from core.mcp_registry import list_registered_services
+
+    results = asyncio.run(check_all_mcp_health())
+    summary = get_health_summary(results)
+    services = {svc["config_name"]: svc for svc in list_registered_services()}
+
+    if getattr(ctx.args, "json", False):
+        _print_json_payload({"servers": results, "summary": summary}, parsed=ctx.parsed, indent=2)
+        return 0
+
+    try:
+        from rich.console import Console
+        from rich.table import Table
+        from rich import box
+
+        console = Console()
+        table = Table(title="MCP Server Health Dashboard", box=box.ROUNDED, show_lines=True)
+        table.add_column("Server", style="bold cyan", no_wrap=True)
+        table.add_column("URL", style="dim")
+        table.add_column("Status", justify="center")
+        table.add_column("Heartbeat", justify="right")
+        table.add_column("Avg Latency", justify="right")
+        table.add_column("Tools", justify="right")
+
+        for r in results:
+            name = r.get("name", "?")
+            svc = services.get(name, {})
+            url = svc.get("url", f"http://127.0.0.1:{r.get('port', '?')}")
+            status = r.get("status", "unknown")
+
+            if status == "healthy":
+                status_cell = "[green]● healthy[/green]"
+            else:
+                status_cell = "[red]✕ offline[/red]"
+
+            health_data = r.get("health_data") or {}
+            heartbeat = health_data.get("timestamp") or health_data.get("last_heartbeat") or "—"
+            latency = health_data.get("latency_ms")
+            latency_cell = f"{latency:.0f} ms" if isinstance(latency, (int, float)) else "—"
+            tool_count = health_data.get("tool_count") or health_data.get("tools_count") or "—"
+
+            table.add_row(name, url, status_cell, str(heartbeat), latency_cell, str(tool_count))
+
+        console.print(table)
+        console.print(
+            f"\n[bold]Summary:[/bold] {summary['healthy_count']}/{summary['total_servers']} healthy"
+        )
+    except ImportError:
+        print("MCP Health Dashboard\n" + "=" * 40)
+        for r in results:
+            status = r.get("status", "unknown")
+            icon = "✓" if status == "healthy" else "✗"
+            print(f"  {icon} {r.get('name', '?')} — {status}")
+        print(f"\nHealthy: {summary['healthy_count']}/{summary['total_servers']}")
+
+    return 0 if summary["all_healthy"] else 1
+
+
+def _handle_mcp_restart_dispatch(ctx: DispatchContext) -> int:
+    """Validate/restart a named MCP server by running a health check and logging the result."""
+    import asyncio
+
+    from core.mcp_health import check_mcp_health
+    from core.mcp_registry import get_registered_service
+
+    server_name = getattr(ctx.args, "mcp_server", None)
+    if not server_name:
+        print("Error: server config name is required (e.g. dev_tools, skills)", file=sys.stderr)
+        return 1
+
+    try:
+        svc = get_registered_service(server_name)
+    except KeyError:
+        print(f"Error: unknown MCP server config name '{server_name}'", file=sys.stderr)
+        return 1
+
+    result = asyncio.run(check_mcp_health(server_name))
+    status = result.get("status", "unknown")
+
+    if getattr(ctx.args, "json", False):
+        _print_json_payload({"server": server_name, "url": svc.get("url"), "result": result}, parsed=ctx.parsed, indent=2)
+        return 0 if status == "healthy" else 1
+
+    icon = "✓" if status == "healthy" else "✗"
+    print(f"{icon} {server_name} ({svc.get('url')}) — {status}")
+    if status != "healthy":
+        print(f"  Error: {result.get('error', 'unknown error')}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def _handle_beads_schemas_dispatch(ctx: DispatchContext) -> int:
+    """List registered BEADS schema contracts from .beads/."""
+    beads_dir = ctx.project_root / ".beads"
+    config_path = beads_dir / "config.yaml"
+    interactions_path = beads_dir / "interactions.jsonl"
+
+    from core.beads_contract import BEADS_SCHEMA_VERSION, BeadsDecision, BeadsInput, BeadsResult
+
+    schema_types = [
+        {"name": "BeadsInput", "description": "Goal + context sent to the BEADS bridge", "fields": list(BeadsInput.__annotations__.keys())},
+        {"name": "BeadsDecision", "description": "Decision returned by the BEADS adapter", "fields": list(BeadsDecision.__annotations__.keys())},
+        {"name": "BeadsResult", "description": "Full bridge result envelope", "fields": list(BeadsResult.__annotations__.keys())},
+    ]
+
+    config_data: dict = {}
+    if config_path.exists():
+        try:
+            import yaml  # type: ignore[import-untyped]
+            config_data = yaml.safe_load(config_path.read_text()) or {}
+        except Exception:
+            config_data = {"raw": config_path.read_text()}
+
+    interaction_count = 0
+    if interactions_path.exists():
+        try:
+            interaction_count = sum(1 for line in interactions_path.read_text().splitlines() if line.strip())
+        except Exception:
+            pass
+
+    payload = {
+        "schema_version": BEADS_SCHEMA_VERSION,
+        "config": config_data,
+        "interaction_count": interaction_count,
+        "schemas": schema_types,
+    }
+
+    if getattr(ctx.args, "json", False):
+        _print_json_payload(payload, parsed=ctx.parsed, indent=2)
+        return 0
+
+    try:
+        from rich.console import Console
+        from rich.table import Table
+        from rich import box
+
+        console = Console()
+        table = Table(title=f"BEADS Schema Contracts (v{BEADS_SCHEMA_VERSION})", box=box.ROUNDED)
+        table.add_column("Schema", style="bold cyan")
+        table.add_column("Description")
+        table.add_column("Fields", style="dim")
+
+        for schema in schema_types:
+            table.add_row(
+                schema["name"],
+                schema["description"],
+                ", ".join(schema["fields"]),
+            )
+
+        console.print(table)
+        console.print(f"\n[dim]Config:[/dim] {config_path}")
+        console.print(f"[dim]Interactions logged:[/dim] {interaction_count}")
+    except ImportError:
+        print(f"BEADS Schemas (v{BEADS_SCHEMA_VERSION})\n" + "=" * 40)
+        for schema in schema_types:
+            print(f"  {schema['name']}: {schema['description']}")
+            print(f"    Fields: {', '.join(schema['fields'])}")
+        print(f"\nInteractions logged: {interaction_count}")
+
+    return 0
+
+
 def _handle_agent_run_dispatch(ctx: DispatchContext) -> int:
     """Dispatch to Agent SDK meta-controller."""
     import anyio
@@ -1013,6 +1180,9 @@ COMMAND_DISPATCH_REGISTRY = {
     "contract_report": _dispatch_rule("contract_report", _handle_contract_report_dispatch),
     "mcp_tools": _dispatch_rule("mcp_tools", _handle_mcp_tools_dispatch),
     "mcp_call": _dispatch_rule("mcp_call", _handle_mcp_call_dispatch),
+    "mcp_status": _dispatch_rule("mcp_status", _handle_mcp_status_dispatch),
+    "mcp_restart": _dispatch_rule("mcp_restart", _handle_mcp_restart_dispatch),
+    "beads_schemas": _dispatch_rule("beads_schemas", _handle_beads_schemas_dispatch),
     "diag": _dispatch_rule("diag", _handle_diag_dispatch),
     "logs": _dispatch_rule("logs", _handle_logs_dispatch),
     "watch": _dispatch_rule("watch", _handle_watch_dispatch),

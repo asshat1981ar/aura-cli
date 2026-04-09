@@ -166,6 +166,55 @@ class GoalQueue:
         log_json("INFO", "goal_queue_recovered", details={"count": count})
         return count
 
+    def is_inflight(self, goal_key: str) -> bool:
+        """Return True when *goal_key* is the string key of an in-flight goal."""
+        return goal_key in self._in_flight
+
+    def in_flight_keys(self) -> list[str]:
+        """Return all current in-flight goal keys (strings)."""
+        return list(self._in_flight.keys())
+
+    def cancel(self, index: int) -> str:
+        """Remove the pending goal at *index* from the queue and persist.
+
+        Args:
+            index: Zero-based position in the queue deque.
+
+        Returns:
+            The goal that was removed.
+
+        Raises:
+            IndexError: If *index* is out of range.
+        """
+        items = list(self.queue)
+        removed = items.pop(index)
+        self.queue = deque(items)
+        self._save_queue()
+        log_json("INFO", "goal_cancelled", details={"index": index, "goal": str(removed)[:120]})
+        return removed
+
+    def promote(self, index: int) -> str:
+        """Move the pending goal at *index* to position 0 (front of queue).
+
+        Args:
+            index: Zero-based position in the queue deque.
+
+        Returns:
+            The goal that was promoted.
+
+        Raises:
+            IndexError: If *index* is out of range.
+        """
+        if index == 0:
+            return list(self.queue)[0]
+        items = list(self.queue)
+        promoted = items.pop(index)
+        items.insert(0, promoted)
+        self.queue = deque(items)
+        self._save_queue()
+        log_json("INFO", "goal_promoted", details={"from_index": index, "goal": str(promoted)[:120]})
+        return promoted
+
     # ------------------------------------------------------------------
     # Persistence helpers
     # ------------------------------------------------------------------

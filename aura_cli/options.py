@@ -197,6 +197,48 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         legacy_flags=("--mcp-call",),
     ),
     CommandSpec(
+        path=("mcp", "status"),
+        summary="Show MCP server health dashboard",
+        description=(
+            "Query all registered MCP servers and render a Rich table showing "
+            "server name, endpoint URL, health status, last heartbeat, average "
+            "response latency, and tool count."
+        ),
+        examples=("python3 main.py mcp status",),
+    ),
+    CommandSpec(
+        path=("mcp", "restart"),
+        summary="Restart / validate an MCP server",
+        description=(
+            "Trigger a manual health validation pass for a named MCP server. "
+            "Pass the server config-name (e.g. 'dev_tools', 'skills')."
+        ),
+        examples=(
+            "python3 main.py mcp restart dev_tools",
+            "python3 main.py mcp restart skills",
+        ),
+    ),
+    CommandSpec(
+        path=("beads",),
+        summary="BEADS contract commands",
+        description="Inspect and validate BEADS schema contracts.",
+        examples=(
+            "python3 main.py beads schemas",
+        ),
+    ),
+    CommandSpec(
+        path=("beads", "schemas"),
+        summary="List registered BEADS schemas",
+        description=(
+            "Print a table of all BEADS schema contracts registered in .beads/. "
+            "Includes schema version, TypedDict names, and interaction count."
+        ),
+        examples=(
+            "python3 main.py beads schemas",
+            "python3 main.py beads schemas --json",
+        ),
+    ),
+    CommandSpec(
         path=("scaffold",),
         summary="Scaffold a project",
         description="Run the scaffolder agent for a named project type.",
@@ -424,6 +466,9 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("contract_report", False, ("contract-report",)),
     CLIActionSpec("mcp_tools", False, ("mcp", "tools"), legacy_primary_flags=("mcp_tools",)),
     CLIActionSpec("mcp_call", False, ("mcp", "call"), legacy_primary_flags=("mcp_call",)),
+    CLIActionSpec("mcp_status", False, ("mcp", "status")),
+    CLIActionSpec("mcp_restart", False, ("mcp", "restart")),
+    CLIActionSpec("beads_schemas", False, ("beads", "schemas")),
     CLIActionSpec("diag", False, ("diag",), legacy_primary_flags=("diag",)),
     CLIActionSpec("logs", False, ("logs",)),
     CLIActionSpec("watch", True, ("watch",)),
@@ -476,6 +521,7 @@ _ACTION_SMOKE_OVERRIDES: dict[str, tuple[str, ...]] = {
     "innovate_resume": ("innovate", "resume", "--session-id", "example-id"),
     "innovate_export": ("innovate", "export", "--session-id", "example-id"),
     "innovate_to_goals": ("innovate", "to-goals", "--session-id", "example-id"),
+    "mcp_restart": ("mcp", "restart", "dev_tools"),
 }
 
 _SMOKE_POSITIONAL_ARGS_BY_PATH: dict[tuple[str, ...], tuple[str, ...]] = {
@@ -549,6 +595,9 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("workflow", "run"): "workflow_run",
     ("mcp", "tools"): "mcp_tools",
     ("mcp", "call"): "mcp_call",
+    ("mcp", "status"): "mcp_status",
+    ("mcp", "restart"): "mcp_restart",
+    ("beads", "schemas"): "beads_schemas",
     ("scaffold",): "scaffold",
     ("evolve",): "evolve",
     ("goal", "status"): "goal_status",

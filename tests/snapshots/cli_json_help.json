@@ -408,6 +408,82 @@
       "summary": "Call an MCP tool"
     },
     {
+      "action": "mcp_status",
+      "description": "Query all registered MCP servers and render a Rich table showing server name, endpoint URL, health status, last heartbeat, average response latency, and tool count.",
+      "examples": [
+        "python3 main.py mcp status"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "mcp",
+        "status"
+      ],
+      "requires_runtime": false,
+      "summary": "Show MCP server health dashboard"
+    },
+    {
+      "action": "mcp_restart",
+      "description": "Trigger a manual health validation pass for a named MCP server. Pass the server config-name (e.g. 'dev_tools', 'skills').",
+      "examples": [
+        "python3 main.py mcp restart dev_tools",
+        "python3 main.py mcp restart skills"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "mcp",
+        "restart"
+      ],
+      "requires_runtime": false,
+      "summary": "Restart / validate an MCP server"
+    },
+    {
+      "action": null,
+      "description": "Inspect and validate BEADS schema contracts.",
+      "examples": [
+        "python3 main.py beads schemas"
+      ],
+      "flags": [],
+      "legacy_flags": [],
+      "path": [
+        "beads"
+      ],
+      "requires_runtime": null,
+      "summary": "BEADS contract commands"
+    },
+    {
+      "action": "beads_schemas",
+      "description": "Print a table of all BEADS schema contracts registered in .beads/. Includes schema version, TypedDict names, and interaction count.",
+      "examples": [
+        "python3 main.py beads schemas",
+        "python3 main.py beads schemas --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "beads",
+        "schemas"
+      ],
+      "requires_runtime": false,
+      "summary": "List registered BEADS schemas"
+    },
+    {
       "action": "scaffold",
       "description": "Run the scaffolder agent for a named project type.",
       "examples": [

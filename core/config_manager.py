@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 from core.logging_utils import log_json
 from core.exceptions import ConfigurationError
+from core.config_schema import ConfigValidator, is_pydantic_available
 
 # ---------------------------------------------------------------------------
 # Value validators — each returns (is_valid: bool, coerced_value, reason: str)
@@ -330,7 +331,27 @@ class ConfigManager:
                 
         merged.update(self.runtime_overrides)
         
+        # P1 FIX: Pydantic schema validation at startup
+        self._validate_with_schema(merged)
+        
         self.effective_config = merged
+    
+    def _validate_with_schema(self, config: Dict[str, Any]) -> None:
+        """Validate configuration using Pydantic schema.
+        
+        Logs warnings for invalid values but doesn't raise exceptions
+        to maintain backward compatibility.
+        """
+        validator = ConfigValidator()
+        is_valid, validated, errors = validator.validate(config)
+        
+        if not is_valid:
+            for error in errors:
+                log_json("WARN", "config_validation_failed", details={"error": error})
+            if is_pydantic_available():
+                log_json("INFO", "config_using_defaults_for_invalid")
+        elif is_pydantic_available():
+            log_json("DEBUG", "config_validated_with_pydantic")
 
     def _validate_value(self, key: str, value: Any) -> Any:
         """Validate *value* for *key*; return coerced value or DEFAULT_CONFIG fallback on error."""

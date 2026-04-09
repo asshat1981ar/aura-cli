@@ -3,7 +3,7 @@ import io
 import json
 import sys
 from contextlib import redirect_stdout
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from agents.registry import default_agents
@@ -25,7 +25,47 @@ from core.vector_store import VectorStore
 from memory.brain import Brain
 
 
+# P0 BUG FIX: Safe async runner for nested event loop contexts (TUI/Jupyter)
+anyio_available = False
+try:
+    import anyio
+    anyio_available = True
+except ImportError:
+    pass
+
+
+def _run_async_safely(coro):
+    """Run an async coroutine safely in any context.
+    
+    P0 BUG FIX: asyncio.run() crashes when an event loop is already running
+    (e.g., in TUI, Jupyter, or nested async contexts).
+    """
+    if anyio_available:
+        return anyio.run(coro)
+    
+    import asyncio
+    try:
+        return asyncio.run(coro)
+    except RuntimeError as e:
+        if "already running" in str(e):
+            loop = asyncio.get_running_loop()
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                future = pool.submit(asyncio.run, coro)
+                return future.result()
+        raise
+
+
+# Idempotency flag for _sync_cli_compat (P0 BUG FIX)
+_sync_cli_compat_done = False
+
+
 def _sync_cli_compat() -> None:
+    """Synchronize CLI compatibility layer (idempotent)."""
+    global _sync_cli_compat_done
+    if _sync_cli_compat_done:
+        return
+    
     cli_main = importlib.import_module("aura_cli.cli_main")
     for name in (
         "log_json",
@@ -54,6 +94,20 @@ def _sync_cli_compat() -> None:
         "unknown_command_help_topic_payload",
     ):
         setattr(sys.modules[__name__], name, getattr(cli_main, name))
+    
+    _sync_cli_compat_done = True
+
+
+@dataclass
+class RuntimeContext:
+    """Typed runtime context for dispatch operations."""
+    agent: str | None = None
+    model: str | None = None
+    verbose: bool = False
+    dry_run: bool = False
+    non_interactive: bool = False
+    timeout: int | None = None
+    extra: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -62,7 +116,7 @@ class DispatchContext:
     project_root: Path
     runtime_factory: object
     args: object
-    runtime: dict | None = None
+    runtime: RuntimeContext | None = None
 
 
 @dataclass(frozen=True)
@@ -404,7 +458,8 @@ def _handle_metrics_show_dispatch(ctx: DispatchContext) -> int:
 
                 total_time += duration
                 recent_data.append({"cycle_id": data.get("cycle_id"), "status": status, "duration": duration, "goal": data.get("goal")})
-            except Exception:
+            except (json.JSONDecodeError, IndexError, KeyError, TypeError):
+                # P1 FIX: Catch specific exceptions instead of bare Exception
                 continue
 
     count = len(recent_data)
@@ -999,7 +1054,7 @@ def _handle_mcp_status_dispatch(ctx: DispatchContext) -> int:
     from core.mcp_health import check_all_mcp_health, get_health_summary
     from core.mcp_registry import list_registered_services
 
-    results = asyncio.run(check_all_mcp_health())
+    results = _run_async_safely(check_all_mcp_health())
     summary = get_health_summary(results)
     services = {svc["config_name"]: svc for svc in list_registered_services()}
 
@@ -1073,7 +1128,7 @@ def _handle_mcp_restart_dispatch(ctx: DispatchContext) -> int:
         print(f"Error: unknown MCP server config name '{server_name}'", file=sys.stderr)
         return 1
 
-    result = asyncio.run(check_mcp_health(server_name))
+    result = _run_async_safely(check_mcp_health(server_name))
     status = result.get("status", "unknown")
 
     if getattr(ctx.args, "json", False):
@@ -1107,14 +1162,16 @@ def _handle_beads_schemas_dispatch(ctx: DispatchContext) -> int:
         try:
             import yaml  # type: ignore[import-untyped]
             config_data = yaml.safe_load(config_path.read_text()) or {}
-        except Exception:
+        except (ImportError, yaml.YAMLError, OSError, ValueError):
+            # P1 FIX: Specific exceptions for YAML parsing failures
             config_data = {"raw": config_path.read_text()}
 
     interaction_count = 0
     if interactions_path.exists():
         try:
             interaction_count = sum(1 for line in interactions_path.read_text().splitlines() if line.strip())
-        except Exception:
+        except (OSError, ValueError):
+            # P1 FIX: Specific exceptions for file read failures
             pass
 
     payload = {

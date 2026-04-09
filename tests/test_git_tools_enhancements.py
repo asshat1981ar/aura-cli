@@ -9,7 +9,8 @@ from pathlib import Path
 # Ensure the project root is on the path for imports
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from core.git_tools import GitTools, GitCommitError
+from core.git_tools import GitTools
+from core.exceptions import GitCommitError
 from git.exc import GitCommandError # Import GitCommandError
 
 class TestGitToolsEnhancements(unittest.TestCase):

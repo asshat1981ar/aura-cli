@@ -1649,6 +1649,22 @@ async def github_webhook(request: Request, x_github_event: str = Header(None), x
     event_type = x_github_event or "unknown"
     result = github_app.handle_webhook(event_type, payload)
     
+    # Broadcast PR events via WebSocket
+    if event_type in ["pull_request", "pull_request_review", "pull_request_review_comment"]:
+        pr_data = payload.get("pull_request", {})
+        await manager.broadcast({
+            "type": "github_pr_event",
+            "payload": {
+                "event": event_type,
+                "action": payload.get("action"),
+                "pr_number": pr_data.get("number"),
+                "pr_title": pr_data.get("title"),
+                "repo": payload.get("repository", {}).get("full_name"),
+                "sender": payload.get("sender", {}).get("login"),
+                "status": result.get("status"),
+            }
+        })
+    
     log_json("INFO", "github_webhook_processed", {
         "event": event_type,
         "action": payload.get("action"),

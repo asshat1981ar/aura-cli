@@ -33,6 +33,30 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "RunRequest": {
+        "description": "Request body for POST /run.",
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "goal": {
+            "title": "Goal",
+            "type": "string"
+          },
+          "max_cycles": {
+            "default": 1,
+            "title": "Max Cycles",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "goal"
+        ],
+        "title": "RunRequest",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -372,6 +396,65 @@
           }
         },
         "summary": "Ready"
+      }
+    },
+    "/run": {
+      "post": {
+        "description": "Trigger a goal-oriented pipeline run via LoopOrchestrator.\n\nRequires the ``AGENT_API_ENABLE_RUN=1`` environment variable to be set.\nReturns a ``run_id`` that can be used to track or cancel the run.",
+        "operationId": "run_pipeline_run_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Run Pipeline Run Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Pipeline"
       }
     },
     "/tools": {

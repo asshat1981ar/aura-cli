@@ -9,7 +9,8 @@ from unittest.mock import MagicMock, patch
 
 from git.exc import GitCommandError
 
-from core.git_tools import GitTools, GitToolsError
+from core.git_tools import GitTools
+from core.exceptions import GitToolsError
 from core.orchestrator import LoopOrchestrator
 from core.policy import Policy
 from memory.store import MemoryStore

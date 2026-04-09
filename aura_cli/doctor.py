@@ -7,7 +7,8 @@ import argparse
 from pathlib import Path
 
 from core.config_manager import DEFAULT_CONFIG
-from core.git_tools import GitTools, GitRepoError
+from core.git_tools import GitTools
+from core.exceptions import GitRepoError
 from core.runtime_auth import (
     _clean_secret,
     resolve_config_api_key,

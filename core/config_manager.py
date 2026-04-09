@@ -1,8 +1,9 @@
 import os
 import json
 import copy
+import socket
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Set
 from core.logging_utils import log_json
 from core.exceptions import ConfigurationError
 from core.config_schema import ConfigValidator, is_pydantic_available
@@ -288,6 +289,21 @@ class ConfigManager:
         if sem_mem_overrides:
             env_config["semantic_memory"] = {**DEFAULT_CONFIG["semantic_memory"], **sem_mem_overrides}
 
+        # R5: Handle nested mcp_servers port overrides
+        # Supports AURA_MCP_SERVERS_<SERVER_NAME>_PORT for each server
+        mcp_port_overrides = {}
+        default_mcp_servers = DEFAULT_CONFIG.get("mcp_servers", {})
+        for server_name in default_mcp_servers:
+            env_name = f"AURA_MCP_SERVERS_{server_name.upper()}_PORT"
+            if env_name in os.environ:
+                try:
+                    mcp_port_overrides[server_name] = int(os.environ[env_name])
+                except (ValueError, TypeError):
+                    log_json("WARN", "config_mcp_port_coercion_failed", 
+                            details={"server": server_name, "val": os.environ[env_name]})
+        if mcp_port_overrides:
+            env_config["mcp_servers"] = {**default_mcp_servers, **mcp_port_overrides}
+
         return env_config
 
     def refresh(self):
@@ -309,10 +325,12 @@ class ConfigManager:
             merged["local_model_profiles"].update(self.file_config["local_model_profiles"])
         if "local_model_routing" in self.file_config:
             merged["local_model_routing"].update(self.file_config["local_model_routing"])
+        if "mcp_servers" in self.file_config:
+            merged["mcp_servers"].update(self.file_config["mcp_servers"])
             
         # Update other top-level keys
         for k, v in self.file_config.items():
-            if k not in ["beads", "model_routing", "semantic_memory", "local_model_profiles", "local_model_routing"]:
+            if k not in ["beads", "model_routing", "semantic_memory", "local_model_profiles", "local_model_routing", "mcp_servers"]:
                 merged[k] = v
         
         # Merge ENV (env_config already has merged sub-dicts)
@@ -324,9 +342,11 @@ class ConfigManager:
             merged["semantic_memory"].update(env_config["semantic_memory"])
         if "local_model_routing" in env_config:
             merged["local_model_routing"].update(env_config["local_model_routing"])
+        if "mcp_servers" in env_config:
+            merged["mcp_servers"].update(env_config["mcp_servers"])
             
         for k, v in env_config.items():
-            if k not in ["beads", "model_routing", "semantic_memory", "local_model_routing"]:
+            if k not in ["beads", "model_routing", "semantic_memory", "local_model_routing", "mcp_servers"]:
                 merged[k] = v
                 
         merged.update(self.runtime_overrides)
@@ -440,6 +460,154 @@ class ConfigManager:
                 )
             return int(default_registry[server_name])
         return int(registry[server_name])
+
+    def check_port_available(self, port: int, host: str = "0.0.0.0", strict: bool = False) -> bool:
+        """Check if a TCP port is available for binding.
+        
+        Args:
+            port: The port number to check.
+            host: The host address to bind to (default: 0.0.0.0).
+            strict: If True, performs a more strict check that detects more
+                   conflicts but may have false positives on some systems.
+            
+        Returns:
+            True if the port is available, False otherwise.
+        """
+        # Validate port range
+        if not isinstance(port, int) or not (0 <= port <= 65535):
+            return False
+            
+        # First try without SO_REUSEADDR for accurate conflict detection
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                # Don't set SO_REUSEADDR to detect actual conflicts
+                sock.bind((host, port))
+                return True
+        except (OSError, socket.error):
+            return False
+
+    def check_mcp_server_port_conflicts(
+        self, 
+        servers: Optional[List[str]] = None,
+        raise_on_conflict: bool = False
+    ) -> Dict[str, Dict[str, Any]]:
+        """Check for port conflicts among MCP servers.
+        
+        R5: Port Conflict Detection - scans configured ports and reports
+        any that are already in use, helping prevent startup failures.
+        
+        Args:
+            servers: List of server names to check. If None, checks all 
+                     servers in the mcp_servers config.
+            raise_on_conflict: If True, raises ConfigurationError when
+                               conflicts are detected.
+                               
+        Returns:
+            Dict mapping server_name -> {
+                "port": int,
+                "available": bool,
+                "error": Optional[str]
+            }
+            
+        Raises:
+            ConfigurationError: If raise_on_conflict=True and conflicts exist.
+        """
+        registry: Dict[str, int] = self.effective_config.get("mcp_servers", {})
+        if not registry:
+            registry = DEFAULT_CONFIG.get("mcp_servers", {})
+            
+        servers_to_check = servers or list(registry.keys())
+        results: Dict[str, Dict[str, Any]] = {}
+        conflicts: List[str] = []
+        
+        for server_name in servers_to_check:
+            if server_name not in registry:
+                error_msg = f"Unknown MCP server: {server_name}"
+                results[server_name] = {"port": None, "available": False, "error": error_msg}
+                conflicts.append(error_msg)
+                continue
+                
+            port = int(registry[server_name])
+            is_available = self.check_port_available(port)
+            
+            if not is_available:
+                error_msg = (
+                    f"Port {port} for '{server_name}' is already in use. "
+                    f"Consider: 1) Stop the other service, 2) Configure a different port "
+                    f"in aura.config.json mcp_servers.{server_name}, or "
+                    f"3) Set the appropriate env var override."
+                )
+                results[server_name] = {
+                    "port": port, 
+                    "available": False, 
+                    "error": error_msg
+                }
+                conflicts.append(error_msg)
+                log_json("WARN", "mcp_port_conflict_detected", 
+                        details={"server": server_name, "port": port})
+            else:
+                results[server_name] = {"port": port, "available": True, "error": None}
+        
+        if conflicts and raise_on_conflict:
+            raise ConfigurationError(
+                f"MCP server port conflicts detected ({len(conflicts)}): " + 
+                "; ".join(conflicts)
+            )
+            
+        return results
+
+    def find_available_port(
+        self, 
+        start_port: int = 8000, 
+        end_port: int = 9000,
+        exclude_ports: Optional[Set[int]] = None
+    ) -> Optional[int]:
+        """Find an available TCP port in a range.
+        
+        Args:
+            start_port: Start of port range (inclusive).
+            end_port: End of port range (inclusive).
+            exclude_ports: Set of ports to skip even if available.
+            
+        Returns:
+            First available port, or None if none found.
+        """
+        exclude = exclude_ports or set()
+        for port in range(start_port, end_port + 1):
+            if port in exclude:
+                continue
+            if self.check_port_available(port):
+                return port
+        return None
+
+    def suggest_mcp_port_reassignments(self) -> Dict[str, int]:
+        """Suggest alternative ports for any configured ports that are in use.
+        
+        Returns:
+            Dict mapping server_name -> suggested_port for any servers
+            with port conflicts. Empty dict if no conflicts.
+        """
+        conflicts = self.check_mcp_server_port_conflicts()
+        suggestions: Dict[str, int] = {}
+        
+        # Track ports we've already suggested to avoid duplicates
+        used_ports: Set[int] = set()
+        
+        for server_name, info in conflicts.items():
+            if not info["available"]:
+                # Find a new port starting from the default range
+                suggested = self.find_available_port(
+                    start_port=8001, 
+                    end_port=8100,
+                    exclude_ports=used_ports
+                )
+                if suggested:
+                    suggestions[server_name] = suggested
+                    used_ports.add(suggested)
+                    log_json("INFO", "mcp_port_suggestion", 
+                            details={"server": server_name, "suggested_port": suggested})
+                    
+        return suggestions
 
     def bootstrap(self):
         """Generates a default aura.config.json if it doesn't exist."""

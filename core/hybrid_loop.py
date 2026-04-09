@@ -3,7 +3,7 @@ import warnings
 from pathlib import Path # Import Path for _validate_file_path
 import re # Import re for _validate_file_path
 
-from core.git_tools import GitToolsError
+from core.exceptions import GitToolsError
 from core.logging_utils import log_json
 from core.file_tools import (
     FileToolsError,

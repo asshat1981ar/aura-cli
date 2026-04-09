@@ -6,7 +6,7 @@ from pathlib import Path
 
 from core.file_tools import _safe_apply_change, OldCodeNotFoundError
 from core.logging_utils import log_json
-from task_manager import TaskManager, Task
+from core.task_manager import TaskManager, Task
 
 
 _REPO_SCAN_SKIP_PARTS = {".git", "__pycache__", "node_modules", ".pytest_cache", "venv", ".venv"}

@@ -360,3 +360,194 @@ class TestDefaultConfig:
         for key in nested_keys:
             assert key in DEFAULT_CONFIG, f"Missing nested config: {key}"
             assert isinstance(DEFAULT_CONFIG[key], dict), f"{key} should be a dict"
+
+    def test_default_config_has_mcp_servers(self):
+        """Test that DEFAULT_CONFIG has mcp_servers registry."""
+        assert "mcp_servers" in DEFAULT_CONFIG, "Missing mcp_servers config"
+        assert isinstance(DEFAULT_CONFIG["mcp_servers"], dict)
+        expected_servers = ["dev_tools", "skills", "control", "agentic_loop", "copilot"]
+        for server in expected_servers:
+            assert server in DEFAULT_CONFIG["mcp_servers"], f"Missing MCP server: {server}"
+            assert isinstance(DEFAULT_CONFIG["mcp_servers"][server], int)
+
+
+class TestMCPServerPortRegistry:
+    """Test MCP server port registry (Roadmap R5)."""
+    
+    def test_get_mcp_server_port_returns_default(self):
+        """Test getting default port for known MCP servers."""
+        cm = ConfigManager()
+        assert cm.get_mcp_server_port("dev_tools") == 8001
+        assert cm.get_mcp_server_port("skills") == 8002
+        assert cm.get_mcp_server_port("control") == 8003
+        assert cm.get_mcp_server_port("agentic_loop") == 8006
+        assert cm.get_mcp_server_port("copilot") == 8007
+    
+    def test_get_mcp_server_port_unknown_raises(self):
+        """Test that unknown server name raises ConfigurationError."""
+        cm = ConfigManager()
+        with pytest.raises(ConfigurationError) as exc_info:
+            cm.get_mcp_server_port("unknown_server")
+        assert "Unknown MCP server name" in str(exc_info.value)
+    
+    def test_get_mcp_server_port_from_config_file(self, tmp_path):
+        """Test loading MCP port from config file."""
+        config_file = tmp_path / "test_config.json"
+        config_file.write_text(json.dumps({
+            "mcp_servers": {
+                "dev_tools": 9001,
+                "skills": 9002
+            }
+        }))
+        cm = ConfigManager(config_file=str(config_file))
+        assert cm.get_mcp_server_port("dev_tools") == 9001
+        assert cm.get_mcp_server_port("skills") == 9002
+        # Other servers should use defaults
+        assert cm.get_mcp_server_port("control") == 8003
+    
+    def test_get_mcp_server_port_env_override(self, tmp_path):
+        """Test MCP port override via environment variable."""
+        os.environ["AURA_MCP_SERVERS_DEV_TOOLS_PORT"] = "9101"
+        try:
+            cm = ConfigManager()
+            cm.refresh()  # Reload to pick up env
+            assert cm.get_mcp_server_port("dev_tools") == 9101
+        finally:
+            del os.environ["AURA_MCP_SERVERS_DEV_TOOLS_PORT"]
+
+
+class TestPortAvailabilityChecking:
+    """Test port availability checking utilities (Roadmap R5)."""
+    
+    def test_check_port_available_with_available_port(self):
+        """Test checking an available port."""
+        cm = ConfigManager()
+        # Find an available port
+        available_port = cm.find_available_port(start_port=18000, end_port=18100)
+        assert available_port is not None
+        # Should be available
+        assert cm.check_port_available(available_port) is True
+    
+    def test_check_port_available_with_unavailable_port(self):
+        """Test checking an unavailable port by temporarily binding it."""
+        import socket
+        cm = ConfigManager()
+        # Find an available port and bind to it (use 0.0.0.0 to block all interfaces)
+        port = cm.find_available_port(start_port=18000, end_port=18100)
+        assert port is not None
+        
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("0.0.0.0", port))
+            # Port should now be unavailable on 0.0.0.0
+            assert cm.check_port_available(port, host="0.0.0.0") is False
+    
+    def test_find_available_port_finds_first_available(self):
+        """Test finding available port in range."""
+        cm = ConfigManager()
+        # Find a port in a high range that's likely to be free
+        port = cm.find_available_port(start_port=18200, end_port=18300)
+        assert port is not None
+        assert 18200 <= port <= 18300
+    
+    def test_find_available_port_respects_exclusions(self):
+        """Test that find_available_port respects exclude_ports."""
+        cm = ConfigManager()
+        # Exclude the first few ports in range
+        exclude = {18200, 18201, 18202}
+        port = cm.find_available_port(start_port=18200, end_port=18210, exclude_ports=exclude)
+        assert port is not None
+        assert port not in exclude
+
+
+class TestMCPServerPortConflicts:
+    """Test MCP server port conflict detection (Roadmap R5)."""
+    
+    def test_check_mcp_server_port_conflicts_all_available(self):
+        """Test conflict detection when all ports are available."""
+        cm = ConfigManager()
+        # Use a config with high ports that should be available
+        cm.effective_config["mcp_servers"] = {
+            "dev_tools": 18301,
+            "skills": 18302,
+        }
+        
+        results = cm.check_mcp_server_port_conflicts()
+        
+        assert "dev_tools" in results
+        assert "skills" in results
+        assert results["dev_tools"]["available"] is True
+        assert results["skills"]["available"] is True
+        assert results["dev_tools"]["error"] is None
+        assert results["skills"]["error"] is None
+    
+    def test_check_mcp_server_port_conflicts_unknown_server(self):
+        """Test conflict detection with unknown server."""
+        cm = ConfigManager()
+        results = cm.check_mcp_server_port_conflicts(servers=["unknown_server"])
+        
+        assert "unknown_server" in results
+        assert results["unknown_server"]["available"] is False
+        assert "Unknown MCP server" in results["unknown_server"]["error"]
+    
+    def test_check_mcp_server_port_conflicts_with_raise(self):
+        """Test that raise_on_conflict raises ConfigurationError."""
+        import socket
+        cm = ConfigManager()
+        
+        # Find and bind a port to create a conflict (use 0.0.0.0)
+        port = cm.find_available_port(start_port=18400, end_port=18500)
+        assert port is not None
+        
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("0.0.0.0", port))
+            
+            cm.effective_config["mcp_servers"] = {"test_server": port}
+            
+            with pytest.raises(ConfigurationError) as exc_info:
+                cm.check_mcp_server_port_conflicts(servers=["test_server"], raise_on_conflict=True)
+            
+            assert "port conflicts" in str(exc_info.value).lower()
+    
+    def test_suggest_mcp_port_reassignments_empty_when_no_conflicts(self):
+        """Test that suggestions are empty when no conflicts."""
+        cm = ConfigManager()
+        # Use high ports that should be available
+        cm.effective_config["mcp_servers"] = {
+            "dev_tools": 18501,
+            "skills": 18502,
+        }
+        
+        suggestions = cm.suggest_mcp_port_reassignments()
+        
+        # Should be empty since no conflicts
+        assert suggestions == {}
+
+
+class TestMCPPortEnvOverrides:
+    """Test environment variable overrides for MCP ports."""
+    
+    def test_env_override_mcp_servers_port(self):
+        """Test AURA_MCP_SERVERS_*_PORT env override."""
+        os.environ["AURA_MCP_SERVERS_SKILLS_PORT"] = "9202"
+        os.environ["AURA_MCP_SERVERS_CONTROL_PORT"] = "9203"
+        try:
+            cm = ConfigManager()
+            cm.refresh()
+            assert cm.get_mcp_server_port("skills") == 9202
+            assert cm.get_mcp_server_port("control") == 9203
+        finally:
+            del os.environ["AURA_MCP_SERVERS_SKILLS_PORT"]
+            del os.environ["AURA_MCP_SERVERS_CONTROL_PORT"]
+    
+    def test_env_override_mcp_port_invalid_ignored(self):
+        """Test that invalid MCP port env values are ignored."""
+        os.environ["AURA_MCP_SERVERS_DEV_TOOLS_PORT"] = "not_a_number"
+        try:
+            cm = ConfigManager()
+            cm.refresh()
+            # Should fall back to default
+            assert cm.get_mcp_server_port("dev_tools") == 8001
+        finally:
+            del os.environ["AURA_MCP_SERVERS_DEV_TOOLS_PORT"]

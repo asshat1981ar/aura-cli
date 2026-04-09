@@ -30,6 +30,8 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from core.security.http_client import attach_dpop_headers
+
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
@@ -144,9 +146,11 @@ def _slack_send(args: Dict) -> Any:
     if thread_ts:
         payload["thread_ts"] = thread_ts
 
+    slack_headers = {"Authorization": f"Bearer {bot_token}", "Content-Type": "application/json"}
+    attach_dpop_headers(slack_headers, "POST", "https://slack.com/api/chat.postMessage", access_token=bot_token)
     resp = requests.post(
         "https://slack.com/api/chat.postMessage",
-        headers={"Authorization": f"Bearer {bot_token}", "Content-Type": "application/json"},
+        headers=slack_headers,
         json=payload,
         timeout=30,
     )

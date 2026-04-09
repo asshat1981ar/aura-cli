@@ -5,6 +5,8 @@ import os
 import urllib.error
 import urllib.request
 
+from core.security.http_client import attach_dpop_headers
+
 
 def _mcp_headers() -> dict[str, str]:
     """Return auth headers for MCP requests, if MCP_API_TOKEN is set."""
@@ -21,6 +23,9 @@ def _mcp_request(method: str, path: str, data: dict | None = None):
     """Small HTTP helper for MCP server; returns (status, json/dict)."""
     url = f"{_mcp_base_url()}{path}"
     headers = {"Content-Type": "application/json", **_mcp_headers()}
+    # Attach DPoP proof if bearer token is present
+    token = os.getenv("MCP_API_TOKEN")
+    attach_dpop_headers(headers, method, url, access_token=token)
     body = json.dumps(data).encode() if data is not None else None
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     try:

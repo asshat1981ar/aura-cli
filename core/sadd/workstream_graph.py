@@ -199,6 +199,21 @@ class WorkstreamGraph:
         """Return the node for *ws_id*, raising ``KeyError`` if not found."""
         return self._nodes[ws_id]
 
+    def get_all_nodes(self) -> list[WorkstreamNode]:
+        """Return all workstream nodes (for iteration).
+        
+        This is a public accessor to avoid private attribute access violations.
+        """
+        return list(self._nodes.values())
+
+    def iter_nodes(self):
+        """Iterate over (workstream_id, node) pairs.
+        
+        This is a public accessor to avoid private attribute access violations.
+        Replaces direct iteration over graph._nodes.items().
+        """
+        return iter(self._nodes.items())
+
     # -- serialization ------------------------------------------------------
 
     def to_dict(self) -> dict:
@@ -228,9 +243,9 @@ class WorkstreamGraph:
         # Construct graph (validates structure)
         graph = cls(specs)
 
-        # Restore runtime state
+        # Restore runtime state (using public accessor)
         for ws_id, node_dict in nodes_data.items():
-            node = graph._nodes[ws_id]
+            node = graph.get_node(ws_id)
             node.status = node_dict["status"]
             node.started_at = node_dict.get("started_at")
             node.completed_at = node_dict.get("completed_at")

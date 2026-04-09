@@ -197,14 +197,14 @@ class SessionCoordinator:
         # re-attempted. "failed" is not terminal from a resume perspective — the
         # user explicitly chose to retry. "blocked" workstreams were blocked because
         # their dependencies failed, so they must also be unblocked for retry.
-        for node in graph._nodes.values():  # noqa: SLF001
+        for node in graph.get_all_nodes():
             if node.status in ("failed", "blocked"):
                 node.status = "pending"
                 node.result = None
 
         remaining = [
             ws_id
-            for ws_id, node in graph._nodes.items()  # noqa: SLF001
+            for ws_id, node in graph.iter_nodes()
             if node.status != "completed"
         ]
         self._logger.info(

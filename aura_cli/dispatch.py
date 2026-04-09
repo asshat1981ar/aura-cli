@@ -1544,6 +1544,63 @@ def _handle_cancel_dispatch(ctx: DispatchContext) -> int:
     else:
         print(confirmation)
 
+
+def _handle_credential_migrate_keyring_dispatch(ctx: DispatchContext) -> int:
+    """Migrate plaintext credentials from config file to the credential store."""
+    from core.security.credential_helpers import SECRET_KEYS, set_credential
+    from core.security.store_factory import get_credential_store
+
+    # Load the raw config file to find plaintext secrets
+    config_path = config.config_file
+    if not config_path.exists():
+        print("No config file found. Nothing to migrate.")
+        return 0
+
+    raw: dict = {}
+    try:
+        raw = json.loads(config_path.read_text())
+    except Exception as e:
+        print(f"Failed to read config file: {e}")
+        return 1
+
+    secrets_found = {k: v for k, v in raw.items() if k in SECRET_KEYS and isinstance(v, str) and v.strip()}
+    if not secrets_found:
+        print("No plaintext credentials found in config file.")
+        return 0
+
+    store = get_credential_store()
+    migrated = []
+    for key, value in secrets_found.items():
+        try:
+            set_credential(store, key, value)
+            migrated.append(key)
+        except Exception as e:
+            print(f"  Failed to migrate '{key}': {e}")
+
+    # Rewrite config file without secrets
+    for key in migrated:
+        raw.pop(key, None)
+    config_path.write_text(json.dumps(raw, indent=4))
+
+    print(f"Migrated {len(migrated)} credential(s) to secure storage:")
+    for key in migrated:
+        print(f"  - {key}")
+    print(f"\nPlaintext secrets removed from {config_path}")
+    return 0
+
+
+def _handle_credential_list_dispatch(ctx: DispatchContext) -> int:
+    """List stored credential names."""
+    from core.security.store_factory import get_credential_store
+
+    store = get_credential_store()
+    keys = store.list_keys()
+    if not keys:
+        print("No credentials stored.")
+        return 0
+    print("Stored credentials:")
+    for key in sorted(keys):
+        print(f"  - {key}")
     return 0
 
 
@@ -1598,6 +1655,9 @@ COMMAND_DISPATCH_REGISTRY = {
     "innovate_insights": _dispatch_rule("innovate_insights", _handle_innovate_insights_dispatch),
     "agent_run": _dispatch_rule("agent_run", _handle_agent_run_dispatch),
     "agent_list": _dispatch_rule("agent_list", _handle_agent_list_dispatch),
+
+    "credential_migrate_keyring": _dispatch_rule("credential_migrate_keyring", _handle_credential_migrate_keyring_dispatch),
+    "credential_list": _dispatch_rule("credential_list", _handle_credential_list_dispatch),
     "interactive": _dispatch_rule("interactive", _handle_interactive_dispatch),
     # Security Issue #427: Credential management dispatch rules
     "credentials_migrate": _dispatch_rule("credentials_migrate", _handle_credentials_migrate_dispatch),

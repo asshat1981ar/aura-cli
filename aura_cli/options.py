@@ -522,6 +522,27 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         ),
         examples=("python3 main.py cancel <run-id>",),
     ),
+    CommandSpec(
+path=("credential",),
+        summary="Credential management",
+        description="Manage credential storage (OS keyring or encrypted file).",
+    ),
+    CommandSpec(
+        path=("credential", "migrate-keyring"),
+        summary="Migrate plaintext credentials to the keyring",
+        description="Read credentials from the old plaintext config and store them in the OS keyring.",
+        examples=(
+            "python3 main.py credential migrate-keyring",
+        ),
+    ),
+    CommandSpec(
+        path=("credential", "list"),
+        summary="List stored credential names",
+        description="Show names of all credentials in the active store (values are never printed).",
+        examples=(
+            "python3 main.py credential list",
+        ),
+    ),
 )
 
 COMMAND_SPECS_BY_PATH: dict[tuple[str, ...], CommandSpec] = {spec.path: spec for spec in COMMAND_SPECS}
@@ -580,6 +601,8 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("innovate_insights", True, ("innovate", "insights")),
     CLIActionSpec("interactive", True, None),
     CLIActionSpec("agent_run", True, ("agent", "run")),
+    CLIActionSpec("credential_migrate_keyring", False, ("credential", "migrate-keyring")),
+    CLIActionSpec("credential_list", False, ("credential", "list")),
     CLIActionSpec("agent_list", False, ("agent", "list")),
     # Security Issue #427: Credential migration actions
     CLIActionSpec("credentials_migrate", False, ("credentials", "migrate")),
@@ -709,6 +732,8 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("innovate", "to-goals"): "innovate_to_goals",
     ("innovate", "insights"): "innovate_insights",
     ("agent", "run"): "agent_run",
+    ("credential", "migrate-keyring"): "credential_migrate_keyring",
+    ("credential", "list"): "credential_list",
     ("agent", "list"): "agent_list",
     # Security Issue #427: Credential management paths
     ("credentials", "migrate"): "credentials_migrate",

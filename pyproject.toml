@@ -41,7 +41,7 @@ dependencies = [
     "openapi_spec_validator>=0.7.0",
     "jsonschema>=4.0.0",
     # Security Issue #427: Secure credential storage
-    "keyring>=24.0.0",
+    "keyring>=25.0.0",
     "cryptography>=46.0.7",
     "PyJWT>=2.8.0",
 ]

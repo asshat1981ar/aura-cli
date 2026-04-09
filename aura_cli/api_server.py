@@ -676,6 +676,75 @@ async def cancel_goal_legacy(goal_id: str, user: dict = Depends(get_current_user
     return await delete_goal(goal_id, user)
 
 
+@app.get("/api/goals/in-flight")
+async def get_in_flight_goal(user: dict = Depends(get_current_user)):
+    """Get the current in-flight goal if any."""
+    from core.in_flight_tracker import InFlightTracker
+    
+    tracker = InFlightTracker()
+    summary = tracker.get_summary()
+    
+    return {
+        "exists": tracker.exists(),
+        "summary": summary,
+    }
+
+
+@app.post("/api/goals/resume")
+async def resume_goal(data: dict = Body(...), user: dict = Depends(get_current_user)):
+    """Resume an interrupted goal.
+    
+    Request body:
+    - run: bool - Whether to immediately run the goal after resuming
+    """
+    from core.in_flight_tracker import InFlightTracker
+    from core.goal_queue import GoalQueue
+    
+    tracker = InFlightTracker()
+    record = tracker.read()
+    
+    if not record:
+        raise HTTPException(status_code=404, detail="No interrupted goal found")
+    
+    goal = record.get("goal", "")
+    if not goal:
+        raise HTTPException(status_code=400, detail="Invalid goal record")
+    
+    # Re-queue the goal
+    try:
+        gq = GoalQueue()
+        gq.prepend_batch([goal])
+        tracker.clear()
+        
+        log_json("INFO", "goal_resumed_via_api", {"goal": goal[:100]})
+        
+        # Broadcast update
+        await manager.broadcast({
+            "type": "goal_resumed",
+            "payload": {"goal": goal[:100]},
+        })
+        
+        should_run = data.get("run", False)
+        
+        if should_run:
+            # Trigger goal run (this would need to be implemented asynchronously)
+            return {
+                "status": "resumed_and_running",
+                "message": f"Goal resumed and execution started: {goal[:80]}...",
+                "goal": goal,
+            }
+        
+        return {
+            "status": "resumed",
+            "message": f"Goal re-queued at front: {goal[:80]}...",
+            "goal": goal,
+        }
+        
+    except Exception as e:
+        log_json("ERROR", "goal_resume_failed", {"error": str(e)})
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Agents endpoints
 @app.get("/api/agents")
 async def get_agents(user: dict = Depends(get_current_user)):

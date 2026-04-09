@@ -90,3 +90,63 @@ class InFlightTracker:
     def exists(self) -> bool:
         """Return ``True`` if an in-flight record is present on disk."""
         return self._path.exists()
+
+    def get_summary(self) -> Optional[dict]:
+        """Get a human-readable summary of the in-flight goal.
+        
+        Returns:
+            Summary dict with formatted timestamps and elapsed time,
+            or None if no goal is in-flight.
+        """
+        record = self.read()
+        if not record:
+            return None
+        
+        from datetime import datetime
+        
+        started_at = record.get("started_at", "")
+        goal = record.get("goal", "Unknown")
+        
+        try:
+            started_dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
+            elapsed = (datetime.now(timezone.utc) - started_dt).total_seconds()
+            
+            # Format elapsed time
+            if elapsed < 60:
+                elapsed_str = f"{int(elapsed)}s"
+            elif elapsed < 3600:
+                elapsed_str = f"{int(elapsed / 60)}m {int(elapsed % 60)}s"
+            else:
+                hours = int(elapsed / 3600)
+                minutes = int((elapsed % 3600) / 60)
+                elapsed_str = f"{hours}h {minutes}m"
+            
+            return {
+                "goal": goal,
+                "started_at": started_at,
+                "started_at_formatted": started_dt.strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "elapsed_seconds": round(elapsed, 1),
+                "elapsed_formatted": elapsed_str,
+                "cycle_limit": record.get("cycle_limit", 10),
+            }
+        except (ValueError, TypeError):
+            return {
+                "goal": goal,
+                "started_at": started_at,
+                "started_at_formatted": started_at,
+                "elapsed_seconds": 0,
+                "elapsed_formatted": "unknown",
+                "cycle_limit": record.get("cycle_limit", 10),
+            }
+
+
+# Global instance helpers
+_tracker: Optional[InFlightTracker] = None
+
+
+def get_tracker() -> InFlightTracker:
+    """Get global tracker instance."""
+    global _tracker
+    if _tracker is None:
+        _tracker = InFlightTracker()
+    return _tracker

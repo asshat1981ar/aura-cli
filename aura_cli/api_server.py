@@ -1871,6 +1871,101 @@ async def clear_cache(user: dict = Depends(get_current_user)):
     return {"status": "cleared"}
 
 
+# Analytics endpoints
+@app.get("/api/metrics/summary")
+async def get_metrics_summary(user: dict = Depends(get_current_user)):
+    """Get metrics summary."""
+    from core.metrics import get_metrics_collector
+    
+    collector = get_metrics_collector()
+    return collector.get_summary()
+
+
+@app.get("/api/analytics/goal-trends")
+async def get_goal_trends(days: int = 7, user: dict = Depends(get_current_user)):
+    """Get goal completion trends.
+    
+    Args:
+        days: Number of days to analyze
+    """
+    from core.metrics import get_analytics_engine
+    
+    engine = get_analytics_engine()
+    return engine.analyze_goal_trends(days=days)
+
+
+@app.get("/api/analytics/system-performance")
+async def get_system_performance_analytics(hours: int = 24, user: dict = Depends(get_current_user)):
+    """Get system performance analytics.
+    
+    Args:
+        hours: Number of hours to analyze
+    """
+    from core.metrics import get_analytics_engine
+    
+    engine = get_analytics_engine()
+    return engine.analyze_system_performance(hours=hours)
+
+
+@app.get("/api/analytics/insights")
+async def get_analytics_insights(user: dict = Depends(get_current_user)):
+    """Get actionable insights."""
+    from core.metrics import get_analytics_engine
+    
+    engine = get_analytics_engine()
+    return {"insights": engine.get_insights()}
+
+
+@app.get("/api/analytics/daily-report")
+async def get_daily_report(user: dict = Depends(get_current_user)):
+    """Get daily analytics report."""
+    from core.metrics import get_analytics_engine
+    
+    engine = get_analytics_engine()
+    return engine.generate_daily_report()
+
+
+@app.get("/api/agents/performance")
+async def get_agents_performance(user: dict = Depends(get_current_user)):
+    """Get performance data for all agents."""
+    from core.metrics import get_agent_tracker
+    
+    tracker = get_agent_tracker()
+    performances = tracker.get_all_performances()
+    
+    return {
+        "performances": [p.to_dict() for p in performances],
+        "summary": tracker.get_summary(),
+        "recommendations": tracker.get_recommendations(),
+    }
+
+
+@app.get("/api/agents/performance/{agent_id}")
+async def get_agent_performance(agent_id: str, user: dict = Depends(get_current_user)):
+    """Get performance data for a specific agent."""
+    from core.metrics import get_agent_tracker
+    
+    tracker = get_agent_tracker()
+    performance = tracker.get_performance(agent_id)
+    
+    if not performance:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    
+    return performance.to_dict()
+
+
+@app.post("/api/agents/performance/{agent_id}/reset")
+async def reset_agent_performance(agent_id: str, user: dict = Depends(get_current_user)):
+    """Reset performance stats for an agent."""
+    from core.metrics import get_agent_tracker
+    
+    tracker = get_agent_tracker()
+    if tracker.reset_agent_stats(agent_id):
+        return {"status": "reset", "agent_id": agent_id}
+    
+    raise HTTPException(status_code=404, detail="Agent not found")
+
+
 # GitHub App webhook endpoint
 @app.post("/api/github/webhook")
 async def github_webhook(request: Request, x_github_event: str = Header(None), x_hub_signature_256: str = Header(None)):

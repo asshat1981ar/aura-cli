@@ -29,7 +29,7 @@ func getToken(credential *credentials.AuraCredential, cfg *clicfg.Config) (strin
 
 	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(data.Encode()))
 	if err != nil {
-		panic(clierr.NewFatalError("can't retrieve authentication token. %w", err))
+		return "", clierr.NewFatalError("can't retrieve authentication token: %w", err)
 	}
 
 	version := cfg.Version
@@ -44,29 +44,31 @@ func getToken(credential *credentials.AuraCredential, cfg *clicfg.Config) (strin
 
 	res, err := client.Do(req)
 	if err != nil {
-		panic(clierr.NewFatalError("can't retrieve authentication token. %w", err))
+		return "", clierr.NewFatalError("can't retrieve authentication token: %w", err)
 	}
 	defer res.Body.Close()
 
 	switch statusCode := res.StatusCode; statusCode {
 	case http.StatusUnauthorized:
 		return "", clierr.NewUsageError("the provided credentials are invalid, expired, or revoked")
-	case http.StatusBadRequest:
-	case http.StatusForbidden:
-	case http.StatusNotFound:
-		panic(clierr.NewFatalError("can't retrieve authentication token. Response status code [%d]", http.StatusBadRequest))
+	case http.StatusBadRequest, http.StatusForbidden, http.StatusNotFound:
+		return "", clierr.NewFatalError("can't retrieve authentication token. Response status code [%d]", statusCode)
+	}
+
+	if !IsSuccessful(res.StatusCode) {
+		return "", clierr.NewFatalError("can't retrieve authentication token. Unexpected response status code [%d]", res.StatusCode)
 	}
 
 	resBody, err := io.ReadAll(res.Body)
 	if err != nil {
-		panic(clierr.NewFatalError("can't retrieve authentication token. %w", err))
+		return "", clierr.NewFatalError("can't retrieve authentication token: %w", err)
 	}
 
 	var grant Grant
 
 	err = json.Unmarshal(resBody, &grant)
 	if err != nil {
-		panic(clierr.NewFatalError("can't retrieve authentication token. %w", err))
+		return "", clierr.NewFatalError("can't retrieve authentication token: %w", err)
 	}
 
 	cfg.Credentials.Aura.UpdateAccessToken(credential, grant.AccessToken, grant.ExpiresIn)

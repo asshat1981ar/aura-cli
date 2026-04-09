@@ -5,7 +5,6 @@ package database
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/neo4j/cli/common/clicfg"
@@ -37,7 +36,7 @@ func NewListCmd(cfg *clicfg.Config) *cobra.Command {
 			return utils.SetProjectFlagsAsRequired(cfg, cmd)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			organizationId, projectId, err := utils.SetProjetDefaults(cfg, organizationId, projectId)
+			organizationId, projectId, err := utils.SetProjectDefaults(cfg, organizationId, projectId)
 			if err != nil {
 				return err
 			}
@@ -74,10 +73,7 @@ func NewListCmd(cfg *clicfg.Config) *cobra.Command {
 	cmd.Flags().StringVar(&projectId, projectIdFlag, "", "(required) Project/tenant ID")
 	cmd.Flags().StringVar(&deploymentId, deploymentIdFlag, "", "(required) Deployment ID")
 
-	err := cmd.MarkFlagRequired(deploymentIdFlag)
-	if err != nil {
-		log.Fatal(err)
-	}
+	cmd.MarkFlagRequired(deploymentIdFlag)
 
 	return cmd
 }

@@ -34,7 +34,7 @@ func NewCancelCommand(cfg *clicfg.Config) *cobra.Command {
 			return utils.SetProjectFlagsAsRequired(cfg, cmd)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			organizationId, projectId, err := utils.SetProjetDefaults(cfg, organizationId, projectId)
+			organizationId, projectId, err := utils.SetProjectDefaults(cfg, organizationId, projectId)
 			if err != nil {
 				return err
 			}

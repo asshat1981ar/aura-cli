@@ -32,7 +32,7 @@ func NewAddCmd(cfg *clicfg.Config) *cobra.Command {
 	cmd.Flags().StringVar(&name, nameFlag, "", "(required) Name")
 	cmd.MarkFlagRequired(nameFlag)
 
-	cmd.Flags().StringVar(&organizationId, organizationIdFlag, "", "(required) Oragnization ID")
+	cmd.Flags().StringVar(&organizationId, organizationIdFlag, "", "(required) Organization ID")
 	cmd.MarkFlagRequired(organizationIdFlag)
 
 	cmd.Flags().StringVar(&projectId, projectIdFlag, "", "(required) Project ID")

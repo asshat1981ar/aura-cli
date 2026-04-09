@@ -37,12 +37,15 @@ type RequestConfig struct {
 
 func MakeRequest(cfg *clicfg.Config, path string, config *RequestConfig) (responseBody []byte, statusCode int, err error) {
 	client := http.Client{}
-	var method = config.Method
+	method := config.Method
 	if method == "" {
-		panic(fmt.Sprintf("method not set in requests %s", path))
+		return nil, 0, fmt.Errorf("method not set in request %s", path)
 	}
 
-	body := createBody(config.PostBody)
+	body, err := createBody(config.PostBody)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to create request body: %w", err)
+	}
 
 	baseUrl := cfg.Aura.BaseUrl()
 	if config.Version == "" {
@@ -50,7 +53,10 @@ func MakeRequest(cfg *clicfg.Config, path string, config *RequestConfig) (respon
 	}
 	versionPath := getVersionPath(cfg, config.Version)
 
-	u, _ := url.ParseRequestURI(baseUrl)
+	u, err := url.ParseRequestURI(baseUrl)
+	if err != nil {
+		return nil, 0, fmt.Errorf("invalid base URL %q: %w", baseUrl, err)
+	}
 	u = u.JoinPath(versionPath)
 	u = u.JoinPath(path)
 
@@ -58,33 +64,31 @@ func MakeRequest(cfg *clicfg.Config, path string, config *RequestConfig) (respon
 
 	urlString := u.String()
 	req, err := http.NewRequest(method, urlString, body)
-
 	if err != nil {
-		panic(err)
+		return nil, 0, fmt.Errorf("failed to create HTTP request: %w", err)
 	}
 
 	credential, err := cfg.Credentials.Aura.GetDefault()
 	if err != nil {
-		return responseBody, 0, err
+		return nil, 0, err
 	}
 
 	req.Header, err = getHeaders(credential, cfg)
 	if err != nil {
-		return responseBody, 0, err
+		return nil, 0, err
 	}
 
 	res, err := client.Do(req)
 	if err != nil {
-		panic(err)
+		return nil, 0, fmt.Errorf("HTTP request failed: %w", err)
 	}
 
 	defer res.Body.Close()
 
 	if IsSuccessful(res.StatusCode) {
 		responseBody, err = io.ReadAll(res.Body)
-
 		if err != nil {
-			panic(err)
+			return nil, res.StatusCode, fmt.Errorf("failed to read response body: %w", err)
 		}
 
 		return responseBody, res.StatusCode, nil
@@ -108,22 +112,21 @@ func getVersionPath(cfg *clicfg.Config, version AuraApiVersion) string {
 		}
 		return "v2"
 	default:
-		panic(fmt.Sprintf("version not set in requests %s", version))
+		return "v1"
 	}
 }
 
-func createBody(data map[string]any) io.Reader {
+func createBody(data map[string]any) (io.Reader, error) {
 	if data == nil {
-		return nil
-	} else {
-		jsonData, err := json.Marshal(data)
-
-		if err != nil {
-			panic(err)
-		}
-
-		return bytes.NewBuffer(jsonData)
+		return nil, nil
 	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+
+	return bytes.NewBuffer(jsonData), nil
 }
 
 func addQueryParams(u *url.URL, params map[string]string) {

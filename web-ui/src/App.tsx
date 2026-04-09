@@ -8,6 +8,7 @@ import { PageLoader, preloadComponent } from './components/LazyComponents'
 // Lazy load all page components for code splitting
 // Using named exports pattern
 const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })))
+const Analytics = lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })))
 const Goals = lazy(() => import('./pages/Goals').then(m => ({ default: m.Goals })))
 const Agents = lazy(() => import('./pages/Agents').then(m => ({ default: m.Agents })))
 const Logs = lazy(() => import('./pages/Logs').then(m => ({ default: m.Logs })))
@@ -71,6 +72,7 @@ function App() {
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/" element={<Dashboard />} />
+              <Route path="/analytics" element={<Analytics />} />
               <Route path="/goals" element={<Goals />} />
               <Route path="/agents" element={<Agents />} />
               <Route path="/logs" element={<Logs />} />

@@ -12,6 +12,7 @@ import {
   WifiOff,
 } from 'lucide-react'
 import { StatsCard } from '../components/StatsCard'
+import { GoalResumeCard } from '../components/GoalResumeCard'
 import { useGoalStore, useGoalWebSocket } from '../stores/goalStore'
 import { useAgentStore, useAgentWebSocket } from '../stores/agentStore'
 import {
@@ -152,6 +153,9 @@ export function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Goal Resume Alert */}
+      <GoalResumeCard />
 
       {/* Stats from API */}
       {stats && (

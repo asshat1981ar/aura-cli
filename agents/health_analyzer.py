@@ -2,7 +2,7 @@ import json
 import logging
 from typing import Dict, Any
 
-class TestHealthAnalyzer:
+class HealthAnalyzer:
     def __init__(self, log_file: str = "test_framework.log"):
         self.log_file = log_file
         self.logger = logging.getLogger(__name__)
@@ -87,7 +87,7 @@ class TestHealthAnalyzer:
         }
 
 def main():
-    analyzer = TestHealthAnalyzer()
+    analyzer = HealthAnalyzer()
     
     # Step 1: Analyze test drop
     drop_analysis = analyzer.analyze_test_drop()

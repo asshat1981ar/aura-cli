@@ -208,7 +208,7 @@ class DiscordNotifier:
         
         event = NotificationEvent(
             type=f"pr_{action}",
-            title=f"PR #{pr_number} {action.title()}",
+            title=f"{emoji_map.get(action, '')} PR #{pr_number} {action.title()}",
             message=f"**{pr_title}** by {author}",
             metadata={
                 "repository": repo,

@@ -13,7 +13,10 @@ import threading
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.sadd.mcp_tool_bridge import MCPToolBridge
 
 from core.sadd.sub_agent_runner import SubAgentRunner
 from core.sadd.types import (

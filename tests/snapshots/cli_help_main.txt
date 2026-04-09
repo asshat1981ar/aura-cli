@@ -13,7 +13,7 @@ Commands:
   studio       Launch AURA Studio
   goal         Goal queue operations
   workflow     Workflow operations
-  mcp          MCP HTTP client commands
+  mcp          Repo-local MCP commands
   beads        BEADS contract commands
   scaffold     Scaffold a project
   evolve       Run innovation workflow

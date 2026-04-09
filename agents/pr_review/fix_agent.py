@@ -5,14 +5,13 @@ Automatically fixes issues detected by PRReviewAgent.
 
 from __future__ import annotations
 
-import ast
 import re
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass
 from enum import Enum
 
 from core.logging_utils import log_json
-from .review_agent import ReviewComment, Severity
+from .review_agent import ReviewComment
 
 
 class FixStatus(Enum):

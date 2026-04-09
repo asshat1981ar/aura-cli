@@ -8,7 +8,6 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
-from pathlib import Path
 from enum import Enum
 
 from core.logging_utils import log_json
@@ -215,16 +214,16 @@ class PRReviewAgent:
     def _generate_summary(self, pr_title: str, comments: List[ReviewComment]) -> str:
         """Generate a review summary."""
         lines = [
-            f"## AURA Code Review",
-            f"",
+            "## AURA Code Review",
+            "",
             f"**PR:** {pr_title}",
-            f"",
-            f"### Summary",
+            "",
+            "### Summary",
             f"- Files changed: {self.stats['files_changed']}",
             f"- Issues found: {self.stats['issues_found']}",
             f"  - Errors: {self.stats['errors']}",
             f"  - Warnings: {self.stats['warnings']}",
-            f"",
+            "",
         ]
 
         if comments:

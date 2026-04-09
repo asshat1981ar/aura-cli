@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import Dict, Any, Optional
 import asyncio
-import json
 
 from core.logging_utils import log_json
-from .manager import NotificationEvent, NotificationChannel
+from .manager import NotificationEvent
 
 
 class SlackNotifier:

@@ -365,9 +365,9 @@ Examples:
 
 ### `aura mcp`
 
-MCP HTTP client commands
+Repo-local MCP commands
 
-Inspect and call MCP tools from the CLI.
+Inspect and call MCP servers configured in the repo-local MCP config.
 
 Examples:
 - `python3 main.py mcp tools`
@@ -376,7 +376,7 @@ Examples:
 
 List MCP tools
 
-List tools exposed by the MCP HTTP server.
+List servers and tools exposed by the repo-local MCP config.
 
 `action`: `mcp_tools` `requires_runtime`: `false`
 
@@ -390,7 +390,7 @@ Examples:
 
 Call an MCP tool
 
-Invoke an MCP tool with optional JSON args.
+Invoke a repo-local MCP server/tool target with optional JSON args.
 
 `action`: `mcp_call` `requires_runtime`: `false`
 
@@ -398,8 +398,8 @@ Legacy flags:
 - `--mcp-call`
 
 Examples:
-- `python3 main.py mcp call limits`
-- `python3 main.py mcp call tail_logs --args '{"lines": 10}'`
+- `python3 main.py mcp call filesystem/read_file --args '{"path":"README.md"}'`
+- `python3 main.py mcp call sqlite/query --args '{"sql":"select 1"}'`
 
 ### `aura mcp status`
 

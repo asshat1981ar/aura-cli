@@ -12,7 +12,7 @@ class DebtHotspot:
     bug_count: int
     change_frequency: float
 
-class TestDebtTracker:
+class DebtTracker:
     def __init__(self):
         self.hotspots: List[DebtHotspot] = []
         self.metrics_baseline = {}
@@ -36,7 +36,7 @@ class TestDebtTracker:
         return []
 
 def test_hotspot_identification():
-    tracker = TestDebtTracker()
+    tracker = DebtTracker()
     mock_results = {
         'file1.py': {
             'coverage': 0.65,
@@ -53,7 +53,7 @@ def test_hotspot_identification():
     assert isinstance(hotspots, list)
 
 def test_debt_metric_tracking():
-    tracker = TestDebtTracker()
+    tracker = DebtTracker()
     tracker.metrics_baseline = {
         'test_coverage': 0.70,
         'complexity': 10,
@@ -77,7 +77,7 @@ def test_debt_metric_tracking():
 
 @pytest.mark.integration
 def test_end_to_end_tracking():
-    tracker = TestDebtTracker()
+    tracker = DebtTracker()
 
     # Mock static analysis setup
     mock_tool = Mock()

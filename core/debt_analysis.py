@@ -4,16 +4,16 @@ import pytest
 from dataclasses import dataclass
 
 @dataclass
-class TestDebtMetrics:
+class DebtMetrics:
     coverage: float
     complexity: int 
     duplication: float
     untested_lines: List[int]
     flaky_rate: float
 
-def analyze_test_coverage(test_file: str) -> TestDebtMetrics:
+def analyze_test_coverage(test_file: str) -> DebtMetrics:
     """Analyze test file and return debt metrics"""
-    metrics = TestDebtMetrics(
+    metrics = DebtMetrics(
         coverage=0.0,
         complexity=0,
         duplication=0.0,
@@ -92,7 +92,7 @@ def test_other():
 
 def test_analyze_coverage(sample_test_file):
     metrics = analyze_test_coverage(sample_test_file)
-    assert isinstance(metrics, TestDebtMetrics)
+    assert isinstance(metrics, DebtMetrics)
     assert 0 <= metrics.coverage <= 1.0
     assert metrics.complexity >= 0
     assert 0 <= metrics.duplication <= 1.0

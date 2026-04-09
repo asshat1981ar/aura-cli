@@ -29,7 +29,19 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
-from core.logging_utils import log_json # Import log_json
+from core.logging_utils import log_json  # Import log_json
+from core.sanitizer import SecurityError  # For violation detection
+
+# ---------------------------------------------------------------------------
+# Violation detection patterns for subprocess output
+# Maps compiled regex patterns to violation_type labels.
+# ---------------------------------------------------------------------------
+_VIOLATION_PATTERNS = [
+    (re.compile(r"\bPermissionError\b"), "restricted_path_access"),
+    (re.compile(r"\b(?:ModuleNotFoundError|ImportError)\b", re.IGNORECASE), "blocked_import"),
+    (re.compile(r"\bSecurityError\b|\bAccess denied\b"), "blocked_command"),
+    (re.compile(r"\bBlockingIOError\b|Operation not permitted", re.IGNORECASE), "blocked_syscall"),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -240,13 +252,15 @@ class SandboxAgent:
             )
             try:
                 stdout, stderr = proc.communicate(timeout=self.timeout)
-                return SandboxResult(
+                result = SandboxResult(
                     success=proc.returncode == 0,
                     exit_code=proc.returncode,
                     stdout=stdout,
                     stderr=stderr,
                     execution_path=script_path,
                 )
+                self._check_and_log_violations(result)
+                return result
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.communicate()
@@ -258,6 +272,24 @@ class SandboxAgent:
                     timed_out=True,
                     execution_path=script_path,
                 )
+        except SecurityError as exc:
+            log_json(
+                "warning",
+                "sandbox_violation_attempt",
+                details={
+                    "violation_type": "blocked_command",
+                    "attempted_value": str(exc),
+                    "goal": None,
+                    "agent": "sandbox",
+                },
+            )
+            return SandboxResult(
+                success=False,
+                exit_code=-1,
+                stdout="",
+                stderr=f"Security violation: {exc}",
+                execution_path=script_path,
+            )
         except Exception as exc:
             log_json("ERROR", "sandbox_internal_error", details={"method": "_run", "error": str(exc), "script_path": script_path})
             return SandboxResult(
@@ -284,13 +316,15 @@ class SandboxAgent:
             )
             try:
                 stdout, stderr = proc.communicate(timeout=self.timeout)
-                return SandboxResult(
+                result = SandboxResult(
                     success=proc.returncode == 0,
                     exit_code=proc.returncode,
                     stdout=stdout,
                     stderr=stderr,
                     execution_path=tmpdir,
                 )
+                self._check_and_log_violations(result)
+                return result
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.communicate()
@@ -299,6 +333,22 @@ class SandboxAgent:
                     stdout="", stderr=f"pytest timed out after {self.timeout}s",
                     timed_out=True, execution_path=tmpdir,
                 )
+        except SecurityError as exc:
+            log_json(
+                "warning",
+                "sandbox_violation_attempt",
+                details={
+                    "violation_type": "blocked_command",
+                    "attempted_value": str(exc),
+                    "goal": None,
+                    "agent": "sandbox",
+                },
+            )
+            return SandboxResult(
+                success=False, exit_code=-1, stdout="",
+                stderr=f"Security violation: {exc}",
+                execution_path=tmpdir,
+            )
         except FileNotFoundError:
             # pytest not installed — fall back to unittest discovery
             return self._run_unittest(tmpdir)
@@ -337,6 +387,28 @@ class SandboxAgent:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _check_and_log_violations(self, result: SandboxResult, goal: Optional[str] = None) -> None:
+        """Scan subprocess stdout/stderr for security violation indicators and log each match.
+
+        Args:
+            result: The :class:`SandboxResult` whose output to inspect.
+            goal: Optional goal string forwarded to the log entry when available.
+        """
+        combined = (result.stdout or "") + (result.stderr or "")
+        for pattern, violation_type in _VIOLATION_PATTERNS:
+            match = pattern.search(combined)
+            if match:
+                log_json(
+                    "warning",
+                    "sandbox_violation_attempt",
+                    details={
+                        "violation_type": violation_type,
+                        "attempted_value": match.group(0),
+                        "goal": goal,
+                        "agent": "sandbox",
+                    },
+                )
 
     def _parse_pytest_summary(self, output: str) -> dict:
         """Extract pass/fail/error counts from pytest output."""

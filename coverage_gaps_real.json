@@ -1,0 +1,21 @@
+{
+  "generated_at": "/home/westonaaron675/aura-cli",
+  "project_root": ".",
+  "statistics": {
+    "total_gaps": 0,
+    "filtered_gaps": 0,
+    "files_affected": 0,
+    "severity_breakdown": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0,
+      "low": 0
+    },
+    "average_complexity": 0,
+    "average_impact": 0
+  },
+  "gaps": [],
+  "recommendations": [
+    "Excellent! No significant coverage gaps found."
+  ]
+}

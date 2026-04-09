@@ -139,7 +139,7 @@ func TestOverwriteWithAwait(t *testing.T) {
 
 	getMock.AssertCalledTimes(2)
 
-	helper.AsssertOk()
+	helper.AssertOk()
 
 	helper.AssertOut(`{
 	"data": {

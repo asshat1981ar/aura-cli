@@ -39,7 +39,7 @@ func SetProjectFlagsAsRequired(cfg *clicfg.Config, cmd *cobra.Command) error {
 
 // This function is meant to run in the RunE of V2 commands to ensure that the values are set as the given default values if no values are
 // given via flags when running the command.
-func SetProjetDefaults(cfg *clicfg.Config, organizationId string, projectId string) (string, string, error) {
+func SetProjectDefaults(cfg *clicfg.Config, organizationId string, projectId string) (string, string, error) {
 	defaultProject, err := cfg.Aura.Projects.Default()
 	if err != nil {
 		return "", "", err

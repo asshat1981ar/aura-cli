@@ -23,7 +23,8 @@ func PrintBodyMap(cmd *cobra.Command, cfg *clicfg.Config, values api.ResponseDat
 	case "json":
 		bytes, err := json.MarshalIndent(values, "", "\t")
 		if err != nil {
-			panic(err)
+			cmd.PrintErrln("Error formatting JSON output:", err)
+			return
 		}
 		cmd.Println(string(bytes))
 	case "table", "default":

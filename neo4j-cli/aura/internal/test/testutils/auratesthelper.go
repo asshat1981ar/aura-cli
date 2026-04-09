@@ -88,8 +88,8 @@ func (helper *AuraTestHelper) SetDefaultProjectInConfig(organizationId, projectI
 	helper.SetConfigValue("aura-projects.default", "test")
 }
 
-// Assets no errors were returned
-func (helper *AuraTestHelper) AsssertOk() {
+// AssertOk asserts no errors were returned.
+func (helper *AuraTestHelper) AssertOk() {
 	helper.AssertErr("")
 }
 

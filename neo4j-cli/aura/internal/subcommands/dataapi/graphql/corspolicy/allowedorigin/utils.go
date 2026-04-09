@@ -39,13 +39,13 @@ func getExistingOrigins(cfg *clicfg.Config, dataApiId, instanceId string) ([]str
 		return nil, err
 	}
 	if statusCode != http.StatusOK {
-		panic(clierr.NewFatalError("unexpected status code %d running CLI with args %s, please report an issue in https://github.com/neo4j/cli", statusCode, os.Args[1:]))
+		return nil, clierr.NewFatalError("unexpected status code %d running CLI with args %s, please report an issue in https://github.com/neo4j/cli", statusCode, os.Args[1:])
 	}
 
 	var parsedGetResBody DetailedBody
 	err = json.Unmarshal(getResBody, &parsedGetResBody)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed to parse GraphQL Data API response: %w", err)
 	}
 
 	return parsedGetResBody.Data.Security.CorsPolicy.AllowedOrigins, nil

@@ -5,7 +5,6 @@ package deployment
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 
 	"github.com/neo4j/cli/common/clicfg"
@@ -39,7 +38,7 @@ func NewCreateCmd(cfg *clicfg.Config) *cobra.Command {
 			return utils.SetProjectFlagsAsRequired(cfg, cmd)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			organizationId, projectId, err := utils.SetProjetDefaults(cfg, organizationId, projectId)
+			organizationId, projectId, err := utils.SetProjectDefaults(cfg, organizationId, projectId)
 			if err != nil {
 				return err
 			}
@@ -73,10 +72,7 @@ func NewCreateCmd(cfg *clicfg.Config) *cobra.Command {
 	cmd.Flags().StringVar(&name, nameFlag, "", "(required) Deployment name")
 	cmd.Flags().StringVar(&connectionUrl, connectionUrlFlag, "", "An optional connection URL for the deployment")
 
-	err := cmd.MarkFlagRequired(nameFlag)
-	if err != nil {
-		log.Fatal(err)
-	}
+	cmd.MarkFlagRequired(nameFlag)
 
 	return cmd
 }

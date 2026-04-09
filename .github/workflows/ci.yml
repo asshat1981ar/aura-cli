@@ -56,6 +56,11 @@ jobs:
     - name: Ruff format check
       run: ruff format --check .
       continue-on-error: true  # Advisory — existing codebase not yet fully formatted
+    - name: Check Python file size limits
+      # Sprint 0 gate s0-file-size-lint: fail if any NEW .py file exceeds 500 lines.
+      # Known pre-existing violators are allow-listed in scripts/check_file_sizes.py
+      # with TODO notes for future refactoring.
+      run: python3 scripts/check_file_sizes.py
 
   security:
     runs-on: ubuntu-latest

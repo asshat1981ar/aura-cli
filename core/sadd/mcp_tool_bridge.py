@@ -10,6 +10,8 @@ import os
 import requests
 from typing import Any
 
+from core.security.http_client import attach_dpop_headers
+
 logger = logging.getLogger(__name__)
 
 # Discovery server default port
@@ -44,10 +46,12 @@ class MCPToolBridge:
         # 1. Try Discovery Server first
         try:
             url = f"http://localhost:{DISCOVERY_PORT}/call"
+            disc_headers = {"Authorization": f"Bearer {API_TOKEN}"}
+            attach_dpop_headers(disc_headers, "POST", url, access_token=API_TOKEN)
             resp = requests.post(
                 url,
                 json={"tool_name": "list_all_mcp_tools", "args": {}},
-                headers={"Authorization": f"Bearer {API_TOKEN}"},
+                headers=disc_headers,
                 timeout=1.0
             )
             if resp.status_code == 200:
@@ -83,10 +87,12 @@ class MCPToolBridge:
         # 1. Try Semantic Discovery Server
         try:
             url = f"http://localhost:{DISCOVERY_PORT}/call"
+            sem_headers = {"Authorization": f"Bearer {API_TOKEN}"}
+            attach_dpop_headers(sem_headers, "POST", url, access_token=API_TOKEN)
             resp = requests.post(
                 url,
                 json={"tool_name": "search_tools_semantically", "args": {"query": goal_text, "top_k": 3}},
-                headers={"Authorization": f"Bearer {API_TOKEN}"},
+                headers=sem_headers,
                 timeout=1.0
             )
             if resp.status_code == 200:

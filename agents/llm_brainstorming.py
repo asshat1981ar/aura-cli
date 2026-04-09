@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from agents.schemas import Idea
 from core.logging_utils import log_json
+from core.security.http_client import attach_dpop_headers
 
 
 @dataclass
@@ -145,7 +146,8 @@ class LLMBrainstormingClient:
             "HTTP-Referer": "https://aura-cli.local",  # Required by OpenRouter
             "X-Title": "AURA Innovation Catalyst"
         }
-        
+        attach_dpop_headers(headers, "POST", f"{self.OPENROUTER_BASE_URL}/chat/completions", access_token=self.api_key)
+
         data = {
             "model": self.model,
             "messages": [

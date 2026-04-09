@@ -10,6 +10,8 @@ import time
 from pathlib import Path
 from typing import Any, List
 
+from core.security.http_client import attach_dpop_headers
+
 
 class _MissingPackage:
     """Placeholder for optional dependencies that are not installed."""
@@ -750,6 +752,11 @@ class ModelAdapter:
         timeout=60,
         retry_label: str | None = None,
     ):
+        # Attach DPoP proof if the request carries a bearer token
+        bearer = headers.get("Authorization", "")
+        token = bearer.removeprefix("Bearer ").strip() if bearer.startswith("Bearer ") else None
+        attach_dpop_headers(headers, method, url, access_token=token)
+
         # [Retry logic unchanged]
         for attempt in range(retries):
             try:

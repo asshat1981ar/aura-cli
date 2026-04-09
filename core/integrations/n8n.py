@@ -7,6 +7,8 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
+from core.security.http_client import attach_dpop_headers
+
 
 @dataclass(frozen=True)
 class N8NIntegrationConfig:
@@ -89,6 +91,7 @@ def emit_n8n_event(event: N8NEvent, cfg: N8NIntegrationConfig) -> dict[str, Any]
     headers = {"Content-Type": "application/json"}
     if cfg.auth_header:
         headers["Authorization"] = cfg.auth_header
+    attach_dpop_headers(headers, "POST", cfg.webhook_url)
     body = json.dumps(event.as_dict()).encode("utf-8")
     request = urllib.request.Request(cfg.webhook_url, data=body, headers=headers, method="POST")
     try:

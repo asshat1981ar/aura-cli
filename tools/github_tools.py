@@ -4,6 +4,8 @@ import requests
 import time
 from typing import Dict, Any, Optional
 
+from core.security.http_client import attach_dpop_headers
+
 class GitHubTools:
     BASE_URL = "https://api.github.com"
     
@@ -18,6 +20,9 @@ class GitHubTools:
         }
 
     def _make_request(self, method: str, url: str, params: Optional[Dict] = None, json_data: Optional[Dict] = None, data: Optional[str] = None) -> Dict[str, Any]:
+        # Attach DPoP proof bound to the GitHub PAT
+        attach_dpop_headers(self.headers, method, url, access_token=self.github_pat)
+
         retries = 3
         for attempt in range(retries):
             response = requests.request(method, url, headers=self.headers, params=params, json=json_data, data=data)

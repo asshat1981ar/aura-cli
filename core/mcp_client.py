@@ -9,6 +9,7 @@ from core.exceptions import (
     MCPRetryExhaustedError,
 )
 from core.logging_utils import log_json
+from core.security.http_client import attach_dpop_headers
 
 
 class MCPAsyncClient:
@@ -54,6 +55,13 @@ class MCPAsyncClient:
 
     async def _request(self, method: str, path: str, **kwargs) -> Dict[str, Any]:
         url = f"{self.base_url}/{path.lstrip('/')}"
+        # Attach DPoP proof to outgoing requests
+        headers = dict(kwargs.pop("headers", {}) or {})
+        bearer = headers.get("Authorization", "")
+        token = bearer.removeprefix("Bearer ").strip() if bearer.startswith("Bearer ") else None
+        attach_dpop_headers(headers, method, url, access_token=token)
+        kwargs["headers"] = headers
+
         max_retries = 3
         backoff = 1.0
         start_time = time.perf_counter()

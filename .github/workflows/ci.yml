@@ -32,6 +32,8 @@ jobs:
     - name: Test with pytest + coverage
       run: |
         pytest -q --maxfail=3 --cov=aura_cli --cov=core --cov=agents --cov=memory --cov-report=xml --cov-report=term-missing
+    - name: Run golden file tests
+      run: pytest tests/security/test_golden_*.py -v --snapshot-warn-unused
     - name: Upload coverage
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

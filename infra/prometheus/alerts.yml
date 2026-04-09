@@ -1,0 +1,137 @@
+# Prometheus Alerting Rules — AURA API
+# Sprint 8 · feat/v1.0-sdlc-wave2
+#
+# Metric sources (server.py):
+#   aura_pipeline_runs_total{status}       — Counter
+#   aura_active_pipeline_runs              — Gauge
+#   http_request_duration_seconds{endpoint}— Histogram
+#   aura_goal_queue_depth                  — Gauge (must be exposed by server)
+#   process_resident_memory_bytes          — standard prometheus_client gauge
+
+groups:
+  - name: aura_api_availability
+    interval: 30s
+    rules:
+      # -----------------------------------------------------------------------
+      # AuraAPIDown
+      # Fires when the AURA API scrape target has been unreachable for >1 min,
+      # which correlates with /health returning non-200 (Prometheus marks the
+      # target `up=0` on scrape failure / connection refused).
+      # -----------------------------------------------------------------------
+      - alert: AuraAPIDown
+        expr: up{job=~"aura.*"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: "AURA API is down ({{ $labels.instance }})"
+          description: >
+            The scrape target {{ $labels.instance }} (job={{ $labels.job }})
+            has been unreachable for more than 1 minute. The /health endpoint
+            is likely returning non-200 or the process has crashed.
+          runbook_url: "https://github.com/asshat1981ar/aura-cli/blob/main/docs/INCIDENT_RUNBOOK.md#aura-api-down"
+          dashboard_url: "http://grafana:3001/d/aura-overview"
+
+  - name: aura_error_rate
+    interval: 60s
+    rules:
+      # -----------------------------------------------------------------------
+      # AuraHighErrorRate
+      # Uses pipeline run counters. Fires when >5 % of pipeline runs over the
+      # last 5 minutes have status="failed".
+      # -----------------------------------------------------------------------
+      - alert: AuraHighErrorRate
+        expr: >
+          (
+            rate(aura_pipeline_runs_total{status="failed"}[5m])
+            /
+            rate(aura_pipeline_runs_total[5m])
+          ) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "AURA pipeline error rate >5 % ({{ $labels.instance }})"
+          description: >
+            The ratio of failed pipeline runs to total runs has exceeded 5 %
+            over a 5-minute window on {{ $labels.instance }}.
+            Current value: {{ $value | humanizePercentage }}.
+          runbook_url: "https://github.com/asshat1981ar/aura-cli/blob/main/docs/INCIDENT_RUNBOOK.md#aura-high-error-rate"
+
+  - name: aura_latency
+    interval: 60s
+    rules:
+      # -----------------------------------------------------------------------
+      # AuraSlowResponse
+      # p95 HTTP request latency across all endpoints exceeds 2 s.
+      # Uses the http_request_duration_seconds histogram from the timing
+      # middleware in server.py.
+      # -----------------------------------------------------------------------
+      - alert: AuraSlowResponse
+        expr: >
+          histogram_quantile(
+            0.95,
+            sum by (le, instance) (
+              rate(http_request_duration_seconds_bucket[5m])
+            )
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "AURA p95 response latency >2 s ({{ $labels.instance }})"
+          description: >
+            The 95th-percentile HTTP response time has exceeded 2 seconds for
+            5 consecutive minutes on {{ $labels.instance }}.
+            Current p95: {{ $value | humanizeDuration }}.
+          runbook_url: "https://github.com/asshat1981ar/aura-cli/blob/main/docs/INCIDENT_RUNBOOK.md#aura-slow-response"
+
+  - name: aura_queue
+    interval: 60s
+    rules:
+      # -----------------------------------------------------------------------
+      # AuraGoalQueueBacklog
+      # Fires when the webhook goal queue depth stays above 50 for >10 min.
+      # Requires that the server exposes `aura_goal_queue_depth` (Gauge).
+      # -----------------------------------------------------------------------
+      - alert: AuraGoalQueueBacklog
+        expr: aura_goal_queue_depth > 50
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "AURA goal queue backlog >50 ({{ $labels.instance }})"
+          description: >
+            The in-memory webhook goal queue has had more than 50 pending
+            entries for over 10 minutes on {{ $labels.instance }}.
+            Current depth: {{ $value }}.
+            This may indicate the orchestrator is overloaded or stalled.
+          runbook_url: "https://github.com/asshat1981ar/aura-cli/blob/main/docs/INCIDENT_RUNBOOK.md#aura-goal-queue-backlog"
+
+  - name: aura_resources
+    interval: 60s
+    rules:
+      # -----------------------------------------------------------------------
+      # AuraMemoryHigh
+      # Process RSS memory exceeds 512 MB (536 870 912 bytes).
+      # process_resident_memory_bytes is emitted by prometheus_client
+      # automatically when the server imports it.
+      # -----------------------------------------------------------------------
+      - alert: AuraMemoryHigh
+        expr: process_resident_memory_bytes{job=~"aura.*"} > 536870912
+        for: 5m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: "AURA process RSS >512 MB ({{ $labels.instance }})"
+          description: >
+            The AURA API process on {{ $labels.instance }} is consuming more
+            than 512 MB of resident memory.
+            Current RSS: {{ $value | humanize1024 }}B.
+            Consider checking for memory leaks or increasing container limits.
+          runbook_url: "https://github.com/asshat1981ar/aura-cli/blob/main/docs/INCIDENT_RUNBOOK.md#aura-memory-high"

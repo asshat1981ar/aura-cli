@@ -515,6 +515,16 @@ def _customize_credentials_status(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(credentials_status=True)
 
 
+# ── Run management customizer ──────────────────────────────────────────────────
+
+
+def _customize_cancel(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "run_id",
+        help="Run ID of the active pipeline to cancel.",
+    )
+
+
 _PARSER_CUSTOMIZERS.update(
     {
         ("help",): _customize_help,
@@ -558,6 +568,8 @@ _PARSER_CUSTOMIZERS.update(
         ("credentials", "store"): _customize_credentials_store,
         ("credentials", "delete"): _customize_credentials_delete,
         ("credentials", "status"): _customize_credentials_status,
+        # ── Run management ──────────────────────────────────────────────────────
+        ("cancel",): _customize_cancel,
     }
 )
 

@@ -505,6 +505,22 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
             "python3 main.py credentials status --json",
         ),
     ),
+    # ── Run management ──────────────────────────────────────────────────────────
+    CommandSpec(
+        path=("cancel",),
+        summary="Cancel an active pipeline run",
+        description=(
+            "Send a cancellation signal to a running AURA pipeline and verify "
+            "that no partial filesystem changes remain on disk.\n\n"
+            "Exit codes:\n"
+            "  0 — run cancelled and filesystem restored\n"
+            "  1 — run_id not found in the active-run registry\n"
+            "  2 — cancellation signal sent but rollback verification failed"
+        ),
+        examples=(
+            "python3 main.py cancel <run-id>",
+        ),
+    ),
 )
 
 COMMAND_SPECS_BY_PATH: dict[tuple[str, ...], CommandSpec] = {spec.path: spec for spec in COMMAND_SPECS}
@@ -567,6 +583,8 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("credentials_store", False, ("credentials", "store")),
     CLIActionSpec("credentials_delete", False, ("credentials", "delete")),
     CLIActionSpec("credentials_status", False, ("credentials", "status")),
+    # ── Run management ──────────────────────────────────────────────────────────
+    CLIActionSpec("cancel", False, ("cancel",)),
 )
 
 CLI_ACTION_SPECS_BY_ACTION: dict[str, CLIActionSpec] = {spec.action: spec for spec in CLI_ACTION_SPECS}
@@ -595,6 +613,7 @@ _SMOKE_POSITIONAL_ARGS_BY_PATH: dict[tuple[str, ...], tuple[str, ...]] = {
     ("scaffold",): ("demo",),
     ("memory", "search"): ("example-query",),
     ("innovate", "start"): ("example-problem-statement",),
+    ("cancel",): ("example-run-id",),
 }
 
 HELP_SCHEMA_VERSION = 3
@@ -690,6 +709,8 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("credentials", "store"): "credentials_store",
     ("credentials", "delete"): "credentials_delete",
     ("credentials", "status"): "credentials_status",
+    # ── Run management ──────────────────────────────────────────────────────────
+    ("cancel",): "cancel",
 }
 
 _LEGACY_PRIMARY_FLAGS: tuple[str, ...] = (

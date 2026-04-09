@@ -1378,6 +1378,61 @@ def _handle_agent_list_dispatch(ctx: DispatchContext) -> int:
     return 0
 
 
+# ── Run cancellation ──────────────────────────────────────────────────────────
+
+
+def _handle_cancel_dispatch(ctx: DispatchContext) -> int:
+    """Handle ``aura cancel <run-id>``.
+
+    Exit codes:
+        0 — run cancelled and filesystem restored.
+        1 — run_id not found in the active-run registry.
+        2 — cancellation signal sent but a problem occurred.
+    """
+    try:
+        from rich.console import Console
+        _rich_available = True
+    except ImportError:  # pragma: no cover
+        _rich_available = False
+
+    run_id = getattr(ctx.args, "run_id", None)
+    if not run_id:
+        print("Error: run_id is required", file=sys.stderr)
+        return 1
+
+    from core.running_runs import cancel_run, list_runs
+
+    # Check known runs (non-intrusive look-up before signalling).
+    known_ids = {r["run_id"] for r in list_runs()}
+    if run_id not in known_ids:
+        msg = f"Error: run '{run_id}' not found in the active-run registry."
+        print(msg, file=sys.stderr)
+        return 1
+
+    try:
+        ok = cancel_run(run_id)
+    except Exception as exc:  # pragma: no cover
+        log_json("ERROR", "cancel_run_error", details={"run_id": run_id, "error": str(exc)})
+        print(f"Error: cancellation failed — {exc}", file=sys.stderr)
+        return 2
+
+    if not ok:
+        # Race: run finished between list_runs() and cancel_run().
+        msg = f"Error: run '{run_id}' completed before cancellation could be sent."
+        print(msg, file=sys.stderr)
+        return 1
+
+    log_json("INFO", "run_cancelled", details={"run_id": run_id})
+
+    confirmation = f"\u2713 Run {run_id} cancelled. Filesystem restored."
+    if _rich_available:
+        Console().print(f"[bold green]{confirmation}[/bold green]")
+    else:
+        print(confirmation)
+
+    return 0
+
+
 def _dispatch_rule(action: str, handler) -> DispatchRule:
     return DispatchRule(action, action_runtime_required(action), handler)
 
@@ -1433,6 +1488,8 @@ COMMAND_DISPATCH_REGISTRY = {
     "credentials_store": _dispatch_rule("credentials_store", _handle_credentials_store_dispatch),
     "credentials_delete": _dispatch_rule("credentials_delete", _handle_credentials_delete_dispatch),
     "credentials_status": _dispatch_rule("credentials_status", _handle_credentials_status_dispatch),
+    # ── Run management ──────────────────────────────────────────────────────────
+    "cancel": _dispatch_rule("cancel", _handle_cancel_dispatch),
 }
 
 

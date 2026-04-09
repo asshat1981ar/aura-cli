@@ -121,21 +121,21 @@ def _sse_payloads(chunks: list[str]) -> list[dict[str, Any]]:
 def test_health_returns_200(server_module):
     os.environ.pop("AGENT_API_TOKEN", None)
     data = _run(server_module.health())
-    assert data["status"] == "ok"
+    assert data["status"] == "healthy"
 
 
 def test_health_body_has_status(server_module):
     os.environ.pop("AGENT_API_TOKEN", None)
     data = _run(server_module.health())
     assert "status" in data
-    assert data["status"] in ("ok", "degraded")
+    assert data["status"] == "healthy"
 
 
-def test_health_body_has_providers(server_module):
+def test_health_body_has_version(server_module):
     os.environ.pop("AGENT_API_TOKEN", None)
     data = _run(server_module.health())
-    assert "providers" in data
-    assert isinstance(data["providers"], dict)
+    assert "version" in data
+    assert data["version"] == "0.1.0"
 
 
 def test_health_still_serves_when_runtime_components_are_missing(server_module):
@@ -149,8 +149,8 @@ def test_health_still_serves_when_runtime_components_are_missing(server_module):
     server_module.memory_store = None
     try:
         data = _run(server_module.health())
-        assert data["status"] == "ok"
-        assert "providers" in data
+        assert data["status"] == "healthy"
+        assert data["version"] == "0.1.0"
     finally:
         server_module.runtime = original_runtime
         server_module.orchestrator = original_orchestrator

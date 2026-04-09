@@ -38,6 +38,9 @@ os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 
+# R8: Import centralized MCP auth
+from tools.mcp_auth import require_control_auth
+
 from core.config_manager import ConfigManager, DEFAULT_CONFIG
 from core.logging_utils import log_json
 from core.mcp_contracts import (
@@ -132,14 +135,15 @@ def _get_memories_cached(brain: Brain) -> list:
 
 
 # ---------------------------------------------------------------------------
-# Auth
+# Auth (R8: Updated to use centralized MCP auth)
 # ---------------------------------------------------------------------------
 
-def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
-    if not _TOKEN:
-        return
-    if authorization != f"Bearer {_TOKEN}":
-        raise HTTPException(status_code=401, detail="Unauthorized")
+def _check_auth(
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(default=None),
+) -> str:
+    """Validate API key using centralized auth."""
+    return require_control_auth(x_api_key, authorization)
 
 
 # ---------------------------------------------------------------------------
@@ -393,16 +397,18 @@ _TOOL_HANDLERS = {
 # ---------------------------------------------------------------------------
 
 @app.get("/health")
-async def health(_: None = Depends(_check_auth)):
+async def health(auth: str = Depends(require_control_auth)):
+    from tools.mcp_auth import is_auth_enabled
     return build_health_payload(
         server=get_registered_service("control")["name"],
         version="1.0.0",
         tool_count=len(_TOOL_HANDLERS),
+        auth_enabled=is_auth_enabled("control"),
     )
 
 
 @app.get("/discovery")
-async def discovery(_: None = Depends(_check_auth)) -> Dict:
+async def discovery(auth: str = Depends(require_control_auth)) -> Dict:
     return build_discovery_payload(
         current_server=get_registered_service("control"),
         servers=list_registered_services(),
@@ -411,19 +417,19 @@ async def discovery(_: None = Depends(_check_auth)) -> Dict:
 
 
 @app.get("/tools")
-async def list_tools(_: None = Depends(_check_auth)) -> List[Dict]:
+async def list_tools(auth: str = Depends(require_control_auth)) -> List[Dict]:
     return build_tool_descriptors_from_schemas(_TOOL_SCHEMAS)
 
 
 @app.get("/tool/{name}")
-async def get_tool(name: str, _: None = Depends(_check_auth)) -> Dict:
+async def get_tool(name: str, auth: str = Depends(require_control_auth)) -> Dict:
     if name not in _TOOL_SCHEMAS:
         raise HTTPException(status_code=404, detail=f"Tool '{name}' not found.")
     return _build_descriptor(name)
 
 
 @app.post("/call")
-async def call_tool(request: ToolCallRequest, _: None = Depends(_check_auth)) -> ToolResult:
+async def call_tool(request: ToolCallRequest, auth: str = Depends(require_control_auth)) -> ToolResult:
     name = request.tool_name
     handler = _TOOL_HANDLERS.get(name)
     if not handler:
@@ -449,7 +455,7 @@ async def call_tool(request: ToolCallRequest, _: None = Depends(_check_auth)) ->
 
 
 @app.get("/metrics")
-async def get_metrics(_: None = Depends(_check_auth)) -> Dict:
+async def get_metrics(auth: str = Depends(require_control_auth)) -> Dict:
     """Return uptime, per-tool call/error counts, queue size, and memory count."""
     uptime_s = round(time.time() - _SERVER_START, 1)
     total_calls = sum(_call_counts.values())
@@ -496,6 +502,9 @@ async def get_metrics(_: None = Depends(_check_auth)) -> Dict:
 if __name__ == "__main__":
     import uvicorn
     from core.config_manager import config as _cfg
+    from tools.mcp_auth import is_auth_enabled
     # R4: port from config registry; env var still overrides for backward-compat
     port = int(os.getenv("MCP_CONTROL_PORT", _cfg.get_mcp_server_port("control")))
+    auth_enabled = is_auth_enabled("control")
+    print(f"[MCP control] Starting on port {port} (auth: {'enabled' if auth_enabled else 'optional'})")
     uvicorn.run("tools.aura_control_mcp:app", host="0.0.0.0", port=port, reload=False)

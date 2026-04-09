@@ -29,6 +29,7 @@ from aura_cli.options import (
 _REQUIRED_SUBCOMMAND_PARENT_PATHS: set[tuple[str, ...]] = {
     ("agent",),
     ("beads",),
+    ("credentials",),
     ("goal",),
     ("innovate",),
     ("mcp",),
@@ -466,6 +467,54 @@ def _customize_innovate_insights(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
 
 
+# Security Issue #427: Credential management command customizers
+
+
+def _customize_credentials_migrate(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(credentials_migrate=True)
+    parser.add_argument(
+        "--yes",
+        dest="yes",
+        action="store_true",
+        help="Skip confirmation and proceed with migration.",
+    )
+
+
+def _customize_credentials_store(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(credentials_store=True)
+    parser.add_argument(
+        "--key",
+        dest="key",
+        required=True,
+        help="Credential key name (e.g., api_key, openai_api_key).",
+    )
+    parser.add_argument(
+        "--value",
+        dest="value",
+        help="Credential value (if not provided, will prompt securely).",
+    )
+
+
+def _customize_credentials_delete(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(credentials_delete=True)
+    parser.add_argument(
+        "--key",
+        dest="key",
+        required=True,
+        help="Credential key name to delete.",
+    )
+    parser.add_argument(
+        "--yes",
+        dest="yes",
+        action="store_true",
+        help="Skip confirmation and delete immediately.",
+    )
+
+
+def _customize_credentials_status(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(credentials_status=True)
+
+
 _PARSER_CUSTOMIZERS.update(
     {
         ("help",): _customize_help,
@@ -504,6 +553,11 @@ _PARSER_CUSTOMIZERS.update(
         ("innovate", "techniques"): _customize_innovate_techniques,
         ("innovate", "to-goals"): _customize_innovate_to_goals,
         ("innovate", "insights"): _customize_innovate_insights,
+        # Security Issue #427: Credential management customizers
+        ("credentials", "migrate"): _customize_credentials_migrate,
+        ("credentials", "store"): _customize_credentials_store,
+        ("credentials", "delete"): _customize_credentials_delete,
+        ("credentials", "status"): _customize_credentials_status,
     }
 )
 

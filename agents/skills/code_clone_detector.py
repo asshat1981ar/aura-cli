@@ -32,7 +32,7 @@ def _extract_functions(source: str, file_path: str, min_lines: int) -> List[Tupl
             if fn_lines < min_lines:
                 continue
             norm = _normalize_ast(node)
-            h = hashlib.md5(norm.encode()).hexdigest()
+            h = hashlib.md5(norm.encode(), usedforsecurity=False).hexdigest()
             funcs.append((h, norm, file_path, node.lineno, node.name))
     return funcs
 

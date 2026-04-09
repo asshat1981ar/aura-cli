@@ -1,6 +1,6 @@
 aura studio
 
-Launch the rich real-time dashboard. Use --autonomous to start the goal loop.
+[EXPERIMENTAL] Launch the rich real-time dashboard. Use --autonomous to start the goal loop.
 
 Examples:
   python3 main.py studio

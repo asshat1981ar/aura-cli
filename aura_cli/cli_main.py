@@ -80,6 +80,7 @@ from aura_cli.dispatch import (
     _handle_show_config_dispatch,
     _handle_watch_dispatch,
     _handle_workflow_run_dispatch,
+    _handle_agent_list_dispatch,
     _maybe_add_goal,
     _prepare_runtime_context,
     _print_json_payload,

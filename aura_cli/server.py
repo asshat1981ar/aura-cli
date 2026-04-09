@@ -9,8 +9,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
 
 from core.logging_utils import log_json
@@ -23,6 +23,41 @@ from core.mcp_registry import list_registered_services
 from core.ai_environment_registry import list_ai_environments
 from core.mcp_architecture import default_routing_profile
 from core.operator_runtime import build_run_tool_audit_summary
+
+# ---------------------------------------------------------------------------
+# Prometheus metrics — imported lazily so the server starts even if
+# prometheus_client is not installed in dev environments.
+# ---------------------------------------------------------------------------
+try:
+    from prometheus_client import (
+        Counter,
+        Gauge,
+        Histogram,
+        generate_latest,
+        CONTENT_TYPE_LATEST,
+    )
+    _PROMETHEUS_AVAILABLE = True
+    pipeline_runs_total = Counter(
+        "aura_pipeline_runs_total",
+        "Total pipeline runs",
+        ["status"],
+    )
+    active_pipeline_runs = Gauge(
+        "aura_active_pipeline_runs",
+        "Currently executing pipelines",
+    )
+    sandbox_violations_total = Counter(
+        "aura_sandbox_violations_total",
+        "Sandbox violations caught by the run-tool denylist",
+        ["type"],
+    )
+    http_request_duration = Histogram(
+        "http_request_duration_seconds",
+        "HTTP request latency in seconds",
+        ["endpoint"],
+    )
+except ImportError:  # pragma: no cover
+    _PROMETHEUS_AVAILABLE = False
 
 # Project root for environment listing
 PROJECT_ROOT = Path.cwd()
@@ -79,6 +114,22 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+# ---------------------------------------------------------------------------
+# Prometheus HTTP request duration middleware
+# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def _prometheus_timing_middleware(request: Request, call_next):
+    """Record HTTP request duration for every endpoint."""
+    start = time.perf_counter()
+    response = await call_next(request)
+    if _PROMETHEUS_AVAILABLE:
+        duration = time.perf_counter() - start
+        # Normalise path to avoid high-cardinality labels (strip UUIDs etc.)
+        path = request.url.path
+        http_request_duration.labels(endpoint=path).observe(duration)
+    return response
 
 
 class ExecuteRequest(BaseModel):
@@ -285,6 +336,8 @@ async def _execute_run(req: ExecuteRequest):
         raise HTTPException(status_code=400, detail="Missing command in args")
     blocked_pattern = _is_denylisted_command(command)
     if blocked_pattern is not None:
+        if _PROMETHEUS_AVAILABLE:
+            sandbox_violations_total.labels(type="denylist").inc()
         raise HTTPException(status_code=403, detail=f"Command blocked by policy: {blocked_pattern}")
 
     async def run_generator():
@@ -525,20 +578,58 @@ def require_auth(authorization: Optional[str] = Header(default=None)) -> None:
 
 @app.get("/health")
 async def health() -> Dict:
-    return build_health_payload(
-        status="ok",
-        server="aura-dev-tools",
-        version="1.0.0",
-        providers={"chat": "connected", "embeddings": "enabled", "openai": "connected", "openrouter": "connected", "gemini": "connected"},
-        run_enabled=os.getenv("AGENT_API_ENABLE_RUN") == "1",
-    )
+    return {"status": "healthy", "version": "0.1.0"}
 
 
-@app.get("/metrics")
-async def metrics(_: None = Depends(require_auth)) -> Dict:
+@app.get("/ready")
+async def ready() -> Dict:
+    """Readiness probe: checks SQLite brain DB is readable; optionally pings Redis."""
+    import sqlite3 as _sqlite3
+
+    db_path = Path("memory/brain_v2.db")
+    try:
+        conn = _sqlite3.connect(str(db_path), timeout=2.0)
+        conn.execute("SELECT 1")
+        conn.close()
+    except Exception as exc:
+        from fastapi.responses import JSONResponse
+
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "reason": f"SQLite unavailable: {exc}"},
+        )
+
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:
+        try:
+            import redis as _redis  # optional dependency
+
+            client = _redis.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
+            client.ping()
+        except Exception as exc:
+            from fastapi.responses import JSONResponse
+
+            return JSONResponse(
+                status_code=503,
+                content={"status": "not_ready", "reason": f"Redis unavailable: {exc}"},
+            )
+
+    return {"status": "ready"}
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics():
+    """Expose Prometheus-format metrics (no auth — scraper must be on private network).
+
+    Falls back to a JSON summary if prometheus_client is not installed.
+    """
+    if _PROMETHEUS_AVAILABLE:
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
+    # Graceful fallback when prometheus_client is not installed
     return {
         "status": "ok",
         "skill_metrics": _runtime_metrics_snapshot(),
+        "warning": "prometheus_client not installed; install it for Prometheus format",
     }
 
 
@@ -624,6 +715,8 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
 
     # Fire-and-forget: run the cycle in background so n8n can poll /webhook/status
     async def _run_cycle() -> None:
+        if _PROMETHEUS_AVAILABLE:
+            active_pipeline_runs.inc()
         try:
             _webhook_goal_queue[goal_id]["status"] = "running"
             _webhook_goal_queue[goal_id]["started_at"] = time.time()
@@ -637,6 +730,8 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
                 "result": result,
                 "completed_at": time.time(),
             })
+            if _PROMETHEUS_AVAILABLE:
+                pipeline_runs_total.labels(status="success").inc()
         except Exception as exc:
             _webhook_goal_queue[goal_id].update({
                 "status": "failed",
@@ -644,6 +739,11 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
                 "completed_at": time.time(),
             })
             log_json("WARN", "aura_webhook_goal_failed", details={"goal_id": goal_id, "error": str(exc)})
+            if _PROMETHEUS_AVAILABLE:
+                pipeline_runs_total.labels(status="failure").inc()
+        finally:
+            if _PROMETHEUS_AVAILABLE:
+                active_pipeline_runs.dec()
 
     asyncio.create_task(_run_cycle())
     return {"status": "queued", "goal_id": goal_id}

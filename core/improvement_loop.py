@@ -77,7 +77,7 @@ class ImprovementProposal:
         created_at: Timestamp
         applied_at: Optional timestamp when applied
     """
-    proposal_id: str = field(default_factory=lambda: f"imp-{int(time.time())}-{hashlib.md5(str(time.time()).encode()).hexdigest()[:6]}")
+    proposal_id: str = field(default_factory=lambda: f"imp-{int(time.time())}-{hashlib.md5(str(time.time()).encode(), usedforsecurity=False).hexdigest()[:6]}")
     target: str = ""
     change_type: str = "config"  # config, code, prompt, strategy
     description: str = ""

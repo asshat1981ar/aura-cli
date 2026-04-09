@@ -36,7 +36,7 @@ export function Logs() {
   const logsEndRef = useRef<HTMLDivElement>(null)
   const [activeTab, setActiveTab] = useState<'logs' | 'metrics'>('logs')
 
-  useWebSocket('ws://localhost:8000/ws', {
+  const { status: wsStatus, retryCount: wsRetryCount } = useWebSocket('ws://localhost:8000/ws', {
     onMessage: (data: unknown) => {
       const msg = data as { type?: string; payload?: LogEntry }
       if (msg?.type === 'log' && msg.payload) {
@@ -96,6 +96,8 @@ export function Logs() {
               className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
                 isConnected
                   ? 'bg-green-100 text-green-800'
+                  : wsStatus === 'connecting'
+                  ? 'bg-yellow-100 text-yellow-800'
                   : 'bg-red-100 text-red-800'
               }`}
             >
@@ -105,7 +107,13 @@ export function Logs() {
                 <WifiOff className="w-4 h-4" />
               )}
               <span className="text-sm font-medium">
-                {isConnected ? 'Live' : 'Disconnected'}
+                {isConnected
+                  ? 'Live'
+                  : wsStatus === 'connecting' && wsRetryCount > 0
+                  ? `Reconnecting (attempt ${wsRetryCount})…`
+                  : wsStatus === 'connecting'
+                  ? 'Connecting…'
+                  : 'Disconnected'}
               </span>
             </div>
             <button

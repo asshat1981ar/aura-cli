@@ -4,13 +4,13 @@ Commands:
   help         Show CLI help
   doctor       Run system diagnostics
   readiness    Check V2 runtime readiness
-  bootstrap    Create default config
+  bootstrap    [EXPERIMENTAL] Create default config
   config       Show effective config
-  contract-report Print CLI contract report
-  diag         MCP diagnostics snapshot
+  contract-report [EXPERIMENTAL] Print CLI contract report
+  diag         [EXPERIMENTAL] MCP diagnostics snapshot
   logs         Stream AURA logs
-  watch        Launch TUI monitor
-  studio       Launch AURA Studio
+  watch        [EXPERIMENTAL] Launch TUI monitor
+  studio       [EXPERIMENTAL] Launch AURA Studio
   goal         Goal queue operations
   workflow     Workflow operations
   mcp          Repo-local MCP commands
@@ -20,9 +20,10 @@ Commands:
   queue        Goal queue management
   memory       Semantic memory operations
   metrics      Show performance metrics
-  sadd         Sub-Agent Driven Development
+  sadd         [EXPERIMENTAL] Sub-Agent Driven Development
   innovate     Innovation Catalyst session management
   agent        Agent SDK commands
+  credentials  Secure credential management
 
 Examples:
   python3 main.py goal add "Refactor queue" --run

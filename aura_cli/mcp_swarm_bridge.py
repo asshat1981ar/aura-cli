@@ -16,18 +16,16 @@ Usage:
 from __future__ import annotations
 
 import json
-import logging
 import os
 import subprocess
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any
 
+from core.logging_utils import log_json
+
 PORT = int(os.getenv("MCP_SERVER_PORT", "8050"))
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-logging.basicConfig(level=logging.INFO, format="[mcp-swarm-bridge] %(levelname)s %(message)s")
-log = logging.getLogger("mcp_swarm_bridge")
 
 
 class MCPProcess:
@@ -60,7 +58,7 @@ class MCPProcess:
         t.start()
         # Initialize MCP session
         self._initialize()
-        log.info("Swarm MCP process started (pid=%s)", self._proc.pid)
+        log_json("INFO", "mcp_swarm_process_started", details={"pid": self._proc.pid})
 
     def _initialize(self):
         """Send MCP initialize handshake."""
@@ -71,7 +69,7 @@ class MCPProcess:
         })
         if resp:
             self._rpc_notify("notifications/initialized", {})
-            log.info("MCP initialized: %s", resp.get("result", {}).get("serverInfo", {}))
+            log_json("INFO", "mcp_swarm_initialized", details={"server_info": resp.get("result", {}).get("serverInfo", {})})
 
     def _reader(self):
         """Background thread: reads stdout lines and dispatches responses."""
@@ -100,7 +98,7 @@ class MCPProcess:
             self._proc.stdin.write(payload + "\n")
             self._proc.stdin.flush()
         except BrokenPipeError:
-            log.error("MCP process pipe broken")
+            log_json("ERROR", "mcp_swarm_pipe_broken")
             return None
 
         if event.wait(timeout):
@@ -109,7 +107,7 @@ class MCPProcess:
             return result
         else:
             self._pending.pop(req_id, None)
-            log.warning("RPC timeout for method=%s id=%s", method, req_id)
+            log_json("WARN", "mcp_swarm_rpc_timeout", details={"method": method, "req_id": req_id})
             return None
 
     def _rpc_notify(self, method: str, params: dict):
@@ -149,7 +147,7 @@ class BridgeHandler(BaseHTTPRequestHandler):
     """Minimal HTTP handler that bridges AURA's MCP HTTP calls to the stdio process."""
 
     def log_message(self, fmt, *args):
-        log.info(fmt, *args)
+        log_json("INFO", "mcp_swarm_request", details={"fmt": fmt % args if args else fmt})
 
     def _send_json(self, code: int, data: Any):
         body = json.dumps(data).encode()
@@ -191,13 +189,13 @@ class BridgeHandler(BaseHTTPRequestHandler):
 def main():
     # Start HTTP server first
     server = HTTPServer(("127.0.0.1", PORT), BridgeHandler)
-    log.info("HTTP bridge listening on http://localhost:%s", PORT)
+    log_json("INFO", "mcp_swarm_bridge_listening", details={"port": PORT})
 
     # Initialize MCP process in background thread
     def _init_mcp():
-        log.info("Starting Swarm MCP process...")
+        log_json("INFO", "mcp_swarm_starting")
         _mcp.start()
-        log.info("Swarm MCP ready — %d tools available", len(_mcp.list_tools()))
+        log_json("INFO", "mcp_swarm_ready", details={"tool_count": len(_mcp.list_tools())})
 
     t = threading.Thread(target=_init_mcp, daemon=True)
     t.start()
@@ -205,7 +203,7 @@ def main():
     try:
         server.serve_forever()
     except KeyboardInterrupt:
-        log.info("Shutting down.")
+        log_json("INFO", "mcp_swarm_shutdown")
 
 
 if __name__ == "__main__":

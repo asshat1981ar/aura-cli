@@ -1,2 +1,3 @@
 # Placeholder for fleet setup logic
-print('Fleet setup agent initialized.')
+from core.logging_utils import log_json
+log_json("INFO", "fleet_setup_initialized")

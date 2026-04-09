@@ -2470,3 +2470,320 @@
 {"timestamp": 1775752001.983157, "goal": "refactor imports", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
 {"timestamp": 1775752007.0705435, "goal": "Test logging apply mismatch", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
 {"timestamp": 1775752007.1226726, "goal": "Test logging dry run", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775757752.339296, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775757863.5615225, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775757958.6633964, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758040.6527476, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758143.2712364, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758242.6419904, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758243.7247336, "goal": "Test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775758246.7098699, "goal": "Test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775758247.3064084, "goal": "Test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775758247.3467956, "goal": "Test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775758247.4183223, "goal": "Test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775758247.4845364, "goal": "Test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775758402.025, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758402.726772, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758402.7961411, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758402.917664, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758404.0366142, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758407.1420248, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775758407.2604735, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758407.290204, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758407.3158507, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758407.3425303, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758407.372449, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758407.397624, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758407.424661, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758509.316167, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758509.7577672, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758509.8065238, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758509.8926997, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758511.0568054, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758514.1863663, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775758514.3183432, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758514.3729794, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758514.4285328, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758514.4568772, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758514.485761, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758514.518439, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758514.5688944, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758568.568256, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758569.468336, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758569.5420804, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758569.781682, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758570.986148, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758574.233721, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775758574.5210903, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758574.7388172, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758574.857139, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758574.9216928, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758574.9771745, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758575.008169, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758575.0444636, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758629.1029837, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758629.4738073, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758629.5340953, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758629.6470358, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758630.7803078, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758633.9533415, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775758634.1172323, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758634.159679, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758634.1934383, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758634.2255163, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758634.2556102, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758634.2861035, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758634.314707, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758658.6132941, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758659.1561236, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758659.2171683, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758659.3139281, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758660.4266627, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758663.8860502, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775758664.5607905, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758664.6092377, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758664.6651378, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758664.720638, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758664.8560379, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758664.9645424, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758664.9982889, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758691.0030096, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758691.455148, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758691.5282269, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758691.686349, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758692.8306184, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758694.642295, "goal": "Test logging apply mismatch", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758694.7211115, "goal": "Test logging dry run", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758695.971334, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775758696.0751452, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758696.143346, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758696.2117786, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758696.2426996, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758696.2725928, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758696.303905, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758696.3355236, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758708.9162092, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758709.1836317, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758709.2086008, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758709.3049638, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758710.3998485, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758713.523252, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775758713.6669888, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758713.6887155, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758713.7224154, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758713.7572596, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758713.8002799, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758713.8443618, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758713.87715, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758839.3787806, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758840.99258, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758841.4701333, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758842.391474, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758843.7577722, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758847.0470498, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775758847.2479992, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758847.2811334, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758847.3176265, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758847.351147, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758847.388572, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758847.4209967, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758847.4563212, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758895.1450293, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758896.305131, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758897.0208452, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758906.7688587, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758910.1765811, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758914.3007178, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775758914.735113, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758914.8205473, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758914.8763762, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758914.925828, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758915.0014575, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758915.127266, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758915.167667, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758921.6450765, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758922.1393604, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758922.1879601, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758922.5854971, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758931.3197742, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758934.8505015, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775758935.5442472, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758935.6142976, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758935.6598096, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758935.7606342, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758935.8038843, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758935.869614, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758935.9575765, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775758938.349979, "goal": "Test logging apply mismatch", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775758938.48889, "goal": "Test logging dry run", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775759007.721567, "goal": "Test logging apply mismatch", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775759007.8510478, "goal": "Test logging dry run", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775759289.573267, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775759289.9945507, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759290.063659, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759290.1967595, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759291.3232815, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759294.491019, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775759294.6464288, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775759294.7060423, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759294.7645102, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759294.8222482, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759294.8773773, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759294.9343581, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759294.991166, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759327.3938518, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775759327.8440647, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759327.9251735, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759328.0764177, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759329.2070777, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759332.3488257, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775759332.6007128, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775759332.6521547, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759332.7048132, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759332.756407, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759332.8090448, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759332.8632438, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759332.8931022, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759351.8981698, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775759352.1654103, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759352.2255666, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759352.3211727, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759353.4441383, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759356.5752757, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775759357.0333586, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775759357.1486325, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759357.2058535, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759357.237623, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759357.2757168, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759357.3344507, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759357.3724232, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759415.8733625, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775759416.6210287, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759416.7054322, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759417.029129, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759418.2080073, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759421.4729757, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775759421.649466, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775759421.6838121, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759421.7448368, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759422.0275705, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759422.0524588, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759422.0776944, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759422.115331, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759472.6764011, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775759473.1807954, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759473.2527347, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759473.402962, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759474.553488, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759477.7678459, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775759477.9307377, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775759477.993641, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759478.063357, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759478.124585, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759478.1856916, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759478.2475877, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775759478.3087533, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760716.9756153, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775760717.3044367, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760717.367491, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760717.490344, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760718.6214592, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760721.7758238, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775760722.0637555, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775760722.1218174, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760722.1529915, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760722.1837356, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760722.214424, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760722.2457767, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760722.27563, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760863.9835205, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775760868.1692111, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760868.2425492, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760868.5347178, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760870.1043842, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760873.6503136, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775760873.9929056, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775760874.034233, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760874.0766118, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760874.1077912, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760874.1498473, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760874.184133, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775760874.2418272, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761052.2149086, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775761052.4366214, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761052.4662387, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761052.5470152, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761053.625444, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761056.7611744, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775761056.9267318, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775761057.0778844, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761057.117278, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761057.1421978, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761057.1615303, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761057.1817255, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761057.2009654, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761072.676511, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775761073.1763012, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761073.2610714, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761073.4410448, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761074.6252203, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761078.0016477, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775761078.222314, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775761078.2814548, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761078.3418102, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761078.4005709, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761078.4421325, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761078.4707427, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761078.5002868, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761134.1191123, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775761134.5548167, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761134.6618779, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761134.8127155, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761135.9715989, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761139.191127, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775761139.533717, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775761139.562666, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761139.592308, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761139.621495, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761139.6501231, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761139.6790233, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761139.7073452, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761203.9260385, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775761204.3097208, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761204.3867502, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761204.526605, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761205.6925821, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761208.8628402, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775761209.2139542, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775761209.2500181, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761209.2847815, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761209.3144956, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761209.3429072, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761209.3717785, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761209.4015849, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761269.7022314, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775761269.9457698, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761269.9755354, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761270.0749555, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761271.1745682, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761274.2990518, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775761274.4705718, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775761274.4895554, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761274.50598, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761274.5223236, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761274.5389967, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761274.5561543, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761274.573605, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761349.2512193, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775761349.562167, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761349.594472, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761349.6770375, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761350.7964835, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761353.9397418, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775761354.1252406, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775761354.1513195, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761354.1686273, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761354.185837, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761354.2040417, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761354.2347465, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775761354.2662666, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}

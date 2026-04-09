@@ -252,6 +252,29 @@ def _handle_show_config_dispatch(_ctx: DispatchContext) -> int:
     return 0
 
 
+def _handle_config_set_dispatch(ctx: DispatchContext) -> int:
+    """Persist a config key-value pair to aura.config.json.
+
+    Supports dotted model paths: ``model.<task>`` maps to
+    ``model_routing.<task>`` in the config file.
+    """
+    key: str = ctx.args.config_key
+    value: str = ctx.args.config_value
+
+    try:
+        if key.startswith("model."):
+            task_type = key[len("model."):]
+            config.update_config({"model_routing": {task_type: value}})
+        else:
+            config.update_config({key: value})
+    except Exception as exc:
+        print(f"Error: failed to save config: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Set {key} = {value}")
+    return 0
+
+
 def _handle_contract_report_dispatch(ctx: DispatchContext) -> int:
     from aura_cli.contract_report import (
         build_cli_contract_report,
@@ -1490,6 +1513,7 @@ COMMAND_DISPATCH_REGISTRY = {
     "readiness": _dispatch_rule("readiness", _handle_readiness_dispatch),
     "bootstrap": _dispatch_rule("bootstrap", _handle_bootstrap_dispatch),
     "show_config": _dispatch_rule("show_config", _handle_show_config_dispatch),
+    "config_set": _dispatch_rule("config_set", _handle_config_set_dispatch),
     "contract_report": _dispatch_rule("contract_report", _handle_contract_report_dispatch),
     "mcp_tools": _dispatch_rule("mcp_tools", _handle_mcp_tools_dispatch),
     "mcp_call": _dispatch_rule("mcp_call", _handle_mcp_call_dispatch),

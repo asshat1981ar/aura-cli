@@ -525,6 +525,17 @@ def _customize_cancel(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def _customize_config_set(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "config_key",
+        help="Config key to set (e.g. model.code_generation or dry_run).",
+    )
+    parser.add_argument(
+        "config_value",
+        help="Value to assign to the key.",
+    )
+
+
 _PARSER_CUSTOMIZERS.update(
     {
         ("help",): _customize_help,
@@ -570,6 +581,8 @@ _PARSER_CUSTOMIZERS.update(
         ("credentials", "status"): _customize_credentials_status,
         # ── Run management ──────────────────────────────────────────────────────
         ("cancel",): _customize_cancel,
+        # ── Config management ───────────────────────────────────────────────────
+        ("config", "set"): _customize_config_set,
     }
 )
 

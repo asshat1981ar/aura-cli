@@ -59,6 +59,18 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         examples=("python3 main.py config",),
     ),
     CommandSpec(
+        path=("config", "set"),
+        summary="Set a config value",
+        description=(
+            "Persist a configuration key-value pair to aura.config.json.\n"
+            "Use dotted model paths like 'model.code_generation' to set model routing."
+        ),
+        examples=(
+            "python3 main.py config set model.code_generation google/gemini-2.5-pro",
+            "python3 main.py config set dry_run true",
+        ),
+    ),
+    CommandSpec(
         path=("contract-report",),
         summary="[EXPERIMENTAL] Print CLI contract report",
         description="[EXPERIMENTAL] Print aggregated parser/help/schema/dispatch contract checks as JSON.",
@@ -533,6 +545,7 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("readiness", True, ("readiness",)),
     CLIActionSpec("bootstrap", False, ("bootstrap",), legacy_primary_flags=("bootstrap",)),
     CLIActionSpec("show_config", False, ("config",)),
+    CLIActionSpec("config_set", False, ("config", "set")),
     CLIActionSpec("contract_report", False, ("contract-report",)),
     CLIActionSpec("mcp_tools", False, ("mcp", "tools"), legacy_primary_flags=("mcp_tools",)),
     CLIActionSpec("mcp_call", False, ("mcp", "call"), legacy_primary_flags=("mcp_call",)),
@@ -669,6 +682,7 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("readiness",): "readiness",
     ("bootstrap",): "bootstrap",
     ("config",): "show_config",
+    ("config", "set"): "config_set",
     ("contract-report",): "contract_report",
     ("diag",): "diag",
     ("logs",): "logs",

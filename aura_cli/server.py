@@ -22,6 +22,7 @@ from core.mcp_registry import list_registered_services
 from core.ai_environment_registry import list_ai_environments
 from core.mcp_architecture import default_routing_profile
 from core.operator_runtime import build_run_tool_audit_summary
+from core.running_runs import register_run, deregister_run
 
 # ---------------------------------------------------------------------------
 # Prometheus metrics — imported lazily so the server starts even if
@@ -800,3 +801,40 @@ async def webhook_plan_review(req: WebhookPlanReviewRequest, _: None = Depends(r
         "plan_steps": len(plan_steps) if isinstance(plan_steps, list) else 1,
     })
     return {"status": "ok", "review_payload": review_payload}
+
+
+class RunRequest(BaseModel):
+    """Request body for POST /run."""
+
+    goal: str
+    max_cycles: int = 1
+    dry_run: bool = False
+
+
+@app.post("/run")
+async def run_pipeline(req: RunRequest, _: None = Depends(require_auth)) -> Dict:
+    """Trigger a goal-oriented pipeline run via LoopOrchestrator.
+
+    Requires the ``AGENT_API_ENABLE_RUN=1`` environment variable to be set.
+    Returns a ``run_id`` that can be used to track or cancel the run.
+    """
+    if os.getenv("AGENT_API_ENABLE_RUN") != "1":
+        raise HTTPException(status_code=403, detail="Run endpoint disabled; set AGENT_API_ENABLE_RUN=1")
+
+    run_id = secrets.token_hex(12)
+
+    async def _background_run() -> None:
+        register_run(run_id)
+        try:
+            active_orchestrator = await _resolve_runtime_component("orchestrator")
+            await asyncio.to_thread(
+                active_orchestrator.run_loop,
+                req.goal,
+                req.max_cycles,
+                req.dry_run,
+            )
+        finally:
+            deregister_run(run_id)
+
+    asyncio.create_task(_background_run())
+    return {"run_id": run_id, "status": "accepted"}

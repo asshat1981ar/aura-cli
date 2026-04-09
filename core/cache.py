@@ -1,282 +1,243 @@
-"""Redis-backed caching layer for AURA CLI.
-
-Provides distributed caching for:
-- LLM response caching
-- Embedding vector caching
-- Session state caching
-- Configuration caching
-"""
+"""Agent result caching layer for performance optimization."""
 
 from __future__ import annotations
 
 import hashlib
-import pickle
+import json
+import time
+from typing import Any, Dict, Optional, Callable
 from functools import wraps
-from typing import Any, Callable, Optional, TypeVar
+from dataclasses import dataclass
+from threading import Lock
 
 from core.logging_utils import log_json
 
-T = TypeVar("T")
 
-# Cache key prefixes
-CACHE_PREFIX_LLM = "aura:llm:"
-CACHE_PREFIX_EMBED = "aura:embed:"
-CACHE_PREFIX_SESSION = "aura:session:"
-CACHE_PREFIX_CONFIG = "aura:config:"
-CACHE_PREFIX_TASK = "aura:task:"
-DEFAULT_TTL = 3600  # 1 hour
-
-
-class CacheError(Exception):
-    """Cache operation error."""
-    pass
+@dataclass
+class CacheEntry:
+    """Cache entry with metadata."""
+    value: Any
+    expires_at: float
+    hits: int = 0
+    created_at: float = 0.0
 
 
-class CacheClient:
-    """Redis-backed cache client with fallback to in-memory."""
+class AgentCache:
+    """Thread-safe cache for agent results."""
     
-    def __init__(self, redis_url: Optional[str] = None):
-        self._redis = None
-        self._memory: dict[str, Any] = {}
-        self._enabled = True
-        
-        if redis_url:
-            try:
-                import redis
-                self._redis = redis.from_url(
-                    redis_url,
-                    socket_connect_timeout=5,
-                    socket_timeout=5,
-                    health_check_interval=30,
-                    decode_responses=False,
-                )
-                self._redis.ping()
-                log_json("INFO", "cache_redis_connected", {"url": redis_url.split("@")[-1]})
-            except Exception as e:
-                log_json("WARN", "cache_redis_fallback", {"error": str(e)})
-                self._redis = None
+    def __init__(
+        self,
+        max_size: int = 1000,
+        default_ttl: int = 3600,  # 1 hour
+        cleanup_interval: int = 300,  # 5 minutes
+    ):
+        self._cache: Dict[str, CacheEntry] = {}
+        self._max_size = max_size
+        self._default_ttl = default_ttl
+        self._cleanup_interval = cleanup_interval
+        self._last_cleanup = time.time()
+        self._lock = Lock()
+        self._stats = {
+            "hits": 0,
+            "misses": 0,
+            "evictions": 0,
+            "size": 0,
+        }
     
     def get(self, key: str) -> Optional[Any]:
-        """Get value from cache."""
-        if not self._enabled:
-            return None
-            
-        try:
-            if self._redis:
-                data = self._redis.get(key)
-                if data:
-                    return pickle.loads(data)
-            else:
-                entry = self._memory.get(key)
-                if entry and entry["expires"] > 0:  # Simple TTL check
-                    return entry["value"]
-        except Exception as e:
-            log_json("WARN", "cache_get_error", {"key": key, "error": str(e)})
+        """Get value from cache.
         
-        return None
+        Args:
+            key: Cache key
+            
+        Returns:
+            Cached value or None if not found/expired
+        """
+        with self._lock:
+            self._maybe_cleanup()
+            
+            entry = self._cache.get(key)
+            if entry is None:
+                self._stats["misses"] += 1
+                return None
+            
+            if time.time() > entry.expires_at:
+                del self._cache[key]
+                self._stats["evictions"] += 1
+                self._stats["misses"] += 1
+                return None
+            
+            entry.hits += 1
+            self._stats["hits"] += 1
+            return entry.value
     
     def set(
         self,
         key: str,
         value: Any,
-        ttl: int = DEFAULT_TTL,
-    ) -> bool:
-        """Set value in cache with TTL."""
-        if not self._enabled:
-            return False
+        ttl: Optional[int] = None,
+    ) -> None:
+        """Set value in cache.
+        
+        Args:
+            key: Cache key
+            value: Value to cache
+            ttl: Time to live in seconds (default: 1 hour)
+        """
+        with self._lock:
+            self._maybe_cleanup()
             
-        try:
-            if self._redis:
-                data = pickle.dumps(value)
-                self._redis.setex(key, ttl, data)
-            else:
-                import time
-                self._memory[key] = {
-                    "value": value,
-                    "expires": time.time() + ttl,
-                }
-            return True
-        except Exception as e:
-            log_json("WARN", "cache_set_error", {"key": key, "error": str(e)})
-            return False
+            # Evict oldest entries if at capacity
+            while len(self._cache) >= self._max_size:
+                oldest_key = min(
+                    self._cache.keys(),
+                    key=lambda k: self._cache[k].created_at,
+                )
+                del self._cache[oldest_key]
+                self._stats["evictions"] += 1
+            
+            now = time.time()
+            self._cache[key] = CacheEntry(
+                value=value,
+                expires_at=now + (ttl or self._default_ttl),
+                created_at=now,
+            )
+            self._stats["size"] = len(self._cache)
     
     def delete(self, key: str) -> bool:
-        """Delete key from cache."""
-        try:
-            if self._redis:
-                self._redis.delete(key)
-            else:
-                self._memory.pop(key, None)
-            return True
-        except Exception as e:
-            log_json("WARN", "cache_delete_error", {"key": key, "error": str(e)})
+        """Delete entry from cache.
+        
+        Args:
+            key: Cache key
+            
+        Returns:
+            True if key existed and was deleted
+        """
+        with self._lock:
+            if key in self._cache:
+                del self._cache[key]
+                self._stats["size"] = len(self._cache)
+                return True
             return False
     
-    def exists(self, key: str) -> bool:
-        """Check if key exists in cache."""
-        try:
-            if self._redis:
-                return bool(self._redis.exists(key))
-            else:
-                return key in self._memory
-        except Exception:
-            return False
+    def clear(self) -> None:
+        """Clear all cache entries."""
+        with self._lock:
+            self._cache.clear()
+            self._stats["size"] = 0
     
-    def clear_pattern(self, pattern: str) -> int:
-        """Clear all keys matching pattern."""
-        try:
-            if self._redis:
-                keys = self._redis.scan_iter(match=pattern)
-                count = 0
-                for key in keys:
-                    self._redis.delete(key)
-                    count += 1
-                return count
-            else:
-                # Simple prefix match for in-memory
-                keys_to_delete = [k for k in self._memory if k.startswith(pattern.rstrip("*"))]
-                for k in keys_to_delete:
-                    del self._memory[k]
-                return len(keys_to_delete)
-        except Exception as e:
-            log_json("WARN", "cache_clear_error", {"pattern": pattern, "error": str(e)})
-            return 0
-    
-    def get_stats(self) -> dict[str, Any]:
+    def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
-        try:
-            if self._redis:
-                info = self._redis.info()
-                return {
-                    "backend": "redis",
-                    "connected": True,
-                    "used_memory": info.get("used_memory_human", "N/A"),
-                    "key_count": self._redis.dbsize(),
-                    "hit_rate": info.get("keyspace_hits", 0) / max(
-                        info.get("keyspace_hits", 0) + info.get("keyspace_misses", 1), 1
-                    ),
-                }
-            else:
-                return {
-                    "backend": "memory",
-                    "connected": True,
-                    "key_count": len(self._memory),
-                    "hit_rate": None,
-                }
-        except Exception as e:
-            return {"backend": "unknown", "connected": False, "error": str(e)}
+        with self._lock:
+            total = self._stats["hits"] + self._stats["misses"]
+            hit_rate = self._stats["hits"] / total if total > 0 else 0
+            
+            return {
+                **self._stats,
+                "hit_rate": round(hit_rate, 4),
+                "size": len(self._cache),
+                "max_size": self._max_size,
+            }
+    
+    def _maybe_cleanup(self) -> None:
+        """Clean up expired entries if cleanup interval has passed."""
+        now = time.time()
+        if now - self._last_cleanup < self._cleanup_interval:
+            return
+        
+        expired = [
+            key for key, entry in self._cache.items()
+            if now > entry.expires_at
+        ]
+        for key in expired:
+            del self._cache[key]
+            self._stats["evictions"] += 1
+        
+        self._last_cleanup = now
+        self._stats["size"] = len(self._cache)
 
 
 # Global cache instance
-_cache_instance: Optional[CacheClient] = None
+_global_cache: Optional[AgentCache] = None
 
 
-def init_cache(redis_url: Optional[str] = None) -> CacheClient:
-    """Initialize global cache instance."""
-    global _cache_instance
-    _cache_instance = CacheClient(redis_url)
-    return _cache_instance
-
-
-def get_cache() -> CacheClient:
+def get_cache() -> AgentCache:
     """Get global cache instance."""
-    global _cache_instance
-    if _cache_instance is None:
-        _cache_instance = CacheClient()
-    return _cache_instance
+    global _global_cache
+    if _global_cache is None:
+        _global_cache = AgentCache()
+    return _global_cache
 
 
 def cached(
-    prefix: str = "aura",
-    ttl: int = DEFAULT_TTL,
-    key_func: Optional[Callable[..., str]] = None,
-) -> Callable[[Callable[..., T]], Callable[..., T]]:
+    ttl: Optional[int] = None,
+    key_fn: Optional[Callable] = None,
+):
     """Decorator for caching function results.
     
     Args:
-        prefix: Cache key prefix
         ttl: Time to live in seconds
-        key_func: Optional function to generate cache key from arguments
+        key_fn: Function to generate cache key from arguments
     """
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+    def decorator(func: Callable) -> Callable:
         @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> T:
+        def wrapper(*args, **kwargs):
             cache = get_cache()
             
             # Generate cache key
-            if key_func:
-                cache_key = f"{prefix}:{key_func(*args, **kwargs)}"
+            if key_fn:
+                cache_key = key_fn(*args, **kwargs)
             else:
                 # Default: hash of function name and arguments
-                key_data = f"{func.__name__}:{args}:{sorted(kwargs.items())}"
-                cache_key = f"{prefix}:{hashlib.sha256(key_data.encode()).hexdigest()[:16]}"
+                key_data = {
+                    "func": func.__name__,
+                    "args": args,
+                    "kwargs": kwargs,
+                }
+                cache_key = hashlib.sha256(
+                    json.dumps(key_data, sort_keys=True, default=str).encode()
+                ).hexdigest()
             
-            # Try cache
+            # Try cache first
             cached_value = cache.get(cache_key)
             if cached_value is not None:
-                log_json("DEBUG", "cache_hit", {"key": cache_key})
+                log_json("DEBUG", "cache_hit", {
+                    "key": cache_key[:16] + "...",
+                    "func": func.__name__,
+                })
                 return cached_value
             
             # Execute and cache
             result = func(*args, **kwargs)
             cache.set(cache_key, result, ttl)
-            log_json("DEBUG", "cache_miss", {"key": cache_key})
+            
+            log_json("DEBUG", "cache_miss", {
+                "key": cache_key[:16] + "...",
+                "func": func.__name__,
+            })
+            
             return result
         
         return wrapper
     return decorator
 
 
-def cache_llm_response(
-    model: str,
-    prompt: str,
-    response: str,
-    ttl: int = 3600,
-) -> bool:
-    """Cache LLM response."""
-    key = f"{CACHE_PREFIX_LLM}{model}:{hashlib.sha256(prompt.encode()).hexdigest()[:32]}"
-    return get_cache().set(key, {"response": response, "model": model}, ttl)
-
-
-def get_cached_llm_response(model: str, prompt: str) -> Optional[str]:
-    """Get cached LLM response."""
-    key = f"{CACHE_PREFIX_LLM}{model}:{hashlib.sha256(prompt.encode()).hexdigest()[:32]}"
-    cached = get_cache().get(key)
-    if cached and isinstance(cached, dict):
-        return cached.get("response")
-    return None
-
-
-def cache_embedding(text: str, embedding: list[float], ttl: int = 86400) -> bool:
-    """Cache text embedding vector."""
-    key = f"{CACHE_PREFIX_EMBED}{hashlib.sha256(text.encode()).hexdigest()[:32]}"
-    return get_cache().set(key, embedding, ttl)
-
-
-def get_cached_embedding(text: str) -> Optional[list[float]]:
-    """Get cached embedding vector."""
-    key = f"{CACHE_PREFIX_EMBED}{hashlib.sha256(text.encode()).hexdigest()[:32]}"
-    return get_cache().get(key)
-
-
-def cache_session(session_id: str, data: dict[str, Any], ttl: int = 86400) -> bool:
-    """Cache session data."""
-    key = f"{CACHE_PREFIX_SESSION}{session_id}"
-    return get_cache().set(key, data, ttl)
-
-
-def get_cached_session(session_id: str) -> Optional[dict[str, Any]]:
-    """Get cached session data."""
-    key = f"{CACHE_PREFIX_SESSION}{session_id}"
-    return get_cache().get(key)
-
-
-def invalidate_session(session_id: str) -> bool:
-    """Invalidate cached session."""
-    key = f"{CACHE_PREFIX_SESSION}{session_id}"
-    return get_cache().delete(key)
-
-
-def clear_all_cache() -> int:
-    """Clear all AURA cache entries."""
-    return get_cache().clear_pattern("aura:*")
+def invalidate_cache(pattern: Optional[str] = None) -> int:
+    """Invalidate cache entries.
+    
+    Args:
+        pattern: Optional pattern to match keys (if None, clears all)
+        
+    Returns:
+        Number of entries invalidated
+    """
+    cache = get_cache()
+    
+    if pattern is None:
+        count = cache.get_stats()["size"]
+        cache.clear()
+        return count
+    
+    # Pattern matching not implemented for simplicity
+    # Would need to iterate and match keys
+    return 0

@@ -350,7 +350,7 @@
     },
     {
       "action": null,
-      "description": "Inspect and call MCP tools from the CLI.",
+      "description": "Inspect and call MCP servers configured in the repo-local MCP config.",
       "examples": [
         "python3 main.py mcp tools"
       ],
@@ -360,11 +360,11 @@
         "mcp"
       ],
       "requires_runtime": null,
-      "summary": "MCP HTTP client commands"
+      "summary": "Repo-local MCP commands"
     },
     {
       "action": "mcp_tools",
-      "description": "List tools exposed by the MCP HTTP server.",
+      "description": "List servers and tools exposed by the repo-local MCP config.",
       "examples": [
         "python3 main.py mcp tools"
       ],
@@ -386,10 +386,10 @@
     },
     {
       "action": "mcp_call",
-      "description": "Invoke an MCP tool with optional JSON args.",
+      "description": "Invoke a repo-local MCP server/tool target with optional JSON args.",
       "examples": [
-        "python3 main.py mcp call limits",
-        "python3 main.py mcp call tail_logs --args '{\"lines\": 10}'"
+        "python3 main.py mcp call filesystem/read_file --args '{\"path\":\"README.md\"}'",
+        "python3 main.py mcp call sqlite/query --args '{\"sql\":\"select 1\"}'"
       ],
       "flags": [
         {

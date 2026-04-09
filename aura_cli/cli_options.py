@@ -283,8 +283,8 @@ def _customize_mcp_tools(parser: argparse.ArgumentParser) -> None:
 
 
 def _customize_mcp_call(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("mcp_call", help="MCP tool name.")
-    parser.add_argument("--args", dest="mcp_args", help="JSON arguments for the MCP tool.")
+    parser.add_argument("mcp_call", help="MCP server/tool target, for example filesystem/read_file.")
+    parser.add_argument("--args", dest="mcp_args", help="JSON arguments for the MCP target.")
 
 
 def _customize_mcp_status(parser: argparse.ArgumentParser) -> None:

@@ -684,6 +684,7 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("innovate", "to-goals"): "innovate_to_goals",
     ("innovate", "insights"): "innovate_insights",
     ("agent", "run"): "agent_run",
+    ("agent", "list"): "agent_list",
     # Security Issue #427: Credential management paths
     ("credentials", "migrate"): "credentials_migrate",
     ("credentials", "store"): "credentials_store",

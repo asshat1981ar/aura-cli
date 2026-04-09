@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import ast
 import base64
-import hmac
 import io
 import json
 import os

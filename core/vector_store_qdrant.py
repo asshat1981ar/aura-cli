@@ -8,20 +8,21 @@ from __future__ import annotations
 
 import uuid
 import time
-from typing import List, Dict, Any, Optional, Union
+from typing import TYPE_CHECKING, List, Dict, Any, Optional, Union
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from core.logging_utils import log_json
+
+if TYPE_CHECKING:
+    from core.vector_store import VectorStore
 
 # Optional Qdrant import
 qdrant_available = False
 try:
     from qdrant_client import QdrantClient
     from qdrant_client.models import (
-        Distance, VectorParams, PointStruct, 
+        Distance, VectorParams, PointStruct,
         Filter, FieldCondition, MatchValue,
-        ScoredPoint
     )
     qdrant_available = True
 except ImportError:

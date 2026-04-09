@@ -51,7 +51,7 @@ def _run_async_safely(coro):
         return asyncio.run(coro)
     except RuntimeError as e:
         if "already running" in str(e):
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 future = pool.submit(asyncio.run, coro)
@@ -1164,7 +1164,6 @@ def _handle_credentials_status_dispatch(ctx: DispatchContext) -> int:
 
 def _handle_mcp_status_dispatch(ctx: DispatchContext) -> int:
     """Render a real-time Rich health dashboard for all registered MCP servers."""
-    import asyncio
 
     from core.mcp_health import check_all_mcp_health, get_health_summary
     from core.mcp_registry import list_registered_services
@@ -1227,7 +1226,6 @@ def _handle_mcp_status_dispatch(ctx: DispatchContext) -> int:
 
 def _handle_mcp_restart_dispatch(ctx: DispatchContext) -> int:
     """Validate/restart a named MCP server by running a health check and logging the result."""
-    import asyncio
 
     from core.mcp_health import check_mcp_health
     from core.mcp_registry import get_registered_service

@@ -32,8 +32,7 @@ import sqlite3
 import time
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Set
-from functools import lru_cache
+from typing import Any, Dict, List, Optional, Tuple
 
 from core.logging_utils import log_json
 

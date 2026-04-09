@@ -18,7 +18,7 @@ from enum import Enum
 # JWT handling
 try:
     import jwt
-    from jwt.algorithms import RSAAlgorithm
+
     JWT_AVAILABLE = True
 except ImportError:
     JWT_AVAILABLE = False
@@ -26,10 +26,8 @@ except ImportError:
 
 # Cryptography for key generation
 try:
-    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric import rsa, ec, ed25519
-    from cryptography.hazmat.primitives.asymmetric.utils import Prehashed
-    from cryptography.exceptions import InvalidSignature
     CRYPTO_AVAILABLE = True
 except ImportError:
     CRYPTO_AVAILABLE = False
@@ -389,7 +387,7 @@ class DPoPValidator:
         """
         try:
             # Decode without verification first to get header
-            unverified = jwt.decode(
+            jwt.decode(
                 proof_token,
                 options={"verify_signature": False}
             )

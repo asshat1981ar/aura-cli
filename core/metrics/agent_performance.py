@@ -12,7 +12,6 @@ import statistics
 from typing import Dict, Any, List, Optional
 from dataclasses import dataclass, field
 from pathlib import Path
-from collections import defaultdict
 
 from core.logging_utils import log_json
 

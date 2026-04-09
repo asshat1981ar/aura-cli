@@ -7,13 +7,12 @@ from __future__ import annotations
 
 import time
 import statistics
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from collections import defaultdict
 
-from core.logging_utils import log_json
-from .collector import MetricsCollector, GoalMetrics, SystemMetrics
+from .collector import MetricsCollector
 
 
 @dataclass

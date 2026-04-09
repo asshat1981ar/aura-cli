@@ -16,7 +16,6 @@ from pydantic import BaseModel
 from core.logging_utils import log_json
 from core.mcp_contracts import (
     build_discovery_payload,
-    build_health_payload,
     build_tool_descriptor,
 )
 from core.mcp_registry import list_registered_services

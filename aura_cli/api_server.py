@@ -1626,6 +1626,182 @@ try:
 except RuntimeError:
     pass  # dist folder doesn't exist in development
 
+# GitHub PR endpoints
+@app.get("/api/github/prs")
+async def list_pull_requests(
+    state: str = Query("open", description="PR state: open, closed, or all"),
+    user: dict = Depends(get_current_user),
+):
+    """List pull requests from GitHub.
+    
+    Returns list of PRs with summary information.
+    """
+    try:
+        from aura_cli.github_integration import get_github_app
+        
+        github_app = get_github_app()
+        if not github_app or not github_app._app_client:
+            # Return mock data for development
+            return [
+                {
+                    "id": 1,
+                    "number": 42,
+                    "title": "Add new feature",
+                    "state": "open",
+                    "created_at": "2024-01-15T10:30:00Z",
+                    "updated_at": "2024-01-15T14:20:00Z",
+                    "user": {
+                        "login": "developer1",
+                        "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+                    },
+                    "head": {"ref": "feature-branch", "sha": "abc123"},
+                    "base": {"ref": "main"},
+                    "additions": 150,
+                    "deletions": 30,
+                    "changed_files": 5,
+                    "comments": 3,
+                    "review_comments": 2,
+                    "html_url": "https://github.com/owner/repo/pull/42",
+                }
+            ]
+        
+        # TODO: Implement actual GitHub API call
+        # This would fetch PRs from configured repositories
+        return []
+        
+    except Exception as e:
+        log_json("ERROR", "github_prs_fetch_failed", {"error": str(e)})
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/github/prs/{pr_number}")
+async def get_pull_request(
+    pr_number: int,
+    user: dict = Depends(get_current_user),
+):
+    """Get detailed information about a specific PR."""
+    try:
+        # Return mock data for development
+        return {
+            "id": 1,
+            "number": pr_number,
+            "title": "Add new feature",
+            "state": "open",
+            "created_at": "2024-01-15T10:30:00Z",
+            "updated_at": "2024-01-15T14:20:00Z",
+            "user": {
+                "login": "developer1",
+                "avatar_url": "https://avatars.githubusercontent.com/u/1?v=4",
+            },
+            "head": {"ref": "feature-branch", "sha": "abc123"},
+            "base": {"ref": "main"},
+            "additions": 150,
+            "deletions": 30,
+            "changed_files": 5,
+            "comments": 3,
+            "review_comments": 2,
+            "html_url": f"https://github.com/owner/repo/pull/{pr_number}",
+        }
+    except Exception as e:
+        log_json("ERROR", "github_pr_fetch_failed", {"error": str(e)})
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/github/prs/{pr_number}/reviews")
+async def get_pr_reviews(
+    pr_number: int,
+    user: dict = Depends(get_current_user),
+):
+    """Get reviews for a specific PR."""
+    return [
+        {
+            "id": 1,
+            "body": "Looks good! Approved.",
+            "state": "APPROVED",
+            "user": {"login": "reviewer1"},
+            "submitted_at": "2024-01-15T12:00:00Z",
+        }
+    ]
+
+
+@app.get("/api/github/prs/{pr_number}/comments")
+async def get_pr_comments(
+    pr_number: int,
+    user: dict = Depends(get_current_user),
+):
+    """Get review comments for a specific PR."""
+    return [
+        {
+            "id": 1,
+            "path": "src/main.py",
+            "line": 42,
+            "body": "Consider using a constant here.",
+            "user": {"login": "reviewer1"},
+            "created_at": "2024-01-15T11:30:00Z",
+        }
+    ]
+
+
+# Notification endpoints
+@app.get("/api/notifications/status")
+async def get_notifications_status(user: dict = Depends(get_current_user)):
+    """Get notification system status."""
+    from core.notifications import get_notification_manager
+    
+    manager = get_notification_manager()
+    return manager.get_status()
+
+
+@app.post("/api/notifications/test")
+async def test_notification(
+    channel: str = Body("slack"),
+    user: dict = Depends(get_current_user),
+):
+    """Send a test notification."""
+    from core.notifications import notify, NotificationChannel
+    
+    channel_map = {
+        "slack": NotificationChannel.SLACK,
+        "discord": NotificationChannel.DISCORD,
+    }
+    
+    result = await notify(
+        type="test",
+        title="Test Notification",
+        message="This is a test notification from AURA.",
+        priority="low",
+        channels=[channel_map.get(channel, NotificationChannel.LOG)],
+    )
+    
+    return {"status": "sent", "result": result}
+
+
+# Performance endpoints
+@app.get("/api/performance/stats")
+async def get_performance_stats(user: dict = Depends(get_current_user)):
+    """Get performance statistics."""
+    from core.cache import get_cache
+    from core.memory_profiler import get_memory_usage
+    
+    cache = get_cache()
+    
+    return {
+        "cache": cache.get_stats(),
+        "memory": get_memory_usage(),
+    }
+
+
+@app.post("/api/performance/cache/clear")
+async def clear_cache(user: dict = Depends(get_current_user)):
+    """Clear the application cache."""
+    from core.cache import get_cache
+    
+    cache = get_cache()
+    cache.clear()
+    
+    return {"status": "cleared"}
+
+
 # GitHub App webhook endpoint
 @app.post("/api/github/webhook")
 async def github_webhook(request: Request, x_github_event: str = Header(None), x_hub_signature_256: str = Header(None)):
@@ -1648,6 +1824,22 @@ async def github_webhook(request: Request, x_github_event: str = Header(None), x
     
     event_type = x_github_event or "unknown"
     result = github_app.handle_webhook(event_type, payload)
+    
+    # Broadcast PR events via WebSocket
+    if event_type in ["pull_request", "pull_request_review", "pull_request_review_comment"]:
+        pr_data = payload.get("pull_request", {})
+        await manager.broadcast({
+            "type": "github_pr_event",
+            "payload": {
+                "event": event_type,
+                "action": payload.get("action"),
+                "pr_number": pr_data.get("number"),
+                "pr_title": pr_data.get("title"),
+                "repo": payload.get("repository", {}).get("full_name"),
+                "sender": payload.get("sender", {}).get("login"),
+                "status": result.get("status"),
+            }
+        })
     
     log_json("INFO", "github_webhook_processed", {
         "event": event_type,

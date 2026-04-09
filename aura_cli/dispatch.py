@@ -6,6 +6,15 @@ from contextlib import redirect_stdout
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from agents.handlers import HANDLER_MAP, PHASE_MAP  # noqa: F401 — re-exported for callers
+from agents.handlers import (
+    run_planner_phase,    # noqa: F401 — re-exported for callers
+    run_coder_phase,      # noqa: F401 — re-exported for callers
+    run_critic_phase,     # noqa: F401 — re-exported for callers
+    run_debugger_phase,   # noqa: F401 — re-exported for callers
+    run_reflector_phase,  # noqa: F401 — re-exported for callers
+    run_applicator_phase,  # noqa: F401 — re-exported for callers
+)
 from agents.registry import default_agents
 from agents.scaffolder import ScaffolderAgent
 from aura_cli.cli_options import attach_cli_warnings, render_help, unknown_command_help_topic_payload
@@ -532,6 +541,39 @@ def _handle_scaffold_dispatch(ctx: DispatchContext) -> int:
     return 0
 
 
+def _resolve_evolve_agents(brain, model, orchestrator):
+    """Resolve (planner, coder, critic) agent instances for EvolutionLoop.
+
+    Prefers agents already attached to the orchestrator; falls back to
+    ``default_agents()`` construction.  Uses :data:`agents.handlers.PHASE_MAP`
+    as the canonical agent registry so the handler layer is the single source
+    of truth for per-phase wiring.
+    """
+    _agents = getattr(orchestrator, "agents", None) or default_agents(brain, model)
+    handler_context = {"brain": brain, "model": model}
+
+    # Prefer pre-wired orchestrator agents; fall back to handler-constructed ones.
+    def _unwrap(adapter):
+        return getattr(adapter, "agent", adapter)
+
+    coder_agent = _unwrap(_agents.get("act")) if _agents.get("act") else None
+    critic_agent = _unwrap(_agents.get("critique")) if _agents.get("critique") else None
+    planner_agent = _unwrap(_agents.get("plan")) if _agents.get("plan") else None
+
+    # If any agent is missing, lazily construct via handler context resolution.
+    if coder_agent is None:
+        from agents.handlers import coder as _ch
+        coder_agent = _ch._resolve_agent(handler_context)
+    if critic_agent is None:
+        from agents.handlers import critic as _cth
+        critic_agent = _cth._resolve_agent(handler_context)
+    if planner_agent is None:
+        from agents.handlers import planner as _ph
+        planner_agent = _ph._resolve_agent(handler_context)
+
+    return planner_agent, coder_agent, critic_agent
+
+
 def _handle_evolve_dispatch(ctx: DispatchContext) -> int:
     from core.evolution_loop import EvolutionLoop
     from agents.mutator import MutatorAgent
@@ -542,13 +584,17 @@ def _handle_evolve_dispatch(ctx: DispatchContext) -> int:
     _brain = runtime.get("brain") or Brain()
     _model = runtime["model_adapter"]
     _orchestrator = runtime.get("orchestrator")
-    _agents = getattr(_orchestrator, "agents", None) or default_agents(_brain, _model)
-    _coder_adapter = _agents.get("act")
-    _critic_adapter = _agents.get("critique")
-    _planner_adapter = _agents.get("plan")
-    _coder = getattr(_coder_adapter, "agent", _coder_adapter)
-    _critic = getattr(_critic_adapter, "agent", _critic_adapter)
-    _planner = getattr(_planner_adapter, "agent", _planner_adapter)
+
+    # Agent resolution is now routed through agents.handlers so that dispatch.py
+    # no longer directly instantiates per-phase agents.
+    log_json("INFO", "evolve_agent_resolve_start", details={"project_root": str(ctx.project_root)})
+    _planner, _coder, _critic = _resolve_evolve_agents(_brain, _model, _orchestrator)
+    log_json("INFO", "evolve_agent_resolve_done", details={
+        "planner": type(_planner).__name__,
+        "coder": type(_coder).__name__,
+        "critic": type(_critic).__name__,
+    })
+
     _git = GitTools(repo_path=str(ctx.project_root))
     _mutator = MutatorAgent(ctx.project_root)
     _vec = VectorStore(_model, _brain)

@@ -86,9 +86,11 @@ def _handle_readiness():
 
 
 def _handle_clear():
+    import subprocess
     import os
 
-    os.system("clear" if os.name == "posix" else "cls")
+    cmd = "clear" if os.name == "posix" else "cls"
+    subprocess.run([cmd], shell=False)  # noqa: S603
 
 
 def _handle_add(goal_queue: GoalQueue, command: str):

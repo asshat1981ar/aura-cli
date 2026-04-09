@@ -146,3 +146,6 @@ sdlc-orchestrator/.adk/logs/
 # ── swarm-mcp-server ─────────────────────────────────────────────────
 swarm-mcp-server/node_modules/
 swarm-mcp-server/dist/
+
+# ── detect-secrets baseline ─────────────────────────────────────────
+.secrets.baseline

@@ -336,6 +336,8 @@ async def _execute_run(req: ExecuteRequest):
         raise HTTPException(status_code=400, detail="Missing command in args")
     blocked_pattern = _is_denylisted_command(command)
     if blocked_pattern is not None:
+        if _PROMETHEUS_AVAILABLE:
+            sandbox_violations_total.labels(type="denylist").inc()
         raise HTTPException(status_code=403, detail=f"Command blocked by policy: {blocked_pattern}")
 
     async def run_generator():
@@ -713,6 +715,8 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
 
     # Fire-and-forget: run the cycle in background so n8n can poll /webhook/status
     async def _run_cycle() -> None:
+        if _PROMETHEUS_AVAILABLE:
+            active_pipeline_runs.inc()
         try:
             _webhook_goal_queue[goal_id]["status"] = "running"
             _webhook_goal_queue[goal_id]["started_at"] = time.time()
@@ -726,6 +730,8 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
                 "result": result,
                 "completed_at": time.time(),
             })
+            if _PROMETHEUS_AVAILABLE:
+                pipeline_runs_total.labels(status="success").inc()
         except Exception as exc:
             _webhook_goal_queue[goal_id].update({
                 "status": "failed",
@@ -733,6 +739,11 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
                 "completed_at": time.time(),
             })
             log_json("WARN", "aura_webhook_goal_failed", details={"goal_id": goal_id, "error": str(exc)})
+            if _PROMETHEUS_AVAILABLE:
+                pipeline_runs_total.labels(status="failure").inc()
+        finally:
+            if _PROMETHEUS_AVAILABLE:
+                active_pipeline_runs.dec()
 
     asyncio.create_task(_run_cycle())
     return {"status": "queued", "goal_id": goal_id}

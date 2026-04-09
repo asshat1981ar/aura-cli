@@ -66,7 +66,7 @@ class LLMBrainstormingClient:
     def _generate_cache_key(self, problem: str, technique: str, context: str = "") -> str:
         """Generate cache key for problem + technique combination."""
         key_data = f"{problem}|{technique}|{context}"
-        return hashlib.md5(key_data.encode()).hexdigest()
+        return hashlib.md5(key_data.encode(), usedforsecurity=False).hexdigest()
     
     def generate_ideas(
         self,

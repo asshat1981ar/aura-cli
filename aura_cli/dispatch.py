@@ -1339,10 +1339,12 @@ def _handle_agent_run_dispatch(ctx: DispatchContext) -> int:
 
 
 def _handle_agent_list_dispatch(ctx: DispatchContext) -> int:
-    """List all registered AURA agents with their type and status."""
-    from agents.registry import default_agents
+    """List all registered AURA agents with their type and status.
 
-    agents = default_agents()
+    Uses the static registry metadata so that no runtime initialisation is
+    required — the command is fast even without API keys or a running model.
+    """
+    from agents.registry import _AGENT_MODULE_MAP, FALLBACK_CAPABILITIES
 
     try:
         from rich.table import Table
@@ -1351,29 +1353,30 @@ def _handle_agent_list_dispatch(ctx: DispatchContext) -> int:
         console = Console()
         table = Table(title="Registered AURA Agents")
         table.add_column("Name", style="cyan")
-        table.add_column("Type", style="green")
-        table.add_column("Status", style="yellow")
-        table.add_column("Last Active", style="dim")
+        table.add_column("Class", style="green")
+        table.add_column("Module", style="dim")
+        table.add_column("Primary Capability", style="yellow")
 
-        for name, agent in agents.items():
-            agent_type = type(agent).__name__
-            status = str(getattr(agent, "status", "idle"))
-            last_active = str(getattr(agent, "last_active_at", "Never"))
-            table.add_row(name, agent_type, status, last_active)
+        for name, (module_path, class_name) in _AGENT_MODULE_MAP.items():
+            caps = FALLBACK_CAPABILITIES.get(name, [name])
+            primary_cap = caps[0] if caps else "-"
+            table.add_row(name, class_name, module_path, primary_cap)
 
         console.print(table)
+        console.print(f"\n[dim]Total: {len(_AGENT_MODULE_MAP)} registered agents[/dim]")
+
     except ImportError:
         # Fallback plain-text output when rich is not installed.
         print("Registered AURA Agents")
-        print(f"{'Name':<25} {'Type':<30} {'Status':<10} {'Last Active'}")
+        print(f"{'Name':<25} {'Class':<30} {'Primary Capability'}")
         print("-" * 80)
-        for name, agent in agents.items():
-            agent_type = type(agent).__name__
-            status = str(getattr(agent, "status", "idle"))
-            last_active = str(getattr(agent, "last_active_at", "Never"))
-            print(f"{name:<25} {agent_type:<30} {status:<10} {last_active}")
+        for name, (module_path, class_name) in _AGENT_MODULE_MAP.items():
+            caps = FALLBACK_CAPABILITIES.get(name, [name])
+            primary_cap = caps[0] if caps else "-"
+            print(f"{name:<25} {class_name:<30} {primary_cap}")
+        print(f"\nTotal: {len(_AGENT_MODULE_MAP)} registered agents")
 
-    log_json("INFO", "agent_list_displayed", details={"count": len(agents)})
+    log_json("INFO", "agent_list_displayed", details={"count": len(_AGENT_MODULE_MAP)})
     return 0
 
 

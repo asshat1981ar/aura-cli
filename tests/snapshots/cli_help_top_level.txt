@@ -23,6 +23,7 @@ Commands:
   sadd         [EXPERIMENTAL] Sub-Agent Driven Development
   innovate     Innovation Catalyst session management
   agent        Agent SDK commands
+  credentials  Secure credential management
 
 Examples:
   python3 main.py goal add "Refactor queue" --run

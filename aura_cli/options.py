@@ -61,7 +61,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("contract-report",),
         summary="[EXPERIMENTAL] Print CLI contract report",
-        description="Print aggregated parser/help/schema/dispatch contract checks as JSON.",
+        description="[EXPERIMENTAL] Print aggregated parser/help/schema/dispatch contract checks as JSON.",
         examples=(
             "python3 main.py contract-report --check",
             "python3 main.py contract-report --compact",
@@ -86,7 +86,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("watch",),
         summary="[EXPERIMENTAL] Launch TUI monitor",
-        description="Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.",
+        description="[EXPERIMENTAL] Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.",
         examples=(
             "python3 main.py watch",
             "python3 main.py watch --autonomous",
@@ -95,7 +95,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("studio",),
         summary="[EXPERIMENTAL] Launch AURA Studio",
-        description="Launch the rich real-time dashboard. Use --autonomous to start the goal loop.",
+        description="[EXPERIMENTAL] Launch the rich real-time dashboard. Use --autonomous to start the goal loop.",
         examples=(
             "python3 main.py studio",
             "python3 main.py studio --autonomous",
@@ -582,6 +582,9 @@ _ACTION_SMOKE_OVERRIDES: dict[str, tuple[str, ...]] = {
     "innovate_export": ("innovate", "export", "--session-id", "example-id"),
     "innovate_to_goals": ("innovate", "to-goals", "--session-id", "example-id"),
     "mcp_restart": ("mcp", "restart", "dev_tools"),
+    # Security Issue #427: Credential command smoke overrides
+    "credentials_store": ("credentials", "store", "--key", "example_key", "--value", "example_value"),
+    "credentials_delete": ("credentials", "delete", "--key", "example_key", "--yes"),
 }
 
 _SMOKE_POSITIONAL_ARGS_BY_PATH: dict[tuple[str, ...], tuple[str, ...]] = {

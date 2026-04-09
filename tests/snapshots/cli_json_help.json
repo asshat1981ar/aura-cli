@@ -100,7 +100,7 @@
     },
     {
       "action": "contract_report",
-      "description": "Print aggregated parser/help/schema/dispatch contract checks as JSON.",
+      "description": "[EXPERIMENTAL] Print aggregated parser/help/schema/dispatch contract checks as JSON.",
       "examples": [
         "python3 main.py contract-report --check",
         "python3 main.py contract-report --compact"
@@ -156,7 +156,7 @@
     },
     {
       "action": "watch",
-      "description": "Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.",
+      "description": "[EXPERIMENTAL] Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.",
       "examples": [
         "python3 main.py watch",
         "python3 main.py watch --autonomous"
@@ -171,7 +171,7 @@
     },
     {
       "action": "studio",
-      "description": "Launch the rich real-time dashboard. Use --autonomous to start the goal loop.",
+      "description": "[EXPERIMENTAL] Launch the rich real-time dashboard. Use --autonomous to start the goal loop.",
       "examples": [
         "python3 main.py studio",
         "python3 main.py studio --autonomous"

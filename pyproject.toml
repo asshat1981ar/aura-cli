@@ -24,7 +24,7 @@ classifiers = [
 dependencies = [
     "fastapi==0.135.1",
     "uvicorn==0.44.0",
-    "requests==2.32.5",
+    "requests>=2.33.0",
     "pydantic==2.12.5",
     "python-dotenv",
     "numpy",
@@ -32,13 +32,17 @@ dependencies = [
     "rich",
     "textblob",
     "networkx",
+    # Explicit lower bounds for CVE remediation
+    "Jinja2>=3.1.6",
+    "tornado>=6.5.5",
+    "future>=0.18.3",
     "typer>=0.12.0",
     "pyautogen>=0.2.0,<0.11",
     "openapi_spec_validator>=0.7.0",
     "jsonschema>=4.0.0",
     # Security Issue #427: Secure credential storage
     "keyring>=24.0.0",
-    "cryptography>=42.0.0",
+    "cryptography>=46.0.7",
     "PyJWT>=2.8.0",
 ]
 

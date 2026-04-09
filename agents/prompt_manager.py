@@ -45,7 +45,7 @@ class PromptCache:
     def _make_key(self, template_name: str, params: tuple) -> str:
         """Create cache key from template name and parameters."""
         key_data = f"{template_name}:{hash(params)}"
-        return hashlib.md5(key_data.encode()).hexdigest()
+        return hashlib.md5(key_data.encode(), usedforsecurity=False).hexdigest()
     
     def get(self, template_name: str, params: dict) -> Optional[str]:
         """Get cached prompt if available and not expired."""

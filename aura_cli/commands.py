@@ -1195,3 +1195,167 @@ def _print_global_insights(insights):
 
 def _handle_exit():
     log_json("INFO", "aura_cli_exit")
+
+
+def _handle_migrate_credentials(args, config_manager=None):
+    """
+    Handle the credentials migration command.
+    
+    Security Issue #427: Migrate API keys from plaintext to secure storage.
+    
+    Args:
+        args: CLI arguments
+        config_manager: Optional ConfigManager instance
+    """
+    from core.config_manager import ConfigManager
+    
+    log_json("INFO", "credential_migration_command_invoked")
+    
+    # Get config manager
+    if config_manager is None:
+        config_manager = ConfigManager()
+    
+    # Check if credential store is available
+    store_info = config_manager.get_credential_store_info()
+    
+    print("\n--- AURA Credentials Migration ---")
+    print("Migrate API keys from plaintext config to secure storage.\n")
+    
+    # Show current storage status
+    print("Storage Configuration:")
+    print(f"  Keyring Available: {'✅ Yes' if store_info['keyring_available'] else '❌ No'}")
+    print(f"  Fallback Available: {'✅ Yes' if store_info['fallback_available'] else '❌ No'}")
+    print(f"  Fallback Path: {store_info['fallback_path']}")
+    print()
+    
+    # Dry run first to show what would be migrated
+    print("Scanning for credentials to migrate...")
+    dry_run_results = config_manager.migrate_credentials(dry_run=True)
+    
+    if dry_run_results["migrated"]:
+        print(f"\nFound {len(dry_run_results['migrated'])} credential(s) to migrate:")
+        for key in dry_run_results["migrated"]:
+            print(f"  - {key}")
+    else:
+        print("\nNo credentials found to migrate.")
+    
+    if dry_run_results["already_secure"]:
+        print(f"\nAlready in secure storage: {', '.join(dry_run_results['already_secure'])}")
+    
+    # Confirm if not --yes flag
+    execute_migration = getattr(args, "yes", False)
+    
+    if dry_run_results["migrated"] and not execute_migration:
+        print()
+        try:
+            response = input("Proceed with migration? [y/N]: ").strip().lower()
+            execute_migration = response in ("y", "yes")
+        except EOFError:
+            print("Migration cancelled (non-interactive mode). Use --yes to force.")
+            return
+    
+    if not execute_migration or not dry_run_results["migrated"]:
+        if not dry_run_results["migrated"]:
+            print("\n✅ Nothing to migrate.")
+        else:
+            print("\n❌ Migration cancelled.")
+        return
+    
+    # Execute migration
+    print("\nMigrating credentials...")
+    results = config_manager.migrate_credentials(dry_run=False)
+    
+    # Show results
+    if results["migrated"]:
+        print(f"\n✅ Successfully migrated {len(results['migrated'])} credential(s):")
+        for key in results["migrated"]:
+            print(f"  - {key}")
+    
+    if results["errors"]:
+        print(f"\n❌ Errors ({len(results['errors'])}):")
+        for key, error in results["errors"].items():
+            print(f"  - {key}: {error}")
+    
+    print("\nMigration complete.")
+    print("Your API keys are now stored securely.")
+    print()
+    print("Note: You can verify the migration with:")
+    print("  python3 main.py config show --secure-status")
+
+
+def _handle_secure_store(args, config_manager=None):
+    """
+    Handle the secure-store command for storing individual credentials.
+    
+    Args:
+        args: CLI arguments
+        config_manager: Optional ConfigManager instance
+    """
+    from core.config_manager import ConfigManager
+    
+    if config_manager is None:
+        config_manager = ConfigManager()
+    
+    key = getattr(args, "key", None)
+    value = getattr(args, "value", None)
+    
+    if not key:
+        print("Error: --key is required")
+        return
+    
+    # Interactive value input if not provided
+    if not value:
+        import getpass
+        value = getpass.getpass(f"Enter value for {key}: ")
+    
+    if not value:
+        print("Error: value is required")
+        return
+    
+    success = config_manager.secure_store_credential(key, value)
+    
+    if success:
+        print(f"✅ Credential '{key}' stored securely.")
+        log_json("INFO", "credential_stored_via_cli", details={"key": key})
+    else:
+        print(f"❌ Failed to store credential '{key}'.")
+        log_json("ERROR", "credential_store_via_cli_failed", details={"key": key})
+
+
+def _handle_secure_delete(args, config_manager=None):
+    """
+    Handle the secure-delete command for removing credentials.
+    
+    Args:
+        args: CLI arguments
+        config_manager: Optional ConfigManager instance
+    """
+    from core.config_manager import ConfigManager
+    
+    if config_manager is None:
+        config_manager = ConfigManager()
+    
+    key = getattr(args, "key", None)
+    
+    if not key:
+        print("Error: --key is required")
+        return
+    
+    # Confirm deletion
+    if not getattr(args, "yes", False):
+        try:
+            response = input(f"Delete credential '{key}'? [y/N]: ").strip().lower()
+            if response not in ("y", "yes"):
+                print("Deletion cancelled.")
+                return
+        except EOFError:
+            print("Deletion cancelled (non-interactive mode). Use --yes to force.")
+            return
+    
+    success = config_manager.secure_delete_credential(key)
+    
+    if success:
+        print(f"✅ Credential '{key}' deleted.")
+        log_json("INFO", "credential_deleted_via_cli", details={"key": key})
+    else:
+        print(f"❌ Failed to delete credential '{key}' (may not exist).")

@@ -59,6 +59,9 @@ os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 
+# R8: Import centralized MCP auth
+from tools.mcp_auth import require_agentic_loop_auth
+
 from core.logging_utils import log_json
 from core.mcp_contracts import (
     build_discovery_payload,
@@ -90,16 +93,15 @@ _call_errors: Dict[str, int] = {}
 
 
 # ---------------------------------------------------------------------------
-# Auth
+# Auth (R8: Updated to use centralized MCP auth)
 # ---------------------------------------------------------------------------
 
-def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
-    if not _TOKEN:
-        return
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing Authorization header.")
-    if authorization.removeprefix("Bearer ").strip() != _TOKEN:
-        raise HTTPException(status_code=403, detail="Invalid token.")
+def _check_auth(
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(default=None),
+) -> str:
+    """Validate API key using centralized auth."""
+    return require_agentic_loop_auth(x_api_key, authorization)
 
 
 # ---------------------------------------------------------------------------
@@ -502,7 +504,7 @@ _TOOL_HANDLERS: Dict[str, Any] = {
 # ---------------------------------------------------------------------------
 
 @app.get("/health")
-async def health(_: None = Depends(_check_auth)) -> Dict:
+async def health(auth: str = Depends(require_agentic_loop_auth)) -> Dict:
     engine = get_engine()
     execs = engine.list_executions()
     loops = engine.list_loops()
@@ -520,7 +522,7 @@ async def health(_: None = Depends(_check_auth)) -> Dict:
 
 
 @app.get("/discovery")
-async def discovery(_: None = Depends(_check_auth)) -> Dict:
+async def discovery(auth: str = Depends(require_agentic_loop_auth)) -> Dict:
     return build_discovery_payload(
         current_server=get_registered_service("agentic_loop"),
         servers=list_registered_services(),
@@ -529,29 +531,29 @@ async def discovery(_: None = Depends(_check_auth)) -> Dict:
 
 
 @app.get("/tools")
-async def list_tools(_: None = Depends(_check_auth)) -> Dict:
+async def list_tools(auth: str = Depends(require_agentic_loop_auth)) -> Dict:
     return {"tools": build_tool_descriptors_from_schemas(_TOOL_SCHEMAS)}
 
 
 @app.get("/tool/{name}")
-async def get_tool(name: str, _: None = Depends(_check_auth)) -> Dict:
+async def get_tool(name: str, auth: str = Depends(require_agentic_loop_auth)) -> Dict:
     if name not in _TOOL_SCHEMAS:
         raise HTTPException(status_code=404, detail=f"Tool '{name}' not found.")
     return _build_descriptor(name)
 
 
 @app.get("/workflows")
-async def list_workflows_route(_: None = Depends(_check_auth)) -> Dict:
+async def list_workflows_route(auth: str = Depends(require_agentic_loop_auth)) -> Dict:
     return {"workflows": get_engine().list_definitions()}
 
 
 @app.get("/loops")
-async def list_loops_route(status: Optional[str] = None, _: None = Depends(_check_auth)) -> Dict:
+async def list_loops_route(status: Optional[str] = None, auth: str = Depends(require_agentic_loop_auth)) -> Dict:
     return {"loops": get_engine().list_loops(status_filter=status)}
 
 
 @app.post("/call")
-async def call_tool(request: ToolCallRequest, _: None = Depends(_check_auth)) -> ToolResult:
+async def call_tool(request: ToolCallRequest, auth: str = Depends(require_agentic_loop_auth)) -> ToolResult:
     name = request.tool_name
     handler = _TOOL_HANDLERS.get(name)
     if not handler:
@@ -580,7 +582,7 @@ async def call_tool(request: ToolCallRequest, _: None = Depends(_check_auth)) ->
 
 
 @app.get("/metrics")
-async def get_metrics(_: None = Depends(_check_auth)) -> Dict:
+async def get_metrics(auth: str = Depends(require_agentic_loop_auth)) -> Dict:
     total_calls = sum(_call_counts.values())
     total_errors = sum(_call_errors.values())
     engine = get_engine()
@@ -608,6 +610,9 @@ async def get_metrics(_: None = Depends(_check_auth)) -> Dict:
 if __name__ == "__main__":
     import uvicorn
     from core.config_manager import config as _cfg
+    from tools.mcp_auth import is_auth_enabled
     # R4: port from config registry; env var still overrides for backward-compat
     port = int(os.getenv("AGENTIC_LOOP_PORT", _cfg.get_mcp_server_port("agentic_loop")))
+    auth_enabled = is_auth_enabled("agentic_loop")
+    print(f"[MCP agentic_loop] Starting on port {port} (auth: {'enabled' if auth_enabled else 'optional'})")
     uvicorn.run("tools.agentic_loop_mcp:app", host="0.0.0.0", port=port, reload=False)

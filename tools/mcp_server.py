@@ -28,6 +28,9 @@ from typing import Any, Dict, List, Optional
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+
+# R8: Import centralized MCP auth
+from tools.mcp_auth import require_dev_tools_auth
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -130,33 +133,31 @@ app = FastAPI(title="AURA MCP Server", version="0.2.0", lifespan=_lifespan)
 
 
 # ---------------------------------------------------------------------------
-# Auth
+# Auth (R8: Updated to use centralized MCP auth)
 # ---------------------------------------------------------------------------
 
 
 def _require_auth(
     request: Request,
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
     authorization: Optional[str] = Header(default=None),
 ) -> str:
-    """Validate bearer token; fail closed; rate-limit all auth attempts."""
+    """Validate API key using centralized auth; fail closed; rate-limit all auth attempts.
+    
+    Supports:
+    - X-API-Key header (preferred)
+    - Authorization: Bearer <token> (legacy)
+    """
     client_id = request.client.host if request.client else "unknown"
     _check_rate_limit(f"auth:{client_id}")
 
-    token = os.getenv("MCP_API_TOKEN", "").strip()
-    if not token:
-        raise HTTPException(status_code=503, detail="Authentication not configured")
-
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing Authorization header")
-
-    parts = authorization.split(" ", 1)
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(status_code=401, detail="Invalid Authorization scheme")
-
-    if not hmac.compare_digest(parts[1], token):
-        raise HTTPException(status_code=403, detail="Invalid token")
-
-    return parts[1]
+    # Use centralized auth validator
+    try:
+        return require_dev_tools_auth(x_api_key, authorization)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Auth error: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -257,7 +258,22 @@ TOOLS_MANIFEST: List[Dict[str, str]] = [
 
 
 @app.get("/health")
-async def health(auth: str = Depends(_require_auth)):
+async def health(auth: str = Depends(require_dev_tools_auth)): 
+    """Return server health, current limits, and runtime metrics."""
+    auth_status = "enabled" if os.getenv("MCP_DEV_TOOLS_API_KEY") or os.getenv("MCP_API_TOKEN") else "disabled"
+    return {
+        "status": "ok",
+        "auth": auth_status,
+        "limits": {
+            "max_read_bytes": MAX_READ_BYTES,
+            "rate_limit_per_min": RATE_LIMIT_PER_MIN,
+            "compress_max_bytes": COMPRESS_MAX_BYTES,
+        },
+        "metrics": {
+            "enable_write": ENABLE_WRITE,
+            "enable_run": ENABLE_RUN,
+        },
+    }
     """Return server health, current limits, and runtime metrics."""
     return {
         "status": "ok",
@@ -274,13 +290,13 @@ async def health(auth: str = Depends(_require_auth)):
 
 
 @app.get("/tools")
-async def tools_list(auth: str = Depends(_require_auth)):
+async def tools_list(auth: str = Depends(require_dev_tools_auth)):
     """Return the full list of available tools."""
     return {"data": {"tools": TOOLS_MANIFEST}}
 
 
 @app.post("/call")
-async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # noqa: C901
+async def call_tool(req: CallRequest, auth: str = Depends(require_dev_tools_auth)):  # noqa: C901
     """Dispatch a tool call by name and return its result under ``data``."""
     name = req.tool_name
     args = req.args
@@ -752,4 +768,10 @@ if __name__ == "__main__":
 
     # R4: port from config registry; env var PORT still overrides for backward-compat
     port = int(os.getenv("PORT", _cfg.get_mcp_server_port("dev_tools")))
+    
+    # R8: Log auth status on startup
+    from tools.mcp_auth import is_auth_enabled
+    auth_enabled = is_auth_enabled("dev_tools")
+    print(f"[MCP dev_tools] Starting on port {port} (auth: {'enabled' if auth_enabled else 'optional'})")
+    
     uvicorn.run(app, host="0.0.0.0", port=port)

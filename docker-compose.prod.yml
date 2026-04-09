@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  api:
+    image: ghcr.io/asshat1981ar/aura-cli:${VERSION:-latest}
+    restart: unless-stopped
+    user: "1000:1000"
+    read_only: false  # SQLite needs writes; only web container is read-only
+    environment:
+      - AURA_ENV=production
+      - AURA_LOG_LEVEL=info
+      - AGENT_API_ENABLE_RUN=1
+    env_file:
+      - .env.n8n
+    ports:
+      - "8001:8001"
+    volumes:
+      - aura-memory:/app/memory
+      - aura-logs:/app/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  aura-memory:
+  aura-logs:
+  redis-data:

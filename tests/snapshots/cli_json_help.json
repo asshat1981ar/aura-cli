@@ -77,7 +77,7 @@
         "bootstrap"
       ],
       "requires_runtime": false,
-      "summary": "Create default config"
+      "summary": "[EXPERIMENTAL] Create default config"
     },
     {
       "action": "show_config",
@@ -116,7 +116,7 @@
         "contract-report"
       ],
       "requires_runtime": false,
-      "summary": "Print CLI contract report"
+      "summary": "[EXPERIMENTAL] Print CLI contract report"
     },
     {
       "action": "diag",
@@ -137,7 +137,7 @@
         "diag"
       ],
       "requires_runtime": false,
-      "summary": "MCP diagnostics snapshot"
+      "summary": "[EXPERIMENTAL] MCP diagnostics snapshot"
     },
     {
       "action": "logs",
@@ -167,7 +167,7 @@
         "watch"
       ],
       "requires_runtime": true,
-      "summary": "Launch TUI monitor"
+      "summary": "[EXPERIMENTAL] Launch TUI monitor"
     },
     {
       "action": "studio",
@@ -182,7 +182,7 @@
         "studio"
       ],
       "requires_runtime": true,
-      "summary": "Launch AURA Studio"
+      "summary": "[EXPERIMENTAL] Launch AURA Studio"
     },
     {
       "action": null,
@@ -346,7 +346,7 @@
         "run"
       ],
       "requires_runtime": true,
-      "summary": "Run a workflow goal"
+      "summary": "[EXPERIMENTAL] Run a workflow goal"
     },
     {
       "action": null,
@@ -382,7 +382,7 @@
         "tools"
       ],
       "requires_runtime": false,
-      "summary": "List MCP tools"
+      "summary": "[EXPERIMENTAL] List MCP tools"
     },
     {
       "action": "mcp_call",
@@ -405,7 +405,7 @@
         "call"
       ],
       "requires_runtime": false,
-      "summary": "Call an MCP tool"
+      "summary": "[EXPERIMENTAL] Call an MCP tool"
     },
     {
       "action": "mcp_status",
@@ -619,7 +619,7 @@
         "search"
       ],
       "requires_runtime": true,
-      "summary": "Search semantic memory"
+      "summary": "[EXPERIMENTAL] Search semantic memory"
     },
     {
       "action": "memory_reindex",
@@ -640,7 +640,7 @@
         "reindex"
       ],
       "requires_runtime": true,
-      "summary": "Rebuild semantic memory embeddings"
+      "summary": "[EXPERIMENTAL] Rebuild semantic memory embeddings"
     },
     {
       "action": "metrics_show",
@@ -675,7 +675,7 @@
         "sadd"
       ],
       "requires_runtime": null,
-      "summary": "Sub-Agent Driven Development"
+      "summary": "[EXPERIMENTAL] Sub-Agent Driven Development"
     },
     {
       "action": "sadd_run",
@@ -955,6 +955,122 @@
       ],
       "requires_runtime": true,
       "summary": "Run goal via Agent SDK meta-controller"
+    },
+    {
+      "action": null,
+      "description": "Display all registered AURA agents, their type, and status.",
+      "examples": [
+        "python3 main.py agent list"
+      ],
+      "flags": [],
+      "legacy_flags": [],
+      "path": [
+        "agent",
+        "list"
+      ],
+      "requires_runtime": null,
+      "summary": "List registered agents"
+    },
+    {
+      "action": null,
+      "description": "Manage API keys and credentials in secure storage (OS keyring or encrypted file).",
+      "examples": [
+        "python3 main.py credentials migrate",
+        "python3 main.py credentials migrate --yes",
+        "python3 main.py credentials store --key api_key",
+        "python3 main.py credentials delete --key api_key --yes"
+      ],
+      "flags": [],
+      "legacy_flags": [],
+      "path": [
+        "credentials"
+      ],
+      "requires_runtime": null,
+      "summary": "Secure credential management"
+    },
+    {
+      "action": "credentials_migrate",
+      "description": "Migrate API keys from plaintext aura.config.json to secure credential store (OS keyring).",
+      "examples": [
+        "python3 main.py credentials migrate",
+        "python3 main.py credentials migrate --yes"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "credentials",
+        "migrate"
+      ],
+      "requires_runtime": false,
+      "summary": "Migrate credentials to secure storage"
+    },
+    {
+      "action": "credentials_store",
+      "description": "Store an API key or credential in the secure credential store.",
+      "examples": [
+        "python3 main.py credentials store --key api_key",
+        "python3 main.py credentials store --key api_key --value sk-xxx"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "credentials",
+        "store"
+      ],
+      "requires_runtime": false,
+      "summary": "Store a credential securely"
+    },
+    {
+      "action": "credentials_delete",
+      "description": "Remove a credential from the secure credential store.",
+      "examples": [
+        "python3 main.py credentials delete --key api_key",
+        "python3 main.py credentials delete --key api_key --yes"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "credentials",
+        "delete"
+      ],
+      "requires_runtime": false,
+      "summary": "Delete a stored credential"
+    },
+    {
+      "action": "credentials_status",
+      "description": "Display information about the credential store configuration and stored credentials.",
+      "examples": [
+        "python3 main.py credentials status",
+        "python3 main.py credentials status --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "credentials",
+        "status"
+      ],
+      "requires_runtime": false,
+      "summary": "Show credential storage status"
     }
   ],
   "deterministic": true,

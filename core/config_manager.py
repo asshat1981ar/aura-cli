@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple, Set
 from core.logging_utils import log_json
 from core.exceptions import ConfigurationError
 from core.config_schema import ConfigValidator, is_pydantic_available
+from core.credential_store import CredentialStore, get_credential_store
 
 # ---------------------------------------------------------------------------
 # Value validators — each returns (is_valid: bool, coerced_value, reason: str)
@@ -151,6 +152,14 @@ DEFAULT_CONFIG = {
         "agentic_loop": 8006,
         "copilot": 8007,
     },
+    # R8: MCP server API keys (optional, for authenticated access)
+    "mcp_server_api_keys": {
+        "dev_tools": None,
+        "skills": None,
+        "control": None,
+        "agentic_loop": None,
+        "copilot": None,
+    },
     # ASCM v2 Configuration
     "semantic_memory": {
         "enabled": True,
@@ -167,9 +176,27 @@ DEFAULT_CONFIG = {
 class ConfigManager:
     """
     Unified Control Plane: Centralized configuration manager for AURA.
-    Enforces a tiered strategy: (Overrides > ENV > JSON > Defaults).
+    Enforces a tiered strategy: (Overrides > ENV > Credential Store > JSON > Defaults).
+    
+    Security Issue #427: API keys are now retrieved from secure credential store
+    (OS keyring) when available, falling back to environment variables and config file.
     """
-    def __init__(self, config_file=None, overrides: Optional[Dict[str, Any]] = None):
+    
+    # Keys that should be retrieved from secure credential store
+    SECURE_CONFIG_KEYS = {
+        "api_key",
+        "openai_api_key",
+        "anthropic_api_key",
+        "github_token",
+        "azure_api_key",
+    }
+    
+    def __init__(
+        self,
+        config_file=None,
+        overrides: Optional[Dict[str, Any]] = None,
+        credential_store: Optional[CredentialStore] = None,
+    ):
         # Look for settings.json first, then aura.config.json
         if config_file:
             self.config_file = Path(config_file)
@@ -181,6 +208,9 @@ class ConfigManager:
         self.runtime_overrides = overrides or {}
         self.file_config = {}
         self.effective_config = {}
+        
+        # Initialize credential store for secure config values
+        self._credential_store = credential_store or get_credential_store()
         
         self.refresh()
 
@@ -327,10 +357,12 @@ class ConfigManager:
             merged["local_model_routing"].update(self.file_config["local_model_routing"])
         if "mcp_servers" in self.file_config:
             merged["mcp_servers"].update(self.file_config["mcp_servers"])
+        if "mcp_server_api_keys" in self.file_config:
+            merged["mcp_server_api_keys"].update(self.file_config["mcp_server_api_keys"])
             
         # Update other top-level keys
         for k, v in self.file_config.items():
-            if k not in ["beads", "model_routing", "semantic_memory", "local_model_profiles", "local_model_routing", "mcp_servers"]:
+            if k not in ["beads", "model_routing", "semantic_memory", "local_model_profiles", "local_model_routing", "mcp_servers", "mcp_server_api_keys"]:
                 merged[k] = v
         
         # Merge ENV (env_config already has merged sub-dicts)
@@ -344,9 +376,11 @@ class ConfigManager:
             merged["local_model_routing"].update(env_config["local_model_routing"])
         if "mcp_servers" in env_config:
             merged["mcp_servers"].update(env_config["mcp_servers"])
+        if "mcp_server_api_keys" in env_config:
+            merged["mcp_server_api_keys"].update(env_config["mcp_server_api_keys"])
             
         for k, v in env_config.items():
-            if k not in ["beads", "model_routing", "semantic_memory", "local_model_routing", "mcp_servers"]:
+            if k not in ["beads", "model_routing", "semantic_memory", "local_model_routing", "mcp_servers", "mcp_server_api_keys"]:
                 merged[k] = v
                 
         merged.update(self.runtime_overrides)
@@ -388,7 +422,46 @@ class ConfigManager:
         return default
 
     def get(self, key: str, default: Any = None) -> Any:
-        """Retrieves a configuration value from the effective config."""
+        """
+        Retrieves a configuration value from the effective config.
+        
+        For sensitive keys (api_key, openai_api_key, anthropic_api_key, etc.),
+        checks the secure credential store first before falling back to config.
+        
+        Priority order:
+        1. Runtime overrides
+        2. Environment variables
+        3. Secure credential store (for sensitive keys)
+        4. Config file
+        5. Default values
+        
+        Security Issue #427: Secure credential storage integration
+        """
+        # Check for sensitive keys in credential store
+        if key in self.SECURE_CONFIG_KEYS:
+            # Priority 1: Runtime overrides
+            if key in self.runtime_overrides:
+                return self._validate_value(key, self.runtime_overrides[key]) \
+                    if key in _KEY_VALIDATORS else self.runtime_overrides[key]
+            
+            # Priority 2: Environment variables
+            env_key = f"AURA_{key.upper()}"
+            env_value = os.environ.get(env_key) or os.environ.get(key.upper())
+            if env_value:
+                return self._validate_value(key, env_value) \
+                    if key in _KEY_VALIDATORS else env_value
+            
+            # Priority 3: Secure credential store
+            credential_value = self._credential_store.retrieve(key)
+            if credential_value:
+                return self._validate_value(key, credential_value) \
+                    if key in _KEY_VALIDATORS else credential_value
+            
+            # Priority 4: Config file / defaults
+            val = self.effective_config.get(key, default)
+            return self._validate_value(key, val) if key in _KEY_VALIDATORS else val
+        
+        # Non-sensitive keys: use normal retrieval
         val = self.effective_config.get(key, default)
         return self._validate_value(key, val) if key in _KEY_VALIDATORS else val
 
@@ -407,7 +480,7 @@ class ConfigManager:
         Supports deep merging for nested config groups.
         """
         for k, v in updates.items():
-            if k in ["beads", "model_routing", "semantic_memory", "local_model_profiles", "local_model_routing"] and isinstance(v, dict):
+            if k in ["beads", "model_routing", "semantic_memory", "local_model_profiles", "local_model_routing", "mcp_server_api_keys"] and isinstance(v, dict):
                 if k not in self.file_config:
                     self.file_config[k] = {}
                 self.file_config[k].update(v)
@@ -460,6 +533,51 @@ class ConfigManager:
                 )
             return int(default_registry[server_name])
         return int(registry[server_name])
+
+    def get_mcp_server_api_key(self, server_name: str) -> Optional[str]:
+        """R8: Return the configured API key for a named MCP server.
+
+        Falls back to environment variables following the pattern:
+        - MCP_<SERVER_NAME>_API_KEY (e.g., MCP_DEV_TOOLS_API_KEY)
+        - Legacy: MCP_API_TOKEN for dev_tools
+
+        Args:
+            server_name: One of ``dev_tools``, ``skills``, ``control``,
+                         ``agentic_loop``, or ``copilot``.
+
+        Returns:
+            API key string or None if not configured.
+
+        Raises:
+            ConfigurationError: For unknown server names.
+        """
+        # Validate server name
+        default_registry = DEFAULT_CONFIG.get("mcp_servers", {})
+        if server_name not in default_registry:
+            raise ConfigurationError(
+                f"Unknown MCP server name '{server_name}'. "
+                f"Known servers: {list(default_registry.keys())}"
+            )
+        
+        # 1. Check environment variable (highest priority)
+        env_var = f"MCP_{server_name.upper()}_API_KEY"
+        env_key = os.getenv(env_var, "").strip()
+        if env_key:
+            return env_key
+        
+        # 2. Check config file
+        key_registry: dict = self.effective_config.get("mcp_server_api_keys", {})
+        cfg_key = key_registry.get(server_name)
+        if cfg_key:
+            return cfg_key
+        
+        # 3. Legacy fallback for dev_tools
+        if server_name == "dev_tools":
+            legacy_token = os.getenv("MCP_API_TOKEN", "").strip()
+            if legacy_token:
+                return legacy_token
+        
+        return None
 
     def check_port_available(self, port: int, host: str = "0.0.0.0", strict: bool = False) -> bool:
         """Check if a TCP port is available for binding.
@@ -629,8 +747,13 @@ class ConfigManager:
         """Interactively guides the user through setting up AURA configuration."""
         print("\n--- AURA Interactive Bootstrap ---")
         print("This will create or update your aura.config.json file.")
+        print("Note: API keys can be stored securely in your OS keyring.")
         
         try:
+            # Ask about secure storage preference
+            use_secure = input("Store API keys in secure credential store? [Y/n]: ").strip().lower()
+            store_securely = use_secure in ("", "y", "yes")
+            
             # 1. API Key
             current_key = self.get("api_key")
             if current_key and current_key not in ["YOUR_API_KEY_HERE", "YOUR_OPENROUTER_API_KEY_HERE"]:
@@ -640,7 +763,11 @@ class ConfigManager:
             
             new_key = input(f"OpenRouter API Key{key_hint} (leave blank to keep): ").strip()
             if new_key:
-                self.file_config["api_key"] = new_key
+                if store_securely:
+                    self._credential_store.store("api_key", new_key)
+                    self.file_config["api_key"] = "***SECURE_STORAGE***"
+                else:
+                    self.file_config["api_key"] = new_key
             
             # 2. OpenAI API Key (optional)
             current_openai = self.get("openai_api_key")
@@ -651,7 +778,11 @@ class ConfigManager:
             
             new_openai = input(f"OpenAI API Key (optional){openai_hint} (leave blank to skip): ").strip()
             if new_openai:
-                self.file_config["openai_api_key"] = new_openai
+                if store_securely:
+                    self._credential_store.store("openai_api_key", new_openai)
+                    self.file_config["openai_api_key"] = "***SECURE_STORAGE***"
+                else:
+                    self.file_config["openai_api_key"] = new_openai
 
             # 2b. Anthropic API Key (optional)
             current_anthropic = self.get("anthropic_api_key")
@@ -662,7 +793,11 @@ class ConfigManager:
             
             new_anthropic = input(f"Anthropic API Key (optional){anthropic_hint} (leave blank to skip): ").strip()
             if new_anthropic:
-                self.file_config["anthropic_api_key"] = new_anthropic
+                if store_securely:
+                    self._credential_store.store("anthropic_api_key", new_anthropic)
+                    self.file_config["anthropic_api_key"] = "***SECURE_STORAGE***"
+                else:
+                    self.file_config["anthropic_api_key"] = new_anthropic
 
             # 3. Default Model
             current_model = self.get("model_name")
@@ -676,6 +811,8 @@ class ConfigManager:
             
             self.refresh()
             print("\n✅ Configuration saved to aura.config.json")
+            if store_securely:
+                print("🔐 API keys stored securely in OS keyring.")
             log_json("INFO", "config_interactive_bootstrap_complete")
             
         except EOFError:
@@ -683,6 +820,155 @@ class ConfigManager:
         except Exception as e:
             print(f"\n❌ Bootstrap failed: {e}")
             log_json("ERROR", "config_interactive_bootstrap_failed", details={"error": str(e)})
+    
+    def migrate_credentials(self, dry_run: bool = False) -> Dict[str, Any]:
+        """
+        Migrate plaintext API keys from config file to secure credential store.
+        
+        Security Issue #427: Migration utility for secure credential storage.
+        
+        Args:
+            dry_run: If True, only report what would be migrated without making changes.
+            
+        Returns:
+            Dictionary with migration results:
+            {
+                "migrated": [list of migrated keys],
+                "already_secure": [list of keys already in secure storage],
+                "not_found": [list of keys not found],
+                "errors": {key: error_message},
+            }
+        """
+        results = {
+            "migrated": [],
+            "already_secure": [],
+            "not_found": [],
+            "errors": {},
+            "dry_run": dry_run,
+        }
+        
+        log_json(
+            "INFO",
+            "credential_migration_started",
+            details={"dry_run": dry_run}
+        )
+        
+        for key in self.SECURE_CONFIG_KEYS:
+            # Check if in file config
+            if key not in self.file_config:
+                results["not_found"].append(key)
+                continue
+            
+            value = self.file_config[key]
+            
+            # Skip if already marked as secure storage
+            if value == "***SECURE_STORAGE***":
+                results["already_secure"].append(key)
+                continue
+            
+            # Skip if empty/placeholder
+            if not value or value in [
+                "YOUR_API_KEY_HERE",
+                "YOUR_OPENROUTER_API_KEY_HERE",
+                "null",
+                "None",
+            ]:
+                results["not_found"].append(key)
+                continue
+            
+            if dry_run:
+                results["migrated"].append(key)
+                continue
+            
+            # Store in credential store
+            try:
+                if self._credential_store.store(key, value):
+                    # Replace with marker in file config
+                    self.file_config[key] = "***SECURE_STORAGE***"
+                    results["migrated"].append(key)
+                    log_json("INFO", "credential_migrated", details={"key": key})
+                else:
+                    results["errors"][key] = "Failed to store in credential store"
+                    log_json("ERROR", "credential_migration_failed", details={"key": key})
+            except Exception as e:
+                results["errors"][key] = str(e)
+                log_json(
+                    "ERROR",
+                    "credential_migration_exception",
+                    details={"key": key, "error": str(e)}
+                )
+        
+        # Save updated config file if changes were made
+        if not dry_run and results["migrated"]:
+            try:
+                with open(self.config_file, 'w') as f:
+                    json.dump(self.file_config, f, indent=4)
+                log_json(
+                    "INFO",
+                    "credential_migration_config_updated",
+                    details={"path": str(self.config_file)}
+                )
+            except Exception as e:
+                results["errors"]["_config_save"] = str(e)
+                log_json(
+                    "ERROR",
+                    "credential_migration_config_save_failed",
+                    details={"error": str(e)}
+                )
+        
+        # Summary
+        log_json(
+            "INFO",
+            "credential_migration_complete",
+            details={
+                "migrated_count": len(results["migrated"]),
+                "already_secure_count": len(results["already_secure"]),
+                "error_count": len(results["errors"]),
+            }
+        )
+        
+        return results
+    
+    def get_credential_store_info(self) -> Dict[str, Any]:
+        """Get information about the credential store configuration."""
+        return self._credential_store.get_storage_info()
+    
+    def secure_store_credential(self, key: str, value: str) -> bool:
+        """
+        Store a credential securely in the credential store.
+        
+        Args:
+            key: The credential key
+            value: The credential value
+            
+        Returns:
+            True if stored successfully
+        """
+        return self._credential_store.store(key, value)
+    
+    def secure_retrieve_credential(self, key: str) -> Optional[str]:
+        """
+        Retrieve a credential from the secure store.
+        
+        Args:
+            key: The credential key
+            
+        Returns:
+            The credential value or None
+        """
+        return self._credential_store.retrieve(key)
+    
+    def secure_delete_credential(self, key: str) -> bool:
+        """
+        Delete a credential from the secure store.
+        
+        Args:
+            key: The credential key
+            
+        Returns:
+            True if deleted successfully
+        """
+        return self._credential_store.delete(key)
 
 # Global instance initialized with defaults
 config = ConfigManager()

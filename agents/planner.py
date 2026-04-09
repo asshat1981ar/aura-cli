@@ -24,9 +24,10 @@ class PlannerAgent:
 
     capabilities = ["planning", "decomposition", "design", "tree_of_thought", "strategy"]
 
-    def __init__(self, brain, model):
+    def __init__(self, brain, model, vector_store=None):
         self.brain = brain
         self.model = model
+        self.vector_store = vector_store
         self.use_structured = SCHEMAS_AVAILABLE
 
     def run(self, input_data: dict) -> dict:
@@ -36,9 +37,18 @@ class PlannerAgent:
         sim = input_data.get("similar_past_problems", "")
         weak = input_data.get("known_weaknesses", "")
         backfill_ctx = input_data.get("backfill_context", [])
-        
-        result = self.plan(goal, mem, sim, weak, backfill_context=backfill_ctx)
-        
+
+        hints: list = []
+        if self.vector_store and goal:
+            try:
+                hints = self.vector_store.query(goal, top_k=3) or []
+            except Exception as exc:
+                log_json("WARN", "planner_vector_hints_failed", details={"error": str(exc)})
+                hints = []
+            log_json("INFO", "planner_vector_hints", details={"hint_count": len(hints), "goal": goal})
+
+        result = self.plan(goal, mem, sim, weak, backfill_context=backfill_ctx, hints=hints)
+
         if isinstance(result, dict) and "plan" in result:
             return result
         return {"steps": result}
@@ -54,8 +64,10 @@ class PlannerAgent:
         return self.model.respond(prompt)
 
     def plan(self, goal: str, memory_snapshot: str, similar_past_problems: str, 
-             known_weaknesses: str, backfill_context: list = None) -> Union[List[str], dict]:
+             known_weaknesses: str, backfill_context: list = None,
+             hints: list = None) -> Union[List[str], dict]:
         """Generate a detailed plan with Chain-of-Thought reasoning and structured output."""
+        hints = hints or []
         backfill_instr = ""
         if backfill_context:
             backfill_instr = "CRITICAL: Modules with LOW/ZERO test coverage:\n"
@@ -66,14 +78,21 @@ class PlannerAgent:
 
         if self.use_structured:
             return self._plan_structured(goal, memory_snapshot, similar_past_problems, 
-                                         known_weaknesses, backfill_instr)
+                                         known_weaknesses, backfill_instr, hints)
         else:
             return self._plan_legacy(goal, memory_snapshot, similar_past_problems, 
-                                     known_weaknesses, backfill_instr)
+                                     known_weaknesses, backfill_instr, hints)
 
     def _plan_structured(self, goal: str, memory: str, similar: str, 
-                         weakness: str, backfill_instr: str) -> dict:
+                         weakness: str, backfill_instr: str,
+                         hints: list = None) -> dict:
         """Generate plan using structured output with CoT reasoning and role-based prompt."""
+        hints = hints or []
+        past_reflections_section = ""
+        if hints:
+            items = "\n".join(f"- {h}" for h in hints)
+            past_reflections_section = f"\n## Past Reflections\n{items}\n"
+
         # Use cached prompt with role-based system context
         prompt = render_prompt(
             template_name="planner",
@@ -86,6 +105,9 @@ class PlannerAgent:
                 "backfill_instr": backfill_instr
             }
         )
+
+        if past_reflections_section:
+            prompt = past_reflections_section + prompt
         
         response = self._respond(prompt)
         self.brain.remember(f"Structured plan for: {goal[:50]}...")
@@ -136,9 +158,16 @@ class PlannerAgent:
             return [f"ERROR: Plan generation failed: {e}"]
 
     def _plan_legacy(self, goal: str, memory: str, similar: str, 
-                     weakness: str, backfill_instr: str) -> List[str]:
+                     weakness: str, backfill_instr: str,
+                     hints: list = None) -> List[str]:
         """Fallback legacy planning method."""
-        prompt = f"""You are AURA — an autonomous recursive engineering system.
+        hints = hints or []
+        past_reflections_section = ""
+        if hints:
+            items = "\n".join(f"- {h}" for h in hints)
+            past_reflections_section = f"## Past Reflections\n{items}\n\n"
+
+        prompt = f"""{past_reflections_section}You are AURA — an autonomous recursive engineering system.
 
 Current Goal:
 {goal}

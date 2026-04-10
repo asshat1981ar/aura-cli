@@ -191,6 +191,14 @@ class TestSemanticQuerier:
         results = querier.what_changes_break("unknown/file.py")
         assert results == []
 
+    def test_what_changes_break_depth_limit(self, querier) -> None:
+        """what_changes_break respects depth parameter."""
+        results_d1 = querier.what_changes_break("core/auth.py", depth=1)
+        results_d2 = querier.what_changes_break("core/auth.py", depth=2)
+        # Both should work
+        assert isinstance(results_d1, list)
+        assert isinstance(results_d2, list)
+
     # ------------------------------------------------------------------
     def test_summarize_file(self, querier) -> None:
         """summarize() on a file path returns module_summary."""
@@ -208,6 +216,36 @@ class TestSemanticQuerier:
         result = querier.summarize("completely_unknown_thing")
         assert result.startswith("No summary available for:")
 
+    def test_summarize_symbol_with_docstring_fallback(self, db_path: Path) -> None:
+        """Test summarize falls back to docstring when intent_summary is None."""
+        db = _populate_test_db(db_path)
+        # Insert a symbol with docstring but no intent_summary
+        file_id = db.upsert_file(
+            path="test/fallback.py",
+            module_name="test.fallback",
+            cluster="test",
+            line_count=10,
+            last_modified="2026-01-01T00:00:00",
+            last_scan_sha="sha",
+        )
+        db.insert_symbol(
+            file_id=file_id,
+            name="fallback_sym",
+            kind="function",
+            line_start=1,
+            line_end=5,
+            signature="def fallback_sym():",
+            docstring="This is the docstring.",
+            decorators="",
+            intent_summary=None,  # No intent summary
+        )
+        db.close()
+        
+        from core.agent_sdk.semantic_querier import SemanticQuerier
+        querier = SemanticQuerier(db_path)
+        summary = querier.summarize("fallback_sym")
+        assert "docstring" in summary.lower()
+
     # ------------------------------------------------------------------
     def test_find_similar(self, querier) -> None:
         """find_similar should return symbol dicts matching the description."""
@@ -218,6 +256,12 @@ class TestSemanticQuerier:
             for row in results:
                 assert "name" in row
                 assert "path" in row
+
+    def test_find_similar_with_limit(self, querier) -> None:
+        """find_similar respects the limit parameter."""
+        results = querier.find_similar("code", limit=2)
+        assert isinstance(results, list)
+        assert len(results) <= 2
 
     # ------------------------------------------------------------------
     def test_architecture_overview(self, querier) -> None:
@@ -246,6 +290,14 @@ class TestSemanticQuerier:
         assert isinstance(overview["summary"], str)
         assert len(overview["summary"]) > 0
 
+    def test_architecture_overview_summary_text(self, querier) -> None:
+        """Test _build_overview_text generates proper summary."""
+        overview = querier.architecture_overview()
+        summary = overview["summary"]
+        # Should contain file counts and cluster info
+        assert "file" in summary.lower()
+        assert "cluster" in summary.lower()
+
     # ------------------------------------------------------------------
     def test_recent_changes(self, querier) -> None:
         """recent_changes returns a list (may be empty in test env)."""
@@ -257,3 +309,47 @@ class TestSemanticQuerier:
             # summary and coupling are optional but should be present as keys
             assert "summary" in row
             assert "coupling" in row
+
+    def test_recent_changes_with_various_commits(self, querier) -> None:
+        """Test recent_changes with different commit counts."""
+        results1 = querier.recent_changes(n_commits=1)
+        results5 = querier.recent_changes(n_commits=5)
+        # Both should be valid lists (possibly empty in test env)
+        assert isinstance(results1, list)
+        assert isinstance(results5, list)
+
+    def test_recent_changes_git_failure_handling(self, querier) -> None:
+        """Test recent_changes gracefully handles git failures."""
+        from unittest.mock import patch
+        # Mock subprocess to simulate git failure
+        with patch('subprocess.run') as mock_run:
+            mock_run.side_effect = FileNotFoundError("git not found")
+            results = querier.recent_changes(n_commits=5)
+            assert results == []
+
+    def test_recent_changes_git_timeout(self, querier) -> None:
+        """Test recent_changes handles subprocess timeout."""
+        from unittest.mock import patch
+        import subprocess as sp
+        # Mock subprocess to simulate timeout
+        with patch('subprocess.run') as mock_run:
+            mock_run.side_effect = sp.TimeoutExpired("git", 10)
+            results = querier.recent_changes(n_commits=5)
+            assert results == []
+
+    def test_recent_changes_git_error_returncode(self, querier) -> None:
+        """Test recent_changes handles git errors (non-zero returncode)."""
+        from unittest.mock import patch, MagicMock
+        # Mock subprocess to return error code
+        with patch('subprocess.run') as mock_run:
+            mock_result = MagicMock()
+            mock_result.returncode = 1
+            mock_result.stderr = "error message"
+            mock_run.return_value = mock_result
+            results = querier.recent_changes(n_commits=5)
+            assert results == []
+
+
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])
+

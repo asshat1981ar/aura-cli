@@ -247,5 +247,115 @@ class TestCacheAdapterFactory(unittest.TestCase):
             del os.environ["MOMENTO_API_KEY"]
 
 
+class TestLocalCacheAdapterErrorHandling(unittest.TestCase):
+    """Test error paths in LocalCacheAdapter (db failures, etc)."""
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.adapter = _make_adapter(self.tmp)
+
+    def test_publish_with_invalid_db_path(self):
+        """Test publish gracefully handles db connection errors."""
+        bad_adapter = _make_adapter(os.path.join(self.tmp, "nonexistent", "deep", "path", "db.db"))
+        # Force a bad path after initialization
+        bad_adapter._db_path = "/root/impossible/path/db.db"
+        ok = bad_adapter.publish("topic", "msg")
+        self.assertFalse(ok)
+
+    def test_read_events_with_invalid_db_path(self):
+        """Test read_events gracefully handles db connection errors."""
+        bad_adapter = _make_adapter(os.path.join(self.tmp, "nonexistent", "deep", "path", "db.db"))
+        bad_adapter._db_path = "/root/impossible/path/db.db"
+        events = bad_adapter.read_events("topic")
+        self.assertEqual(events, [])
+
+    def test_init_db_with_invalid_path(self):
+        """Test _init_db gracefully handles errors."""
+        from memory.local_cache_adapter import LocalCacheAdapter
+        # Try to create db in impossible location
+        bad_adapter = LocalCacheAdapter(db_path="/root/impossible/db.db")
+        # Should still be usable for in-memory operations
+        self.assertTrue(bad_adapter.is_available())
+
+    def test_ensure_caches_is_noop(self):
+        """Test that ensure_caches does nothing (no-op for local adapter)."""
+        # Should not raise
+        self.adapter.ensure_caches()
+        # Can still use cache after
+        self.adapter.cache_set("c", "k", "v")
+        self.assertEqual(self.adapter.cache_get("c", "k"), "v")
+
+    def test_stats_with_expired_entries(self):
+        """Test stats correctly counts expired and live entries."""
+        self.adapter.cache_set("c", "k1", "v1", ttl_seconds=1)
+        self.adapter.cache_set("c", "k2", "v2", ttl_seconds=3600)
+        time.sleep(1.05)
+        stats = self.adapter.stats()
+        # k1 should be expired, k2 should be live
+        self.assertEqual(stats["kv_expired_pending_eviction"], 1)
+        self.assertEqual(stats["kv_live"], 1)
+
+    def test_evict_expired_multiple_entries(self):
+        """Test evict_expired removes multiple expired entries."""
+        self.adapter.cache_set("c", "k1", "v1", ttl_seconds=1)
+        self.adapter.cache_set("c", "k2", "v2", ttl_seconds=1)
+        self.adapter.cache_set("c", "k3", "v3", ttl_seconds=3600)
+        time.sleep(1.05)
+        removed = self.adapter.evict_expired()
+        self.assertEqual(removed, 2)
+
+    def test_list_range_with_none_end(self):
+        """Test list_range with end=None behaves like end=-1."""
+        self.adapter.list_push("c", "lst", "a")
+        self.adapter.list_push("c", "lst", "b")
+        self.adapter.list_push("c", "lst", "c")
+        # end=None should return all from start
+        result = self.adapter.list_range("c", "lst", start=1, end=None)
+        self.assertEqual(result, ["b", "c"])
+
+    def test_publish_read_events_integration(self):
+        """Test publishing and reading multiple events in sequence."""
+        # Publish multiple events
+        for i in range(3):
+            ok = self.adapter.publish("topic", f"msg-{i}")
+            self.assertTrue(ok)
+        
+        # Read all events
+        events = self.adapter.read_events("topic", since_ts=0.0)
+        self.assertEqual(len(events), 3)
+        messages = [e["message"] for e in events]
+        self.assertIn("msg-0", messages)
+        self.assertIn("msg-2", messages)
+
+    def test_publish_read_events_with_limit(self):
+        """Test read_events respects limit parameter."""
+        for i in range(10):
+            self.adapter.publish("topic", f"msg-{i}")
+        
+        events = self.adapter.read_events("topic", limit=3)
+        self.assertEqual(len(events), 3)
+
+    def test_list_range_out_of_bounds(self):
+        """Test list_range with out-of-bounds indices."""
+        self.adapter.list_push("c", "lst", "a")
+        self.adapter.list_push("c", "lst", "b")
+        # start > len
+        result = self.adapter.list_range("c", "lst", start=10, end=20)
+        self.assertEqual(result, [])
+
+    def test_cache_set_zero_ttl(self):
+        """Test cache_set with ttl_seconds=0 doesn't expire."""
+        self.adapter.cache_set("c", "k", "v", ttl_seconds=0)
+        time.sleep(0.1)
+        # Should still be there since ttl_seconds=0 means no expiry
+        self.assertEqual(self.adapter.cache_get("c", "k"), "v")
+
+    def test_namespace_helper(self):
+        """Test the _ns helper function."""
+        from memory.local_cache_adapter import _ns
+        result = _ns("myCache", "myKey")
+        self.assertEqual(result, "myCache:myKey")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -58,10 +58,15 @@ class TestCLIContract(unittest.TestCase):
     def test_required_subcommand_parent_paths_match_non_leaf_command_paths(self):
         parent_paths = parser_parent_command_paths()
         required_paths = parser_required_subcommand_parent_paths()
+        canonical_paths = {
+            spec.canonical_path
+            for spec in cli_options_meta.CLI_ACTION_SPECS_BY_ACTION.values()
+            if spec.canonical_path is not None
+        }
         self.assertEqual(
             sorted(required_paths),
-            sorted(parent_paths),
-            "Required-subcommand parent paths must stay in sync with non-leaf command paths.",
+            sorted(path for path in parent_paths if path not in canonical_paths),
+            "Required-subcommand parent paths must stay in sync with non-leaf command paths that are not executable commands themselves.",
         )
 
     def test_actions_with_positional_smoke_args_have_parser_customizers(self):

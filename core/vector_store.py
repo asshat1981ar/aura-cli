@@ -94,6 +94,13 @@ class VectorStore:
             self.brain.db.execute("CREATE INDEX IF NOT EXISTS idx_mr_source_type ON memory_records(source_type)")
             self.brain.db.commit()
 
+            # Namespace column migration (ASCM v2)
+            try:
+                self.brain.db.execute("ALTER TABLE memory_records ADD COLUMN namespace TEXT")
+                self.brain.db.commit()
+            except sqlite3.OperationalError:
+                pass  # column already exists
+
             # Migration check for legacy v1 table
             self._migrate_legacy_v1()
         except sqlite3.Error as e:
@@ -177,13 +184,13 @@ class VectorStore:
                 try:
                     self.brain.db.execute(
                         """
-                        INSERT OR REPLACE INTO memory_records 
-                        (id, content, source_type, source_ref, created_at, updated_at, 
-                         goal_id, agent_name, tags, importance, token_count, 
-                         embedding_model, embedding_dims, content_hash, embedding)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                        INSERT OR REPLACE INTO memory_records
+                        (id, content, source_type, source_ref, created_at, updated_at,
+                         goal_id, agent_name, tags, importance, token_count,
+                         embedding_model, embedding_dims, content_hash, embedding, namespace)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
-                        (rec.id, rec.content, rec.source_type, rec.source_ref, rec.created_at, rec.updated_at, rec.goal_id, rec.agent_name, json.dumps(rec.tags), rec.importance, rec.token_count, rec.embedding_model, rec.embedding_dims, rec.content_hash, rec.embedding),
+                        (rec.id, rec.content, rec.source_type, rec.source_ref, rec.created_at, rec.updated_at, rec.goal_id, rec.agent_name, json.dumps(rec.tags), rec.importance, rec.token_count, rec.embedding_model, rec.embedding_dims, rec.content_hash, rec.embedding, getattr(rec, "namespace", None)),
                     )
 
                     if rec.embedding:
@@ -239,6 +246,10 @@ class VectorStore:
                     sql += f" AND mr.{key} = ?"
                     params.append(val)
 
+        if q_obj.namespace is not None:
+            sql += " AND mr.namespace = ?"
+            params.append(q_obj.namespace)
+
         sql += " LIMIT ?"
         params.append(SEARCH_LIMIT)
 
@@ -265,7 +276,7 @@ class VectorStore:
                     score += q_obj.recency_bias * 0.1
 
             if score >= q_obj.min_score:
-                hits.append(SearchHit(record_id=row["id"], content=row["content"], score=score, source_ref=row["source_ref"], metadata={"source_type": row["source_type"], "tags": json.loads(row["tags"])}, explanation=f"Similarity: {score:.3f}"))
+                hits.append(SearchHit(record_id=row["id"], content=row["content"], score=score, source_ref=row["source_ref"], metadata={"source_type": row["source_type"], "tags": json.loads(row["tags"])}, explanation=f"Similarity: {score:.3f}", embedding_model_version=current_model))
 
         hits.sort(key=lambda h: h.score, reverse=True)
 

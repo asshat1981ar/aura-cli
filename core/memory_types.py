@@ -50,6 +50,7 @@ class MemoryRecord:
     embedding_dims: int = 1536
     content_hash: str = ""
     embedding: Optional[bytes] = None  # Store binary blob of numpy array
+    namespace: Optional[str] = None  # e.g. "goals", "code", "agent:planner"
 
 
 @dataclass
@@ -63,6 +64,7 @@ class RetrievalQuery:
     recency_bias: float = 0.0  # 0.0 to 1.0
     dedupe_key: Optional[str] = "content_hash"
     budget_tokens: int = 4000
+    namespace: Optional[str] = None  # filter to this namespace if set
 
 
 @dataclass
@@ -75,6 +77,7 @@ class SearchHit:
     source_ref: str
     metadata: Dict[str, Any]
     explanation: str  # Why this was retrieved
+    embedding_model_version: str = ""  # provenance: which model produced this hit
 
 
 @dataclass
@@ -98,6 +101,13 @@ class EmbeddingProvider(Protocol):
     def model_id(self) -> str: ...
     def dimensions(self) -> int: ...
     def healthcheck(self) -> bool: ...
+    # ASCM v2 extended interface
+    def embed_text(self, text: str) -> "Any": ...  # returns EmbeddingResult
+    def embed_batch(self, texts: List[str]) -> "List[Any]": ...  # returns List[EmbeddingResult]
+    @property
+    def model_version(self) -> str: ...
+    @property
+    def provider_type(self) -> str: ...
 
 
 class VectorStoreV2(Protocol):

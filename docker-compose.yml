@@ -22,6 +22,12 @@ services:
       - ./.mcp.json:/app/.mcp.json:ro
     networks:
       - aura-network
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"
+    tmpfs:
+      - /tmp
+      - /run
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
       interval: 30s
@@ -42,6 +48,15 @@ services:
       - api
     networks:
       - aura-network
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    user: "1000:1000"
+    tmpfs:
+      - /tmp
+      - /run
+      - /var/cache/nginx
+      - /var/run
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
       interval: 30s
@@ -59,6 +74,9 @@ services:
       - redis-data:/data
     networks:
       - aura-network
+    security_opt:
+      - no-new-privileges:true
+    user: "999:999"
     command: redis-server --appendonly yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -69,7 +87,7 @@ services:
 
   # Optional: Prometheus for monitoring
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v2.51.2
     container_name: aura-prometheus
     restart: unless-stopped
     ports:
@@ -79,6 +97,9 @@ services:
       - prometheus-data:/prometheus
     networks:
       - aura-network
+    security_opt:
+      - no-new-privileges:true
+    user: "65534:65534"
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -95,7 +116,7 @@ services:
 
   # Optional: Grafana for visualization
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:10.4.2
     container_name: aura-grafana
     restart: unless-stopped
     ports:
@@ -109,6 +130,9 @@ services:
       - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources:ro
     networks:
       - aura-network
+    security_opt:
+      - no-new-privileges:true
+    user: "472:472"
     depends_on:
       - prometheus
     healthcheck:

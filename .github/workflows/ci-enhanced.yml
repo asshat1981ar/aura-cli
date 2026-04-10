@@ -219,3 +219,40 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
         continue-on-error: true
+
+  openapi-validate:
+    name: OpenAPI Spec Validation
+    runs-on: ubuntu-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt --quiet
+          pip install openapi-spec-validator --quiet
+      - name: Export OpenAPI spec
+        env:
+          AURA_TEST_MODE: "1"
+        run: python3 scripts/export_openapi.py
+      - name: Validate OpenAPI spec
+        run: |
+          python3 -c "
+          from openapi_spec_validator import validate
+          from openapi_spec_validator.readers import read_from_filename
+          spec, _ = read_from_filename('docs/api/openapi.json')
+          validate(spec)
+          print('OpenAPI spec is valid')
+          "
+      - name: Check spec is committed
+        run: |
+          git diff --exit-code docs/api/openapi.json || \
+            (echo "::warning::OpenAPI spec is stale — run: python3 scripts/export_openapi.py" && true)
+      - name: Upload OpenAPI spec
+        uses: actions/upload-artifact@v4
+        with:
+          name: openapi-spec
+          path: docs/api/openapi.json

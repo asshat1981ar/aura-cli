@@ -8,8 +8,12 @@ from pathlib import Path
 
 def export_openapi():
     try:
-        # Import the FastAPI app
         import os
+
+        # Ensure project root is in sys.path so all local packages resolve
+        project_root = str(Path(__file__).parent.parent.resolve())
+        if project_root not in sys.path:
+            sys.path.insert(0, project_root)
 
         os.environ.setdefault("AURA_TEST_MODE", "1")
         from aura_cli.server import app

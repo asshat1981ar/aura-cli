@@ -1,4 +1,5 @@
 """Tests for core.tree_of_thought — Tree-of-Thought planning."""
+
 import json
 import pytest
 from unittest.mock import MagicMock
@@ -80,10 +81,12 @@ class TestPlanGeneration:
 
 class TestStepParsing:
     def test_parse_json_array(self):
-        response = json.dumps([
-            {"step": 1, "description": "First"},
-            {"step": 2, "description": "Second"},
-        ])
+        response = json.dumps(
+            [
+                {"step": 1, "description": "First"},
+                {"step": 2, "description": "Second"},
+            ]
+        )
         planner = TreeOfThoughtPlanner()
         steps = planner._parse_steps(response)
 
@@ -127,19 +130,19 @@ class TestStepParsing:
 class TestScoring:
     def test_score_parsing_from_json(self):
         model = _make_model()
-        scores_response = json.dumps({
-            "scores": {
-                "conservative": {"feasibility": 0.9, "coverage": 0.8, "risk": 0.7, "testability": 0.6, "clarity": 0.5},
-                "aggressive": {"feasibility": 0.5, "coverage": 0.9, "risk": 0.4, "testability": 0.7, "clarity": 0.8},
+        scores_response = json.dumps(
+            {
+                "scores": {
+                    "conservative": {"feasibility": 0.9, "coverage": 0.8, "risk": 0.7, "testability": 0.6, "clarity": 0.5},
+                    "aggressive": {"feasibility": 0.5, "coverage": 0.9, "risk": 0.4, "testability": 0.7, "clarity": 0.8},
+                }
             }
-        })
+        )
         model.respond.return_value = scores_response
 
         candidates = [
-            PlanCandidate(strategy="conservative", strategy_description="safe",
-                          steps=[{"step": 1, "description": "A"}]),
-            PlanCandidate(strategy="aggressive", strategy_description="bold",
-                          steps=[{"step": 1, "description": "B"}]),
+            PlanCandidate(strategy="conservative", strategy_description="safe", steps=[{"step": 1, "description": "A"}]),
+            PlanCandidate(strategy="aggressive", strategy_description="bold", steps=[{"step": 1, "description": "B"}]),
         ]
 
         planner = TreeOfThoughtPlanner()
@@ -151,8 +154,7 @@ class TestScoring:
 
     def test_single_candidate_auto_wins(self):
         model = _make_model()
-        candidate = PlanCandidate(strategy="conservative", strategy_description="safe",
-                                  steps=[{"step": 1, "description": "A"}])
+        candidate = PlanCandidate(strategy="conservative", strategy_description="safe", steps=[{"step": 1, "description": "A"}])
 
         planner = TreeOfThoughtPlanner()
         winner = planner.score_plans(model, [candidate], "Goal")
@@ -177,10 +179,8 @@ class TestScoring:
         model.respond.side_effect = RuntimeError("LLM down")
 
         candidates = [
-            PlanCandidate(strategy="conservative", strategy_description="safe",
-                          steps=[{"step": 1, "description": "A"}, {"step": 2, "description": "B"}]),
-            PlanCandidate(strategy="aggressive", strategy_description="bold",
-                          steps=[{"step": 1, "description": "C"}]),
+            PlanCandidate(strategy="conservative", strategy_description="safe", steps=[{"step": 1, "description": "A"}, {"step": 2, "description": "B"}]),
+            PlanCandidate(strategy="aggressive", strategy_description="bold", steps=[{"step": 1, "description": "C"}]),
         ]
 
         planner = TreeOfThoughtPlanner()
@@ -197,8 +197,7 @@ class TestScoring:
         model.respond.return_value = 'Here are my scores:\n{"scores": {"conservative": {"feasibility": 0.8, "coverage": 0.7, "risk": 0.6, "testability": 0.9, "clarity": 0.7}}}\nHope this helps!'
 
         candidates = [
-            PlanCandidate(strategy="conservative", strategy_description="safe",
-                          steps=[{"step": 1, "description": "A"}]),
+            PlanCandidate(strategy="conservative", strategy_description="safe", steps=[{"step": 1, "description": "A"}]),
         ]
 
         planner = TreeOfThoughtPlanner()

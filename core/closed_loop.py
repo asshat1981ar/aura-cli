@@ -1,4 +1,3 @@
-
 class ClosedDevelopmentLoop:
     """
     Implements a basic closed-loop autonomous development workflow.

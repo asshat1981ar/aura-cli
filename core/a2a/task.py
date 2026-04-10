@@ -3,6 +3,7 @@
 Tasks are the core unit of work in A2A. They progress through a well-defined
 state machine: submitted -> working -> completed/failed/canceled.
 """
+
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -22,6 +23,7 @@ class TaskState(str, Enum):
 @dataclass
 class A2AMessage:
     """A message in the A2A task conversation."""
+
     role: str  # "user" or "agent"
     content: str
     parts: list[dict] = field(default_factory=list)
@@ -31,6 +33,7 @@ class A2AMessage:
 @dataclass
 class A2ATask:
     """An A2A task with full lifecycle management."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     capability: str = ""
     state: TaskState = TaskState.SUBMITTED
@@ -46,11 +49,15 @@ class A2ATask:
     def __post_init__(self):
         self._TRANSITIONS = {
             TaskState.SUBMITTED: {
-                TaskState.WORKING, TaskState.CANCELED, TaskState.FAILED,
+                TaskState.WORKING,
+                TaskState.CANCELED,
+                TaskState.FAILED,
             },
             TaskState.WORKING: {
-                TaskState.COMPLETED, TaskState.FAILED,
-                TaskState.INPUT_REQUIRED, TaskState.CANCELED,
+                TaskState.COMPLETED,
+                TaskState.FAILED,
+                TaskState.INPUT_REQUIRED,
+                TaskState.CANCELED,
             },
             TaskState.INPUT_REQUIRED: {TaskState.WORKING, TaskState.CANCELED},
         }
@@ -59,24 +66,22 @@ class A2ATask:
         """Transition task to new state with validation."""
         allowed = self._TRANSITIONS.get(self.state, set())
         if new_state not in allowed:
-            raise ValueError(
-                f"Invalid transition: {self.state.value} -> {new_state.value}"
-            )
+            raise ValueError(f"Invalid transition: {self.state.value} -> {new_state.value}")
         self.state = new_state
         self.updated_at = time.time()
 
-    def add_message(self, role: str, content: str,
-                    parts: list[dict] | None = None):
-        self.messages.append(
-            A2AMessage(role=role, content=content, parts=parts or [])
-        )
+    def add_message(self, role: str, content: str, parts: list[dict] | None = None):
+        self.messages.append(A2AMessage(role=role, content=content, parts=parts or []))
         self.updated_at = time.time()
 
-    def add_artifact(self, name: str, content: Any,
-                     mime_type: str = "application/json"):
-        self.artifacts.append({
-            "name": name, "content": content, "mime_type": mime_type,
-        })
+    def add_artifact(self, name: str, content: Any, mime_type: str = "application/json"):
+        self.artifacts.append(
+            {
+                "name": name,
+                "content": content,
+                "mime_type": mime_type,
+            }
+        )
         self.updated_at = time.time()
 
     def to_dict(self) -> dict:
@@ -84,11 +89,7 @@ class A2ATask:
             "id": self.id,
             "capability": self.capability,
             "state": self.state.value,
-            "messages": [
-                {"role": m.role, "content": m.content,
-                 "parts": m.parts, "timestamp": m.timestamp}
-                for m in self.messages
-            ],
+            "messages": [{"role": m.role, "content": m.content, "parts": m.parts, "timestamp": m.timestamp} for m in self.messages],
             "artifacts": self.artifacts,
             "metadata": self.metadata,
             "created_at": self.created_at,

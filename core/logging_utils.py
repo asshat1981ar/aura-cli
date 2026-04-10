@@ -7,16 +7,16 @@ from core.redaction import mask_secrets
 
 
 def log_json(
-    level: str, 
-    event: str, 
-    goal: str = None, 
+    level: str,
+    event: str,
+    goal: str = None,
     details: dict = None,
     correlation_id: Optional[str] = None,
 ):
     """
     Emits a single-line JSON log to stderr by default.
     Automatically masks sensitive info in details.
-    
+
     Args:
         level (str): Log level (e.g., "INFO", "WARN", "ERROR").
         event (str): Short description of the event.
@@ -32,23 +32,24 @@ def log_json(
         "level": level.upper(),
         "event": event,
     }
-    
+
     # Add correlation ID for distributed tracing
     if correlation_id is None:
         try:
             from core.correlation import get_correlation_id
+
             correlation_id = get_correlation_id()
         except ImportError:
             pass
-    
+
     if correlation_id:
         log_entry["trace_id"] = correlation_id
-    
+
     if goal:
         log_entry["goal"] = goal
     if safe_details:
         log_entry["details"] = safe_details
-    
+
     stream_name = os.getenv("AURA_LOG_STREAM", "stderr").lower()
     stream = sys.stdout if stream_name == "stdout" else sys.stderr
     stream.write(json.dumps(log_entry) + "\n")

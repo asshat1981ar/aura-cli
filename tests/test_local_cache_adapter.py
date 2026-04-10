@@ -5,6 +5,7 @@ Run with::
 
     AURA_SKIP_CHDIR=1 python3 -m pytest tests/test_local_cache_adapter.py -v
 """
+
 import json
 import os
 import tempfile
@@ -12,17 +13,24 @@ import threading
 import time
 import unittest
 
+import pytest
+
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
+
+# This module contains tests that deliberately sleep for ~1 second to validate
+# TTL expiry behaviour. Mark the whole module slow so it is excluded from the
+# fast-unit gate.
+pytestmark = pytest.mark.slow
 
 
 def _make_adapter(tmp_dir=None):
     from memory.local_cache_adapter import LocalCacheAdapter
+
     db = os.path.join(tmp_dir or tempfile.mkdtemp(), "test_cache.db")
     return LocalCacheAdapter(db_path=db)
 
 
 class TestLocalCacheAdapterBasics(unittest.TestCase):
-
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.adapter = _make_adapter(self.tmp)
@@ -56,7 +64,6 @@ class TestLocalCacheAdapterBasics(unittest.TestCase):
 
 
 class TestLocalCacheAdapterTTL(unittest.TestCase):
-
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.adapter = _make_adapter(self.tmp)
@@ -83,7 +90,6 @@ class TestLocalCacheAdapterTTL(unittest.TestCase):
 
 
 class TestLocalCacheAdapterLists(unittest.TestCase):
-
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.adapter = _make_adapter(self.tmp)
@@ -97,14 +103,12 @@ class TestLocalCacheAdapterLists(unittest.TestCase):
     def test_list_range_slice(self):
         for i in range(10):
             self.adapter.list_push("c", "lst", str(i))
-        self.assertEqual(self.adapter.list_range("c", "lst", start=2, end=4),
-                         ["2", "3", "4"])
+        self.assertEqual(self.adapter.list_range("c", "lst", start=2, end=4), ["2", "3", "4"])
 
     def test_list_range_negative_end(self):
         for i in range(5):
             self.adapter.list_push("c", "lst", str(i))
-        self.assertEqual(self.adapter.list_range("c", "lst", start=3, end=-1),
-                         ["3", "4"])
+        self.assertEqual(self.adapter.list_range("c", "lst", start=3, end=-1), ["3", "4"])
 
     def test_list_max_size_trim(self):
         for i in range(10):
@@ -125,7 +129,6 @@ class TestLocalCacheAdapterLists(unittest.TestCase):
 
 
 class TestLocalCacheAdapterPubSub(unittest.TestCase):
-
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.adapter = _make_adapter(self.tmp)
@@ -159,7 +162,6 @@ class TestLocalCacheAdapterPubSub(unittest.TestCase):
 
 
 class TestLocalCacheAdapterThreadSafety(unittest.TestCase):
-
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.adapter = _make_adapter(self.tmp)
@@ -198,7 +200,6 @@ class TestLocalCacheAdapterThreadSafety(unittest.TestCase):
 
 
 class TestLocalCacheAdapterStats(unittest.TestCase):
-
     def setUp(self):
         self.tmp = tempfile.mkdtemp()
         self.adapter = _make_adapter(self.tmp)
@@ -222,12 +223,12 @@ class TestLocalCacheAdapterStats(unittest.TestCase):
 
 
 class TestCacheAdapterFactory(unittest.TestCase):
-
     def test_returns_local_without_api_key(self):
         env_backup = os.environ.pop("MOMENTO_API_KEY", None)
         try:
             from memory.cache_adapter_factory import create_cache_adapter
             from memory.local_cache_adapter import LocalCacheAdapter
+
             adapter = create_cache_adapter()
             self.assertIsInstance(adapter, LocalCacheAdapter)
         finally:
@@ -239,6 +240,7 @@ class TestCacheAdapterFactory(unittest.TestCase):
         try:
             from memory.cache_adapter_factory import create_cache_adapter
             from memory.momento_adapter import MomentoAdapter
+
             adapter = create_cache_adapter()
             self.assertIsInstance(adapter, MomentoAdapter)
         finally:

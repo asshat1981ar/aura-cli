@@ -26,9 +26,7 @@ class TestConfigSetDispatch(unittest.TestCase):
         out = io.StringIO()
         err = io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
-            code = cli_main.dispatch_command(
-                parsed, project_root=Path("."), runtime_factory=rf
-            )
+            code = cli_main.dispatch_command(parsed, project_root=Path("."), runtime_factory=rf)
         return code, out.getvalue(), err.getvalue(), rf
 
     # ------------------------------------------------------------------
@@ -48,9 +46,7 @@ class TestConfigSetDispatch(unittest.TestCase):
 
     def test_config_set_dotted_key_bound(self):
         """Dotted key paths are accepted as-is by the parser."""
-        parsed = parse_cli_args(
-            ["config", "set", "model.code_generation", "google/gemini-2.5-pro"]
-        )
+        parsed = parse_cli_args(["config", "set", "model.code_generation", "google/gemini-2.5-pro"])
         self.assertEqual(parsed.namespace.config_key, "model.code_generation")
         self.assertEqual(parsed.namespace.config_value, "google/gemini-2.5-pro")
 
@@ -65,13 +61,11 @@ class TestConfigSetDispatch(unittest.TestCase):
             config_path.write_text(json.dumps({"model_routing": {}}))
 
             from core.config_manager import ConfigManager
+
             real_cm = ConfigManager(config_file=str(config_path))
 
-            with patch("aura_cli.dispatch.config", real_cm), \
-                 patch("aura_cli.cli_main.config", real_cm):
-                code, out, err, _ = self._dispatch(
-                    ["config", "set", "model.code_generation", "google/gemini-2.5-pro"]
-                )
+            with patch("aura_cli.dispatch.config", real_cm), patch("aura_cli.cli_main.config", real_cm):
+                code, out, err, _ = self._dispatch(["config", "set", "model.code_generation", "google/gemini-2.5-pro"])
 
             self.assertEqual(code, 0, msg=f"stderr: {err}")
             self.assertIn("Set model.code_generation = google/gemini-2.5-pro", out)
@@ -89,13 +83,11 @@ class TestConfigSetDispatch(unittest.TestCase):
             config_path.write_text(json.dumps({}))
 
             from core.config_manager import ConfigManager
+
             real_cm = ConfigManager(config_file=str(config_path))
 
-            with patch("aura_cli.dispatch.config", real_cm), \
-                 patch("aura_cli.cli_main.config", real_cm):
-                code, out, err, _ = self._dispatch(
-                    ["config", "set", "max_iterations", "42"]
-                )
+            with patch("aura_cli.dispatch.config", real_cm), patch("aura_cli.cli_main.config", real_cm):
+                code, out, err, _ = self._dispatch(["config", "set", "max_iterations", "42"])
 
             self.assertEqual(code, 0, msg=f"stderr: {err}")
             self.assertIn("Set max_iterations = 42", out)
@@ -110,13 +102,11 @@ class TestConfigSetDispatch(unittest.TestCase):
             config_path.write_text(json.dumps({}))
 
             from core.config_manager import ConfigManager
+
             real_cm = ConfigManager(config_file=str(config_path))
 
-            with patch("aura_cli.dispatch.config", real_cm), \
-                 patch("aura_cli.cli_main.config", real_cm):
-                code, out, _err, _ = self._dispatch(
-                    ["config", "set", "model.planning", "openai/gpt-4o"]
-                )
+            with patch("aura_cli.dispatch.config", real_cm), patch("aura_cli.cli_main.config", real_cm):
+                code, out, _err, _ = self._dispatch(["config", "set", "model.planning", "openai/gpt-4o"])
 
             self.assertEqual(code, 0)
             self.assertIn("Set model.planning = openai/gpt-4o", out)
@@ -132,13 +122,11 @@ class TestConfigSetDispatch(unittest.TestCase):
             config_path.write_text(json.dumps({"model_routing": {}}))
 
             from core.config_manager import ConfigManager
+
             real_cm = ConfigManager(config_file=str(config_path))
 
-            with patch("aura_cli.dispatch.config", real_cm), \
-                 patch("aura_cli.cli_main.config", real_cm):
-                code, out, err, _ = self._dispatch(
-                    ["config", "set", "model.planning", "anthropic/claude-3.5-sonnet"]
-                )
+            with patch("aura_cli.dispatch.config", real_cm), patch("aura_cli.cli_main.config", real_cm):
+                code, out, err, _ = self._dispatch(["config", "set", "model.planning", "anthropic/claude-3.5-sonnet"])
 
             self.assertEqual(code, 0, msg=f"stderr: {err}")
             written = json.loads(config_path.read_text())
@@ -154,13 +142,11 @@ class TestConfigSetDispatch(unittest.TestCase):
             config_path.write_text(json.dumps({"model_routing": {}}))
 
             from core.config_manager import ConfigManager
+
             real_cm = ConfigManager(config_file=str(config_path))
 
-            with patch("aura_cli.dispatch.config", real_cm), \
-                 patch("aura_cli.cli_main.config", real_cm):
-                code, out, err, _ = self._dispatch(
-                    ["config", "set", "model.quality", "openai/o3"]
-                )
+            with patch("aura_cli.dispatch.config", real_cm), patch("aura_cli.cli_main.config", real_cm):
+                code, out, err, _ = self._dispatch(["config", "set", "model.quality", "openai/o3"])
 
             self.assertEqual(code, 0, msg=f"stderr: {err}")
             written = json.loads(config_path.read_text())
@@ -179,11 +165,8 @@ class TestConfigSetDispatch(unittest.TestCase):
         failing_cm.update_config.side_effect = Exception("disk full")
 
         # _sync_cli_compat may copy config from cli_main → patch both
-        with patch("aura_cli.dispatch.config", failing_cm), \
-             patch("aura_cli.cli_main.config", failing_cm):
-            code, _out, err, _ = self._dispatch(
-                ["config", "set", "model.code_generation", "any-model"]
-            )
+        with patch("aura_cli.dispatch.config", failing_cm), patch("aura_cli.cli_main.config", failing_cm):
+            code, _out, err, _ = self._dispatch(["config", "set", "model.code_generation", "any-model"])
 
         self.assertEqual(code, 1)
         self.assertIn("failed to save config", err)

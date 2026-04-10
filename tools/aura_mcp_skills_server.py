@@ -15,6 +15,7 @@ Start:
 Auth (optional):
   Set MCP_API_TOKEN env var — all requests must include Authorization: Bearer <token>
 """
+
 from __future__ import annotations
 
 import os
@@ -292,6 +293,23 @@ _SKILL_METADATA_OVERRIDES: Dict[str, Dict[str, Any]] = {
             "project_root": {"type": "string", "description": "Path to project root to analyze", "default": "."},
         },
     },
+    "prompt_forge": {
+        "description": "Semantic-aware prompt generation: analyse code for patterns (async, recursion, loops, error handling, network, state) and assemble optimised prompts using 6 task templates.",
+        "input": {
+            "task": {"type": "string", "description": "Natural-language description of the coding task", "required": True},
+            "template": {"type": "string", "description": "Prompt template: function, bugfix, refactor, feature, architecture, or test", "default": "function"},
+            "language": {"type": "string", "description": "Target programming language"},
+            "code_context": {"type": "string", "description": "Existing code snippet for semantic analysis"},
+            "file_tree": {"type": "string", "description": "Project file-tree listing for context detection"},
+            "constraints": {"type": "string", "description": "Hard constraints the solution must satisfy"},
+            "test_cases": {"type": "string", "description": "Expected test cases or examples"},
+            "environment": {"type": "string", "description": "Runtime environment description"},
+            "chain_of_thought": {"type": "boolean", "description": "Enable step-by-step reasoning", "default": True},
+            "multi_candidate": {"type": "boolean", "description": "Request multiple solution candidates", "default": False},
+            "iterative_refine": {"type": "boolean", "description": "Enable self-review loop", "default": True},
+            "project_root": {"type": "string", "description": "Project root for auto file-tree detection", "default": "."},
+        },
+    },
 }
 
 
@@ -313,6 +331,7 @@ def _load_skills() -> None:
     global _skills, _load_error
     try:
         from agents.skills.registry import all_skills
+
         _skills = all_skills()
         log_json("INFO", "mcp_skills_server_loaded", details={"count": len(_skills)})
     except Exception as exc:
@@ -354,6 +373,7 @@ def _list_skill_descriptors() -> List[Dict[str, Any]]:
 def require_auth(authorization: Optional[str] = Header(default=None)) -> None:
     """Legacy auth handler - now delegates to centralized auth."""
     from tools.mcp_auth import get_mcp_server_api_key
+
     expected_key = get_mcp_server_api_key("skills")
     if not expected_key:
         return
@@ -375,6 +395,7 @@ class CallRequest(BaseModel):
 @app.get("/health")
 async def health(_: str = Depends(require_skills_auth)) -> Dict:
     from tools.mcp_auth import is_auth_enabled
+
     return build_health_payload(
         status="ok" if not _load_error else "degraded",
         server=get_registered_service("skills")["name"],
@@ -455,6 +476,7 @@ if __name__ == "__main__":
     import uvicorn
     from core.config_manager import config as _cfg
     from tools.mcp_auth import is_auth_enabled
+
     # R4: port from config registry; env var still overrides for backward-compat
     port = int(os.getenv("MCP_SKILLS_PORT", _cfg.get_mcp_server_port("skills")))
     auth_enabled = is_auth_enabled("skills")

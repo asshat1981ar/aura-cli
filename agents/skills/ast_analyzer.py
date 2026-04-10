@@ -7,6 +7,7 @@ Uses Python's built-in ast module to analyze:
 - Dead code detection (unreachable after return/raise)
 - Type annotation coverage
 """
+
 from __future__ import annotations
 
 import ast
@@ -174,15 +175,9 @@ class ASTAnalyzerSkill(SkillBase):
                 )
                 break
 
-    def _check_class_smells(
-        self, node: ast.ClassDef, file_path: str, metrics: ASTMetrics
-    ) -> None:
+    def _check_class_smells(self, node: ast.ClassDef, file_path: str, metrics: ASTMetrics) -> None:
         """Check for class-level code smells."""
-        method_count = sum(
-            1
-            for n in node.body
-            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-        )
+        method_count = sum(1 for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)))
         if method_count > 20:
             metrics.smells.append(
                 {
@@ -195,9 +190,7 @@ class ASTAnalyzerSkill(SkillBase):
                 }
             )
 
-    def _collect_imports(
-        self, node: ast.Import | ast.ImportFrom, metrics: ASTMetrics
-    ) -> None:
+    def _collect_imports(self, node: ast.Import | ast.ImportFrom, metrics: ASTMetrics) -> None:
         """Collect import module names."""
         if isinstance(node, ast.ImportFrom) and node.module:
             metrics.imports.append(node.module)

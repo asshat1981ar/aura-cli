@@ -6,6 +6,7 @@ snapshot-based test suites. Their primary purpose is to confirm that the
 `python3 main.py ...` entrypoint is wired correctly and that basic
 invocations succeed with a status code of 0.
 """
+
 import json
 import os
 import sys
@@ -33,7 +34,7 @@ class TestCLIEntrypointSmoke(TestCase):
         proc = run_main_subprocess("--json-help")
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertEqual(proc.stderr, "")
-        
+
         # Assert that the output is valid JSON and contains top-level keys
         payload = json.loads(proc.stdout)
         self.assertIn("commands", payload)

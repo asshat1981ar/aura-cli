@@ -1,17 +1,19 @@
 """Authentication middleware for AURA API.
 
 Extracted from api_server.py as part of Sprint 1 server decomposition.
-Provides JWT token verification and user extraction.
+Provides both token-based auth (matching server.py) and optional JWT support.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict
+import os
+import secrets
+from typing import Any, Dict, Optional
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Header, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
-# Try to import AURA auth components
+# Try to import AURA JWT auth components
 try:
     from core.auth import get_auth_manager, AUTH_AVAILABLE
 except ImportError:
@@ -21,7 +23,7 @@ security = HTTPBearer(auto_error=False)
 
 
 class AuthMiddleware:
-    """FastAPI middleware for JWT authentication.
+    """FastAPI middleware for authentication.
 
     Usage:
         app.add_middleware(AuthMiddleware)
@@ -47,12 +49,7 @@ async def get_current_user(
     Returns:
         Dict with username and role keys.
     """
-    # Always allow anonymous access when auth is not available
-    if not AUTH_AVAILABLE:
-        return {"username": "anonymous", "role": "admin"}
-
-    # Also allow if no credentials provided (for development)
-    if not credentials:
+    if not AUTH_AVAILABLE or not credentials:
         return {"username": "anonymous", "role": "admin"}
 
     try:
@@ -60,35 +57,25 @@ async def get_current_user(
         user = auth.get_current_user(credentials.credentials)
         return user.to_dict()
     except Exception:
-        # Fall back to anonymous on error
         return {"username": "anonymous", "role": "admin"}
 
 
-async def require_auth(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> Dict[str, Any]:
-    """Require valid authentication.
+def require_auth(authorization: Optional[str] = Header(default=None)) -> None:
+    """Require a valid Bearer token matching the AGENT_API_TOKEN env var.
 
-    Unlike get_current_user, this raises HTTPException on missing/invalid auth.
+    Matches the token-based auth used in server.py so that all routers share
+    a consistent authentication mechanism.
 
     Args:
-        credentials: HTTP Authorization credentials with Bearer token.
-
-    Returns:
-        Dict with username and role keys.
+        authorization: Value of the HTTP Authorization header.
 
     Raises:
-        HTTPException: 401 if credentials missing, 403 if invalid.
+        HTTPException: 401 if the header is absent, 403 if the token is wrong.
     """
-    if not credentials:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    if not AUTH_AVAILABLE:
-        return {"username": "anonymous", "role": "admin"}
-
-    try:
-        auth = get_auth_manager()
-        user = auth.get_current_user(credentials.credentials)
-        return user.to_dict()
-    except Exception as exc:
-        raise HTTPException(status_code=403, detail=f"Invalid token: {exc}") from exc
+    token = os.getenv("AGENT_API_TOKEN")
+    if not token:
+        return
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Missing Authorization header")
+    if not secrets.compare_digest(authorization, f"Bearer {token}"):
+        raise HTTPException(status_code=403, detail="Invalid token")

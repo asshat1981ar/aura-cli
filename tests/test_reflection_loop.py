@@ -1,4 +1,5 @@
 """Comprehensive tests for core.reflection_loop.DeepReflectionLoop."""
+
 from __future__ import annotations
 
 import json
@@ -104,29 +105,20 @@ class TestPhaseFailureRateDetection(unittest.TestCase):
     def test_no_insight_below_warn_threshold(self):
         # 30% failure rate is below PHASE_FAIL_RATE_WARN (40%)
         result = self._run_with_fail_rate(3, 10)
-        phase_insights = [
-            i for i in result.get("insights", [])
-            if i["type"] == "phase_failure" and i["phase"] == "act"
-        ]
+        phase_insights = [i for i in result.get("insights", []) if i["type"] == "phase_failure" and i["phase"] == "act"]
         self.assertEqual(phase_insights, [])
 
     def test_medium_severity_at_warn_threshold(self):
         # 50% failure rate → MEDIUM (>= 40%, < 65%)
         result = self._run_with_fail_rate(5, 10)
-        phase_insights = [
-            i for i in result.get("insights", [])
-            if i["type"] == "phase_failure" and i["phase"] == "act"
-        ]
+        phase_insights = [i for i in result.get("insights", []) if i["type"] == "phase_failure" and i["phase"] == "act"]
         self.assertEqual(len(phase_insights), 1)
         self.assertEqual(phase_insights[0]["severity"], "MEDIUM")
 
     def test_high_severity_at_high_threshold(self):
         # 70% failure rate → HIGH (>= 65%)
         result = self._run_with_fail_rate(7, 10)
-        phase_insights = [
-            i for i in result.get("insights", [])
-            if i["type"] == "phase_failure" and i["phase"] == "act"
-        ]
+        phase_insights = [i for i in result.get("insights", []) if i["type"] == "phase_failure" and i["phase"] == "act"]
         self.assertEqual(len(phase_insights), 1)
         self.assertEqual(phase_insights[0]["severity"], "HIGH")
 
@@ -140,25 +132,15 @@ class TestPhaseFailureRateDetection(unittest.TestCase):
         self.assertAlmostEqual(insight["failure_rate"], 0.8, places=1)
 
     def test_phases_with_underscore_prefix_are_skipped(self):
-        entries = [
-            _entry(phases={"_internal": {"status": "fail"}}) for _ in range(10)
-        ]
+        entries = [_entry(phases={"_internal": {"status": "fail"}}) for _ in range(10)]
         result = _make_loop(entries).run()
-        internal_insights = [
-            i for i in result.get("insights", [])
-            if i.get("phase") == "_internal"
-        ]
+        internal_insights = [i for i in result.get("insights", []) if i.get("phase") == "_internal"]
         self.assertEqual(internal_insights, [])
 
     def test_apply_result_phase_is_skipped(self):
-        entries = [
-            _entry(phases={"apply_result": {"status": "fail"}}) for _ in range(10)
-        ]
+        entries = [_entry(phases={"apply_result": {"status": "fail"}}) for _ in range(10)]
         result = _make_loop(entries).run()
-        apply_insights = [
-            i for i in result.get("insights", [])
-            if i.get("phase") == "apply_result"
-        ]
+        apply_insights = [i for i in result.get("insights", []) if i.get("phase") == "apply_result"]
         self.assertEqual(apply_insights, [])
 
 
@@ -187,10 +169,7 @@ class TestSkillLowSignalDetection(unittest.TestCase):
         # 0/5 actionable → 0% < 25% threshold
         entries = self._entries_with_skill("linter", 0, 5)
         result = _make_loop(entries).run()
-        skill_insights = [
-            i for i in result.get("insights", [])
-            if i["type"] == "low_value_skill" and i["skill"] == "linter"
-        ]
+        skill_insights = [i for i in result.get("insights", []) if i["type"] == "low_value_skill" and i["skill"] == "linter"]
         self.assertEqual(len(skill_insights), 1)
         self.assertEqual(skill_insights[0]["severity"], "LOW")
 
@@ -198,18 +177,14 @@ class TestSkillLowSignalDetection(unittest.TestCase):
         # 4/5 actionable → 80% >> 25% threshold
         entries = self._entries_with_skill("linter", 4, 5)
         result = _make_loop(entries).run()
-        skill_insights = [
-            i for i in result.get("insights", [])
-            if i["type"] == "low_value_skill" and i["skill"] == "linter"
-        ]
+        skill_insights = [i for i in result.get("insights", []) if i["type"] == "low_value_skill" and i["skill"] == "linter"]
         self.assertEqual(skill_insights, [])
 
     def test_skill_insight_contains_runs_and_rate(self):
         entries = self._entries_with_skill("complexity_scorer", 0, 5)
         result = _make_loop(entries).run()
         insight = next(
-            (i for i in result.get("insights", [])
-             if i["type"] == "low_value_skill" and i["skill"] == "complexity_scorer"),
+            (i for i in result.get("insights", []) if i["type"] == "low_value_skill" and i["skill"] == "complexity_scorer"),
             None,
         )
         self.assertIsNotNone(insight)
@@ -218,14 +193,9 @@ class TestSkillLowSignalDetection(unittest.TestCase):
 
     def test_skill_with_error_key_is_not_counted_as_actionable(self):
         # result with only "error" key should not be actionable
-        entries = [
-            _entry(skill_context={"linter": {"error": "timeout"}}) for _ in range(5)
-        ]
+        entries = [_entry(skill_context={"linter": {"error": "timeout"}}) for _ in range(5)]
         result = _make_loop(entries).run()
-        skill_insights = [
-            i for i in result.get("insights", [])
-            if i["type"] == "low_value_skill" and i["skill"] == "linter"
-        ]
+        skill_insights = [i for i in result.get("insights", []) if i["type"] == "low_value_skill" and i["skill"] == "linter"]
         self.assertEqual(len(skill_insights), 1)
 
 
@@ -250,10 +220,7 @@ class TestGoalTypeOutcomeTracking(unittest.TestCase):
         # 1/5 pass → 20% < 40% threshold
         entries = self._entries_for_goal_type("bugfix", 1, 5)
         result = _make_loop(entries).run()
-        insights = [
-            i for i in result.get("insights", [])
-            if i["type"] == "goal_type_struggling" and i["goal_type"] == "bugfix"
-        ]
+        insights = [i for i in result.get("insights", []) if i["type"] == "goal_type_struggling" and i["goal_type"] == "bugfix"]
         self.assertEqual(len(insights), 1)
         self.assertEqual(insights[0]["severity"], "HIGH")
 
@@ -261,35 +228,24 @@ class TestGoalTypeOutcomeTracking(unittest.TestCase):
         # 4/5 pass → 80%
         entries = self._entries_for_goal_type("refactor", 4, 5)
         result = _make_loop(entries).run()
-        insights = [
-            i for i in result.get("insights", [])
-            if i["type"] == "goal_type_struggling" and i["goal_type"] == "refactor"
-        ]
+        insights = [i for i in result.get("insights", []) if i["type"] == "goal_type_struggling" and i["goal_type"] == "refactor"]
         self.assertEqual(insights, [])
 
     def test_no_insight_when_fewer_than_3_samples(self):
         # Only 2 entries — minimum is 3
         entries = self._entries_for_goal_type("feature", 0, 2)
         result = _make_loop(entries).run()
-        insights = [
-            i for i in result.get("insights", [])
-            if i["type"] == "goal_type_struggling" and i["goal_type"] == "feature"
-        ]
+        insights = [i for i in result.get("insights", []) if i["type"] == "goal_type_struggling" and i["goal_type"] == "feature"]
         self.assertEqual(insights, [])
 
     def test_skip_status_counts_as_pass(self):
-        entries = [
-            _entry(goal_type="migration", verif_status="skip") for _ in range(5)
-        ]
+        entries = [_entry(goal_type="migration", verif_status="skip") for _ in range(5)]
         result = _make_loop(entries).run()
         outcomes = result["goal_type_outcomes"]["migration"]
         self.assertEqual(outcomes["pass"], 5)
 
     def test_multiple_goal_types_tracked_independently(self):
-        entries = (
-            self._entries_for_goal_type("refactor", 5, 5) +
-            self._entries_for_goal_type("bugfix", 0, 5)
-        )
+        entries = self._entries_for_goal_type("refactor", 5, 5) + self._entries_for_goal_type("bugfix", 0, 5)
         result = _make_loop(entries).run()
         self.assertEqual(result["goal_type_outcomes"]["refactor"]["pass"], 5)
         self.assertEqual(result["goal_type_outcomes"]["bugfix"]["pass"], 0)
@@ -300,9 +256,7 @@ class TestGoalTypeOutcomeTracking(unittest.TestCase):
 
 class TestInsightExtraction(unittest.TestCase):
     def test_insights_written_to_brain(self):
-        entries = [
-            _entry(phases={"plan": {"status": "fail"}}) for _ in range(10)
-        ]
+        entries = [_entry(phases={"plan": {"status": "fail"}}) for _ in range(10)]
         loop = _make_loop(entries)
         loop.run()
         # At minimum, add_weakness should be called (even zero times is valid
@@ -311,9 +265,7 @@ class TestInsightExtraction(unittest.TestCase):
         loop.brain.add_weakness.assert_called()
 
     def test_insight_written_as_json_string(self):
-        entries = [
-            _entry(phases={"act": {"status": "fail"}}) for _ in range(10)
-        ]
+        entries = [_entry(phases={"act": {"status": "fail"}}) for _ in range(10)]
         loop = _make_loop(entries)
         loop.run()
         # Each call to add_weakness should pass a valid JSON string

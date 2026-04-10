@@ -15,6 +15,7 @@ from core.logging_utils import log_json
 
 class Severity(Enum):
     """Review comment severity levels."""
+
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
@@ -23,6 +24,7 @@ class Severity(Enum):
 @dataclass
 class ReviewComment:
     """A single review comment."""
+
     path: str
     line: int
     message: str
@@ -34,6 +36,7 @@ class ReviewComment:
 @dataclass
 class ReviewResult:
     """Complete PR review result."""
+
     pr_number: int
     pr_title: str
     summary: str
@@ -113,11 +116,15 @@ class PRReviewAgent:
         Returns:
             ReviewResult with comments and summary
         """
-        log_json("INFO", "pr_review_started", {
-            "pr_number": pr_number,
-            "title": pr_title,
-            "files_count": len(files),
-        })
+        log_json(
+            "INFO",
+            "pr_review_started",
+            {
+                "pr_number": pr_number,
+                "title": pr_title,
+                "files_count": len(files),
+            },
+        )
 
         comments: List[ReviewComment] = []
         self.stats["files_changed"] = len(files)
@@ -147,11 +154,15 @@ class PRReviewAgent:
             approved=approved,
         )
 
-        log_json("INFO", "pr_review_completed", {
-            "pr_number": pr_number,
-            "comments_count": len(comments),
-            "approved": approved,
-        })
+        log_json(
+            "INFO",
+            "pr_review_completed",
+            {
+                "pr_number": pr_number,
+                "comments_count": len(comments),
+                "approved": approved,
+            },
+        )
 
         return result
 
@@ -227,10 +238,12 @@ class PRReviewAgent:
         ]
 
         if comments:
-            lines.extend([
-                "### Issues by Category",
-                "",
-            ])
+            lines.extend(
+                [
+                    "### Issues by Category",
+                    "",
+                ]
+            )
 
             # Group by rule
             by_rule: Dict[str, List[ReviewComment]] = {}

@@ -184,9 +184,7 @@ def analyze_capability_needs(
             if tool_name not in mcp_tools:
                 mcp_tools.append(tool_name)
 
-        if rule.provisioning_action and not any(
-            action["action"] == rule.provisioning_action for action in provisioning_actions
-        ):
+        if rule.provisioning_action and not any(action["action"] == rule.provisioning_action for action in provisioning_actions):
             provisioning_actions.append(
                 {
                     "action": rule.provisioning_action,
@@ -380,10 +378,7 @@ def _start_github_mcp_bridge(project_root: Path) -> dict:
 
 def build_missing_skill_goals(missing_skills: Iterable[str], goal: str) -> list[str]:
     goal_text = (goal or "").strip()
-    return [
-        f"{CAPABILITY_GOAL_PREFIX}{skill_name}' so AURA can better handle goal: {goal_text}"
-        for skill_name in missing_skills
-    ]
+    return [f"{CAPABILITY_GOAL_PREFIX}{skill_name}' so AURA can better handle goal: {goal_text}" for skill_name in missing_skills]
 
 
 def queue_missing_capability_goals(
@@ -419,11 +414,7 @@ def queue_missing_capability_goals(
     existing = set(getattr(goal_queue, "queue", []) or [])
     candidate_goals = build_missing_skill_goals(missing, goal)
     new_goals = [item for item in candidate_goals if item not in existing]
-    skipped = [
-        {"goal": item, "reason": "already_queued"}
-        for item in candidate_goals
-        if item in existing
-    ]
+    skipped = [{"goal": item, "reason": "already_queued"} for item in candidate_goals if item in existing]
     if not new_goals:
         return {"attempted": True, "queued": [], "skipped": skipped, "queue_strategy": None}
 
@@ -466,11 +457,7 @@ def record_capability_status(
         "skipped_goals": list((capability_goal_queue or {}).get("skipped", [])),
         "queue_strategy": (capability_goal_queue or {}).get("queue_strategy"),
         "provisioning_results": list((capability_provisioning or {}).get("results", [])),
-        "pending_self_development_goals": [
-            item
-            for item in _goal_queue_items(project_root=project_root, goal_queue=goal_queue)
-            if is_capability_goal(item)
-        ],
+        "pending_self_development_goals": [item for item in _goal_queue_items(project_root=project_root, goal_queue=goal_queue) if is_capability_goal(item)],
     }
     return save_capability_status(project_root, report)
 
@@ -510,31 +497,21 @@ def build_capability_status_report(
             failed_bootstrap_actions.append(action_name)
 
     if not provisioning_results:
-        pending_bootstrap_actions.extend(
-            item.get("action")
-            for item in stored.get("provisioning_actions", [])
-            if item.get("action")
-        )
+        pending_bootstrap_actions.extend(item.get("action") for item in stored.get("provisioning_actions", []) if item.get("action"))
 
     dedupe = lambda values: list(dict.fromkeys(item for item in values if item))
 
     return {
         "configured": {
             "auto_add_capabilities": bool(_config_value(resolved_config, "auto_add_capabilities", True)),
-            "auto_queue_missing_capabilities": bool(
-                _config_value(resolved_config, "auto_queue_missing_capabilities", True)
-            ),
+            "auto_queue_missing_capabilities": bool(_config_value(resolved_config, "auto_queue_missing_capabilities", True)),
             "auto_provision_mcp": bool(_config_value(resolved_config, "auto_provision_mcp", False)),
             "auto_start_mcp_servers": bool(_config_value(resolved_config, "auto_start_mcp_servers", False)),
         },
         "last_updated": stored.get("updated_at"),
         "last_goal": stored.get("last_goal"),
         "matched_capabilities": matched_capabilities,
-        "matched_capability_ids": [
-            item.get("capability_id")
-            for item in matched_capabilities
-            if item.get("capability_id")
-        ],
+        "matched_capability_ids": [item.get("capability_id") for item in matched_capabilities if item.get("capability_id")],
         "recommended_skills": list(stored.get("recommended_skills", [])),
         "missing_skills": list(stored.get("missing_skills", [])),
         "queued_goals": list(stored.get("queued_goals", [])),

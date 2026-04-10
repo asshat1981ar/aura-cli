@@ -55,6 +55,7 @@ def handle(task: dict, context: dict) -> dict:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _resolve_agent(context: dict):
     """Return a PlannerAgent from context, constructing one if needed."""
     agent = context.get("agent")
@@ -64,9 +65,8 @@ def _resolve_agent(context: dict):
     brain = context.get("brain")
     model = context.get("model")
     if brain is None or model is None:
-        raise ValueError(
-            "handlers/planner: context must contain 'agent' or both 'brain' and 'model'"
-        )
+        raise ValueError("handlers/planner: context must contain 'agent' or both 'brain' and 'model'")
 
     from agents.planner import PlannerAgent  # deferred import
+
     return PlannerAgent(brain=brain, model=model)

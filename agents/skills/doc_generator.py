@@ -1,4 +1,5 @@
 """Skill: auto-generate docstring templates and README sections from Python source."""
+
 from __future__ import annotations
 import ast
 from pathlib import Path

@@ -36,9 +36,11 @@ class MCPDiscoveryAgent:
                     config = json.load(f)
                     mcp_servers = config.get("mcpServers", {})
                     for name, details in mcp_servers.items():
-                        # Basic validation of config format
+                        # Basic validation of config format — support both stdio (command) and HTTP (url) transports
                         if "command" in details:
-                            discovered.append({"name": name, "command": details["command"], "status": "configured"})
+                            discovered.append({"name": name, "command": details["command"], "transport": "stdio", "status": "configured"})
+                        elif "url" in details:
+                            discovered.append({"name": name, "url": details["url"], "transport": "http", "status": "configured"})
                         else:
                             log_json("WARNING", "mcp_discovery_invalid_config", details={"server": name})
             except json.JSONDecodeError as e:
@@ -60,9 +62,7 @@ class MCPDiscoveryAgent:
         async def _do_register():
             for server in discovered:
                 server_raw = mcp_servers.get(server.get("name", ""), {})
-                port = server_raw.get("port") or (
-                    int(server_raw.get("env", {}).get("PORT", 0)) or None
-                )
+                port = server_raw.get("port") or (int(server_raw.get("env", {}).get("PORT", 0)) or None)
                 if port:
                     cfg = MCPServerConfig(
                         name=server["name"],
@@ -72,8 +72,7 @@ class MCPDiscoveryAgent:
                     try:
                         await agent_registry.register_mcp_agents(cfg)
                     except Exception as e:
-                        log_json("WARN", "mcp_discovery_register_failed",
-                                 details={"server": server["name"], "error": str(e)})
+                        log_json("WARN", "mcp_discovery_register_failed", details={"server": server["name"], "error": str(e)})
 
         try:
             asyncio.get_running_loop()

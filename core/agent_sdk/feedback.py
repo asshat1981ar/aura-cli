@@ -4,6 +4,7 @@
 Dispatches goal outcomes to three systems: model router (EMA updates),
 skill weights (JSON file), and brain memory (semantic storage).
 """
+
 from __future__ import annotations
 
 import json
@@ -105,16 +106,18 @@ class FeedbackCollector:
         # 3. Brain memory
         if self._brain is not None:
             try:
-                self._brain.remember({
-                    "type": "goal_outcome",
-                    "goal": goal,
-                    "goal_type": goal_type,
-                    "model": model,
-                    "success": success,
-                    "cost_usd": cost,
-                    "verification": verification_result,
-                })
-            except Exception as exc:
+                self._brain.remember(
+                    {
+                        "type": "goal_outcome",
+                        "goal": goal,
+                        "goal_type": goal_type,
+                        "model": model,
+                        "success": success,
+                        "cost_usd": cost,
+                        "verification": verification_result,
+                    }
+                )
+            except (OSError, RuntimeError, TypeError) as exc:
                 logger.warning("Failed to store outcome in brain: %s", exc)
 
         return {
@@ -130,14 +133,11 @@ class FeedbackCollector:
 
         try:
             recent = self._session_store.list_sessions(status="failed", limit=10)
-        except Exception:
+        except (OSError, RuntimeError, KeyError):
             return []
 
         # Filter to this goal_type if possible
-        failures = [
-            s for s in recent
-            if s.get("goal_type") == goal_type and s.get("error_summary")
-        ]
+        failures = [s for s in recent if s.get("goal_type") == goal_type and s.get("error_summary")]
         if not failures:
             failures = [s for s in recent if s.get("error_summary")]
 

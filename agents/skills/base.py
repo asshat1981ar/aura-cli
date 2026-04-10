@@ -1,4 +1,5 @@
 """Base class for all AURA skill modules."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -12,12 +13,27 @@ from core.logging_utils import log_json
 # ---------------------------------------------------------------------------
 
 #: Directories that should always be excluded when walking project source trees.
-SKIP_DIRS: frozenset[str] = frozenset({
-    ".git", "__pycache__", "node_modules", ".tox", ".venv", "venv",
-    "dist", "build", "env", ".env", "site-packages", "test-aura-env",
-    "aura_cli.egg-info", "tmp_out", ".mypy_cache", ".ruff_cache",
-    ".pytest_cache",
-})
+SKIP_DIRS: frozenset[str] = frozenset(
+    {
+        ".git",
+        "__pycache__",
+        "node_modules",
+        ".tox",
+        ".venv",
+        "venv",
+        "dist",
+        "build",
+        "env",
+        ".env",
+        "site-packages",
+        "test-aura-env",
+        "aura_cli.egg-info",
+        "tmp_out",
+        ".mypy_cache",
+        ".ruff_cache",
+        ".pytest_cache",
+    }
+)
 
 
 def iter_py_files(root: Path) -> Iterator[Path]:

@@ -1,5 +1,6 @@
 # tests/test_agent_sdk_session_persistence.py
 """Tests for session persistence and cost tracking."""
+
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,10 +15,12 @@ class TestSessionStore(unittest.TestCase):
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_create_session(self):
         from core.agent_sdk.session_persistence import SessionStore
+
         store = SessionStore(db_path=self.db_path)
         pk = store.create_session("sdk-123", "Fix bug", "bug_fix", "bug_fix", "claude-sonnet-4-6")
         self.assertIsInstance(pk, int)
@@ -25,6 +28,7 @@ class TestSessionStore(unittest.TestCase):
 
     def test_get_session(self):
         from core.agent_sdk.session_persistence import SessionStore
+
         store = SessionStore(db_path=self.db_path)
         store.create_session("sdk-456", "Add feature", "feature", "feature", "claude-sonnet-4-6")
         session = store.get_session("sdk-456")
@@ -34,6 +38,7 @@ class TestSessionStore(unittest.TestCase):
 
     def test_update_status(self):
         from core.agent_sdk.session_persistence import SessionStore
+
         store = SessionStore(db_path=self.db_path)
         pk = store.create_session("sdk-789", "Refactor", "refactor", "refactor", "claude-sonnet-4-6")
         store.update_status(pk, "completed")
@@ -42,6 +47,7 @@ class TestSessionStore(unittest.TestCase):
 
     def test_record_event(self):
         from core.agent_sdk.session_persistence import SessionStore
+
         store = SessionStore(db_path=self.db_path)
         pk = store.create_session("sdk-e1", "Test", "default", "feature", "claude-sonnet-4-6")
         store.record_event(pk, "analyze_goal", "analyze_goal", "claude-sonnet-4-6", 100, 50, True, None)
@@ -50,6 +56,7 @@ class TestSessionStore(unittest.TestCase):
 
     def test_list_sessions(self):
         from core.agent_sdk.session_persistence import SessionStore
+
         store = SessionStore(db_path=self.db_path)
         store.create_session("s1", "Goal 1", "bug_fix", "bug_fix", "claude-sonnet-4-6")
         store.create_session("s2", "Goal 2", "feature", "feature", "claude-sonnet-4-6")
@@ -58,6 +65,7 @@ class TestSessionStore(unittest.TestCase):
 
     def test_list_sessions_by_status(self):
         from core.agent_sdk.session_persistence import SessionStore
+
         store = SessionStore(db_path=self.db_path)
         pk1 = store.create_session("s1", "G1", "bug_fix", "bug_fix", "claude-sonnet-4-6")
         store.create_session("s2", "G2", "feature", "feature", "claude-sonnet-4-6")
@@ -67,6 +75,7 @@ class TestSessionStore(unittest.TestCase):
 
     def test_get_resumable(self):
         from core.agent_sdk.session_persistence import SessionStore
+
         store = SessionStore(db_path=self.db_path)
         pk = store.create_session("s1", "Paused goal", "bug_fix", "bug_fix", "claude-sonnet-4-6")
         store.update_status(pk, "paused")
@@ -80,16 +89,19 @@ class TestCostComputation(unittest.TestCase):
 
     def test_compute_cost_sonnet(self):
         from core.agent_sdk.session_persistence import compute_cost
+
         cost = compute_cost("claude-sonnet-4-6", 1_000_000, 1_000_000)
         self.assertAlmostEqual(cost, 18.0)  # 3 + 15
 
     def test_compute_cost_haiku(self):
         from core.agent_sdk.session_persistence import compute_cost
+
         cost = compute_cost("claude-haiku-4-5", 1_000_000, 1_000_000)
         self.assertAlmostEqual(cost, 6.0)  # 1 + 5
 
     def test_compute_cost_small_usage(self):
         from core.agent_sdk.session_persistence import compute_cost
+
         cost = compute_cost("claude-sonnet-4-6", 1000, 500)
         expected = (1000 * 3.0 + 500 * 15.0) / 1_000_000
         self.assertAlmostEqual(cost, expected)

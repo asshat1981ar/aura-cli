@@ -30,7 +30,7 @@ class TestMetricsCollector:
     def test_system_metrics_collection(self, collector):
         """Test collecting system metrics."""
         metrics = collector.collect_system_metrics()
-        
+
         assert isinstance(metrics, SystemMetrics)
         assert metrics.timestamp > 0
         assert 0 <= metrics.cpu_percent <= 100
@@ -47,7 +47,7 @@ class TestMetricsCollector:
             agent_count=2,
             tokens_used=1000,
         )
-        
+
         goals = collector.get_goal_metrics()
         assert len(goals) == 1
         assert goals[0].goal_id == "test-1"
@@ -70,9 +70,9 @@ class TestMetricsCollector:
             duration_seconds=10.0,
             cycles_used=10,
         )
-        
+
         summary = collector.get_summary()
-        
+
         assert summary["goals"]["total"] == 2
         assert summary["goals"]["completed"] == 1
         assert summary["goals"]["failed"] == 1
@@ -87,18 +87,18 @@ class TestMetricsCollector:
             duration_seconds=1.0,
             cycles_used=1,
         )
-        
+
         # Save metrics
         collector._save_metrics()
-        
+
         # Verify file exists
         assert collector.METRICS_FILE.exists()
-        
+
         # Create new collector and load
         new_collector = MetricsCollector()
         new_collector.METRICS_FILE = collector.METRICS_FILE
         new_collector._load_metrics()
-        
+
         assert len(new_collector.get_goal_metrics()) >= 1
 
 
@@ -123,9 +123,9 @@ class TestAnalyticsEngine:
                 duration_seconds=5.0 + i,
                 cycles_used=3,
             )
-        
+
         trends = engine.analyze_goal_trends(days=7)
-        
+
         assert trends["total_goals"] == 5
         assert trends["completed"] == 4
         assert trends["success_rate"] == 0.8
@@ -136,9 +136,9 @@ class TestAnalyticsEngine:
         # Collect some system metrics
         for _ in range(5):
             engine.collector.collect_system_metrics()
-        
+
         perf = engine.analyze_system_performance(hours=24)
-        
+
         assert "status" in perf
         assert "health_score" in perf
         assert "cpu" in perf
@@ -156,9 +156,9 @@ class TestAnalyticsEngine:
                 duration_seconds=60.0 + i * 10,
                 cycles_used=5,
             )
-        
+
         prediction = engine.predict_goal_completion("medium")
-        
+
         assert "predicted_duration_seconds" in prediction
         assert "confidence" in prediction
         assert prediction["based_on_samples"] == 10
@@ -175,13 +175,13 @@ class TestAnalyticsEngine:
                 duration_seconds=10.0,
                 cycles_used=5,
             )
-        
+
         # Add system metrics to trigger health warning
         for _ in range(5):
             metrics = engine.collector.collect_system_metrics()
-        
+
         insights = engine.get_insights()
-        
+
         assert isinstance(insights, list)
         # Should have at least one insight (goals or system)
         assert len(insights) >= 0  # May or may not have insights depending on data
@@ -207,7 +207,7 @@ class TestAgentPerformanceTracker:
             duration_seconds=5.0,
             tokens_used=1000,
         )
-        
+
         perf = tracker.get_performance("agent-1")
         assert perf is not None
         assert perf.total_tasks == 1
@@ -226,7 +226,7 @@ class TestAgentPerformanceTracker:
                 duration_seconds=30.0,
                 tokens_used=500,
             )
-        
+
         perf = tracker.get_performance("agent-2")
         assert perf.performance_score > 0
         assert perf.performance_score <= 100
@@ -244,7 +244,7 @@ class TestAgentPerformanceTracker:
                     duration_seconds=10.0 + agent_num * 5,
                     tokens_used=1000,
                 )
-        
+
         leaderboard = tracker.get_leaderboard(limit=10)
         assert len(leaderboard) == 3
         # Should be sorted by performance score
@@ -262,7 +262,7 @@ class TestAgentPerformanceTracker:
                 duration_seconds=100.0,  # Slow
                 tokens_used=5000,  # Expensive
             )
-        
+
         recs = tracker.get_recommendations()
         assert len(recs) > 0
         assert any("Underperforming" in r["title"] for r in recs)
@@ -277,9 +277,9 @@ class TestAgentPerformanceTracker:
             duration_seconds=5.0,
             tokens_used=100,
         )
-        
+
         assert tracker.reset_agent_stats("reset-agent")
-        
+
         perf = tracker.get_performance("reset-agent")
         assert perf.total_tasks == 0
         assert perf.successful_tasks == 0
@@ -297,9 +297,9 @@ class TestAgentPerformanceTracker:
                     duration_seconds=10.0,
                     tokens_used=500,
                 )
-        
+
         summary = tracker.get_summary()
-        
+
         assert summary["total_agents"] == 3
         assert summary["total_tasks"] == 15
         assert summary["total_successful"] == 12
@@ -315,10 +315,10 @@ class TestIntegration:
         collector = MetricsCollector()
         collector.METRICS_FILE = tmp_path / "metrics.json"
         engine = AnalyticsEngine(collector)
-        
+
         # Collect system metrics
         collector.collect_system_metrics()
-        
+
         # Record goal completions
         collector.record_goal_completion(
             goal_id="int-test",
@@ -329,11 +329,11 @@ class TestIntegration:
             agent_count=2,
             tokens_used=2000,
         )
-        
+
         # Generate analytics
         trends = engine.analyze_goal_trends(days=7)
         summary = collector.get_summary()
-        
+
         assert trends["total_goals"] == 1
         assert summary["goals"]["completed"] == 1
 
@@ -343,7 +343,7 @@ class TestIntegration:
         collector.METRICS_FILE = tmp_path / "metrics.json"
         tracker = AgentPerformanceTracker()
         tracker.DATA_FILE = tmp_path / "agent_perf.json"
-        
+
         # Record agent task
         tracker.record_task(
             agent_id="integration-agent",
@@ -353,7 +353,7 @@ class TestIntegration:
             duration_seconds=15.0,
             tokens_used=1500,
         )
-        
+
         # Record goal completion
         collector.record_goal_completion(
             goal_id="agent-goal",
@@ -364,10 +364,10 @@ class TestIntegration:
             agent_count=1,
             tokens_used=1500,
         )
-        
+
         # Verify both systems have data
         agent_perf = tracker.get_performance("integration-agent")
         goals = collector.get_goal_metrics()
-        
+
         assert agent_perf.total_tasks == 1
         assert len(goals) == 1

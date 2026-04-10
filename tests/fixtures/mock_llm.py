@@ -6,6 +6,7 @@ Responses are resolved by substring-matching the incoming prompt against a
 registry of ``pattern → response_text`` pairs supplied at construction time
 or registered later via ``set_response``.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -45,9 +46,7 @@ class MockModelAdapter:
 
     def __init__(self, responses: dict[str, str] | None = None) -> None:
         # Use caller-supplied mapping or fall back to the built-in defaults.
-        self._responses: dict[str, str] = (
-            dict(responses) if responses is not None else dict(_DEFAULT_PATTERNS)
-        )
+        self._responses: dict[str, str] = dict(responses) if responses is not None else dict(_DEFAULT_PATTERNS)
         # Track every call for assertion convenience.
         self.call_log: list[str] = []
 
@@ -107,9 +106,7 @@ class MockModelAdapter:
         lower_prompt = prompt.lower()
         # Sort patterns longest-first so more specific entries win over generic
         # ones (e.g. "plan and code" beats "plan").
-        matched_patterns = [
-            p for p in self._responses if p.lower() in lower_prompt
-        ]
+        matched_patterns = [p for p in self._responses if p.lower() in lower_prompt]
         if not matched_patterns:
             return DEFAULT_RESPONSE
         best = max(matched_patterns, key=len)

@@ -61,10 +61,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("config", "set"),
         summary="Set a config value",
-        description=(
-            "Persist a configuration key-value pair to aura.config.json.\n"
-            "Use dotted model paths like 'model.code_generation' to set model routing."
-        ),
+        description=("Persist a configuration key-value pair to aura.config.json.\nUse dotted model paths like 'model.code_generation' to set model routing."),
         examples=(
             "python3 main.py config set model.code_generation google/gemini-2.5-pro",
             "python3 main.py config set dry_run true",
@@ -93,6 +90,16 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         examples=(
             "python3 main.py logs --tail 50",
             "python3 main.py logs --file memory/aura.log --follow",
+        ),
+    ),
+    CommandSpec(
+        path=("history",),
+        summary="Show completed goal history",
+        description="List the last N completed goals with their scores and timestamps from the goal archive.",
+        examples=(
+            "python3 main.py history",
+            "python3 main.py history --limit 20",
+            "python3 main.py history --json",
         ),
     ),
     CommandSpec(
@@ -162,11 +169,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("goal", "resume"),
         summary="Resume an interrupted goal",
-        description=(
-            "Re-queue a goal that was interrupted mid-execution due to a crash or "
-            "process kill. Reads memory/in_flight_goal.json written by the goal run "
-            "loop. Use --run to immediately execute the re-queued goal."
-        ),
+        description=("Re-queue a goal that was interrupted mid-execution due to a crash or process kill. Reads memory/in_flight_goal.json written by the goal run loop. Use --run to immediately execute the re-queued goal."),
         examples=(
             "python3 main.py goal resume",
             "python3 main.py goal resume --run",
@@ -203,28 +206,21 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         summary="[EXPERIMENTAL] Call an MCP tool",
         description="Invoke a repo-local MCP server/tool target with optional JSON args.",
         examples=(
-            "python3 main.py mcp call filesystem/read_file --args '{\"path\":\"README.md\"}'",
-            "python3 main.py mcp call sqlite/query --args '{\"sql\":\"select 1\"}'",
+            'python3 main.py mcp call filesystem/read_file --args \'{"path":"README.md"}\'',
+            'python3 main.py mcp call sqlite/query --args \'{"sql":"select 1"}\'',
         ),
         legacy_flags=("--mcp-call",),
     ),
     CommandSpec(
         path=("mcp", "status"),
         summary="Show MCP server health dashboard",
-        description=(
-            "Query all registered MCP servers and render a Rich table showing "
-            "server name, endpoint URL, health status, last heartbeat, average "
-            "response latency, and tool count."
-        ),
+        description=("Query all registered MCP servers and render a Rich table showing server name, endpoint URL, health status, last heartbeat, average response latency, and tool count."),
         examples=("python3 main.py mcp status",),
     ),
     CommandSpec(
         path=("mcp", "restart"),
         summary="Restart / validate an MCP server",
-        description=(
-            "Trigger a manual health validation pass for a named MCP server. "
-            "Pass the server config-name (e.g. 'dev_tools', 'skills')."
-        ),
+        description=("Trigger a manual health validation pass for a named MCP server. Pass the server config-name (e.g. 'dev_tools', 'skills')."),
         examples=(
             "python3 main.py mcp restart dev_tools",
             "python3 main.py mcp restart skills",
@@ -234,17 +230,12 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         path=("beads",),
         summary="BEADS contract commands",
         description="Inspect and validate BEADS schema contracts.",
-        examples=(
-            "python3 main.py beads schemas",
-        ),
+        examples=("python3 main.py beads schemas",),
     ),
     CommandSpec(
         path=("beads", "schemas"),
         summary="List registered BEADS schemas",
-        description=(
-            "Print a table of all BEADS schema contracts registered in .beads/. "
-            "Includes schema version, TypedDict names, and interaction count."
-        ),
+        description=("Print a table of all BEADS schema contracts registered in .beads/. Includes schema version, TypedDict names, and interaction count."),
         examples=(
             "python3 main.py beads schemas",
             "python3 main.py beads schemas --json",
@@ -529,9 +520,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
             "  1 — run_id not found in the active-run registry\n"
             "  2 — cancellation signal sent but rollback verification failed"
         ),
-        examples=(
-            "python3 main.py cancel <run-id>",
-        ),
+        examples=("python3 main.py cancel <run-id>",),
     ),
 )
 
@@ -554,6 +543,7 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("beads_schemas", False, ("beads", "schemas")),
     CLIActionSpec("diag", False, ("diag",), legacy_primary_flags=("diag",)),
     CLIActionSpec("logs", False, ("logs",)),
+    CLIActionSpec("history", True, ("history",)),
     CLIActionSpec("watch", True, ("watch",)),
     CLIActionSpec("studio", True, ("studio",)),
     CLIActionSpec("workflow_run", True, ("workflow", "run"), legacy_primary_flags=("workflow_goal",)),
@@ -687,6 +677,7 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("contract-report",): "contract_report",
     ("diag",): "diag",
     ("logs",): "logs",
+    ("history",): "history",
     ("watch",): "watch",
     ("studio",): "studio",
     ("workflow", "run"): "workflow_run",

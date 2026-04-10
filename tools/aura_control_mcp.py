@@ -21,6 +21,7 @@ Start:
 Auth (optional):
   Set MCP_CONTROL_TOKEN env var — all requests must include Authorization: Bearer <token>
 """
+
 from __future__ import annotations
 
 import os
@@ -93,33 +94,21 @@ def _resolve_storage_path(key: str, default: str) -> Path:
 def _get_goal_queue() -> GoalQueue:
     global _goal_queue
     if _goal_queue is None:
-        _goal_queue = GoalQueue(
-            queue_path=str(
-                _resolve_storage_path("goal_queue_path", DEFAULT_CONFIG["goal_queue_path"])
-            )
-        )
+        _goal_queue = GoalQueue(queue_path=str(_resolve_storage_path("goal_queue_path", DEFAULT_CONFIG["goal_queue_path"])))
     return _goal_queue
 
 
 def _get_goal_archive() -> GoalArchive:
     global _goal_archive
     if _goal_archive is None:
-        _goal_archive = GoalArchive(
-            archive_path=str(
-                _resolve_storage_path("goal_archive_path", DEFAULT_CONFIG["goal_archive_path"])
-            )
-        )
+        _goal_archive = GoalArchive(archive_path=str(_resolve_storage_path("goal_archive_path", DEFAULT_CONFIG["goal_archive_path"])))
     return _goal_archive
 
 
 def _get_brain() -> Brain:
     global _brain
     if _brain is None:
-        _brain = Brain(
-            db_path=str(
-                _resolve_storage_path("brain_db_path", DEFAULT_CONFIG["brain_db_path"])
-            )
-        )
+        _brain = Brain(db_path=str(_resolve_storage_path("brain_db_path", DEFAULT_CONFIG["brain_db_path"])))
     return _brain
 
 
@@ -137,6 +126,7 @@ def _get_memories_cached(brain: Brain) -> list:
 # ---------------------------------------------------------------------------
 # Auth (R8: Updated to use centralized MCP auth)
 # ---------------------------------------------------------------------------
+
 
 def _check_auth(
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
@@ -228,6 +218,7 @@ def _build_descriptor(name: str) -> Dict:
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
+
 
 def _goal_add(args: Dict) -> Any:
     text = args.get("text", "").strip()
@@ -337,11 +328,13 @@ def _file_list(args: Dict) -> Any:
         raise ValueError(f"'{path_str}' is not a directory.")
     entries = []
     for item in sorted(path.iterdir()):
-        entries.append({
-            "name": item.name,
-            "type": "dir" if item.is_dir() else "file",
-            "size_bytes": item.stat().st_size if item.is_file() else None,
-        })
+        entries.append(
+            {
+                "name": item.name,
+                "type": "dir" if item.is_dir() else "file",
+                "size_bytes": item.stat().st_size if item.is_file() else None,
+            }
+        )
     return {"path": path_str, "entries": entries, "count": len(entries)}
 
 
@@ -396,9 +389,11 @@ _TOOL_HANDLERS = {
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @app.get("/health")
 async def health(auth: str = Depends(require_control_auth)):
     from tools.mcp_auth import is_auth_enabled
+
     return build_health_payload(
         server=get_registered_service("control")["name"],
         version="1.0.0",
@@ -503,6 +498,7 @@ if __name__ == "__main__":
     import uvicorn
     from core.config_manager import config as _cfg
     from tools.mcp_auth import is_auth_enabled
+
     # R4: port from config registry; env var still overrides for backward-compat
     port = int(os.getenv("MCP_CONTROL_PORT", _cfg.get_mcp_server_port("control")))
     auth_enabled = is_auth_enabled("control")

@@ -104,10 +104,7 @@ class CircuitBreaker:
             return False
 
         if self.state == "OPEN":
-            if (
-                self.last_failure_time is not None
-                and (time.monotonic() - self.last_failure_time) >= self.recovery_timeout
-            ):
+            if self.last_failure_time is not None and (time.monotonic() - self.last_failure_time) >= self.recovery_timeout:
                 self.state = "HALF_OPEN"
                 return False
             return True

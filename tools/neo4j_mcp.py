@@ -19,6 +19,7 @@ Start:
 Auth (optional):
   Set NEO4J_MCP_TOKEN env var
 """
+
 from __future__ import annotations
 
 import os
@@ -55,10 +56,7 @@ def _get_driver():
     """Lazy-load and return the Neo4j driver singleton."""
     global _neo4j_driver
     if not _neo4j_available:
-        raise RuntimeError(
-            "neo4j Python driver is not installed. "
-            "Install it with: pip install neo4j"
-        )
+        raise RuntimeError("neo4j Python driver is not installed. Install it with: pip install neo4j")
     if _neo4j_driver is None:
         uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
         user = os.getenv("NEO4J_USER", "neo4j")
@@ -81,6 +79,7 @@ _call_errors: Dict[str, int] = {}
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
+
 
 def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
     if not _TOKEN:
@@ -163,6 +162,7 @@ def _build_descriptor(name: str) -> Dict:
 # Tool implementations
 # ---------------------------------------------------------------------------
 
+
 def _query_cypher(args: Dict) -> Any:
     query = args.get("query", "").strip()
     if not query:
@@ -197,11 +197,7 @@ def _create_relationship(args: Dict) -> Any:
         if not args.get(field, "").strip():
             raise ValueError(f"'{field}' is required.")
     driver = _get_driver()
-    cypher = (
-        f"MATCH (a:{args['from_label']} {{{args['from_key']}: $from_value}}), "
-        f"(b:{args['to_label']} {{{args['to_key']}: $to_value}}) "
-        f"CREATE (a)-[r:{args['rel_type']}]->(b) RETURN type(r) AS rel_type"
-    )
+    cypher = f"MATCH (a:{args['from_label']} {{{args['from_key']}: $from_value}}), (b:{args['to_label']} {{{args['to_key']}: $to_value}}) CREATE (a)-[r:{args['rel_type']}]->(b) RETURN type(r) AS rel_type"
     with driver.session() as session:
         result = session.run(cypher, from_value=args["from_value"], to_value=args["to_value"])
         record = result.single()
@@ -215,21 +211,18 @@ def _find_paths(args: Dict) -> Any:
             raise ValueError(f"'{field}' is required.")
     max_depth = int(args.get("max_depth", 5))
     driver = _get_driver()
-    cypher = (
-        f"MATCH (a:{args['from_label']} {{{args['from_key']}: $from_value}}), "
-        f"(b:{args['to_label']} {{{args['to_key']}: $to_value}}), "
-        f"p = shortestPath((a)-[*..{max_depth}]-(b)) "
-        f"RETURN p"
-    )
+    cypher = f"MATCH (a:{args['from_label']} {{{args['from_key']}: $from_value}}), (b:{args['to_label']} {{{args['to_key']}: $to_value}}), p = shortestPath((a)-[*..{max_depth}]-(b)) RETURN p"
     with driver.session() as session:
         result = session.run(cypher, from_value=args["from_value"], to_value=args["to_value"])
         paths = []
         for record in result:
             path = record["p"]
-            paths.append({
-                "nodes": [dict(node) for node in path.nodes],
-                "length": len(path),
-            })
+            paths.append(
+                {
+                    "nodes": [dict(node) for node in path.nodes],
+                    "length": len(path),
+                }
+            )
     return {"paths": paths, "count": len(paths)}
 
 
@@ -277,11 +270,7 @@ def _import_codebase_graph(args: Dict) -> Any:
             to_key = rel.get("to_key", "name")
             to_value = rel.get("to_value", "")
             rel_type = rel.get("rel_type", "RELATES_TO")
-            cypher = (
-                f"MATCH (a:{from_label} {{{from_key}: $from_value}}), "
-                f"(b:{to_label} {{{to_key}: $to_value}}) "
-                f"MERGE (a)-[r:{rel_type}]->(b) RETURN type(r)"
-            )
+            cypher = f"MATCH (a:{from_label} {{{from_key}: $from_value}}), (b:{to_label} {{{to_key}: $to_value}}) MERGE (a)-[r:{rel_type}]->(b) RETURN type(r)"
             session.run(cypher, from_value=from_value, to_value=to_value)
             created_rels += 1
 
@@ -302,6 +291,7 @@ _TOOL_HANDLERS = {
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health")
 async def health(_: None = Depends(_check_auth)):
@@ -380,5 +370,6 @@ async def get_metrics(_: None = Depends(_check_auth)) -> Dict:
 if __name__ == "__main__":
     import uvicorn
     from core.config_manager import config as _cfg
+
     port = int(os.getenv("NEO4J_MCP_PORT", _cfg.get_mcp_server_port("neo4j", default=8013)))
     uvicorn.run("tools.neo4j_mcp:app", host="0.0.0.0", port=port, reload=False)

@@ -2,6 +2,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import List
 
+
 @dataclass
 class FileManager:
     base_path: Path
@@ -18,12 +19,13 @@ class FileManager:
         """Reads the content of a file and returns it as a string."""
         file_path = self.get_full_path(file_name)
         try:
-            with file_path.open('r', encoding='utf-8') as file:
+            with file_path.open("r", encoding="utf-8") as file:
                 return file.read()
         except FileNotFoundError:
-            raise ValueError(f'File not found: {file_path}')
+            raise ValueError(f"File not found: {file_path}")
         except Exception as e:
-            raise RuntimeError(f'Error reading file: {file_path}') from e
+            raise RuntimeError(f"Error reading file: {file_path}") from e
+
 
 # Example usage
 # fm = FileManager(Path('/path/to/directory'))

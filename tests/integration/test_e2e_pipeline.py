@@ -12,6 +12,7 @@ Test 2 — ``test_failure_triggers_rollback``
     gracefully (no unhandled exception) and that the target file is either
     unchanged or restored to its original content.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -30,6 +31,7 @@ from tests.fixtures.mock_llm import MockModelAdapter
 # ---------------------------------------------------------------------------
 # Shared helpers (mirrors the pattern from test_pipeline_integration.py)
 # ---------------------------------------------------------------------------
+
 
 class _FakeAgent:
     """Returns a fixed *output* dict on every ``run()`` call."""
@@ -63,56 +65,68 @@ def _base_agents(**overrides) -> Dict[str, Any]:
     pass *overrides* to replace specific phases with custom behaviour.
     """
     agents: Dict[str, Any] = {
-        "ingest": _FakeAgent({
-            "goal": "Add a hello() function to core/utils.py",
-            "snapshot": "core/utils.py",
-            "memory_summary": "",
-            "constraints": {},
-        }),
-        "plan": _FakeAgent({
-            "steps": [
-                {
-                    "id": "s1",
-                    "title": "Implement hello()",
-                    "description": "Add function.",
-                    "files": ["core/utils.py"],
-                },
-            ],
-            "risks": [],
-            "estimated_complexity": "low",
-        }),
-        "critique": _FakeAgent({
-            "issues": [],
-            "fixes": [],
-            "blocking": False,
-            "approved": True,
-        }),
-        "synthesize": _FakeAgent({
-            "tasks": [
-                {
-                    "id": "t1",
-                    "title": "Add hello()",
-                    "intent": "add function",
-                    "files": ["core/utils.py"],
-                    "tests": [],
-                }
-            ],
-        }),
+        "ingest": _FakeAgent(
+            {
+                "goal": "Add a hello() function to core/utils.py",
+                "snapshot": "core/utils.py",
+                "memory_summary": "",
+                "constraints": {},
+            }
+        ),
+        "plan": _FakeAgent(
+            {
+                "steps": [
+                    {
+                        "id": "s1",
+                        "title": "Implement hello()",
+                        "description": "Add function.",
+                        "files": ["core/utils.py"],
+                    },
+                ],
+                "risks": [],
+                "estimated_complexity": "low",
+            }
+        ),
+        "critique": _FakeAgent(
+            {
+                "issues": [],
+                "fixes": [],
+                "blocking": False,
+                "approved": True,
+            }
+        ),
+        "synthesize": _FakeAgent(
+            {
+                "tasks": [
+                    {
+                        "id": "t1",
+                        "title": "Add hello()",
+                        "intent": "add function",
+                        "files": ["core/utils.py"],
+                        "tests": [],
+                    }
+                ],
+            }
+        ),
         "act": _FakeAgent({"changes": []}),
         "sandbox": _FakeAgent({"passed": True, "summary": "ok"}),
-        "verify": _FakeAgent({
-            "passed": True,
-            "status": "pass",
-            "failures": [],
-            "logs": "",
-        }),
-        "reflect": _FakeAgent({
-            "summary": "Cycle completed successfully.",
-            "learnings": ["Mock-based tests keep the pipeline hermetic."],
-            "next_actions": [],
-            "cycle_outcome": "success",
-            "confidence": 0.95,
-        }),
+        "verify": _FakeAgent(
+            {
+                "passed": True,
+                "status": "pass",
+                "failures": [],
+                "logs": "",
+            }
+        ),
+        "reflect": _FakeAgent(
+            {
+                "summary": "Cycle completed successfully.",
+                "learnings": ["Mock-based tests keep the pipeline hermetic."],
+                "next_actions": [],
+                "cycle_outcome": "success",
+                "confidence": 0.95,
+            }
+        ),
     }
     agents.update(overrides)
     return agents
@@ -158,6 +172,7 @@ def _make_orchestrator(
 # Test 1 — Full pipeline happy-path
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 def test_happy_path_full_pipeline(tmp_path: Path) -> None:
     """Complete ``run_loop`` with ``dry_run=True`` produces all required
@@ -177,40 +192,32 @@ def test_happy_path_full_pipeline(tmp_path: Path) -> None:
 
     # ── Basic shape ──────────────────────────────────────────────────────────
     assert result["goal"] == goal
-    assert result["stop_reason"] in {"PASS", "MAX_CYCLES", ""}, (
-        f"Unexpected stop_reason: {result['stop_reason']!r}"
-    )
+    assert result["stop_reason"] in {"PASS", "MAX_CYCLES", ""}, f"Unexpected stop_reason: {result['stop_reason']!r}"
     assert result["history"], "Expected at least one completed cycle."
 
     phases = result["history"][0]["phase_outputs"]
 
     # ── All eight required phase output keys ─────────────────────────────────
     required_keys = [
-        "context",        # phase 1  – ingest
+        "context",  # phase 1  – ingest
         "skill_context",  # phase 2  – skill dispatch
-        "plan",           # phase 3  – planner
-        "critique",       # phase 4  – critic
-        "task_bundle",    # phase 5  – synthesize
-        "change_set",     # phase 6  – act
-        "verification",   # phase 9  – verify
-        "reflection",     # phase 10 – reflect
+        "plan",  # phase 3  – planner
+        "critique",  # phase 4  – critic
+        "task_bundle",  # phase 5  – synthesize
+        "change_set",  # phase 6  – act
+        "verification",  # phase 9  – verify
+        "reflection",  # phase 10 – reflect
     ]
     for key in required_keys:
-        assert key in phases, (
-            f"Expected phase_outputs[{key!r}] to be present after pipeline run."
-        )
+        assert key in phases, f"Expected phase_outputs[{key!r}] to be present after pipeline run."
 
     # ── plan.steps is a list ─────────────────────────────────────────────────
     plan = phases["plan"]
-    assert isinstance(plan.get("steps"), list), (
-        f"plan['steps'] should be a list, got: {type(plan.get('steps'))!r}"
-    )
+    assert isinstance(plan.get("steps"), list), f"plan['steps'] should be a list, got: {type(plan.get('steps'))!r}"
 
     # ── verification passed ───────────────────────────────────────────────────
     verification = phases["verification"]
-    assert verification.get("passed") is True, (
-        f"Expected verification['passed'] == True, got: {verification.get('passed')!r}"
-    )
+    assert verification.get("passed") is True, f"Expected verification['passed'] == True, got: {verification.get('passed')!r}"
 
     # ── reflection was written ────────────────────────────────────────────────
     reflection = phases["reflection"]
@@ -224,6 +231,7 @@ def test_happy_path_full_pipeline(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # Test 2 — Failure triggers graceful handling and rollback
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 def test_failure_triggers_rollback(tmp_path: Path) -> None:
@@ -269,12 +277,8 @@ def test_failure_triggers_rollback(tmp_path: Path) -> None:
 
     # ── apply_result records the failure ─────────────────────────────────────
     apply_result = phases.get("apply_result", {})
-    assert apply_result.get("failed"), (
-        "Expected apply_result['failed'] to be non-empty when old_code is absent."
-    )
+    assert apply_result.get("failed"), "Expected apply_result['failed'] to be non-empty when old_code is absent."
 
     # ── Target file is unchanged (no partial write; rollback is a no-op since
     #    OldCodeNotFoundError is raised before any bytes are written) ──────────
-    assert target_abs.read_text(encoding="utf-8") == original_content, (
-        "Target file content should be unchanged after a failed apply."
-    )
+    assert target_abs.read_text(encoding="utf-8") == original_content, "Target file content should be unchanged after a failed apply."

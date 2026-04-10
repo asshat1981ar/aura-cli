@@ -3,6 +3,7 @@
 Uses a configurable MockModelAdapter so each phase returns fake but
 schema-valid responses without hitting any external service.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -16,6 +17,7 @@ from memory.store import MemoryStore
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
+
 
 class _FakeAgent:
     """Always returns *output*."""
@@ -44,40 +46,56 @@ class _CallableAgent:
 def _base_agents(**overrides) -> Dict[str, Any]:
     """Return a full agent dict with schema-valid responses, applying overrides."""
     agents = {
-        "ingest": _FakeAgent({
-            "goal": "test-goal",
-            "snapshot": "file.py",
-            "memory_summary": "",
-            "constraints": {},
-        }),
-        "plan": _FakeAgent({
-            "steps": ["step 1"],
-            "risks": [],
-        }),
-        "critique": _FakeAgent({
-            "issues": [],
-            "fixes": [],
-        }),
-        "synthesize": _FakeAgent({
-            "tasks": [{"id": "t1", "title": "demo", "intent": "", "files": [], "tests": []}],
-        }),
-        "act": _FakeAgent({
-            "changes": [],
-        }),
-        "sandbox": _FakeAgent({
-            "passed": True,
-            "summary": "ok",
-        }),
-        "verify": _FakeAgent({
-            "status": "pass",
-            "failures": [],
-            "logs": "",
-        }),
-        "reflect": _FakeAgent({
-            "summary": "done",
-            "learnings": [],
-            "next_actions": [],
-        }),
+        "ingest": _FakeAgent(
+            {
+                "goal": "test-goal",
+                "snapshot": "file.py",
+                "memory_summary": "",
+                "constraints": {},
+            }
+        ),
+        "plan": _FakeAgent(
+            {
+                "steps": ["step 1"],
+                "risks": [],
+            }
+        ),
+        "critique": _FakeAgent(
+            {
+                "issues": [],
+                "fixes": [],
+            }
+        ),
+        "synthesize": _FakeAgent(
+            {
+                "tasks": [{"id": "t1", "title": "demo", "intent": "", "files": [], "tests": []}],
+            }
+        ),
+        "act": _FakeAgent(
+            {
+                "changes": [],
+            }
+        ),
+        "sandbox": _FakeAgent(
+            {
+                "passed": True,
+                "summary": "ok",
+            }
+        ),
+        "verify": _FakeAgent(
+            {
+                "status": "pass",
+                "failures": [],
+                "logs": "",
+            }
+        ),
+        "reflect": _FakeAgent(
+            {
+                "summary": "done",
+                "learnings": [],
+                "next_actions": [],
+            }
+        ),
     }
     agents.update(overrides)
     return agents
@@ -97,6 +115,7 @@ def _make_orchestrator(agents, tmp_path: Path, **kwargs) -> LoopOrchestrator:
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
 
+
 def test_full_9_phase_cycle_completes(tmp_path: Path):
     """Full pipeline runs without error and all expected phases are present."""
     orchestrator = _make_orchestrator(_base_agents(), tmp_path)
@@ -107,18 +126,25 @@ def test_full_9_phase_cycle_completes(tmp_path: Path):
 
     phases = result["history"][0]["phase_outputs"]
     for expected_phase in [
-        "context", "plan", "critique", "task_bundle",
-        "change_set", "verification", "reflection",
+        "context",
+        "plan",
+        "critique",
+        "task_bundle",
+        "change_set",
+        "verification",
+        "reflection",
     ]:
         assert expected_phase in phases, f"Missing phase: {expected_phase}"
 
 
 def test_sandbox_failure_triggers_act_retry(tmp_path: Path):
     """When sandbox fails once then passes, act is retried before verify."""
-    fail_then_pass = iter([
-        {"passed": False, "summary": "syntax error", "details": {"stderr": "SyntaxError"}},
-        {"passed": True, "summary": "ok"},
-    ])
+    fail_then_pass = iter(
+        [
+            {"passed": False, "summary": "syntax error", "details": {"stderr": "SyntaxError"}},
+            {"passed": True, "summary": "ok"},
+        ]
+    )
 
     sandbox_agent = _CallableAgent(lambda _: next(fail_then_pass))
     agents = _base_agents(sandbox=sandbox_agent)
@@ -160,19 +186,25 @@ def test_verify_failure_restores_only_loop_applied_files(tmp_path: Path):
     target_file.chmod(0o755)
 
     agents = _base_agents(
-        act=_FakeAgent({
-            "changes": [{
-                "file_path": "run_aura.sh",
-                "old_code": "#!/usr/bin/env bash\necho old\n",
-                "new_code": "#!/usr/bin/env bash\necho new\n",
-                "overwrite_file": False,
-            }],
-        }),
-        verify=_FakeAgent({
-            "status": "fail",
-            "failures": ["AssertionError: wrapper output mismatch"],
-            "logs": "",
-        }),
+        act=_FakeAgent(
+            {
+                "changes": [
+                    {
+                        "file_path": "run_aura.sh",
+                        "old_code": "#!/usr/bin/env bash\necho old\n",
+                        "new_code": "#!/usr/bin/env bash\necho new\n",
+                        "overwrite_file": False,
+                    }
+                ],
+            }
+        ),
+        verify=_FakeAgent(
+            {
+                "status": "fail",
+                "failures": ["AssertionError: wrapper output mismatch"],
+                "logs": "",
+            }
+        ),
     )
     orchestrator = _make_orchestrator(agents, tmp_path)
     result = orchestrator.run_loop("fix wrapper", max_cycles=1, dry_run=False)
@@ -187,14 +219,18 @@ def test_dry_run_skips_file_writes(tmp_path: Path):
     """dry_run=True must not write any files to project_root."""
     target_file = tmp_path / "output.py"
 
-    act_with_change = _FakeAgent({
-        "changes": [{
-            "file_path": str(target_file),
-            "old_code": "",
-            "new_code": "# generated",
-            "overwrite_file": True,
-        }],
-    })
+    act_with_change = _FakeAgent(
+        {
+            "changes": [
+                {
+                    "file_path": str(target_file),
+                    "old_code": "",
+                    "new_code": "# generated",
+                    "overwrite_file": True,
+                }
+            ],
+        }
+    )
     agents = _base_agents(act=act_with_change)
     orchestrator = _make_orchestrator(agents, tmp_path)
     result = orchestrator.run_loop("write file", max_cycles=1, dry_run=True)
@@ -222,11 +258,12 @@ def test_human_gate_blocks_and_denies_skips_apply(tmp_path: Path, monkeypatch):
 
     # Inject critical security finding into skill_context via monkeypatching
     # dispatch_skills to return a mock result
-    with patch(
-        "core.orchestrator.dispatch_skills",
-        return_value={"security_scanner": {"critical_count": 1, "findings": ["SQL injection"]}},
-    ), patch.object(
-        orchestrator.human_gate, "request_approval", return_value=False
+    with (
+        patch(
+            "core.orchestrator.dispatch_skills",
+            return_value={"security_scanner": {"critical_count": 1, "findings": ["SQL injection"]}},
+        ),
+        patch.object(orchestrator.human_gate, "request_approval", return_value=False),
     ):
         result = orchestrator.run_loop("risky", max_cycles=1, dry_run=True)
 
@@ -272,10 +309,13 @@ def test_goal_capability_plan_can_trigger_mcp_provisioning(tmp_path: Path):
         "changelog_generator": MagicMock(),
     }
 
-    with patch(
-        "core.orchestrator.provision_capability_actions",
-        return_value={"attempted": True, "results": [{"action": "ensure_mcp_servers", "status": "applied"}]},
-    ) as mock_provision, patch("core.orchestrator.dispatch_skills", return_value={}):
+    with (
+        patch(
+            "core.orchestrator.provision_capability_actions",
+            return_value={"attempted": True, "results": [{"action": "ensure_mcp_servers", "status": "applied"}]},
+        ) as mock_provision,
+        patch("core.orchestrator.dispatch_skills", return_value={}),
+    ):
         result = orchestrator.run_cycle("Review GitHub pull requests and release notes", dry_run=False)
 
     phases = result["phase_outputs"]

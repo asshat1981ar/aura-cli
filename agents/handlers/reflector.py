@@ -67,6 +67,7 @@ def handle(task: dict, context: dict) -> dict:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _resolve_agent(context: dict):
     """Return a ReflectorAgent from context, using a shared instance as fallback."""
     global _SHARED_AGENT
@@ -76,6 +77,7 @@ def _resolve_agent(context: dict):
 
     if _SHARED_AGENT is None:
         from agents.reflector import ReflectorAgent  # deferred import
+
         _SHARED_AGENT = ReflectorAgent()
 
     return _SHARED_AGENT

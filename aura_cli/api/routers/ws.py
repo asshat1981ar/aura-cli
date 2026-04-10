@@ -93,9 +93,7 @@ def _get_agents_from_registry() -> List[Dict[str, Any]]:
         return []
 
 
-def _format_goals_for_api(
-    queue_data: Dict[str, Any], archive: List[Dict[str, Any]]
-) -> List[Dict[str, Any]]:
+def _format_goals_for_api(queue_data: Dict[str, Any], archive: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Format goals for API response."""
     goals: List[Dict[str, Any]] = []
 
@@ -103,33 +101,39 @@ def _format_goals_for_api(
     if isinstance(queue_data, dict):
         for goal in queue_data.get("queue", []):
             if isinstance(goal, dict):
-                goals.append({
-                    "id": goal.get("id", "unknown"),
-                    "description": goal.get("description", ""),
-                    "status": "queued",
-                    "created_at": goal.get("created_at", ""),
-                })
+                goals.append(
+                    {
+                        "id": goal.get("id", "unknown"),
+                        "description": goal.get("description", ""),
+                        "status": "queued",
+                        "created_at": goal.get("created_at", ""),
+                    }
+                )
 
         # Add in-flight goals
         for goal_id, goal in queue_data.get("in_flight", {}).items():
             if isinstance(goal, dict):
-                goals.append({
-                    "id": goal_id,
-                    "description": goal.get("description", ""),
-                    "status": "in_progress",
-                    "created_at": goal.get("created_at", ""),
-                })
+                goals.append(
+                    {
+                        "id": goal_id,
+                        "description": goal.get("description", ""),
+                        "status": "in_progress",
+                        "created_at": goal.get("created_at", ""),
+                    }
+                )
 
     # Add archived goals
     for goal in archive[-50:]:  # Last 50 archived
         if isinstance(goal, dict):
-            goals.append({
-                "id": goal.get("id", "unknown"),
-                "description": goal.get("description", ""),
-                "status": goal.get("status", "completed"),
-                "created_at": goal.get("created_at", ""),
-                "completed_at": goal.get("completed_at", ""),
-            })
+            goals.append(
+                {
+                    "id": goal.get("id", "unknown"),
+                    "description": goal.get("description", ""),
+                    "status": goal.get("status", "completed"),
+                    "created_at": goal.get("created_at", ""),
+                    "completed_at": goal.get("completed_at", ""),
+                }
+            )
 
     # Sort by created_at descending
     goals.sort(key=lambda x: x.get("created_at", ""), reverse=True)
@@ -150,13 +154,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     goals = _format_goals_for_api(queue_data, archive)
     agents = _get_agents_from_registry()
 
-    await websocket.send_json({
-        "type": "initial",
-        "payload": {
-            "goals": goals[:20],  # Send last 20
-            "agents": agents,
+    await websocket.send_json(
+        {
+            "type": "initial",
+            "payload": {
+                "goals": goals[:20],  # Send last 20
+                "agents": agents,
+            },
         }
-    })
+    )
 
     try:
         while True:

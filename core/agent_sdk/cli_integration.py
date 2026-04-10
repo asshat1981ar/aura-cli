@@ -1,5 +1,6 @@
 # core/agent_sdk/cli_integration.py
 """Wire the Agent SDK meta-controller into AURA CLI commands."""
+
 from __future__ import annotations
 
 import json
@@ -24,7 +25,7 @@ def build_controller_from_args(args: Any) -> Any:
             with open(config_path) as f:
                 aura_config = json.load(f)
             config = AgentSDKConfig.from_aura_config(aura_config)
-    except Exception:
+    except (OSError, json.JSONDecodeError, KeyError, TypeError):
         pass  # Fall back to defaults
 
     # Apply CLI overrides
@@ -47,13 +48,15 @@ def build_controller_from_args(args: Any) -> Any:
     model_adapter = None
     try:
         from memory.brain import Brain
+
         brain = Brain()
-    except Exception:
+    except (ImportError, OSError, RuntimeError):
         pass
     try:
         from core.model_adapter import ModelAdapter
+
         model_adapter = ModelAdapter()
-    except Exception:
+    except (ImportError, OSError, RuntimeError):
         pass
 
     # Initialize production subsystems
@@ -109,10 +112,7 @@ def format_result(result: Dict[str, Any]) -> str:
 
     if result.get("metrics"):
         m = result["metrics"]
-        parts.append(
-            f"Metrics: {m.get('total_calls', 0)} tool calls, "
-            f"{m.get('success_rate', 0):.0%} success rate"
-        )
+        parts.append(f"Metrics: {m.get('total_calls', 0)} tool calls, {m.get('success_rate', 0):.0%} success rate")
 
     return "\n".join(parts)
 
@@ -143,7 +143,7 @@ async def handle_agent_run(args: Any) -> int:
     except RuntimeError as exc:
         print(f"Error: {exc}")
         return 1
-    except Exception as exc:
+    except Exception as exc:  # Catch-all: CLI top-level handler must not crash
         logger.exception("Agent run failed")
         print(f"Error: {exc}")
         return 1
@@ -158,6 +158,7 @@ def handle_agent_scan(
 ) -> Dict[str, Any]:
     """Run a semantic scan of the codebase."""
     from core.agent_sdk.semantic_scanner import SemanticScanner
+
     scanner = SemanticScanner(
         project_root=project_root,
         db_path=db_path,
@@ -170,14 +171,10 @@ def handle_agent_scan(
 def format_scan_stats(db_path: Path) -> str:
     """Format scan statistics for CLI output."""
     from core.agent_sdk.semantic_schema import SemanticDB
+
     db = SemanticDB(db_path)
     meta = db.get_last_scan()
     if not meta:
         return "No scan data available. Run 'agent scan' first."
     files = db.get_all_files()
-    return (
-        f"Last scan: {meta['scan_time']}\n"
-        f"Type: {meta['scan_type']}, SHA: {meta['scan_sha'][:8]}\n"
-        f"Files: {len(files)}, Symbols: {meta['symbols_found']}\n"
-        f"LLM calls: {meta['llm_calls_made']}, Cost: ${meta['llm_cost_usd']:.3f}"
-    )
+    return f"Last scan: {meta['scan_time']}\nType: {meta['scan_type']}, SHA: {meta['scan_sha'][:8]}\nFiles: {len(files)}, Symbols: {meta['symbols_found']}\nLLM calls: {meta['llm_calls_made']}, Cost: ${meta['llm_cost_usd']:.3f}"

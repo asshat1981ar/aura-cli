@@ -1,20 +1,17 @@
 """Unit tests for core/health_monitor.py."""
+
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 from core.health_monitor import HealthMonitor
+
 
 class TestHealthMonitor(unittest.TestCase):
     def setUp(self):
         self.mock_skills = {}
         self.mock_queue = MagicMock()
         self.mock_store = MagicMock()
-        self.monitor = HealthMonitor(
-            skills=self.mock_skills,
-            goal_queue=self.mock_queue,
-            memory_store=self.mock_store,
-            project_root=Path(".")
-        )
+        self.monitor = HealthMonitor(skills=self.mock_skills, goal_queue=self.mock_queue, memory_store=self.mock_store, project_root=Path("."))
 
     def test_instantiation(self):
         self.assertIsNotNone(self.monitor)
@@ -33,6 +30,7 @@ class TestHealthMonitor(unittest.TestCase):
         with patch.object(self.monitor, "run_scan") as mock_scan:
             self.monitor.on_cycle_complete({"goal": "test"})
             assert mock_scan.called
+
 
 if __name__ == "__main__":
     unittest.main()

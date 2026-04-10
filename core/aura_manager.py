@@ -2,9 +2,11 @@
 AURA Manager — Central orchestration and function integration hub.
 Providing a baseline for autonomous architectural evolution.
 """
+
 import logging
 
 logger = logging.getLogger(__name__)
+
 
 class AuraManager:
     def __init__(self):
@@ -18,7 +20,7 @@ class AuraManager:
         """
         results = {}
         for func in func_list:
-            name = getattr(func, '__name__', 'unknown')
+            name = getattr(func, "__name__", "unknown")
             try:
                 # Placeholder for coordination logic
                 results[name] = func()
@@ -26,12 +28,14 @@ class AuraManager:
                 logger.error(f"Function {name} failed: {e}")
         return results
 
+
 def orchestration_manager():
     """
     Placeholder for high-level system orchestration.
     Targeted by RSI for cross-agent coordination improvements.
     """
     pass
+
 
 def safe_execute(func):
     """

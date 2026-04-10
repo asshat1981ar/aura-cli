@@ -3,6 +3,7 @@
 An Agent Card is a JSON document served at /.well-known/agent.json that
 describes an agent's capabilities, supported protocols, and connection details.
 """
+
 import json
 from dataclasses import dataclass, field, asdict
 from typing import Any
@@ -11,6 +12,7 @@ from typing import Any
 @dataclass
 class AgentCapability:
     """A single capability the agent can perform."""
+
     name: str
     description: str
     input_schema: dict[str, Any] = field(default_factory=dict)
@@ -20,17 +22,14 @@ class AgentCapability:
 @dataclass
 class AgentCard:
     """A2A Agent Card for capability discovery."""
+
     name: str = "AURA CLI"
     description: str = "Autonomous software development agent with 10-phase loop"
     version: str = "0.1.0"
     url: str = ""
     capabilities: list[AgentCapability] = field(default_factory=list)
-    supported_protocols: list[str] = field(
-        default_factory=lambda: ["a2a/1.0", "mcp/1.0"]
-    )
-    authentication: dict[str, Any] = field(
-        default_factory=lambda: {"type": "bearer"}
-    )
+    supported_protocols: list[str] = field(default_factory=lambda: ["a2a/1.0", "mcp/1.0"])
+    authentication: dict[str, Any] = field(default_factory=lambda: {"type": "bearer"})
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -138,8 +137,7 @@ class AgentCard:
     @classmethod
     def from_dict(cls, data: dict) -> "AgentCard":
         caps_data = data.pop("capabilities", [])
-        caps = [AgentCapability(**c) if isinstance(c, dict) else c
-                for c in caps_data]
+        caps = [AgentCapability(**c) if isinstance(c, dict) else c for c in caps_data]
         return cls(
             capabilities=caps,
             **{k: v for k, v in data.items() if k in cls.__dataclass_fields__},

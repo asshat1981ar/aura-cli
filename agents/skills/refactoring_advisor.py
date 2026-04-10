@@ -1,4 +1,5 @@
 """Skill: detect code smells and suggest refactoring opportunities."""
+
 from __future__ import annotations
 import ast
 from pathlib import Path

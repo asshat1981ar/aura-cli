@@ -5,6 +5,7 @@ By default this writes a safe config with ``${env:VAR}`` token placeholders inst
 of embedding live secrets. The output defaults to ``.mcp.json`` because that file is
 already ignored in this repository.
 """
+
 from __future__ import annotations
 
 import argparse

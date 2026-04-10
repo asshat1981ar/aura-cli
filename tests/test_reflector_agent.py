@@ -8,6 +8,7 @@ Coverage targets:
 - _analyze_context_quality() — all context-gap signal branches
 - Edge: empty input_data
 """
+
 from __future__ import annotations
 
 import pytest
@@ -120,33 +121,21 @@ class TestExtractSkillLearnings:
     # security_scanner ---------------------------------------------------
 
     def test_security_critical_count_adds_alert(self, agent: ReflectorAgent) -> None:
-        learnings = agent._extract_skill_learnings(
-            {"security_scanner": {"critical_count": 3}}
-        )
+        learnings = agent._extract_skill_learnings({"security_scanner": {"critical_count": 3}})
         assert any("security_scanner" in l and "3 critical" in l for l in learnings)
 
     def test_security_zero_critical_no_alert(self, agent: ReflectorAgent) -> None:
-        learnings = agent._extract_skill_learnings(
-            {"security_scanner": {"critical_count": 0}}
-        )
+        learnings = agent._extract_skill_learnings({"security_scanner": {"critical_count": 0}})
         assert not any("security_scanner" in l for l in learnings)
 
     # architecture_validator ---------------------------------------------
 
-    def test_architecture_coupling_above_threshold_adds_alert(
-        self, agent: ReflectorAgent
-    ) -> None:
-        learnings = agent._extract_skill_learnings(
-            {"architecture_validator": {"coupling_score": 2.5}}
-        )
+    def test_architecture_coupling_above_threshold_adds_alert(self, agent: ReflectorAgent) -> None:
+        learnings = agent._extract_skill_learnings({"architecture_validator": {"coupling_score": 2.5}})
         assert any("architecture coupling" in l and "2.50" in l for l in learnings)
 
-    def test_architecture_coupling_exactly_at_threshold_no_alert(
-        self, agent: ReflectorAgent
-    ) -> None:
-        learnings = agent._extract_skill_learnings(
-            {"architecture_validator": {"coupling_score": 1.0}}
-        )
+    def test_architecture_coupling_exactly_at_threshold_no_alert(self, agent: ReflectorAgent) -> None:
+        learnings = agent._extract_skill_learnings({"architecture_validator": {"coupling_score": 1.0}})
         assert not any("architecture coupling" in l for l in learnings)
 
     def test_architecture_coupling_none_no_alert(self, agent: ReflectorAgent) -> None:
@@ -156,55 +145,39 @@ class TestExtractSkillLearnings:
     # complexity_scorer --------------------------------------------------
 
     def test_complexity_high_risk_count_adds_alert(self, agent: ReflectorAgent) -> None:
-        learnings = agent._extract_skill_learnings(
-            {"complexity_scorer": {"high_risk_count": 5}}
-        )
+        learnings = agent._extract_skill_learnings({"complexity_scorer": {"high_risk_count": 5}})
         assert any("5 high-risk" in l for l in learnings)
 
     def test_complexity_zero_no_alert(self, agent: ReflectorAgent) -> None:
-        learnings = agent._extract_skill_learnings(
-            {"complexity_scorer": {"high_risk_count": 0}}
-        )
+        learnings = agent._extract_skill_learnings({"complexity_scorer": {"high_risk_count": 0}})
         assert not any("complexity_scorer" in l for l in learnings)
 
     # test_coverage_analyzer ---------------------------------------------
 
     def test_coverage_below_target_adds_alert(self, agent: ReflectorAgent) -> None:
-        learnings = agent._extract_skill_learnings(
-            {"test_coverage_analyzer": {"meets_target": False, "coverage_pct": 72.3}}
-        )
+        learnings = agent._extract_skill_learnings({"test_coverage_analyzer": {"meets_target": False, "coverage_pct": 72.3}})
         assert any("72.3%" in l for l in learnings)
 
     def test_coverage_meets_target_true_no_alert(self, agent: ReflectorAgent) -> None:
-        learnings = agent._extract_skill_learnings(
-            {"test_coverage_analyzer": {"meets_target": True, "coverage_pct": 95.0}}
-        )
+        learnings = agent._extract_skill_learnings({"test_coverage_analyzer": {"meets_target": True, "coverage_pct": 95.0}})
         assert not any("test coverage" in l for l in learnings)
 
     def test_coverage_meets_target_none_no_alert(self, agent: ReflectorAgent) -> None:
-        learnings = agent._extract_skill_learnings(
-            {"test_coverage_analyzer": {"meets_target": None}}
-        )
+        learnings = agent._extract_skill_learnings({"test_coverage_analyzer": {"meets_target": None}})
         assert not any("test coverage" in l for l in learnings)
 
     # tech_debt_quantifier -----------------------------------------------
 
     def test_debt_score_above_50_adds_alert(self, agent: ReflectorAgent) -> None:
-        learnings = agent._extract_skill_learnings(
-            {"tech_debt_quantifier": {"debt_score": 75}}
-        )
+        learnings = agent._extract_skill_learnings({"tech_debt_quantifier": {"debt_score": 75}})
         assert any("tech_debt_score 75" in l for l in learnings)
 
     def test_debt_score_exactly_50_no_alert(self, agent: ReflectorAgent) -> None:
-        learnings = agent._extract_skill_learnings(
-            {"tech_debt_quantifier": {"debt_score": 50}}
-        )
+        learnings = agent._extract_skill_learnings({"tech_debt_quantifier": {"debt_score": 50}})
         assert not any("tech_debt_score" in l for l in learnings)
 
     def test_debt_score_zero_no_alert(self, agent: ReflectorAgent) -> None:
-        learnings = agent._extract_skill_learnings(
-            {"tech_debt_quantifier": {"debt_score": 0}}
-        )
+        learnings = agent._extract_skill_learnings({"tech_debt_quantifier": {"debt_score": 0}})
         assert not any("tech_debt_score" in l for l in learnings)
 
     # general -----------------------------------------------------------
@@ -251,9 +224,7 @@ class TestBuildSkillSummary:
         assert summary["complexity_scorer"] == {"high_risk": 3}
 
     def test_test_coverage_analyzer_extracted(self, agent: ReflectorAgent) -> None:
-        ctx = {
-            "test_coverage_analyzer": {"coverage_pct": 88.0, "meets_target": True}
-        }
+        ctx = {"test_coverage_analyzer": {"coverage_pct": 88.0, "meets_target": True}}
         summary = agent._build_skill_summary(ctx)
         assert summary["test_coverage_analyzer"] == {
             "coverage_pct": 88.0,
@@ -283,9 +254,7 @@ class TestBuildSkillSummary:
         summary = agent._build_skill_summary(ctx)
         assert summary["security_scanner"] == {"critical": 0, "total": 0}
 
-    def test_architecture_validator_no_circular_deps(
-        self, agent: ReflectorAgent
-    ) -> None:
+    def test_architecture_validator_no_circular_deps(self, agent: ReflectorAgent) -> None:
         ctx = {"architecture_validator": {"coupling_score": 0.5}}
         summary = agent._build_skill_summary(ctx)
         assert summary["architecture_validator"]["circular_deps"] == 0
@@ -306,15 +275,11 @@ class TestAnalyzeContextQuality:
         assert any("ImportError" in g for g in gaps)
 
     def test_module_not_found_error_detected(self, agent: ReflectorAgent) -> None:
-        gaps = agent._analyze_context_quality(
-            ["ModuleNotFoundError: no module named y"]
-        )
+        gaps = agent._analyze_context_quality(["ModuleNotFoundError: no module named y"])
         assert any("ModuleNotFoundError" in g for g in gaps)
 
     def test_attribute_error_detected(self, agent: ReflectorAgent) -> None:
-        gaps = agent._analyze_context_quality(
-            ["AttributeError: obj has no attribute z"]
-        )
+        gaps = agent._analyze_context_quality(["AttributeError: obj has no attribute z"])
         assert any("AttributeError" in g for g in gaps)
 
     def test_not_defined_signal_detected(self, agent: ReflectorAgent) -> None:
@@ -325,9 +290,7 @@ class TestAnalyzeContextQuality:
         gaps = agent._analyze_context_quality(["some random failure text"])
         assert gaps == []
 
-    def test_multiple_failures_each_produce_one_gap(
-        self, agent: ReflectorAgent
-    ) -> None:
+    def test_multiple_failures_each_produce_one_gap(self, agent: ReflectorAgent) -> None:
         failures = ["NameError: x", "ImportError: y"]
         gaps = agent._analyze_context_quality(failures)
         assert len(gaps) == 2
@@ -335,9 +298,7 @@ class TestAnalyzeContextQuality:
     def test_empty_failures_returns_empty(self, agent: ReflectorAgent) -> None:
         assert agent._analyze_context_quality([]) == []
 
-    def test_failure_matching_multiple_signals_yields_single_gap(
-        self, agent: ReflectorAgent
-    ) -> None:
+    def test_failure_matching_multiple_signals_yields_single_gap(self, agent: ReflectorAgent) -> None:
         """A single failure line that contains multiple signal keywords must
         only add one gap entry — the ``break`` inside the loop prevents doubles."""
         failures = ["NameError and ImportError both appear in this message"]

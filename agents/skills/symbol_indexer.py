@@ -1,4 +1,5 @@
 """Skill: build a project-wide symbol index — classes, functions, methods with file/line/docstring."""
+
 from __future__ import annotations
 
 import ast
@@ -50,41 +51,47 @@ def _index_file(source: str, rel_path: str, include_private: bool) -> List[Dict]
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.ClassDef):
             if _should_include(node.name):
-                symbols.append({
-                    "name": node.name,
-                    "qualified_name": node.name,
-                    "type": "class",
-                    "file": rel_path,
-                    "line": node.lineno,
-                    "docstring": _first_docstring(node),
-                    "bases": [ast.unparse(b) if hasattr(ast, "unparse") else "" for b in node.bases],
-                })
+                symbols.append(
+                    {
+                        "name": node.name,
+                        "qualified_name": node.name,
+                        "type": "class",
+                        "file": rel_path,
+                        "line": node.lineno,
+                        "docstring": _first_docstring(node),
+                        "bases": [ast.unparse(b) if hasattr(ast, "unparse") else "" for b in node.bases],
+                    }
+                )
             # Methods inside class
             for item in ast.iter_child_nodes(node):
                 if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                     if _should_include(item.name) or item.name in ("__init__", "__call__", "__str__", "__repr__"):
-                        symbols.append({
-                            "name": item.name,
-                            "qualified_name": f"{node.name}.{item.name}",
-                            "type": "method",
-                            "file": rel_path,
-                            "line": item.lineno,
-                            "docstring": _first_docstring(item),
-                            "parent_class": node.name,
-                            "args": [a.arg for a in item.args.args if a.arg != "self"],
-                        })
+                        symbols.append(
+                            {
+                                "name": item.name,
+                                "qualified_name": f"{node.name}.{item.name}",
+                                "type": "method",
+                                "file": rel_path,
+                                "line": item.lineno,
+                                "docstring": _first_docstring(item),
+                                "parent_class": node.name,
+                                "args": [a.arg for a in item.args.args if a.arg != "self"],
+                            }
+                        )
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             if _should_include(node.name):
-                symbols.append({
-                    "name": node.name,
-                    "qualified_name": node.name,
-                    "type": "function",
-                    "file": rel_path,
-                    "line": node.lineno,
-                    "docstring": _first_docstring(node),
-                    "args": [a.arg for a in node.args.args],
-                    "is_async": isinstance(node, ast.AsyncFunctionDef),
-                })
+                symbols.append(
+                    {
+                        "name": node.name,
+                        "qualified_name": node.name,
+                        "type": "function",
+                        "file": rel_path,
+                        "line": node.lineno,
+                        "docstring": _first_docstring(node),
+                        "args": [a.arg for a in node.args.args],
+                        "is_async": isinstance(node, ast.AsyncFunctionDef),
+                    }
+                )
 
     return symbols
 
@@ -131,13 +138,17 @@ class SymbolIndexerSkill(SkillBase):
         for sym in all_symbols:
             name_index[sym["name"]].append({"file": sym["file"], "line": sym["line"], "type": sym["type"]})
 
-        log_json("INFO", "symbol_indexer_complete", details={
-            "symbols": len(all_symbols),
-            "files": files_indexed,
-            "classes": by_type.get("class", 0),
-            "functions": by_type.get("function", 0),
-            "methods": by_type.get("method", 0),
-        })
+        log_json(
+            "INFO",
+            "symbol_indexer_complete",
+            details={
+                "symbols": len(all_symbols),
+                "files": files_indexed,
+                "classes": by_type.get("class", 0),
+                "functions": by_type.get("function", 0),
+                "methods": by_type.get("method", 0),
+            },
+        )
 
         return {
             "symbols": all_symbols,

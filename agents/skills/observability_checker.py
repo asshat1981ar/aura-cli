@@ -1,4 +1,5 @@
 """Skill: observability checker — logging coverage, structured logging, error tracing."""
+
 from __future__ import annotations
 
 import ast
@@ -11,10 +12,22 @@ from core.logging_utils import log_json
 
 # Names that indicate a logging call
 _LOG_CALL_NAMES: Set[str] = {
-    "log_json",                                  # AURA's own structured logger
-    "logging.debug", "logging.info", "logging.warning", "logging.error", "logging.critical",
-    "logger.debug", "logger.info", "logger.warning", "logger.error", "logger.critical",
-    "log.debug", "log.info", "log.warning", "log.error", "log.critical",
+    "log_json",  # AURA's own structured logger
+    "logging.debug",
+    "logging.info",
+    "logging.warning",
+    "logging.error",
+    "logging.critical",
+    "logger.debug",
+    "logger.info",
+    "logger.warning",
+    "logger.error",
+    "logger.critical",
+    "log.debug",
+    "log.info",
+    "log.warning",
+    "log.error",
+    "log.critical",
 }
 
 _BARE_PRINT_RE = re.compile(r"^\s*print\s*\(")
@@ -84,32 +97,38 @@ def _analyse_file(source: str, file_path: str) -> Dict[str, Any]:
         functions.append(fn_info)
 
         if not has_log and len(body) > 5:
-            issues.append({
-                "type": "missing_logging",
-                "severity": "low",
-                "function": fn_name,
-                "line": fn_line,
-                "detail": f"Function '{fn_name}' has no logging calls (>{len(body)} statements).",
-            })
+            issues.append(
+                {
+                    "type": "missing_logging",
+                    "severity": "low",
+                    "function": fn_name,
+                    "line": fn_line,
+                    "detail": f"Function '{fn_name}' has no logging calls (>{len(body)} statements).",
+                }
+            )
         if except_without_log:
-            issues.append({
-                "type": "silent_exception",
-                "severity": "medium",
-                "function": fn_name,
-                "line": fn_line,
-                "detail": f"Function '{fn_name}' catches exceptions without logging or re-raising.",
-            })
+            issues.append(
+                {
+                    "type": "silent_exception",
+                    "severity": "medium",
+                    "function": fn_name,
+                    "line": fn_line,
+                    "detail": f"Function '{fn_name}' catches exceptions without logging or re-raising.",
+                }
+            )
 
     # Bare prints
     bare_prints = _count_bare_prints(source)
     for bp in bare_prints:
-        issues.append({
-            "type": "bare_print",
-            "severity": "low",
-            "function": None,
-            "line": bp["line"],
-            "detail": f"bare print() at line {bp['line']} — use structured logging instead: {bp['snippet']}",
-        })
+        issues.append(
+            {
+                "type": "bare_print",
+                "severity": "low",
+                "function": None,
+                "line": bp["line"],
+                "detail": f"bare print() at line {bp['line']} — use structured logging instead: {bp['snippet']}",
+            }
+        )
 
     logged_fns = sum(1 for f in functions if f["has_logging"])
     coverage_pct = round(100 * logged_fns / len(functions), 1) if functions else 100.0

@@ -43,16 +43,7 @@ class MCPProcess:
         env = {**os.environ}
         # Run from project root
         server_path = os.path.join(PROJECT_ROOT, "swarm-mcp-server", "dist", "index.js")
-        self._proc = subprocess.Popen(
-            ["node", server_path],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=env,
-            text=True,
-            bufsize=1,
-            cwd=PROJECT_ROOT
-        )
+        self._proc = subprocess.Popen(["node", server_path], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env, text=True, bufsize=1, cwd=PROJECT_ROOT)
         # Start reader thread
         t = threading.Thread(target=self._reader, daemon=True)
         t.start()
@@ -62,11 +53,14 @@ class MCPProcess:
 
     def _initialize(self):
         """Send MCP initialize handshake."""
-        resp = self._rpc("initialize", {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": {"name": "aura-mcp-swarm-bridge", "version": "1.0"},
-        })
+        resp = self._rpc(
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "aura-mcp-swarm-bridge", "version": "1.0"},
+            },
+        )
         if resp:
             self._rpc_notify("notifications/initialized", {})
             log_json("INFO", "mcp_swarm_initialized", details={"server_info": resp.get("result", {}).get("serverInfo", {})})

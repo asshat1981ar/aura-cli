@@ -1,4 +1,5 @@
 """Skill: quantify technical debt across a codebase."""
+
 from __future__ import annotations
 import ast
 import re
@@ -89,9 +90,7 @@ class TechDebtQuantifierSkill(SkillBase):
         density = len(unique_items) / max(total_files, 1)
         debt_score = max(0.0, round(100 - min(density * 20, 100), 1))
 
-        summary = (f"{len(unique_items)} debt items found across {total_files} files "
-                   f"({total_todos} TODO/FIXME/HACK). "
-                   f"Estimated remediation: {total_effort:.1f} dev-days. Debt score: {debt_score}/100.")
+        summary = f"{len(unique_items)} debt items found across {total_files} files ({total_todos} TODO/FIXME/HACK). Estimated remediation: {total_effort:.1f} dev-days. Debt score: {debt_score}/100."
 
         log_json("INFO", "tech_debt_quantifier_complete", details={"items": len(unique_items), "score": debt_score})
         return {"debt_score": debt_score, "debt_items": unique_items[:200], "total_todos": total_todos, "total_files": total_files, "total_lines": total_lines, "estimated_effort_days": round(total_effort, 1), "summary": summary}

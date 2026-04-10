@@ -31,6 +31,7 @@ from core.agentic_evaluation import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _passing_result(score: float = 0.95, iteration: int = 0) -> EvaluationResult:
     return EvaluationResult(score=score, passed=True, feedback="looks good", iteration=iteration)
 
@@ -42,6 +43,7 @@ def _failing_result(score: float = 0.3, iteration: int = 0) -> EvaluationResult:
 # ---------------------------------------------------------------------------
 # TestDataclasses
 # ---------------------------------------------------------------------------
+
 
 class TestDataclasses(unittest.TestCase):
     def test_evaluation_criteria_defaults(self):
@@ -132,9 +134,7 @@ class TestBasicReflection(unittest.TestCase):
     def test_run_converges_when_passed_on_first_iteration(self, MockAdapter, mock_log):
         """When evaluate() returns passed=True immediately, loop stops after 1 iteration."""
         mock_model = MockAdapter.return_value
-        mock_model.generate_text.return_value = json.dumps({
-            "score": 0.95, "passed": True, "feedback": "perfect", "dimensions": {}
-        })
+        mock_model.generate_text.return_value = json.dumps({"score": 0.95, "passed": True, "feedback": "perfect", "dimensions": {}})
 
         reflector = self._make_reflector()
         output, history = reflector.run("some task")
@@ -151,10 +151,7 @@ class TestBasicReflection(unittest.TestCase):
         # Always return a failing result with monotonically increasing scores
         # so stall detection doesn't kick in.
         scores = [0.1, 0.2, 0.4]
-        responses = [
-            json.dumps({"score": s, "passed": False, "feedback": "bad", "dimensions": {}})
-            for s in scores
-        ]
+        responses = [json.dumps({"score": s, "passed": False, "feedback": "bad", "dimensions": {}}) for s in scores]
         mock_model.generate_text.side_effect = responses * 10  # plenty of responses
 
         reflector = self._make_reflector(max_iterations=3)
@@ -168,9 +165,7 @@ class TestBasicReflection(unittest.TestCase):
         """When improvement is below min_improvement threshold, loop stops early."""
         mock_model = MockAdapter.return_value
         # Return same low score each time — improvement is 0 < min_improvement
-        fixed_response = json.dumps({
-            "score": 0.3, "passed": False, "feedback": "still bad", "dimensions": {}
-        })
+        fixed_response = json.dumps({"score": 0.3, "passed": False, "feedback": "still bad", "dimensions": {}})
         # optimize() also calls generate_text, so alternate:
         mock_model.generate_text.return_value = fixed_response
 
@@ -186,9 +181,7 @@ class TestBasicReflection(unittest.TestCase):
     def test_run_returns_history_with_correct_structure(self, MockAdapter, mock_log):
         """RefinementHistory has iterations tuples and final_output set."""
         mock_model = MockAdapter.return_value
-        mock_model.generate_text.return_value = json.dumps({
-            "score": 0.9, "passed": True, "feedback": "good", "dimensions": {}
-        })
+        mock_model.generate_text.return_value = json.dumps({"score": 0.9, "passed": True, "feedback": "good", "dimensions": {}})
 
         reflector = self._make_reflector()
         output, history = reflector.run("write code")
@@ -206,9 +199,7 @@ class TestBasicReflection(unittest.TestCase):
     def test_run_appends_to_instance_history(self, MockAdapter, mock_log):
         """Each call to run() appends to self.history."""
         mock_model = MockAdapter.return_value
-        mock_model.generate_text.return_value = json.dumps({
-            "score": 1.0, "passed": True, "feedback": "ok", "dimensions": {}
-        })
+        mock_model.generate_text.return_value = json.dumps({"score": 1.0, "passed": True, "feedback": "ok", "dimensions": {}})
 
         reflector = self._make_reflector()
         reflector.run("task 1")
@@ -242,12 +233,14 @@ class TestBasicReflection(unittest.TestCase):
     def test_evaluate_parses_json_response(self, MockAdapter, mock_log):
         """evaluate() correctly parses a valid JSON response from the model."""
         mock_model = MockAdapter.return_value
-        mock_model.generate_text.return_value = json.dumps({
-            "score": 0.88,
-            "passed": True,
-            "feedback": "excellent work",
-            "dimensions": {"correctness": 0.9, "clarity": 0.85},
-        })
+        mock_model.generate_text.return_value = json.dumps(
+            {
+                "score": 0.88,
+                "passed": True,
+                "feedback": "excellent work",
+                "dimensions": {"correctness": 0.9, "clarity": 0.85},
+            }
+        )
 
         reflector = self._make_reflector()
         result = reflector.evaluate("some output", "some task")
@@ -307,6 +300,7 @@ class TestBasicReflection(unittest.TestCase):
 # TestEvaluatorOptimizer
 # ---------------------------------------------------------------------------
 
+
 class TestEvaluatorOptimizer(unittest.TestCase):
     """Tests for EvaluatorOptimizer.run()."""
 
@@ -327,9 +321,7 @@ class TestEvaluatorOptimizer(unittest.TestCase):
     @patch(EVAL_LOG_PATH)
     def test_run_converges_when_score_meets_threshold(self, mock_log):
         """Loop stops after first iteration when evaluator score >= threshold."""
-        evaluator = MagicMock(return_value=EvaluationResult(
-            score=0.9, passed=True, feedback="good"
-        ))
+        evaluator = MagicMock(return_value=EvaluationResult(score=0.9, passed=True, feedback="good"))
         eo = self._make_eo(evaluator=evaluator, score_threshold=0.8)
         output, history = eo.run("task")
 
@@ -340,10 +332,12 @@ class TestEvaluatorOptimizer(unittest.TestCase):
     def test_run_uses_optimizer_when_score_below_threshold(self, mock_log):
         """Optimizer is called when evaluator score is below threshold."""
         # First call fails, second passes
-        evaluator = MagicMock(side_effect=[
-            EvaluationResult(score=0.5, passed=False, feedback="needs improvement"),
-            EvaluationResult(score=0.9, passed=True, feedback="better"),
-        ])
+        evaluator = MagicMock(
+            side_effect=[
+                EvaluationResult(score=0.5, passed=False, feedback="needs improvement"),
+                EvaluationResult(score=0.9, passed=True, feedback="better"),
+            ]
+        )
         optimizer = MagicMock(return_value="improved output")
         eo = self._make_eo(evaluator=evaluator, optimizer=optimizer)
         eo.run("task")
@@ -353,9 +347,7 @@ class TestEvaluatorOptimizer(unittest.TestCase):
     @patch(EVAL_LOG_PATH)
     def test_run_respects_max_iterations(self, mock_log):
         """Loop runs at most max_iterations times regardless of score."""
-        evaluator = MagicMock(return_value=EvaluationResult(
-            score=0.3, passed=False, feedback="bad"
-        ))
+        evaluator = MagicMock(return_value=EvaluationResult(score=0.3, passed=False, feedback="bad"))
         eo = self._make_eo(evaluator=evaluator, max_iterations=4)
         _, history = eo.run("task")
 
@@ -374,11 +366,13 @@ class TestEvaluatorOptimizer(unittest.TestCase):
     @patch(EVAL_LOG_PATH)
     def test_run_sets_iteration_on_evaluation_result(self, mock_log):
         """EvaluationResult.iteration is set to the loop index."""
-        evaluator = MagicMock(side_effect=[
-            EvaluationResult(score=0.4, passed=False, feedback="bad"),
-            EvaluationResult(score=0.6, passed=False, feedback="still bad"),
-            EvaluationResult(score=0.9, passed=True, feedback="ok"),
-        ])
+        evaluator = MagicMock(
+            side_effect=[
+                EvaluationResult(score=0.4, passed=False, feedback="bad"),
+                EvaluationResult(score=0.6, passed=False, feedback="still bad"),
+                EvaluationResult(score=0.9, passed=True, feedback="ok"),
+            ]
+        )
         eo = self._make_eo(evaluator=evaluator, max_iterations=5)
         _, history = eo.run("task")
 
@@ -412,10 +406,12 @@ class TestEvaluatorOptimizer(unittest.TestCase):
     @patch(EVAL_LOG_PATH)
     def test_run_optimizer_output_fed_back_for_next_evaluation(self, mock_log):
         """The optimizer output becomes the input to the next evaluator call."""
-        evaluator = MagicMock(side_effect=[
-            EvaluationResult(score=0.5, passed=False, feedback="bad"),
-            EvaluationResult(score=0.95, passed=True, feedback="great"),
-        ])
+        evaluator = MagicMock(
+            side_effect=[
+                EvaluationResult(score=0.5, passed=False, feedback="bad"),
+                EvaluationResult(score=0.95, passed=True, feedback="great"),
+            ]
+        )
         optimizer = MagicMock(return_value="optimized version")
         eo = self._make_eo(evaluator=evaluator, optimizer=optimizer)
         eo.run("task")
@@ -428,6 +424,7 @@ class TestEvaluatorOptimizer(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # TestCodeReflector
 # ---------------------------------------------------------------------------
+
 
 class TestCodeReflector(unittest.TestCase):
     """Tests for CodeReflector methods."""
@@ -494,6 +491,7 @@ class TestCodeReflector(unittest.TestCase):
     def test_run_tests_handles_timeout(self, mock_subproc, mock_log):
         """run_tests() returns success=False on TimeoutExpired."""
         import subprocess
+
         mock_subproc.side_effect = subprocess.TimeoutExpired(cmd="pytest", timeout=30)
 
         reflector = CodeReflector()
@@ -523,10 +521,7 @@ class TestCodeReflector(unittest.TestCase):
         mock_model.generate_text.return_value = "def foo(): return 42"
 
         reflector = CodeReflector()
-        result = reflector.fix_code(
-            "def foo(): pass",
-            {"success": False, "stderr": "AssertionError: expected 42"}
-        )
+        result = reflector.fix_code("def foo(): pass", {"success": False, "stderr": "AssertionError: expected 42"})
 
         self.assertEqual(result, "def foo(): return 42")
 
@@ -549,9 +544,7 @@ class TestCodeReflector(unittest.TestCase):
     @patch(EVAL_LOG_PATH)
     @patch(MODEL_ADAPTER_PATH)
     @patch("subprocess.run")
-    def test_reflect_and_fix_stops_at_max_iterations_on_failure(
-        self, mock_subproc, MockAdapter, mock_log
-    ):
+    def test_reflect_and_fix_stops_at_max_iterations_on_failure(self, mock_subproc, MockAdapter, mock_log):
         """reflect_and_fix() runs max_iterations times when tests always fail."""
         mock_model = MockAdapter.return_value
         mock_model.generate_text.return_value = "def foo(): pass"
@@ -584,9 +577,7 @@ class TestCodeReflector(unittest.TestCase):
     @patch(EVAL_LOG_PATH)
     @patch(MODEL_ADAPTER_PATH)
     @patch("subprocess.run")
-    def test_reflect_and_fix_score_is_one_on_success_zero_on_failure(
-        self, mock_subproc, MockAdapter, mock_log
-    ):
+    def test_reflect_and_fix_score_is_one_on_success_zero_on_failure(self, mock_subproc, MockAdapter, mock_log):
         """EvaluationResult score is 1.0 on passing tests, 0.0 on failing."""
         mock_model = MockAdapter.return_value
         mock_model.generate_text.return_value = "code"
@@ -604,6 +595,7 @@ class TestCodeReflector(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # TestRubricBasedEvaluator
 # ---------------------------------------------------------------------------
+
 
 class TestRubricBasedEvaluator(unittest.TestCase):
     """Tests for RubricBasedEvaluator."""
@@ -645,12 +637,14 @@ class TestRubricBasedEvaluator(unittest.TestCase):
     def test_evaluate_returns_evaluation_result(self, MockAdapter, mock_log):
         """evaluate() returns an EvaluationResult."""
         mock_model = MockAdapter.return_value
-        mock_model.generate_text.return_value = json.dumps({
-            "dimensions": {"correctness": 4, "readability": 3},
-            "overall_score": 0.7,
-            "feedback": "decent",
-            "passed": True,
-        })
+        mock_model.generate_text.return_value = json.dumps(
+            {
+                "dimensions": {"correctness": 4, "readability": 3},
+                "overall_score": 0.7,
+                "feedback": "decent",
+                "passed": True,
+            }
+        )
 
         ev = self._make_evaluator()
         result = ev.evaluate("some output")
@@ -663,12 +657,14 @@ class TestRubricBasedEvaluator(unittest.TestCase):
     def test_evaluate_dimensions_contains_rubric_keys(self, MockAdapter, mock_log):
         """dimensions in EvaluationResult contains the rubric dimension keys."""
         mock_model = MockAdapter.return_value
-        mock_model.generate_text.return_value = json.dumps({
-            "dimensions": {"correctness": 4, "readability": 3},
-            "overall_score": 0.7,
-            "feedback": "ok",
-            "passed": True,
-        })
+        mock_model.generate_text.return_value = json.dumps(
+            {
+                "dimensions": {"correctness": 4, "readability": 3},
+                "overall_score": 0.7,
+                "feedback": "ok",
+                "passed": True,
+            }
+        )
 
         ev = self._make_evaluator()
         result = ev.evaluate("output")
@@ -684,12 +680,14 @@ class TestRubricBasedEvaluator(unittest.TestCase):
         # readability=5, weight=0.4 → 5*0.4=2.0
         # total = 5.0 / 5.0 = 1.0
         mock_model = MockAdapter.return_value
-        mock_model.generate_text.return_value = json.dumps({
-            "dimensions": {"correctness": 5, "readability": 5},
-            "overall_score": 1.0,
-            "feedback": "perfect",
-            "passed": True,
-        })
+        mock_model.generate_text.return_value = json.dumps(
+            {
+                "dimensions": {"correctness": 5, "readability": 5},
+                "overall_score": 1.0,
+                "feedback": "perfect",
+                "passed": True,
+            }
+        )
 
         ev = self._make_evaluator()
         result = ev.evaluate("perfect output")
@@ -701,12 +699,14 @@ class TestRubricBasedEvaluator(unittest.TestCase):
     def test_evaluate_score_bounded_between_zero_and_one(self, MockAdapter, mock_log):
         """Score never exceeds 1.0 or goes below 0.0 for valid 1-5 dimension scores."""
         mock_model = MockAdapter.return_value
-        mock_model.generate_text.return_value = json.dumps({
-            "dimensions": {"correctness": 3, "readability": 2},
-            "overall_score": 0.5,
-            "feedback": "average",
-            "passed": False,
-        })
+        mock_model.generate_text.return_value = json.dumps(
+            {
+                "dimensions": {"correctness": 3, "readability": 2},
+                "overall_score": 0.5,
+                "feedback": "average",
+                "passed": False,
+            }
+        )
 
         ev = self._make_evaluator()
         result = ev.evaluate("mediocre output")
@@ -746,12 +746,14 @@ class TestRubricBasedEvaluator(unittest.TestCase):
     def test_evaluate_uses_context_parameter(self, MockAdapter, mock_log):
         """Context string is passed through to the model prompt."""
         mock_model = MockAdapter.return_value
-        mock_model.generate_text.return_value = json.dumps({
-            "dimensions": {"correctness": 4},
-            "overall_score": 0.8,
-            "feedback": "good",
-            "passed": True,
-        })
+        mock_model.generate_text.return_value = json.dumps(
+            {
+                "dimensions": {"correctness": 4},
+                "overall_score": 0.8,
+                "feedback": "good",
+                "passed": True,
+            }
+        )
 
         rubric = {"correctness": {"weight": 1.0, "description": "correct?"}}
         ev = RubricBasedEvaluator(rubric)
@@ -764,6 +766,7 @@ class TestRubricBasedEvaluator(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # TestPredefinedRubrics
 # ---------------------------------------------------------------------------
+
 
 class TestPredefinedRubrics(unittest.TestCase):
     """Verify the RUBRICS constant has expected keys and structure."""
@@ -789,15 +792,13 @@ class TestPredefinedRubrics(unittest.TestCase):
     def test_rubric_weights_are_positive(self):
         for rubric_name, rubric in RUBRICS.items():
             for dim_name, dim_config in rubric.items():
-                self.assertGreater(
-                    dim_config["weight"], 0,
-                    f"{rubric_name}/{dim_name} weight must be > 0"
-                )
+                self.assertGreater(dim_config["weight"], 0, f"{rubric_name}/{dim_name} weight must be > 0")
 
 
 # ---------------------------------------------------------------------------
 # TestEvaluateSaddWorkstream
 # ---------------------------------------------------------------------------
+
 
 class TestEvaluateSaddWorkstream(unittest.TestCase):
     """Tests for module-level evaluate_sadd_workstream()."""
@@ -807,14 +808,14 @@ class TestEvaluateSaddWorkstream(unittest.TestCase):
     def test_returns_evaluation_result(self, MockAdapter, mock_log):
         """evaluate_sadd_workstream() returns an EvaluationResult."""
         mock_model = MockAdapter.return_value
-        mock_model.generate_text.return_value = json.dumps({
-            "dimensions": {
-                "completeness": 4, "quality": 4, "alignment": 4, "efficiency": 3
-            },
-            "overall_score": 0.76,
-            "feedback": "solid workstream",
-            "passed": True,
-        })
+        mock_model.generate_text.return_value = json.dumps(
+            {
+                "dimensions": {"completeness": 4, "quality": 4, "alignment": 4, "efficiency": 3},
+                "overall_score": 0.76,
+                "feedback": "solid workstream",
+                "passed": True,
+            }
+        )
 
         result = evaluate_sadd_workstream(
             workstream_title="Implement login",
@@ -829,12 +830,14 @@ class TestEvaluateSaddWorkstream(unittest.TestCase):
     def test_acceptance_criteria_in_context(self, MockAdapter, mock_log):
         """Acceptance criteria are embedded in the context sent to the model."""
         mock_model = MockAdapter.return_value
-        mock_model.generate_text.return_value = json.dumps({
-            "dimensions": {"completeness": 3, "quality": 3, "alignment": 3, "efficiency": 3},
-            "overall_score": 0.6,
-            "feedback": "ok",
-            "passed": False,
-        })
+        mock_model.generate_text.return_value = json.dumps(
+            {
+                "dimensions": {"completeness": 3, "quality": 3, "alignment": 3, "efficiency": 3},
+                "overall_score": 0.6,
+                "feedback": "ok",
+                "passed": False,
+            }
+        )
 
         evaluate_sadd_workstream(
             workstream_title="Auth",
@@ -851,12 +854,14 @@ class TestEvaluateSaddWorkstream(unittest.TestCase):
     def test_workstream_title_in_context(self, MockAdapter, mock_log):
         """Workstream title is embedded in the context sent to the model."""
         mock_model = MockAdapter.return_value
-        mock_model.generate_text.return_value = json.dumps({
-            "dimensions": {"completeness": 3, "quality": 3, "alignment": 3, "efficiency": 3},
-            "overall_score": 0.6,
-            "feedback": "ok",
-            "passed": False,
-        })
+        mock_model.generate_text.return_value = json.dumps(
+            {
+                "dimensions": {"completeness": 3, "quality": 3, "alignment": 3, "efficiency": 3},
+                "overall_score": 0.6,
+                "feedback": "ok",
+                "passed": False,
+            }
+        )
 
         evaluate_sadd_workstream(
             workstream_title="My Unique Workstream Title",
@@ -872,6 +877,7 @@ class TestEvaluateSaddWorkstream(unittest.TestCase):
 # TestReflectAndRefineWorkstream
 # ---------------------------------------------------------------------------
 
+
 class TestReflectAndRefineWorkstream(unittest.TestCase):
     """Tests for module-level reflect_and_refine_workstream()."""
 
@@ -880,9 +886,7 @@ class TestReflectAndRefineWorkstream(unittest.TestCase):
     def test_returns_tuple_of_string_and_history(self, MockAdapter, mock_log):
         """reflect_and_refine_workstream() returns (str, RefinementHistory)."""
         mock_model = MockAdapter.return_value
-        mock_model.generate_text.return_value = json.dumps({
-            "score": 0.95, "passed": True, "feedback": "great", "dimensions": {}
-        })
+        mock_model.generate_text.return_value = json.dumps({"score": 0.95, "passed": True, "feedback": "great", "dimensions": {}})
 
         output, history = reflect_and_refine_workstream(
             workstream_title="Feature X",
@@ -898,9 +902,7 @@ class TestReflectAndRefineWorkstream(unittest.TestCase):
     def test_acceptance_criteria_included_in_criteria_list(self, MockAdapter, mock_log):
         """Acceptance criteria are reflected in the BasicReflection criteria list."""
         mock_model = MockAdapter.return_value
-        mock_model.generate_text.return_value = json.dumps({
-            "score": 1.0, "passed": True, "feedback": "ok", "dimensions": {}
-        })
+        mock_model.generate_text.return_value = json.dumps({"score": 1.0, "passed": True, "feedback": "ok", "dimensions": {}})
 
         # Call should complete without error regardless of criteria composition
         output, history = reflect_and_refine_workstream(
@@ -917,10 +919,7 @@ class TestReflectAndRefineWorkstream(unittest.TestCase):
         """Default max_iterations is 3 — loop runs at most 3 times."""
         # Always return failing scores with small increments to avoid stall detection
         scores = [0.1, 0.2, 0.4]
-        responses = [
-            json.dumps({"score": s, "passed": False, "feedback": "nope", "dimensions": {}})
-            for s in scores
-        ]
+        responses = [json.dumps({"score": s, "passed": False, "feedback": "nope", "dimensions": {}}) for s in scores]
         mock_model = MockAdapter.return_value
         mock_model.generate_text.side_effect = responses * 10
 

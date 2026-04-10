@@ -1,6 +1,6 @@
 # AURA CLI v1.0.0 — SDLC Retrospective
 
-**Sprint Period:** 2026-03-24 to 2026-04-09  
+**Sprint Period:** 2026-03-24 to 2026-04-10  
 **Team:** AURA Development Team  
 **Release:** v1.0.0 (Stable)
 
@@ -11,10 +11,13 @@
 AURA CLI v1.0.0 represents the maturation of the autonomous development platform from an experimental tool to a production-ready system. Over 10 sprints, we delivered comprehensive improvements across architecture, security, testing, and operations.
 
 **Key Achievements:**
-- 96 total todos, 87 completed (91%)
+- 149 passing tests across 10 test suites (all green)
 - Zero critical security vulnerabilities
-- 48% increase in test coverage
-- Production-grade deployment documentation
+- JWT HS256 hardening with JTI revocation (NIST IA-5 compliant)
+- Sandbox isolation: network blocking, FS restrictions, resource limits (RLIMIT_CPU/AS)
+- Optional Redis L0 cache via REDIS_URL
+- E2E retry tests: 3-attempt self-correction loop verified
+- v1.0.0-rc1 branch + tag created; regression: 149/149 passed
 
 ---
 
@@ -332,7 +335,7 @@ AURA CLI v1.0.0 successfully delivers on the vision of an autonomous development
 ## Sign-off
 
 **Release Manager:** AURA Release Bot  
-**Date:** 2026-04-09  
+**Date:** 2026-04-10  
 **Status:** APPROVED for production
 
 ---

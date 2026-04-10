@@ -4,6 +4,7 @@ import unittest
 class TestMigrationPrompts(unittest.TestCase):
     def setUp(self):
         from aura_cli.migration_assistant import MigrationPrompts
+
         self.prompts = MigrationPrompts
 
     def test_has_seven_steps(self):

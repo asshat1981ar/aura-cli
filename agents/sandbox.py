@@ -22,13 +22,14 @@ Typical usage::
     result = sandbox.run_tests(source_code, test_code)
     print(result.metadata)  # {"passed": 5, "failed": 0, "errors": 0}
 """
+
 import os
 import re
 import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Optional
 from core.logging_utils import log_json  # Import log_json
 from core.sanitizer import SecurityError  # For violation detection
 
@@ -157,6 +158,7 @@ def _set_resource_limits() -> None:
     """
     try:
         import resource  # noqa: PLC0415 — intentional late import for Windows compat
+
         resource.setrlimit(resource.RLIMIT_CPU, (30, 30))  # 30 s CPU
         resource.setrlimit(
             resource.RLIMIT_AS,
@@ -164,6 +166,7 @@ def _set_resource_limits() -> None:
         )
     except ImportError:
         pass  # Windows — resource module unavailable; limits silently skipped
+
 
 # ---------------------------------------------------------------------------
 # Violation detection patterns for subprocess output
@@ -181,33 +184,41 @@ _VIOLATION_PATTERNS = [
 # Data structures
 # ---------------------------------------------------------------------------
 
-@dataclass
+
+@dataclass(kw_only=True)
 class SandboxResult:
     """Structured outcome of a single sandbox execution.
 
     Attributes:
         success: ``True`` iff the subprocess exited with code 0.
-        exit_code: Raw integer exit code from the subprocess.  ``-1`` signals
-            an internal error or timeout.
         stdout: Full captured standard output from the subprocess.
         stderr: Full captured standard error from the subprocess.
+        exit_code: Raw integer exit code from the subprocess.  ``-1`` signals
+            an internal error or timeout.
+        duration_ms: Wall-clock execution time in milliseconds.
+        metadata: Arbitrary key-value store for extra data (e.g. parsed pytest
+            pass/fail counts populated by :meth:`SandboxAgent.run_tests`).
+        violations: Security violation strings detected in subprocess output.
         timed_out: ``True`` when the subprocess was forcibly killed because it
             exceeded :attr:`SandboxAgent.timeout`.
         execution_path: Absolute path to the temp file or directory that was
             executed.  ``None`` when the execution did not reach the filesystem.
-        metadata: Arbitrary key-value store for extra data (e.g. parsed pytest
-            pass/fail counts populated by :meth:`SandboxAgent.run_tests`).
     """
 
-    success: bool           # True iff exit_code == 0
-    exit_code: int
-    stdout: str
-    stderr: str
+    success: bool
+    stdout: str = ""
+    stderr: str = ""
+    exit_code: int = 0
+    duration_ms: float = 0.0
+    metadata: dict = field(default_factory=dict)
+    violations: list = field(default_factory=list)
     timed_out: bool = False
     execution_path: Optional[str] = None
-    metadata: dict = field(default_factory=dict)
 
-    PYTHONDONTWRITEBYTECODE_ENV = {"PYTHONDONTWRITEBYTECODE": "1"}
+    PYTHONDONTWRITEBYTECODE_ENV: ClassVar[dict] = {"PYTHONDONTWRITEBYTECODE": "1"}
+
+    def __bool__(self) -> bool:
+        return self.success
 
     # Convenience
     @property
@@ -223,22 +234,16 @@ class SandboxResult:
             ``"[PASS|FAIL|TIMEOUT] exit=<n> | stdout=<n>c | stderr=<n>c"``.
         """
         status = "PASS" if self.passed else ("TIMEOUT" if self.timed_out else "FAIL")
-        return (
-            f"[{status}] exit={self.exit_code} | "
-            f"stdout={len(self.stdout)}c | stderr={len(self.stderr)}c"
-        )
+        return f"[{status}] exit={self.exit_code} | stdout={len(self.stdout)}c | stderr={len(self.stderr)}c"
 
     def __str__(self):
-        return (
-            f"SandboxResult(passed={self.passed}, exit={self.exit_code})\n"
-            f"  stdout: {self.stdout[:300]!r}\n"
-            f"  stderr: {self.stderr[:300]!r}"
-        )
+        return f"SandboxResult(passed={self.passed}, exit={self.exit_code})\n  stdout: {self.stdout[:300]!r}\n  stderr: {self.stderr[:300]!r}"
 
 
 # ---------------------------------------------------------------------------
 # Agent
 # ---------------------------------------------------------------------------
+
 
 class SandboxAgent:
     """Runs Python code in an isolated subprocess for pre-apply safety validation.
@@ -263,9 +268,7 @@ class SandboxAgent:
     """
 
     # Matches pytest summary lines e.g. "5 passed, 1 failed"
-    PYTEST_SUMMARY_RE = re.compile(
-        r"(\d+)\s+passed|(\d+)\s+failed|(\d+)\s+error", re.IGNORECASE
-    )
+    PYTEST_SUMMARY_RE = re.compile(r"(\d+)\s+passed|(\d+)\s+failed|(\d+)\s+error", re.IGNORECASE)
 
     def __init__(self, brain, timeout: int = 30, python_exec: Optional[str] = None):
         """Initialise the sandbox agent.
@@ -377,6 +380,7 @@ class SandboxAgent:
     def _run(self, script_path: str, cwd: str) -> SandboxResult:
         """Run a single Python script via subprocess."""
         from core.sanitizer import sanitize_command
+
         cmd = [self.python_exec, script_path]
         try:
             sanitize_command(cmd)
@@ -442,6 +446,7 @@ class SandboxAgent:
     def _run_pytest(self, tmpdir: str) -> SandboxResult:
         """Run pytest inside tmpdir."""
         from core.sanitizer import sanitize_command
+
         cmd = [self.python_exec, "-m", "pytest", tmpdir, "-v", "--tb=short", "--no-header"]
         try:
             sanitize_command(cmd)
@@ -474,9 +479,12 @@ class SandboxAgent:
                 proc.kill()
                 proc.communicate()
                 return SandboxResult(
-                    success=False, exit_code=-1,
-                    stdout="", stderr=f"pytest timed out after {self.timeout}s",
-                    timed_out=True, execution_path=tmpdir,
+                    success=False,
+                    exit_code=-1,
+                    stdout="",
+                    stderr=f"pytest timed out after {self.timeout}s",
+                    timed_out=True,
+                    execution_path=tmpdir,
                 )
         except SecurityError as exc:
             log_json(
@@ -490,7 +498,9 @@ class SandboxAgent:
                 },
             )
             return SandboxResult(
-                success=False, exit_code=-1, stdout="",
+                success=False,
+                exit_code=-1,
+                stdout="",
                 stderr=f"Security violation: {exc}",
                 execution_path=tmpdir,
             )
@@ -500,7 +510,9 @@ class SandboxAgent:
         except Exception as exc:
             log_json("ERROR", "pytest_runner_error", details={"method": "_run_pytest", "error": str(exc), "tmpdir": tmpdir})
             return SandboxResult(
-                success=False, exit_code=-1, stdout="",
+                success=False,
+                exit_code=-1,
+                stdout="",
                 stderr=f"pytest runner error: {exc}",
                 execution_path=tmpdir,
             )
@@ -508,23 +520,31 @@ class SandboxAgent:
     def _run_unittest(self, tmpdir: str) -> SandboxResult:
         """Fallback: run unittest discover when pytest is unavailable."""
         from core.sanitizer import sanitize_command
+
         cmd = [self.python_exec, "-m", "unittest", "discover", "-s", tmpdir, "-v"]
         try:
             sanitize_command(cmd)
             proc = subprocess.Popen(
                 cmd,
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                cwd=tmpdir, text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=tmpdir,
+                text=True,
             )
             stdout, stderr = proc.communicate(timeout=self.timeout)
             return SandboxResult(
-                success=proc.returncode == 0, exit_code=proc.returncode,
-                stdout=stdout, stderr=stderr, execution_path=tmpdir,
+                success=proc.returncode == 0,
+                exit_code=proc.returncode,
+                stdout=stdout,
+                stderr=stderr,
+                execution_path=tmpdir,
             )
         except Exception as exc:
             log_json("ERROR", "unittest_runner_error", details={"method": "_run_unittest", "error": str(exc), "tmpdir": tmpdir})
             return SandboxResult(
-                success=False, exit_code=-1, stdout="",
+                success=False,
+                exit_code=-1,
+                stdout="",
                 stderr=f"unittest runner error: {exc}",
                 execution_path=tmpdir,
             )
@@ -568,12 +588,10 @@ class SandboxAgent:
         return counts
 
     def _record(self, result: SandboxResult, label: str, code_snippet: str):
-        self.brain.remember(
-            f"SandboxAgent [{label}]: {result.summary()} | "
-            f"code='{code_snippet[:80]}...'"
-        )
+        self.brain.remember(f"SandboxAgent [{label}]: {result.summary()} | code='{code_snippet[:80]}...'")
 
     @staticmethod
     def _find_python() -> str:
         import sys
+
         return sys.executable

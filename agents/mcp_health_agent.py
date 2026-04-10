@@ -10,6 +10,7 @@ def _update_registry_health(results: dict) -> None:
     resolve_by_capability() skips them until they recover.
     """
     from core.mcp_agent_registry import agent_registry
+
     for server_name, result in results.items():
         healthy = result.get("status") == "healthy"
         # Find all agents backed by this MCP server

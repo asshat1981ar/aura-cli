@@ -4,6 +4,7 @@
 Hooks intercept tool calls to enforce safety policies, collect metrics,
 and feed the reflection loop.
 """
+
 from __future__ import annotations
 
 import time
@@ -32,11 +33,13 @@ class MetricsCollector:
         self._records: List[ToolCallRecord] = []
 
     def record_tool_call(self, tool_name: str, elapsed_s: float, success: bool) -> None:
-        self._records.append(ToolCallRecord(
-            tool_name=tool_name,
-            elapsed_s=elapsed_s,
-            success=success,
-        ))
+        self._records.append(
+            ToolCallRecord(
+                tool_name=tool_name,
+                elapsed_s=elapsed_s,
+                success=success,
+            )
+        )
 
     def get_stats(self) -> Dict[str, Any]:
         """Per-tool aggregated statistics."""

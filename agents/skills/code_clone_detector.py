@@ -1,4 +1,5 @@
 """Skill: detect exact and near-duplicate code blocks across a project."""
+
 from __future__ import annotations
 import ast
 import hashlib

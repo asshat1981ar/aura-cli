@@ -61,11 +61,14 @@ class MCPProcess:
 
     def _initialize(self):
         """Send MCP initialize handshake."""
-        resp = self._rpc("initialize", {
-            "protocolVersion": "2024-11-05",
-            "capabilities": {},
-            "clientInfo": {"name": "aura-mcp-bridge", "version": "1.0"},
-        })
+        resp = self._rpc(
+            "initialize",
+            {
+                "protocolVersion": "2024-11-05",
+                "capabilities": {},
+                "clientInfo": {"name": "aura-mcp-bridge", "version": "1.0"},
+            },
+        )
         if resp:
             self._rpc_notify("notifications/initialized", {})
             log_json("INFO", "mcp_github_initialized", details={"server_info": resp.get("result", {}).get("serverInfo", {})})

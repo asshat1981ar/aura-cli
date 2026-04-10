@@ -47,10 +47,21 @@ nav:
     - Configuration: getting-started/configuration.md
   - User Guide:
     - CLI Commands: user-guide/cli.md
+    - Commands:
+      - goal: commands/goal.md
+      - sadd: commands/sadd.md
+      - config: commands/config.md
+      - doctor: commands/doctor.md
     - Web Dashboard: user-guide/dashboard.md
     - GitHub Integration: user-guide/github.md
+  - Architecture:
+    - Overview: architecture/overview.md
+    - ADRs:
+      - Index: adr/INDEX.md
+      - ADR-010: adr/ADR-010-pytest-testing.md
+      - ADR-011: adr/ADR-011-10-phase-pipeline.md
+      - ADR-012: adr/ADR-012-mcp-plugin-system.md
   - Development:
-    - Architecture: development/architecture.md
     - Contributing: development/contributing.md
     - API Reference: development/api.md
   - Deployment:

@@ -3,6 +3,7 @@
 Routes to the notification MCP server (port 8015) or sends directly via
 HTTP when the MCP server is not available.
 """
+
 from __future__ import annotations
 
 import time
@@ -65,13 +66,11 @@ class NotificationAgentAdapter:
         }
         self._history.append(entry)
         if len(self._history) > self._max_history:
-            self._history = self._history[-self._max_history:]
+            self._history = self._history[-self._max_history :]
 
         return result
 
-    def _send_via_mcp(
-        self, channel: str, message: str, severity: str, metadata: dict
-    ) -> dict:
+    def _send_via_mcp(self, channel: str, message: str, severity: str, metadata: dict) -> dict:
         """Send notification via the notification MCP server."""
         tool_map = {
             "slack": "slack_send",
@@ -115,9 +114,7 @@ class NotificationAgentAdapter:
                 "error": f"MCP server unreachable: {exc}",
             }
 
-    def _build_args(
-        self, channel: str, message: str, severity: str, metadata: dict
-    ) -> dict:
+    def _build_args(self, channel: str, message: str, severity: str, metadata: dict) -> dict:
         """Build channel-specific args for the MCP tool call."""
         if channel == "slack":
             return {

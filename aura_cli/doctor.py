@@ -66,9 +66,7 @@ def check_embedding_index(project_root: Path, cfg: dict) -> tuple[str, str]:
             if total_records == 0:
                 return "PASS", f"No semantic records indexed yet for {active_model}."
 
-            rows = conn.execute(
-                "SELECT model_id, COUNT(*) FROM embeddings GROUP BY model_id ORDER BY model_id"
-            ).fetchall()
+            rows = conn.execute("SELECT model_id, COUNT(*) FROM embeddings GROUP BY model_id ORDER BY model_id").fetchall()
         finally:
             conn.close()
     except sqlite3.OperationalError as exc:
@@ -77,10 +75,7 @@ def check_embedding_index(project_root: Path, cfg: dict) -> tuple[str, str]:
         return "WARN", f"Unable to inspect semantic index ({exc})."
 
     if not rows:
-        return "WARN", (
-            f"Semantic records exist but no embeddings are stored for active model {active_model}. "
-            "Run `python3 main.py memory reindex --json`."
-        )
+        return "WARN", (f"Semantic records exist but no embeddings are stored for active model {active_model}. Run `python3 main.py memory reindex --json`.")
 
     model_counts = {str(model_id): int(count) for model_id, count in rows}
     active_count = model_counts.get(active_model, 0)
@@ -88,10 +83,8 @@ def check_embedding_index(project_root: Path, cfg: dict) -> tuple[str, str]:
         return "PASS", f"Active model {active_model} has {active_count} stored embeddings."
 
     available = ", ".join(f"{model} ({count})" for model, count in sorted(model_counts.items()))
-    return "WARN", (
-        f"Active embedding model {active_model} has no stored embeddings. "
-        f"Found: {available}. Run `python3 main.py memory reindex --json`."
-    )
+    return "WARN", (f"Active embedding model {active_model} has no stored embeddings. Found: {available}. Run `python3 main.py memory reindex --json`.")
+
 
 def check_python_version():
     """Checks if the Python version is 3.9 or higher."""
@@ -100,32 +93,24 @@ def check_python_version():
     else:
         return "FAIL", f"Python version: {sys.version.split(' ')[0]} (Requires Python 3.9+)"
 
+
 def check_dependencies():
     """Checks for required third-party dependencies."""
-    required = {
-        "fastapi": "fastapi",
-        "uvicorn": "uvicorn",
-        "requests": "requests",
-        "pydantic": "pydantic",
-        "dotenv": "python-dotenv",
-        "numpy": "numpy",
-        "git": "gitpython",
-        "rich": "rich",
-        "textblob": "textblob",
-        "networkx": "networkx"
-    }
+    required = {"fastapi": "fastapi", "uvicorn": "uvicorn", "requests": "requests", "pydantic": "pydantic", "dotenv": "python-dotenv", "numpy": "numpy", "git": "gitpython", "rich": "rich", "textblob": "textblob", "networkx": "networkx"}
     missing = []
     import importlib.util
+
     for module, pkg_name in required.items():
         if importlib.util.find_spec(module) is None:
             missing.append(pkg_name)
-    
+
     if not missing:
         return "PASS", "All required dependencies are installed."
     else:
         return "FAIL", f"Missing dependencies: {', '.join(missing)}"
 
-def check_env_vars(openrouter_api_key_arg: str = None): # Add argument
+
+def check_env_vars(openrouter_api_key_arg: str = None):  # Add argument
     """Checks for required environment variables."""
     gemini_cli = _clean_secret(os.getenv("GEMINI_CLI_PATH"))
     gemini_ready = False
@@ -135,11 +120,7 @@ def check_env_vars(openrouter_api_key_arg: str = None): # Add argument
 
     status = {
         "openai": bool(_clean_secret(os.getenv("OPENAI_API_KEY"))),
-        "openrouter": bool(
-            _clean_secret(openrouter_api_key_arg)
-            or _clean_secret(os.getenv("OPENROUTER_API_KEY"))
-            or _clean_secret(os.getenv("AURA_API_KEY"))
-        ),
+        "openrouter": bool(_clean_secret(openrouter_api_key_arg) or _clean_secret(os.getenv("OPENROUTER_API_KEY")) or _clean_secret(os.getenv("AURA_API_KEY"))),
         "local_model": bool(_clean_secret(os.getenv("AURA_LOCAL_MODEL_COMMAND"))),
         "gemini_cli": gemini_ready,
         "chat_ready": False,
@@ -156,6 +137,7 @@ def check_env_vars(openrouter_api_key_arg: str = None): # Add argument
     overall = "PASS" if status["chat_ready"] else "WARN"
     return overall, runtime_provider_summary(status)
 
+
 def check_sqlite_write_access(repo_root: Path):
     """Checks for SQLite write access in the repository directory."""
     test_db_path = repo_root / "test_write_access.db"
@@ -169,6 +151,7 @@ def check_sqlite_write_access(repo_root: Path):
         return "PASS", f"SQLite write access in '{repo_root}': OK"
     except Exception as e:
         return "FAIL", f"SQLite write access in '{repo_root}': Failed ({e})"
+
 
 def check_git_status(repo_root: Path):
     """Checks if Git is installed and the current directory is a Git repository."""
@@ -187,7 +170,7 @@ def check_git_status(repo_root: Path):
         return "FAIL", f"Git check encountered an unexpected error: {e}"
 
 
-def check_pytest_and_run_tests(repo_root: Path, run_tests: bool, openrouter_api_key_arg: str = None): # Add argument
+def check_pytest_and_run_tests(repo_root: Path, run_tests: bool, openrouter_api_key_arg: str = None):  # Add argument
     """
     Checks if pytest is available and optionally runs tests.
     Returns status and message.
@@ -200,7 +183,7 @@ def check_pytest_and_run_tests(repo_root: Path, run_tests: bool, openrouter_api_
         return "WARN", "Pytest is available, but tests were not run (use --run-tests)."
 
     # Find all test files in the repo_root
-    test_files = [str(f) for f in repo_root.glob('**/test_*.py') if 'env' not in f.parts] # Exclude virtual environments
+    test_files = [str(f) for f in repo_root.glob("**/test_*.py") if "env" not in f.parts]  # Exclude virtual environments
 
     if not test_files:
         return "WARN", "No test files (test_*.py) found in the repository."
@@ -211,7 +194,7 @@ def check_pytest_and_run_tests(repo_root: Path, run_tests: bool, openrouter_api_
         # Prioritize the command-line argument for OPENROUTER_API_KEY
         if openrouter_api_key_arg:
             env_for_pytest["OPENROUTER_API_KEY"] = openrouter_api_key_arg
-        
+
         # Explicitly pass test files to pytest
         pytest_command = [pytest_path, "-q", f"--rootdir={repo_root}"] + test_files
 
@@ -220,10 +203,10 @@ def check_pytest_and_run_tests(repo_root: Path, run_tests: bool, openrouter_api_
             capture_output=True,
             text=True,
             cwd=repo_root,
-            check=False, # Do not raise exception for non-zero exit codes
-            env=env_for_pytest # Pass the modified environment variables
+            check=False,  # Do not raise exception for non-zero exit codes
+            env=env_for_pytest,  # Pass the modified environment variables
         )
-        
+
         output = result.stdout.strip()
         if "== no tests ran in" in output or "ERROR" in output or "FAIL" in output or result.returncode != 0:
             return "FAIL", f"Pytest tests failed or no tests ran. Output: {output}"
@@ -283,7 +266,7 @@ def main():
             break
         elif "WARN" in result and overall_status == "PASS":
             overall_status = "WARN"
-    
+
     print(f"Overall Health: {overall_status}")
 
 
@@ -294,6 +277,7 @@ if __name__ == "__main__":
 # ---------------------------------------------------------------------------
 # Doctor v2 — Rich-formatted comprehensive health check
 # ---------------------------------------------------------------------------
+
 
 def run_doctor_v2(
     project_root: Path = None,
@@ -329,6 +313,7 @@ def run_doctor_v2(
 
     # 2. Config file
     from core.config_manager import config
+
     cfg = config.effective_config
     if config.config_file.exists():
         _add("Config file", "PASS", f"aura.config.json ({len(cfg)} keys)")
@@ -349,11 +334,7 @@ def run_doctor_v2(
     _add(
         "Embeddings",
         "PASS" if provider_status["embedding_ready"] else "WARN",
-        (
-            f"Configured embedding backend: {active_embedding_model}"
-            if provider_status["embedding_ready"] and active_embedding_model
-            else "OPENAI_API_KEY not set; semantic search will fall back"
-        ),
+        (f"Configured embedding backend: {active_embedding_model}" if provider_status["embedding_ready"] and active_embedding_model else "OPENAI_API_KEY not set; semantic search will fall back"),
     )
     embedding_index_status, embedding_index_detail = check_embedding_index(project_root, cfg)
     _add("Embedding index", embedding_index_status, embedding_index_detail)
@@ -400,8 +381,7 @@ def run_doctor_v2(
         "numpy": "numpy",
         "rich": "rich",
     }
-    missing = [pkg for mod, pkg in required.items()
-               if importlib.util.find_spec(mod) is None]
+    missing = [pkg for mod, pkg in required.items() if importlib.util.find_spec(mod) is None]
     if missing:
         _add("Dependencies", "WARN", f"Missing: {', '.join(missing)}")
     else:
@@ -415,10 +395,7 @@ def run_doctor_v2(
 
     # 9. Git repo
     try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            capture_output=True, text=True, cwd=project_root, timeout=5
-        )
+        result = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, cwd=project_root, timeout=5)
         if result.returncode == 0:
             _add("Git repo", "PASS", f"HEAD={result.stdout.strip()}")
         else:
@@ -429,6 +406,7 @@ def run_doctor_v2(
     # 10. OpenRouter reachable (quick DNS check only)
     try:
         import socket
+
         socket.setdefaulttimeout(2)
         socket.getaddrinfo("openrouter.ai", 443)
         _add("OpenRouter DNS", "PASS", "openrouter.ai resolves")

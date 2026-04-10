@@ -14,6 +14,7 @@ from agents.schemas import Idea, InnovationOutput, TechniqueResult, InnovationPh
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_ideas(n, technique="test_technique", novelty=0.7, feasibility=0.6, impact=0.5):
     """Return a list of n Idea objects with the given scores."""
     return [
@@ -49,10 +50,11 @@ def _make_mock_bot(technique_name, ideas):
 # TestInnovationSwarmInit
 # ---------------------------------------------------------------------------
 
-class TestInnovationSwarmInit(unittest.TestCase):
 
+class TestInnovationSwarmInit(unittest.TestCase):
     def _make_swarm(self, **kwargs):
         from agents.innovation_swarm import InnovationSwarm
+
         return InnovationSwarm(**kwargs)
 
     def test_init_defaults(self):
@@ -70,10 +72,12 @@ class TestInnovationSwarmInit(unittest.TestCase):
 
     def test_capabilities_non_empty(self):
         from agents.innovation_swarm import InnovationSwarm
+
         self.assertTrue(len(InnovationSwarm.capabilities) > 0)
 
     def test_description_is_string(self):
         from agents.innovation_swarm import InnovationSwarm
+
         self.assertIsInstance(InnovationSwarm.description, str)
         self.assertTrue(len(InnovationSwarm.description) > 0)
 
@@ -82,8 +86,8 @@ class TestInnovationSwarmInit(unittest.TestCase):
 # TestDivergencePhase
 # ---------------------------------------------------------------------------
 
-class TestDivergencePhase(unittest.TestCase):
 
+class TestDivergencePhase(unittest.TestCase):
     @patch("agents.innovation_swarm.log_json")
     @patch("agents.innovation_swarm.get_bot")
     def test_divergence_runs_each_technique(self, mock_get_bot, mock_log):
@@ -126,9 +130,7 @@ class TestDivergencePhase(unittest.TestCase):
 
         swarm = InnovationSwarm()
         swarm.session_id = "test-sid"
-        results = swarm._divergence_phase(
-            "test problem", ["bad_tech", "good_tech"], ""
-        )
+        results = swarm._divergence_phase("test problem", ["bad_tech", "good_tech"], "")
 
         # bad_tech should be absent, good_tech should be present
         self.assertNotIn("bad_tech", results)
@@ -140,10 +142,11 @@ class TestDivergencePhase(unittest.TestCase):
 # TestConvergencePhase
 # ---------------------------------------------------------------------------
 
-class TestConvergencePhase(unittest.TestCase):
 
+class TestConvergencePhase(unittest.TestCase):
     def _swarm(self):
         from agents.innovation_swarm import InnovationSwarm
+
         return InnovationSwarm()
 
     def test_convergence_filters_low_scoring_ideas(self):
@@ -181,20 +184,15 @@ class TestConvergencePhase(unittest.TestCase):
     def test_convergence_composite_score_ordering(self):
         """Higher composite-score ideas are selected first."""
         from agents.innovation_swarm import InnovationSwarm
+
         swarm = InnovationSwarm()
 
         # idea_high: score = 0.4*0.9 + 0.3*0.9 + 0.3*0.9 = 0.9
         # idea_low:  score = 0.4*0.6 + 0.3*0.6 + 0.3*0.6 = 0.6
-        idea_high = Idea(
-            description="high", technique="t", novelty=0.9, feasibility=0.9, impact=0.9
-        )
-        idea_low = Idea(
-            description="low", technique="t", novelty=0.6, feasibility=0.6, impact=0.6
-        )
+        idea_high = Idea(description="high", technique="t", novelty=0.9, feasibility=0.9, impact=0.9)
+        idea_low = Idea(description="low", technique="t", novelty=0.6, feasibility=0.6, impact=0.6)
         # Use max_ideas=1 so only one idea is selected
-        result = swarm._convergence_phase(
-            [idea_low, idea_high], {"max_ideas": 1}
-        )
+        result = swarm._convergence_phase([idea_low, idea_high], {"max_ideas": 1})
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].description, "high")
 
@@ -203,16 +201,15 @@ class TestConvergencePhase(unittest.TestCase):
 # TestMetricCalculation
 # ---------------------------------------------------------------------------
 
-class TestMetricCalculation(unittest.TestCase):
 
+class TestMetricCalculation(unittest.TestCase):
     def _swarm(self):
         from agents.innovation_swarm import InnovationSwarm
+
         return InnovationSwarm()
 
     def _tech_result(self, name, ideas):
-        return TechniqueResult(
-            technique=name, ideas=ideas, idea_count=len(ideas)
-        )
+        return TechniqueResult(technique=name, ideas=ideas, idea_count=len(ideas))
 
     def test_calculate_diversity_all_produce(self):
         swarm = self._swarm()
@@ -270,8 +267,8 @@ class TestMetricCalculation(unittest.TestCase):
 # TestBrainstorm
 # ---------------------------------------------------------------------------
 
-class TestBrainstorm(unittest.TestCase):
 
+class TestBrainstorm(unittest.TestCase):
     def _patched_brainstorm(self, techniques, ideas_per_bot=5):
         """Return (swarm, output) with bots mocked to return *ideas_per_bot* ideas each."""
         from agents.innovation_swarm import InnovationSwarm
@@ -280,9 +277,7 @@ class TestBrainstorm(unittest.TestCase):
 
         bots_dict = {t: MagicMock() for t in techniques}
 
-        with patch("agents.innovation_swarm.log_json"), \
-             patch("agents.innovation_swarm.BRAINSTORMING_BOTS", bots_dict), \
-             patch("agents.innovation_swarm.get_bot", return_value=mock_bot):
+        with patch("agents.innovation_swarm.log_json"), patch("agents.innovation_swarm.BRAINSTORMING_BOTS", bots_dict), patch("agents.innovation_swarm.get_bot", return_value=mock_bot):
             swarm = InnovationSwarm()
             output = swarm.brainstorm(
                 "How to improve code review?",
@@ -306,9 +301,7 @@ class TestBrainstorm(unittest.TestCase):
         mock_bot = _make_mock_bot("mock_tech", _make_ideas(3))
         problem = "Reduce build times by 50%"
 
-        with patch("agents.innovation_swarm.log_json"), \
-             patch("agents.innovation_swarm.BRAINSTORMING_BOTS", {"t": MagicMock()}), \
-             patch("agents.innovation_swarm.get_bot", return_value=mock_bot):
+        with patch("agents.innovation_swarm.log_json"), patch("agents.innovation_swarm.BRAINSTORMING_BOTS", {"t": MagicMock()}), patch("agents.innovation_swarm.get_bot", return_value=mock_bot):
             swarm = InnovationSwarm()
             output = swarm.brainstorm(problem, techniques=["t"])
 
@@ -325,9 +318,7 @@ class TestBrainstorm(unittest.TestCase):
         bots_dict = {"t1": MagicMock(), "t2": MagicMock(), "t3": MagicMock()}
         mock_bot = _make_mock_bot("mock_tech", _make_ideas(3))
 
-        with patch("agents.innovation_swarm.log_json"), \
-             patch("agents.innovation_swarm.BRAINSTORMING_BOTS", bots_dict), \
-             patch("agents.innovation_swarm.get_bot", return_value=mock_bot) as mock_get_bot:
+        with patch("agents.innovation_swarm.log_json"), patch("agents.innovation_swarm.BRAINSTORMING_BOTS", bots_dict), patch("agents.innovation_swarm.get_bot", return_value=mock_bot) as mock_get_bot:
             swarm = InnovationSwarm()
             output = swarm.brainstorm("problem with no techniques")
 
@@ -339,9 +330,7 @@ class TestBrainstorm(unittest.TestCase):
         brain = MagicMock()
         mock_bot = _make_mock_bot("mock_tech", _make_ideas(3))
 
-        with patch("agents.innovation_swarm.log_json"), \
-             patch("agents.innovation_swarm.BRAINSTORMING_BOTS", {"t": MagicMock()}), \
-             patch("agents.innovation_swarm.get_bot", return_value=mock_bot):
+        with patch("agents.innovation_swarm.log_json"), patch("agents.innovation_swarm.BRAINSTORMING_BOTS", {"t": MagicMock()}), patch("agents.innovation_swarm.get_bot", return_value=mock_bot):
             swarm = InnovationSwarm(brain=brain)
             swarm.brainstorm("test", techniques=["t"])
 
@@ -357,17 +346,15 @@ class TestBrainstorm(unittest.TestCase):
 # TestRun
 # ---------------------------------------------------------------------------
 
-class TestRun(unittest.TestCase):
 
+class TestRun(unittest.TestCase):
     def _run_with_input(self, input_data):
         from agents.innovation_swarm import InnovationSwarm
 
         mock_bot = _make_mock_bot("mock_tech", _make_ideas(5))
         bots_dict = {"t1": MagicMock()}
 
-        with patch("agents.innovation_swarm.log_json"), \
-             patch("agents.innovation_swarm.BRAINSTORMING_BOTS", bots_dict), \
-             patch("agents.innovation_swarm.get_bot", return_value=mock_bot):
+        with patch("agents.innovation_swarm.log_json"), patch("agents.innovation_swarm.BRAINSTORMING_BOTS", bots_dict), patch("agents.innovation_swarm.get_bot", return_value=mock_bot):
             swarm = InnovationSwarm()
             result = swarm.run(input_data)
         return result
@@ -384,9 +371,7 @@ class TestRun(unittest.TestCase):
 
     def test_run_task_takes_precedence_over_problem(self):
         """When both 'task' and 'problem' are present, 'task' wins."""
-        result = self._run_with_input(
-            {"task": "task value", "problem": "problem value", "techniques": ["t1"]}
-        )
+        result = self._run_with_input({"task": "task value", "problem": "problem value", "techniques": ["t1"]})
         self.assertEqual(result["problem_statement"], "task value")
 
     def test_run_returns_dict(self):
@@ -404,9 +389,7 @@ class TestRun(unittest.TestCase):
         mock_bot = _make_mock_bot("mock_tech", _make_ideas(3))
         bots_dict = {"alpha": MagicMock(), "beta": MagicMock()}
 
-        with patch("agents.innovation_swarm.log_json"), \
-             patch("agents.innovation_swarm.BRAINSTORMING_BOTS", bots_dict), \
-             patch("agents.innovation_swarm.get_bot", return_value=mock_bot):
+        with patch("agents.innovation_swarm.log_json"), patch("agents.innovation_swarm.BRAINSTORMING_BOTS", bots_dict), patch("agents.innovation_swarm.get_bot", return_value=mock_bot):
             swarm = InnovationSwarm()
             result = swarm.run({"task": "goal", "techniques": ["alpha", "beta"]})
 
@@ -422,10 +405,11 @@ class TestRun(unittest.TestCase):
 # TestGetStats
 # ---------------------------------------------------------------------------
 
-class TestGetStats(unittest.TestCase):
 
+class TestGetStats(unittest.TestCase):
     def test_get_stats_before_brainstorm(self):
         from agents.innovation_swarm import InnovationSwarm
+
         swarm = InnovationSwarm()
         stats = swarm.get_stats()
         self.assertIsInstance(stats, dict)
@@ -450,6 +434,7 @@ class TestGetStats(unittest.TestCase):
 
     def test_get_stats_capabilities_match_class_attribute(self):
         from agents.innovation_swarm import InnovationSwarm
+
         swarm = InnovationSwarm()
         stats = swarm.get_stats()
         self.assertEqual(stats["capabilities"], InnovationSwarm.capabilities)

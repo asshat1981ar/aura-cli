@@ -5,6 +5,7 @@ intentional stubs — undefined names that act as pseudo-code placeholders.
 We inject mock callables into the module's global namespace before calling
 the function so the test exercises the real control flow without external deps.
 """
+
 import importlib
 import sys
 import types
@@ -42,6 +43,7 @@ def _load_module_with_mocks():
 class TestValidateApiContracts:
     def test_function_exists(self):
         import agents.api_validation_agent as mod
+
         assert hasattr(mod, "validate_api_contracts_after_feature_addition")
         assert callable(mod.validate_api_contracts_after_feature_addition)
 

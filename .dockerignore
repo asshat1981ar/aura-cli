@@ -1,0 +1,79 @@
+# Version control
+.git
+.gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env
+*.env
+
+# Test artifacts
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.tox/
+junit.xml
+bandit-results.json
+
+# Dev tools
+.pre-commit-config.yaml
+.ruff_cache/
+.mypy_cache/
+
+# Documentation (not needed in container)
+docs/
+*.md
+!README.md
+
+# CI/CD
+.github/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Memory/data files (mounted as volumes in production)
+memory/*.db
+memory/*.json
+memory/*.jsonl
+memory/context/
+memory/projects/
+memory/people/
+memory/heuristics/
+memory/store/
+
+# Logs
+*.log
+logs/
+
+# Node (web-ui built separately)
+web-ui/node_modules/
+web-ui/dist/
+web-ui/.next/
+
+# Scripts (not needed in runtime container)
+scripts/
+
+# Archive
+archive/
+
+# Temp files
+tmp/
+.tmp/
+*.tmp

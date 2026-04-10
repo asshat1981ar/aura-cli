@@ -19,8 +19,7 @@ def test_atomic_change_set_blocks_stale_overwrite_and_restores_file(tmp_path: Pa
         }
     ]
 
-    with pytest.raises(MismatchOverwriteBlockedError), pytest.MonkeyPatch.context() as mp, \
-         patch("core.file_tools.log_json") as mock_log:
+    with pytest.raises(MismatchOverwriteBlockedError), pytest.MonkeyPatch.context() as mp, patch("core.file_tools.log_json") as mock_log:
         mp.setattr("core.file_tools.recover_old_code_from_git", lambda *args, **kwargs: None)
         AtomicChangeSet(changes, tmp_path).apply()
 
@@ -29,10 +28,7 @@ def test_atomic_change_set_blocks_stale_overwrite_and_restores_file(tmp_path: Pa
     assert "old_code_mismatch_overwrite_blocked" in events
     assert "atomic_change_set_failure" in events
 
-    blocked_logs = [
-        c for c in mock_log.call_args_list
-        if len(c.args) >= 2 and c.args[1] == "old_code_mismatch_overwrite_blocked"
-    ]
+    blocked_logs = [c for c in mock_log.call_args_list if len(c.args) >= 2 and c.args[1] == "old_code_mismatch_overwrite_blocked"]
     assert blocked_logs[0].kwargs["details"]["policy"] == "explicit_overwrite_file_required"
 
 

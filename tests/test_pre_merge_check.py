@@ -7,6 +7,7 @@ Covers:
   4. Output contains each check name in the summary
   5. NO_COLOR env suppresses ANSI escape sequences
 """
+
 from __future__ import annotations
 
 import importlib.util
@@ -36,6 +37,7 @@ def _load_module(env_override: dict[str, str] | None = None) -> types.ModuleType
     """
     # Give each load a unique name so module-level state is not shared between tests.
     import uuid
+
     unique_name = f"{_MODULE_NAME}_{uuid.uuid4().hex}"
 
     spec = importlib.util.spec_from_file_location(unique_name, SCRIPT_PATH)
@@ -56,6 +58,7 @@ def _load_module(env_override: dict[str, str] | None = None) -> types.ModuleType
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
+
 
 def _make_completed_process(returncode: int, stdout: str = "", stderr: str = "") -> MagicMock:
     proc = MagicMock()

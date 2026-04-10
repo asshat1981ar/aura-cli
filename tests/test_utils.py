@@ -1,4 +1,5 @@
 """Unit tests for core/utils.py — FileUtils, ConfigLoader, ErrorHandler, Logger."""
+
 import json
 import os
 import tempfile
@@ -74,9 +75,7 @@ class TestFileUtilsEnsurePathExists:
 class TestConfigLoader:
     def test_load_config_from_file(self):
         settings = {"model": "gemini", "max_cycles": 10}
-        with tempfile.NamedTemporaryFile(
-            suffix=".json", mode="w", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
             json.dump(settings, f)
             path = f.name
         try:
@@ -87,9 +86,7 @@ class TestConfigLoader:
             os.unlink(path)
 
     def test_get_returns_default_for_missing_key(self):
-        with tempfile.NamedTemporaryFile(
-            suffix=".json", mode="w", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(suffix=".json", mode="w", delete=False) as f:
             json.dump({}, f)
             path = f.name
         try:

@@ -12,6 +12,7 @@ Usage::
     monitor.on_cycle_complete(cycle_entry)   # auto-trigger every N cycles
     report = monitor.run_scan()              # or trigger manually
 """
+
 from __future__ import annotations
 
 import time
@@ -113,8 +114,7 @@ class HealthMonitor:
             log_json("WARN", "health_monitor_no_skills")
             return {"skipped": True, "reason": "no_health_skills_available"}
 
-        log_json("INFO", "health_monitor_scan_start",
-                 details={"skills": list(available.keys()), "root": self.root})
+        log_json("INFO", "health_monitor_scan_start", details={"skills": list(available.keys()), "root": self.root})
 
         results = dispatch_skills("default", available, self.root, timeout=30.0)
 
@@ -145,8 +145,7 @@ class HealthMonitor:
                     goal_text = f"Health issue in {skill_name}: {value}"
                 self.queue.add(goal_text)
                 auto_goals.append(goal_text)
-                log_json("INFO", "health_monitor_goal_generated",
-                         details={"goal": goal_text, "reason": breach_reason})
+                log_json("INFO", "health_monitor_goal_generated", details={"goal": goal_text, "reason": breach_reason})
 
         snapshot = {
             "timestamp": time.time(),
@@ -161,9 +160,7 @@ class HealthMonitor:
             "auto_goals": auto_goals,
             "skills_ran": list(results.keys()),
         }
-        log_json("INFO", "health_monitor_scan_complete",
-                 details={"metrics": metrics, "breaches": len(breaches),
-                          "auto_goals": len(auto_goals)})
+        log_json("INFO", "health_monitor_scan_complete", details={"metrics": metrics, "breaches": len(breaches), "auto_goals": len(auto_goals)})
         return report
 
     def _check_breach(

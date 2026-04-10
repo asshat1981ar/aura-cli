@@ -10,6 +10,7 @@ Or programmatically:
     from aura_cli.tui.log_streamer import LogStreamer, stream_file
     stream_file("/path/to/aura.log", tail=100, level="warn")
 """
+
 from __future__ import annotations
 
 import json
@@ -21,6 +22,7 @@ from typing import IO, List, Optional
 try:
     from rich.console import Console
     from rich.text import Text
+
     _RICH_AVAILABLE = True
 except ImportError:
     _RICH_AVAILABLE = False
@@ -170,15 +172,14 @@ def stream_file(path: str, tail: Optional[int] = None, level: str = "DEBUG") -> 
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def _main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description="AURA Log Streamer")
     parser.add_argument("--file", "-f", help="Log file to read (default: stdin)")
     parser.add_argument("--tail", "-n", type=int, default=None, help="Show last N lines")
-    parser.add_argument("--level", "-l", default="debug",
-                        choices=["debug", "info", "warn", "error", "critical"],
-                        help="Minimum log level to display")
+    parser.add_argument("--level", "-l", default="debug", choices=["debug", "info", "warn", "error", "critical"], help="Minimum log level to display")
     parser.add_argument("--follow", action="store_true", help="Follow file (tail -f mode)")
     args = parser.parse_args()
 

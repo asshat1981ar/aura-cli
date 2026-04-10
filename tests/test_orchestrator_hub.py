@@ -1,8 +1,10 @@
 """Tests for orchestrator_hub/ — registry, lifecycle, router, message_bus, hub."""
+
 import time
 import unittest
 
 import pytest
+
 pytest.importorskip("orchestrator_hub")
 
 from orchestrator_hub.registry import AgentInfo, AgentRegistryHub, ServerInfo
@@ -120,9 +122,7 @@ class TestTaskRouter(unittest.TestCase):
     def test_route_with_fallback_excludes_agents(self):
         self.registry.register_agent("py1", "python", ["python"], "http://py1", "gemini")
         self.registry.register_agent("py2", "python", ["python"], "http://py2", "claude")
-        result = self.router.route_with_fallback(
-            {"goal": "python script"}, exclude=["py1"]
-        )
+        result = self.router.route_with_fallback({"goal": "python script"}, exclude=["py1"])
         self.assertEqual(result, "py2")
 
     def test_load_balance_round_robin(self):

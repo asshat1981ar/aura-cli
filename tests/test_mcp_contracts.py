@@ -1,4 +1,5 @@
 """Unit tests for core/mcp_contracts.py."""
+
 from __future__ import annotations
 
 import pytest
@@ -138,15 +139,11 @@ class TestBuildDiscoveryPayload:
         assert len(payload["servers"]) == 1
 
     def test_custom_discovery_version(self):
-        payload = build_discovery_payload(
-            current_server={}, servers=[], discovery_version="2.0"
-        )
+        payload = build_discovery_payload(current_server={}, servers=[], discovery_version="2.0")
         assert payload["discovery_version"] == "2.0"
 
     def test_extra_fields_included(self):
-        payload = build_discovery_payload(
-            current_server={}, servers=[], region="us-east-1"
-        )
+        payload = build_discovery_payload(current_server={}, servers=[], region="us-east-1")
         assert payload["region"] == "us-east-1"
 
     def test_servers_copied_as_dicts(self):

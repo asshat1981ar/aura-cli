@@ -3,6 +3,7 @@ from unittest.mock import Mock
 from dataclasses import dataclass
 from typing import List, Dict
 
+
 @dataclass
 class DebtHotspot:
     file_path: str
@@ -11,6 +12,7 @@ class DebtHotspot:
     cyclomatic_complexity: int
     bug_count: int
     change_frequency: float
+
 
 class DebtTracker:
     def __init__(self):
@@ -25,55 +27,36 @@ class DebtTracker:
 
     def track_debt_metrics(self, hotspot: DebtHotspot) -> Dict[str, float]:
         """Track debt metrics for a given hotspot"""
-        return {
-            'test_coverage_delta': hotspot.test_coverage - self.metrics_baseline.get('test_coverage', 0),
-            'complexity_delta': hotspot.cyclomatic_complexity - self.metrics_baseline.get('complexity', 0),
-            'bug_trend': hotspot.bug_count - self.metrics_baseline.get('bugs', 0)
-        }
+        return {"test_coverage_delta": hotspot.test_coverage - self.metrics_baseline.get("test_coverage", 0), "complexity_delta": hotspot.cyclomatic_complexity - self.metrics_baseline.get("complexity", 0), "bug_trend": hotspot.bug_count - self.metrics_baseline.get("bugs", 0)}
 
     def _process_analysis_results(self, results) -> List[DebtHotspot]:
         # Process mock analysis results into DebtHotspot objects
         return []
 
+
 def test_hotspot_identification():
     tracker = DebtTracker()
-    mock_results = {
-        'file1.py': {
-            'coverage': 0.65,
-            'complexity': 15,
-            'bugs': 5,
-            'changes_per_month': 8.5
-        }
-    }
-    
+    mock_results = {"file1.py": {"coverage": 0.65, "complexity": 15, "bugs": 5, "changes_per_month": 8.5}}
+
     tracker.static_analysis_tool.analyze.return_value = mock_results
-    hotspots = tracker.identify_hotspots('/fake/path')
-    
+    hotspots = tracker.identify_hotspots("/fake/path")
+
     assert tracker.static_analysis_tool.analyze.called
     assert isinstance(hotspots, list)
 
+
 def test_debt_metric_tracking():
     tracker = DebtTracker()
-    tracker.metrics_baseline = {
-        'test_coverage': 0.70,
-        'complexity': 10,
-        'bugs': 3
-    }
-    
-    hotspot = DebtHotspot(
-        file_path='test.py',
-        metrics={},
-        test_coverage=0.75,
-        cyclomatic_complexity=8,
-        bug_count=2,
-        change_frequency=5.0
-    )
-    
+    tracker.metrics_baseline = {"test_coverage": 0.70, "complexity": 10, "bugs": 3}
+
+    hotspot = DebtHotspot(file_path="test.py", metrics={}, test_coverage=0.75, cyclomatic_complexity=8, bug_count=2, change_frequency=5.0)
+
     metrics = tracker.track_debt_metrics(hotspot)
-    
-    assert abs(metrics['test_coverage_delta'] - 0.05) < 1e-9
-    assert metrics['complexity_delta'] == -2
-    assert metrics['bug_trend'] == -1
+
+    assert abs(metrics["test_coverage_delta"] - 0.05) < 1e-9
+    assert metrics["complexity_delta"] == -2
+    assert metrics["bug_trend"] == -1
+
 
 @pytest.mark.integration
 def test_end_to_end_tracking():
@@ -81,17 +64,10 @@ def test_end_to_end_tracking():
 
     # Mock static analysis setup
     mock_tool = Mock()
-    mock_tool.analyze.return_value = {
-        'file2.py': {
-            'coverage': 0.55,
-            'complexity': 25,
-            'bugs': 8,
-            'changes_per_month': 12.0
-        }
-    }
+    mock_tool.analyze.return_value = {"file2.py": {"coverage": 0.55, "complexity": 25, "bugs": 8, "changes_per_month": 12.0}}
 
     tracker.static_analysis_tool = mock_tool
-    hotspots = tracker.identify_hotspots('/fake/path')
+    hotspots = tracker.identify_hotspots("/fake/path")
 
     # Verify tracking workflow
     for hotspot in hotspots:

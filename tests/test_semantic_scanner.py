@@ -1,4 +1,5 @@
 """Tests for the three-layer semantic scanner pipeline."""
+
 from __future__ import annotations
 
 import os
@@ -86,11 +87,11 @@ class TestASTExtraction(unittest.TestCase):
         self.assertEqual(kinds["prop"], "property")
 
     def test_extract_imports(self):
-        src = '''\
+        src = """\
             import os
             from pathlib import Path
             from typing import Any, Dict
-        '''
+        """
         f = self.tmpdir / "imps.py"
         _write(f, src)
         imps = extract_imports(f)
@@ -105,12 +106,12 @@ class TestASTExtraction(unittest.TestCase):
         self.assertIn("Dict", names)
 
     def test_extract_call_sites(self):
-        src = '''\
+        src = """\
             def caller():
                 result = len([1, 2, 3])
                 print(result)
                 return result
-        '''
+        """
         f = self.tmpdir / "calls.py"
         _write(f, src)
         syms = extract_symbols(f)
@@ -121,7 +122,7 @@ class TestASTExtraction(unittest.TestCase):
         self.assertIn("print", callee_names)
 
     def test_extract_base_classes(self):
-        src = '''\
+        src = """\
             class Base:
                 pass
 
@@ -130,7 +131,7 @@ class TestASTExtraction(unittest.TestCase):
 
             class MultiChild(Base, object):
                 pass
-        '''
+        """
         f = self.tmpdir / "inherit.py"
         _write(f, src)
         syms = extract_symbols(f)
@@ -216,17 +217,23 @@ class TestFullScan(unittest.TestCase):
         _write(abs_path, textwrap.dedent(code))
 
     def test_full_scan_without_llm(self):
-        self._make_py("pkg/alpha.py", """\
+        self._make_py(
+            "pkg/alpha.py",
+            """\
             def alpha_func(x: int) -> int:
                 \"\"\"Alpha function.\"\"\"
                 return x + 1
-        """)
-        self._make_py("pkg/beta.py", """\
+        """,
+        )
+        self._make_py(
+            "pkg/beta.py",
+            """\
             from pkg.alpha import alpha_func
 
             def beta_func():
                 return alpha_func(10)
-        """)
+        """,
+        )
 
         scanner = SemanticScanner(
             project_root=self.tmpdir,
@@ -251,10 +258,13 @@ class TestFullScan(unittest.TestCase):
         db.close()
 
     def test_scan_respects_exclude_patterns(self):
-        self._make_py("good.py", """\
+        self._make_py(
+            "good.py",
+            """\
             def good():
                 pass
-        """)
+        """,
+        )
         # This file should be excluded
         bad_dir = self.tmpdir / "__pycache__"
         bad_dir.mkdir(exist_ok=True)

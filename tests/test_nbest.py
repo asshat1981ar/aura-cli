@@ -1,4 +1,5 @@
 """Tests for N-Best code generation with critic tournament."""
+
 import unittest
 from unittest.mock import MagicMock
 
@@ -92,16 +93,15 @@ class TestNBestEngine(unittest.TestCase):
         model.respond.return_value = "invalid json"
         delattr(model, "respond_for_role")
         candidates = [
-            CodeCandidate(variant_id=0, changes=[{"file_path": "a.py"}],
-                          temperature=0.2, sandbox_passed=True),
-            CodeCandidate(variant_id=1, changes=[{"file_path": "b.py"}],
-                          temperature=0.8, sandbox_passed=False),
+            CodeCandidate(variant_id=0, changes=[{"file_path": "a.py"}], temperature=0.2, sandbox_passed=True),
+            CodeCandidate(variant_id=1, changes=[{"file_path": "b.py"}], temperature=0.8, sandbox_passed=False),
         ]
         winner = self.engine.critic_tournament(model, candidates, "test")
         self.assertEqual(winner.variant_id, 0)  # sandbox passed + lower temp
 
     def test_critic_tournament_with_valid_scores(self):
         import json
+
         model = MagicMock()
         scores = {
             "scores": {

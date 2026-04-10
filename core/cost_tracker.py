@@ -34,9 +34,7 @@ class CostCapExceededError(Exception):
     """Raised when the cumulative model call cost exceeds the configured cap."""
 
     def __init__(self, current_usd: float, cap_usd: float) -> None:
-        super().__init__(
-            f"Cost cap exceeded: ${current_usd:.6f} >= cap ${cap_usd:.6f}"
-        )
+        super().__init__(f"Cost cap exceeded: ${current_usd:.6f} >= cap ${cap_usd:.6f}")
         self.current_usd = current_usd
         self.cap_usd = cap_usd
 

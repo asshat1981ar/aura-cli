@@ -1,9 +1,14 @@
 """Tests for guaranteed-execution lifecycle hooks."""
+
 import json
 import unittest
 
 from core.hooks import (
-    HookConfig, HookEngine, HookExecution, HookResult, HookTiming,
+    HookConfig,
+    HookEngine,
+    HookExecution,
+    HookResult,
+    HookTiming,
 )
 
 
@@ -14,20 +19,24 @@ class TestHookConfig(unittest.TestCase):
         self.assertTrue(h.blocking)
 
     def test_from_dict(self):
-        h = HookConfig.from_dict({
-            "command": "python3 check.py",
-            "blocking": False,
-            "timeout_seconds": 10,
-        })
+        h = HookConfig.from_dict(
+            {
+                "command": "python3 check.py",
+                "blocking": False,
+                "timeout_seconds": 10,
+            }
+        )
         self.assertEqual(h.command, "python3 check.py")
         self.assertFalse(h.blocking)
         self.assertEqual(h.timeout_seconds, 10)
 
     def test_from_dict_with_extras(self):
-        h = HookConfig.from_dict({
-            "command": "test",
-            "unknown_field": True,
-        })
+        h = HookConfig.from_dict(
+            {
+                "command": "test",
+                "unknown_field": True,
+            }
+        )
         self.assertEqual(h.command, "test")
 
 
@@ -69,27 +78,39 @@ class TestHookEngine(unittest.TestCase):
         self.assertEqual(len(engine.history), 1)
 
     def test_run_pre_hooks_block(self):
-        config = {"hooks": {"pre_apply": [
-            {"command": "exit 2", "blocking": True},
-        ]}}
+        config = {
+            "hooks": {
+                "pre_apply": [
+                    {"command": "exit 2", "blocking": True},
+                ]
+            }
+        }
         engine = HookEngine(config)
         proceed, _ = engine.run_pre_hooks("apply", {"changes": []})
         self.assertFalse(proceed)
         self.assertEqual(engine.history[0].result, HookResult.BLOCK)
 
     def test_run_pre_hooks_modify(self):
-        config = {"hooks": {"pre_plan": [
-            {"command": 'echo \'{"extra": true}\'', "blocking": True},
-        ]}}
+        config = {
+            "hooks": {
+                "pre_plan": [
+                    {"command": "echo '{\"extra\": true}'", "blocking": True},
+                ]
+            }
+        }
         engine = HookEngine(config)
         proceed, modified = engine.run_pre_hooks("plan", {"goal": "test"})
         self.assertTrue(proceed)
         self.assertTrue(modified.get("extra"))
 
     def test_run_pre_hooks_error_continues(self):
-        config = {"hooks": {"pre_act": [
-            {"command": "exit 1", "blocking": True},
-        ]}}
+        config = {
+            "hooks": {
+                "pre_act": [
+                    {"command": "exit 1", "blocking": True},
+                ]
+            }
+        }
         engine = HookEngine(config)
         proceed, _ = engine.run_pre_hooks("act", {})
         self.assertTrue(proceed)  # exit 1 is error, not block
@@ -102,9 +123,13 @@ class TestHookEngine(unittest.TestCase):
         self.assertEqual(len(engine.history), 1)
 
     def test_hook_timeout(self):
-        config = {"hooks": {"pre_act": [
-            {"command": "sleep 10", "timeout_seconds": 1},
-        ]}}
+        config = {
+            "hooks": {
+                "pre_act": [
+                    {"command": "sleep 10", "timeout_seconds": 1},
+                ]
+            }
+        }
         engine = HookEngine(config)
         proceed, _ = engine.run_pre_hooks("act", {})
         self.assertTrue(proceed)
@@ -128,9 +153,13 @@ class TestHookEngine(unittest.TestCase):
         self.assertEqual(len(engine.history), 0)
 
     def test_hook_env_vars(self):
-        config = {"hooks": {"pre_act": [
-            {"command": "echo $AURA_PHASE", "env": {"CUSTOM": "val"}},
-        ]}}
+        config = {
+            "hooks": {
+                "pre_act": [
+                    {"command": "echo $AURA_PHASE", "env": {"CUSTOM": "val"}},
+                ]
+            }
+        }
         engine = HookEngine(config)
         proceed, _ = engine.run_pre_hooks("act", {})
         self.assertTrue(proceed)

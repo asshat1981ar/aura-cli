@@ -368,6 +368,10 @@ def _customize_logs(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--follow", action="store_true", help="Follow the file when using --file.")
 
 
+def _customize_history(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--limit", "-n", type=int, default=10, help="Number of recent completed goals to show (default: 10).")
+
+
 def _customize_studio(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(watch=True)
     parser.add_argument("--autonomous", action="store_true", help="Start the goal loop in the background.")
@@ -557,6 +561,7 @@ _PARSER_CUSTOMIZERS.update(
         ("scaffold",): _customize_scaffold,
         ("evolve",): _customize_evolve,
         ("logs",): _customize_logs,
+        ("history",): _customize_history,
         ("queue", "list"): _customize_queue_list,
         ("queue", "clear"): _customize_queue_clear,
         ("memory", "search"): _customize_memory_search,
@@ -885,11 +890,7 @@ def _documented_default_actions() -> set[str]:
 
 
 def _action_canonical_paths() -> set[tuple[str, ...]]:
-    return {
-        spec.canonical_path
-        for spec in CLI_ACTION_SPECS_BY_ACTION.values()
-        if spec.canonical_path is not None
-    }
+    return {spec.canonical_path for spec in CLI_ACTION_SPECS_BY_ACTION.values() if spec.canonical_path is not None}
 
 
 def _smoke_invocation_and_dispatch_failures(
@@ -1009,9 +1010,7 @@ def cli_contract_report(dispatch_registry: Mapping[str, Any] | None = None) -> d
         "customizers_on_non_leaf_paths": sorted(customizer_paths - leaf_paths),
         # Parent commands that are also canonical invocations (for example
         # `config`) do not need to force a subcommand to satisfy the contract.
-        "missing_required_parent_paths": sorted(
-            path for path in (parent_paths - required_parent_paths) if path not in action_canonical_paths
-        ),
+        "missing_required_parent_paths": sorted(path for path in (parent_paths - required_parent_paths) if path not in action_canonical_paths),
         "extra_required_parent_paths": sorted(required_parent_paths - parent_paths),
         "action_spec_actions": action_spec_actions,
         "help_actions": help_actions,

@@ -1,4 +1,5 @@
 """End-to-end integration test for SADD: parse spec -> build graph -> coordinator with mock orchestrator."""
+
 import os
 import tempfile
 import unittest
@@ -93,15 +94,18 @@ class TestSADDE2E(unittest.TestCase):
             def mock_factory():
                 orch = MagicMock()
                 orch.run_loop.return_value = {
-                    "goal": "test", "stop_reason": "PASS",
+                    "goal": "test",
+                    "stop_reason": "PASS",
                     "history": [{"phase_outputs": {"verification": {"status": "pass"}}}],
                 }
                 return orch
 
             config = SessionConfig(max_parallel=1, max_cycles_per_workstream=1)
             coordinator = SessionCoordinator(
-                design_spec=spec, orchestrator_factory=mock_factory,
-                brain=brain, config=config,
+                design_spec=spec,
+                orchestrator_factory=mock_factory,
+                brain=brain,
+                config=config,
             )
             report = coordinator.run()
             summary = report.summary()

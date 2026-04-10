@@ -14,6 +14,7 @@ import time
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_brain(stored: dict | None = None):
     """Return a minimal brain mock that supports get/set/remember."""
     brain = MagicMock()
@@ -40,11 +41,13 @@ def _make_adapter(responses: dict | None = None):
 # TestRouterAgentEMA
 # ---------------------------------------------------------------------------
 
+
 class TestRouterAgentEMA(unittest.TestCase):
     """Test EMA score update math in ModelStats.record()."""
 
     def setUp(self):
         from agents.router import ModelStats
+
         self.ModelStats = ModelStats
 
     def test_initial_ema_score(self):
@@ -139,11 +142,13 @@ class TestRouterAgentEMA(unittest.TestCase):
 # TestRouterAgentRouting
 # ---------------------------------------------------------------------------
 
+
 class TestRouterAgentRouting(unittest.TestCase):
     """Test route() returns the highest-EMA model for a given prompt."""
 
     def _make_router(self, enabled=None, responses=None):
         from agents.router import RouterAgent
+
         brain = _make_brain()
         adapter = _make_adapter(responses)
         router = RouterAgent(brain, adapter, enabled_models=enabled or ["openai", "gemini"])
@@ -231,22 +236,24 @@ class TestRouterAgentRouting(unittest.TestCase):
 # TestRouterAgentFallback
 # ---------------------------------------------------------------------------
 
+
 class TestRouterAgentFallback(unittest.TestCase):
     """Test fallback behaviour when no scores have been recorded."""
 
     def test_all_models_start_with_equal_ema(self):
         """Fresh router — all models start at ema_score = 0.75."""
         from agents.router import RouterAgent
+
         brain = _make_brain()
         adapter = _make_adapter()
         router = RouterAgent(brain, adapter, enabled_models=["openai", "gemini", "anthropic"])
         scores = {name: s.ema_score for name, s in router.stats.items()}
-        self.assertTrue(all(v == 0.75 for v in scores.values()),
-                        f"Expected all 0.75, got {scores}")
+        self.assertTrue(all(v == 0.75 for v in scores.values()), f"Expected all 0.75, got {scores}")
 
     def test_router_initialises_stats_for_all_enabled_models(self):
         """Stats entries are created for every enabled model on init."""
         from agents.router import RouterAgent
+
         enabled = ["openai", "gemini", "codex"]
         router = RouterAgent(_make_brain(), _make_adapter(), enabled_models=enabled)
         for model in enabled:
@@ -255,6 +262,7 @@ class TestRouterAgentFallback(unittest.TestCase):
     def test_route_picks_any_model_when_all_equal(self):
         """When all scores are equal, route() still succeeds (picks any)."""
         from agents.router import RouterAgent
+
         brain = _make_brain()
         adapter = _make_adapter()
         router = RouterAgent(brain, adapter, enabled_models=["openai", "gemini"])
@@ -265,6 +273,7 @@ class TestRouterAgentFallback(unittest.TestCase):
     def test_router_loads_persisted_stats_from_brain(self):
         """RouterAgent restores previously persisted stats on construction."""
         from agents.router import RouterAgent, ModelStats
+
         persisted_stats = {
             "openai": ModelStats(name="openai", ema_score=0.3).to_dict(),
             "gemini": ModelStats(name="gemini", ema_score=0.9).to_dict(),
@@ -278,6 +287,7 @@ class TestRouterAgentFallback(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # TestRouterAgentConfigOverride
 # ---------------------------------------------------------------------------
+
 
 class TestRouterAgentConfigOverride(unittest.TestCase):
     """Test that config-level model_routing overrides are honoured
@@ -351,16 +361,16 @@ class TestRouterAgentConfigOverride(unittest.TestCase):
     def test_model_routing_task_types_defined_in_default_config(self):
         """Default config contains expected task-type routing keys."""
         from core.config_manager import DEFAULT_CONFIG
+
         routing = DEFAULT_CONFIG.get("model_routing", {})
-        expected_keys = {"code_generation", "planning", "analysis", "critique",
-                         "embedding", "fast", "quality"}
-        self.assertTrue(expected_keys.issubset(set(routing.keys())),
-                        f"Missing routing keys. Found: {set(routing.keys())}")
+        expected_keys = {"code_generation", "planning", "analysis", "critique", "embedding", "fast", "quality"}
+        self.assertTrue(expected_keys.issubset(set(routing.keys())), f"Missing routing keys. Found: {set(routing.keys())}")
 
 
 # ---------------------------------------------------------------------------
 # TestModelAdapterRouterWiring
 # ---------------------------------------------------------------------------
+
 
 class TestModelAdapterRouterWiring(unittest.TestCase):
     """Test ModelAdapter.set_router() and that respond() delegates to router."""
@@ -368,6 +378,7 @@ class TestModelAdapterRouterWiring(unittest.TestCase):
     def _make_adapter_instance(self):
         """Build a minimal ModelAdapter instance without real I/O."""
         from core.model_adapter import ModelAdapter
+
         adapter = ModelAdapter.__new__(ModelAdapter)
         adapter._mem_cache = {}
         adapter.router = None
@@ -404,9 +415,7 @@ class TestModelAdapterRouterWiring(unittest.TestCase):
         # Patch config and _call_with_timeout
         with patch("core.model_adapter.config") as mock_cfg:
             mock_cfg.get.return_value = "openrouter"
-            adapter._call_with_timeout = MagicMock(
-                side_effect=lambda fn, *args, **kw: fn(*args)
-            )
+            adapter._call_with_timeout = MagicMock(side_effect=lambda fn, *args, **kw: fn(*args))
             result = adapter.respond("test prompt via router")
 
         mock_router.route.assert_called_once_with("test prompt via router")
@@ -427,9 +436,7 @@ class TestModelAdapterRouterWiring(unittest.TestCase):
 
         with patch("core.model_adapter.config") as mock_cfg:
             mock_cfg.get.return_value = "openrouter"
-            adapter._call_with_timeout = MagicMock(
-                side_effect=lambda fn, *args, **kw: fn(*args)
-            )
+            adapter._call_with_timeout = MagicMock(side_effect=lambda fn, *args, **kw: fn(*args))
             result = adapter.respond("prompt without router")
 
         self.assertEqual(fallback_called, ["prompt without router"])
@@ -453,9 +460,7 @@ class TestModelAdapterRouterWiring(unittest.TestCase):
 
         with patch("core.model_adapter.config") as mock_cfg:
             mock_cfg.get.return_value = "openrouter"
-            adapter._call_with_timeout = MagicMock(
-                side_effect=lambda fn, *args, **kw: fn(*args)
-            )
+            adapter._call_with_timeout = MagicMock(side_effect=lambda fn, *args, **kw: fn(*args))
             result = adapter.respond("a prompt that breaks the router")
 
         self.assertEqual(result, "fallback_from_openrouter")
@@ -471,6 +476,7 @@ class TestModelAdapterRouterWiring(unittest.TestCase):
         router.stats["openai"].ema_score = 0.9
 
         from core.model_adapter import ModelAdapter
+
         adapter = ModelAdapter.__new__(ModelAdapter)
         adapter._mem_cache = {}
         adapter.router = None

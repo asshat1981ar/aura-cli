@@ -1,4 +1,5 @@
 """Unit tests for agents/investigation_agent.py."""
+
 from __future__ import annotations
 
 import unittest
@@ -10,6 +11,7 @@ from agents.investigation_agent import InvestigationAgent
 # ---------------------------------------------------------------------------
 # Mock-based unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestInvestigationAgentUnit(unittest.TestCase):
     """Isolated unit tests using mocks for all core helpers."""
@@ -58,16 +60,12 @@ class TestInvestigationAgentUnit(unittest.TestCase):
     @patch("agents.investigation_agent.investigate_test_count_drop")
     @patch("agents.investigation_agent.build_remediation_plan")
     @patch("agents.investigation_agent.investigate_verification_failure")
-    def test_test_drop_triggered_when_both_counts_present(
-        self, mock_verify, mock_remediation, mock_drop
-    ):
+    def test_test_drop_triggered_when_both_counts_present(self, mock_verify, mock_remediation, mock_drop):
         mock_verify.return_value = self._mock_investigation("v-summary")
         mock_remediation.return_value = self._mock_remediation("r-summary")
         mock_drop.return_value = {"summary": "drop-summary"}
 
-        result = InvestigationAgent().run(
-            {"previous_test_count": 100, "current_test_count": 80}
-        )
+        result = InvestigationAgent().run({"previous_test_count": 100, "current_test_count": 80})
 
         mock_drop.assert_called_once()
         self.assertIsNotNone(result["test_drop_investigation"])
@@ -76,9 +74,7 @@ class TestInvestigationAgentUnit(unittest.TestCase):
     @patch("agents.investigation_agent.investigate_test_count_drop")
     @patch("agents.investigation_agent.build_remediation_plan")
     @patch("agents.investigation_agent.investigate_verification_failure")
-    def test_test_drop_not_triggered_with_only_one_count(
-        self, mock_verify, mock_remediation, mock_drop
-    ):
+    def test_test_drop_not_triggered_with_only_one_count(self, mock_verify, mock_remediation, mock_drop):
         mock_verify.return_value = self._mock_investigation()
         mock_remediation.return_value = self._mock_remediation()
 
@@ -88,9 +84,7 @@ class TestInvestigationAgentUnit(unittest.TestCase):
 
     @patch("agents.investigation_agent.build_remediation_plan")
     @patch("agents.investigation_agent.investigate_verification_failure")
-    def test_summary_joins_investigation_and_remediation_parts(
-        self, mock_verify, mock_remediation
-    ):
+    def test_summary_joins_investigation_and_remediation_parts(self, mock_verify, mock_remediation):
         mock_verify.return_value = self._mock_investigation("alpha")
         mock_remediation.return_value = self._mock_remediation("beta")
 
@@ -124,9 +118,7 @@ def test_investigation_agent_combines_failure_analysis_and_remediation():
                 "patterns": ["syntax_error"],
                 "recommended_actions": ["Inspect the generated file."],
             },
-            "history": [
-                {"phase_outputs": {"verification": {"failures": ["SyntaxError: invalid syntax"]}}}
-            ],
+            "history": [{"phase_outputs": {"verification": {"failures": ["SyntaxError: invalid syntax"]}}}],
         }
     )
 

@@ -27,6 +27,7 @@ from agents.schemas import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_plan_step(n: int = 1) -> PlanStep:
     return PlanStep(
         step_number=n,
@@ -57,6 +58,7 @@ def _make_technique_result() -> TechniqueResult:
 # TestDebugStrategy
 # ---------------------------------------------------------------------------
 
+
 class TestDebugStrategy:
     def test_valid_debug_strategy(self):
         ds = DebugStrategy(
@@ -82,9 +84,7 @@ class TestDebugStrategy:
 
     def test_severity_all_valid_values(self):
         for sev in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
-            ds = DebugStrategy(
-                summary="s", diagnosis="d", fix_strategy="f", severity=sev
-            )
+            ds = DebugStrategy(summary="s", diagnosis="d", fix_strategy="f", severity=sev)
             assert ds.severity == sev
 
     def test_severity_validation_invalid(self):
@@ -99,14 +99,13 @@ class TestDebugStrategy:
     def test_severity_case_sensitive(self):
         # Pydantic Literal is case-sensitive
         with pytest.raises(ValidationError):
-            DebugStrategy(
-                summary="s", diagnosis="d", fix_strategy="f", severity="high"
-            )
+            DebugStrategy(summary="s", diagnosis="d", fix_strategy="f", severity="high")
 
 
 # ---------------------------------------------------------------------------
 # TestPlanStep
 # ---------------------------------------------------------------------------
+
 
 class TestPlanStep:
     def test_valid_plan_step_with_target_file(self):
@@ -127,6 +126,7 @@ class TestPlanStep:
 # ---------------------------------------------------------------------------
 # TestPlannerOutput
 # ---------------------------------------------------------------------------
+
 
 class TestPlannerOutput:
     def _valid_kwargs(self):
@@ -202,6 +202,7 @@ class TestPlannerOutput:
 # TestCriticIssue
 # ---------------------------------------------------------------------------
 
+
 class TestCriticIssue:
     def test_valid_critic_issue(self):
         issue = CriticIssue(
@@ -233,22 +234,19 @@ class TestCriticIssue:
 
     def test_all_severity_values(self):
         for sev in ("critical", "major", "minor", "suggestion"):
-            issue = CriticIssue(
-                severity=sev, category="other", description="d", recommendation="r"
-            )
+            issue = CriticIssue(severity=sev, category="other", description="d", recommendation="r")
             assert issue.severity == sev
 
     def test_all_category_values(self):
         for cat in ("completeness", "clarity", "feasibility", "alignment", "safety", "other"):
-            issue = CriticIssue(
-                severity="minor", category=cat, description="d", recommendation="r"
-            )
+            issue = CriticIssue(severity="minor", category=cat, description="d", recommendation="r")
             assert issue.category == cat
 
 
 # ---------------------------------------------------------------------------
 # TestCriticOutput
 # ---------------------------------------------------------------------------
+
 
 class TestCriticOutput:
     def _valid_kwargs(self):
@@ -303,6 +301,7 @@ class TestCriticOutput:
 # TestCodeChange
 # ---------------------------------------------------------------------------
 
+
 class TestCodeChange:
     def test_valid_code_change(self):
         cc = CodeChange(
@@ -318,6 +317,7 @@ class TestCodeChange:
 # ---------------------------------------------------------------------------
 # TestCoderOutput
 # ---------------------------------------------------------------------------
+
 
 class TestCoderOutput:
     def _valid_kwargs(self):
@@ -363,6 +363,7 @@ class TestCoderOutput:
 # ---------------------------------------------------------------------------
 # TestMutationValidationOutput
 # ---------------------------------------------------------------------------
+
 
 class TestMutationValidationOutput:
     def _valid_kwargs(self):
@@ -416,6 +417,7 @@ class TestMutationValidationOutput:
 # TestInnovationEnums
 # ---------------------------------------------------------------------------
 
+
 class TestInnovationEnums:
     def test_innovation_phases_count(self):
         assert len(InnovationPhase) == 5
@@ -459,6 +461,7 @@ class TestInnovationEnums:
 # TestIdea
 # ---------------------------------------------------------------------------
 
+
 class TestIdea:
     def test_valid_idea(self):
         idea = _make_idea()
@@ -481,35 +484,50 @@ class TestIdea:
     def test_novelty_above_one_raises(self):
         with pytest.raises(ValidationError):
             Idea(
-                description="d", technique="SCAMPER",
-                novelty=1.01, feasibility=0.5, impact=0.5,
+                description="d",
+                technique="SCAMPER",
+                novelty=1.01,
+                feasibility=0.5,
+                impact=0.5,
             )
 
     def test_novelty_below_zero_raises(self):
         with pytest.raises(ValidationError):
             Idea(
-                description="d", technique="SCAMPER",
-                novelty=-0.1, feasibility=0.5, impact=0.5,
+                description="d",
+                technique="SCAMPER",
+                novelty=-0.1,
+                feasibility=0.5,
+                impact=0.5,
             )
 
     def test_feasibility_bounds(self):
         with pytest.raises(ValidationError):
             Idea(
-                description="d", technique="SCAMPER",
-                novelty=0.5, feasibility=1.5, impact=0.5,
+                description="d",
+                technique="SCAMPER",
+                novelty=0.5,
+                feasibility=1.5,
+                impact=0.5,
             )
 
     def test_impact_bounds(self):
         with pytest.raises(ValidationError):
             Idea(
-                description="d", technique="SCAMPER",
-                novelty=0.5, feasibility=0.5, impact=-1.0,
+                description="d",
+                technique="SCAMPER",
+                novelty=0.5,
+                feasibility=0.5,
+                impact=-1.0,
             )
 
     def test_boundary_values_accepted(self):
         idea = Idea(
-            description="d", technique="SCAMPER",
-            novelty=0.0, feasibility=1.0, impact=0.0,
+            description="d",
+            technique="SCAMPER",
+            novelty=0.0,
+            feasibility=1.0,
+            impact=0.0,
         )
         assert idea.novelty == 0.0
         assert idea.feasibility == 1.0
@@ -518,6 +536,7 @@ class TestIdea:
 # ---------------------------------------------------------------------------
 # TestTechniqueResult
 # ---------------------------------------------------------------------------
+
 
 class TestTechniqueResult:
     def test_valid_technique_result(self):
@@ -538,6 +557,7 @@ class TestTechniqueResult:
 # ---------------------------------------------------------------------------
 # TestInnovationOutput
 # ---------------------------------------------------------------------------
+
 
 class TestInnovationOutput:
     def _make_output(self, **overrides):
@@ -598,6 +618,7 @@ class TestInnovationOutput:
 # ---------------------------------------------------------------------------
 # TestInnovationSessionState
 # ---------------------------------------------------------------------------
+
 
 class TestInnovationSessionState:
     def _make_state(self, **overrides):
@@ -667,6 +688,7 @@ class TestInnovationSessionState:
 # ---------------------------------------------------------------------------
 # TestMetaConductorOutput
 # ---------------------------------------------------------------------------
+
 
 class TestMetaConductorOutput:
     def _valid_kwargs(self):

@@ -5,6 +5,7 @@ Verifies that next() moves goals to in_flight instead of deleting them,
 complete() removes from in_flight, fail() re-queues at front, recover()
 restores all in-flight goals, and that state is persisted across save/load.
 """
+
 from __future__ import annotations
 
 import json
@@ -41,6 +42,7 @@ class TestNextMovesToInFlight:
 
     def test_next_records_timestamp(self, gq):
         import time
+
         before = time.time()
         gq.add("goal-b")
         gq.next()
@@ -111,6 +113,7 @@ class TestRecover:
 
     def test_recover_multiple_inflight_oldest_first(self, gq):
         import time
+
         gq.add("goal-x")
         gq.add("goal-y")
         # Manually set timestamps so order is deterministic

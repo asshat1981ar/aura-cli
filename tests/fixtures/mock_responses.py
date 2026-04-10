@@ -4,15 +4,14 @@ Each constant is a valid string that the real model would plausibly return for
 the corresponding phase.  Using these fixtures keeps tests hermetic and ensures
 downstream parsers can exercise their full parsing logic.
 """
+
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
 # Catch-all fallback
 # ---------------------------------------------------------------------------
 
-DEFAULT_RESPONSE: str = (
-    '{"status": "ok", "message": "Mock LLM default response"}'
-)
+DEFAULT_RESPONSE: str = '{"status": "ok", "message": "Mock LLM default response"}'
 
 # ---------------------------------------------------------------------------
 # Planner phase — valid JSON plan with 3 steps

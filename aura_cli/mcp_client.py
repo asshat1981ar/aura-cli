@@ -9,15 +9,15 @@ from typing import Optional
 
 def _get_mcp_server_api_key(server_name: str = "dev_tools") -> Optional[str]:
     """Get API key for an MCP server from config or environment.
-    
+
     Priority:
     1. Environment variable: MCP_<SERVER_NAME>_API_KEY
     2. Config manager: mcp_server_api_keys.<server_name>
     3. Legacy: MCP_API_TOKEN for dev_tools
-    
+
     Args:
         server_name: Name of the MCP server (default: "dev_tools")
-    
+
     Returns:
         API key string or None if not configured
     """
@@ -26,52 +26,53 @@ def _get_mcp_server_api_key(server_name: str = "dev_tools") -> Optional[str]:
     env_key = os.getenv(env_var, "").strip()
     if env_key:
         return env_key
-    
+
     # 2. Check config manager
     try:
         from core.config_manager import config as _cfg
+
         cfg_key = _cfg.get_mcp_server_api_key(server_name)
         if cfg_key:
             return cfg_key
     except Exception:
         pass
-    
+
     # 3. Legacy fallback for dev_tools
     if server_name == "dev_tools":
         legacy_token = os.getenv("MCP_API_TOKEN", "").strip()
         if legacy_token:
             return legacy_token
-    
+
     return None
 
 
 def _mcp_headers(server_name: str = "dev_tools") -> dict[str, str]:
     """Return auth headers for MCP requests, including API key if configured.
-    
+
     Supports both X-API-Key (preferred) and legacy Authorization: Bearer.
-    
+
     Args:
         server_name: Name of the MCP server to get headers for
-    
+
     Returns:
         Dictionary of HTTP headers
     """
     headers: dict[str, str] = {"Content-Type": "application/json"}
-    
+
     api_key = _get_mcp_server_api_key(server_name)
     if api_key:
         # Use X-API-Key header (preferred)
         headers["X-API-Key"] = api_key
-    
+
     return headers
 
 
 def _mcp_base_url(server_name: str = "dev_tools") -> str:
     """Base URL for MCP server (default http://localhost:8001).
-    
+
     Args:
         server_name: Name of the MCP server to get URL for
-    
+
     Returns:
         Base URL string
     """
@@ -80,15 +81,16 @@ def _mcp_base_url(server_name: str = "dev_tools") -> str:
     env_url = os.getenv(env_var, "").strip()
     if env_url:
         return env_url
-    
+
     # Fall back to config
     try:
         from core.config_manager import config as _cfg
+
         port = _cfg.get_mcp_server_port(server_name)
         return f"http://localhost:{port}"
     except Exception:
         pass
-    
+
     # Default fallback
     default_ports = {
         "dev_tools": 8001,
@@ -102,19 +104,19 @@ def _mcp_base_url(server_name: str = "dev_tools") -> str:
 
 
 def _mcp_request(
-    method: str, 
-    path: str, 
+    method: str,
+    path: str,
     data: dict | None = None,
     server_name: str = "dev_tools",
 ) -> tuple[int, dict]:
     """Small HTTP helper for MCP server; returns (status, json/dict).
-    
+
     Args:
         method: HTTP method (GET, POST, etc.)
         path: API path (e.g., /tools, /call)
         data: Optional request body data
         server_name: Name of the MCP server to call
-    
+
     Returns:
         Tuple of (status_code, response_data)
     """
@@ -146,6 +148,7 @@ def cmd_mcp_tools(server_name: str = "dev_tools") -> int:
         server_name: Name of the MCP server to query
     """
     from aura_cli.mcp_cli import main as mcp_cli_main
+
     return mcp_cli_main([])
 
 
@@ -158,6 +161,7 @@ def cmd_mcp_call(tool: str, args_json: str | None, server_name: str = "dev_tools
         server_name: Name of the MCP server to call
     """
     from aura_cli.mcp_cli import main as mcp_cli_main
+
     argv = [tool]
     if args_json:
         argv.append(args_json)
@@ -166,7 +170,7 @@ def cmd_mcp_call(tool: str, args_json: str | None, server_name: str = "dev_tools
 
 def cmd_diag(server_name: str = "dev_tools") -> None:
     """Fetch MCP health/metrics/limits/log tail and linter capabilities.
-    
+
     Args:
         server_name: Name of the MCP server to diagnose
     """
@@ -191,53 +195,63 @@ def cmd_diag(server_name: str = "dev_tools") -> None:
 
 # R8: New functions for multi-server support
 
+
 def cmd_mcp_servers_list() -> None:
     """List all configured MCP servers and their status."""
     from core.config_manager import config as _cfg, DEFAULT_CONFIG
-    
+
     servers = DEFAULT_CONFIG.get("mcp_servers", {})
-    
+
     result = []
     for name, default_port in servers.items():
         try:
             port = _cfg.get_mcp_server_port(name)
             has_key = _get_mcp_server_api_key(name) is not None
-            
+
             # Try to connect
             health_status, health_data = _mcp_request("GET", "/health", server_name=name)
             is_running = health_status == 200
-            
-            result.append({
-                "name": name,
-                "port": port,
-                "configured": True,
-                "auth_enabled": has_key,
-                "running": is_running,
-                "status": "ok" if is_running else "unreachable",
-            })
+
+            result.append(
+                {
+                    "name": name,
+                    "port": port,
+                    "configured": True,
+                    "auth_enabled": has_key,
+                    "running": is_running,
+                    "status": "ok" if is_running else "unreachable",
+                }
+            )
         except Exception as e:
-            result.append({
-                "name": name,
-                "port": default_port,
-                "configured": False,
-                "auth_enabled": False,
-                "running": False,
-                "status": f"error: {e}",
-            })
-    
+            result.append(
+                {
+                    "name": name,
+                    "port": default_port,
+                    "configured": False,
+                    "auth_enabled": False,
+                    "running": False,
+                    "status": f"error: {e}",
+                }
+            )
+
     print(json.dumps({"servers": result}, indent=2))
 
 
 def cmd_mcp_server_health(server_name: str) -> None:
     """Check health of a specific MCP server.
-    
+
     Args:
         server_name: Name of the MCP server to check
     """
     status, data = _mcp_request("GET", "/health", server_name=server_name)
-    print(json.dumps({
-        "server": server_name,
-        "status": status,
-        "healthy": status == 200,
-        "data": data,
-    }, indent=2))
+    print(
+        json.dumps(
+            {
+                "server": server_name,
+                "status": status,
+                "healthy": status == 200,
+                "data": data,
+            },
+            indent=2,
+        )
+    )

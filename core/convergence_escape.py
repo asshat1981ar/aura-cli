@@ -23,6 +23,7 @@ Usage::
         # action is a dict: {"strategy": "...", "hint": {...}}
         # Pass hint into next run_cycle() call as override
 """
+
 from __future__ import annotations
 
 import time
@@ -97,9 +98,7 @@ class OscillationDetector:
             return False
 
         passes = [s > self.PASS_THRESHOLD for s in scores]
-        alternations = sum(
-            1 for i in range(1, len(passes)) if passes[i] != passes[i - 1]
-        )
+        alternations = sum(1 for i in range(1, len(passes)) if passes[i] != passes[i - 1])
         return alternations >= self._min_alternations
 
     def suggest_strategy(self) -> str:
@@ -120,6 +119,7 @@ class OscillationDetector:
         """Clear all recorded scores."""
         self._scores.clear()
 
+
 # Minimum history to evaluate
 MIN_HISTORY: int = 3
 
@@ -133,9 +133,7 @@ class ConvergenceEscapeLoop:
 
     # ── Public API ───────────────────────────────────────────────────────────
 
-    def check_and_escape(
-        self, goal: str, cycle_entry: Dict[str, Any]
-    ) -> Optional[Dict[str, Any]]:
+    def check_and_escape(self, goal: str, cycle_entry: Dict[str, Any]) -> Optional[Dict[str, Any]]:
         """Analyse recent history for *goal* and escape if stuck.
 
         Returns:
@@ -155,11 +153,7 @@ class ConvergenceEscapeLoop:
 
         # Filter to entries that belong to this goal
         goal_lower = goal.lower()
-        goal_cycles = [
-            e for e in recent
-            if goal_lower in str(e.get("phase_outputs", {})).lower()
-            or goal_lower in str(e.get("goal", "")).lower()
-        ]
+        goal_cycles = [e for e in recent if goal_lower in str(e.get("phase_outputs", {})).lower() or goal_lower in str(e.get("goal", "")).lower()]
 
         if len(goal_cycles) < MIN_HISTORY:
             return None
@@ -185,7 +179,8 @@ class ConvergenceEscapeLoop:
         strategy = self._select_strategy(stuck_sig)
 
         log_json(
-            "WARN", "convergence_escape_triggered",
+            "WARN",
+            "convergence_escape_triggered",
             details={
                 "goal": goal[:80],
                 "stuck_signature": stuck_sig,
@@ -207,9 +202,7 @@ class ConvergenceEscapeLoop:
         # Default: goal is too hard as-is — break it down
         return "decompose"
 
-    def _apply_strategy(
-        self, goal: str, strategy: str, stuck_sig: str
-    ) -> Dict[str, Any]:
+    def _apply_strategy(self, goal: str, strategy: str, stuck_sig: str) -> Dict[str, Any]:
         hint: Dict[str, Any] = {}
 
         if strategy == "overwrite":
@@ -221,22 +214,23 @@ class ConvergenceEscapeLoop:
             hint = {"model_override": "quality"}
 
         elif strategy == "skip_and_log":
-            self.memory.put("skipped_goals", {
-                "goal": goal,
-                "reason": "external_dependency_stuck",
-                "failure_signature": stuck_sig,
-                "timestamp": time.time(),
-            })
-            log_json("INFO", "convergence_escape_goal_skipped",
-                     details={"goal": goal[:80], "reason": stuck_sig})
+            self.memory.put(
+                "skipped_goals",
+                {
+                    "goal": goal,
+                    "reason": "external_dependency_stuck",
+                    "failure_signature": stuck_sig,
+                    "timestamp": time.time(),
+                },
+            )
+            log_json("INFO", "convergence_escape_goal_skipped", details={"goal": goal[:80], "reason": stuck_sig})
             hint = {"skip": True}
 
         elif strategy == "decompose":
             # Re-enqueue prefixed — GoalDecomposer will handle it
             decompose_goal = f"[DECOMPOSE] {goal}"
             self.queue.add(decompose_goal)
-            log_json("INFO", "convergence_escape_decompose_queued",
-                     details={"original_goal": goal[:80]})
+            log_json("INFO", "convergence_escape_decompose_queued", details={"original_goal": goal[:80]})
             hint = {"decomposed": True}
 
         return {"strategy": strategy, "hint": hint, "stuck_signature": stuck_sig}

@@ -1,4 +1,5 @@
 """Unit tests for agents/external_llm_agent.py."""
+
 from __future__ import annotations
 
 import unittest

@@ -19,6 +19,7 @@ Start:
 Auth (optional):
   Set DOCKER_MCP_TOKEN env var
 """
+
 from __future__ import annotations
 
 import os
@@ -55,10 +56,7 @@ _SAFE_VALUE_RE = re.compile(r"^[a-zA-Z0-9_\-./: ]*$")
 def _sanitize(value: str, field_name: str = "value") -> str:
     """Validate that a user-provided value contains only safe characters."""
     if not _SAFE_VALUE_RE.match(value):
-        raise ValueError(
-            f"Invalid characters in '{field_name}': only alphanumeric, dash, "
-            "underscore, dot, colon, and forward slash are allowed."
-        )
+        raise ValueError(f"Invalid characters in '{field_name}': only alphanumeric, dash, underscore, dot, colon, and forward slash are allowed.")
     return value
 
 
@@ -75,6 +73,7 @@ def _run_cmd(cmd: List[str], timeout: int = 120) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
+
 
 def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
     if not _TOKEN:
@@ -157,6 +156,7 @@ def _build_descriptor(name: str) -> Dict:
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
+
 
 def _container_list(args: Dict) -> Any:
     out = _run_cmd(["docker", "ps", "--format", "json"])
@@ -279,6 +279,7 @@ _TOOL_HANDLERS = {
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @app.get("/health")
 async def health(_: None = Depends(_check_auth)):
     return {
@@ -355,5 +356,6 @@ async def get_metrics(_: None = Depends(_check_auth)) -> Dict:
 if __name__ == "__main__":
     import uvicorn
     from core.config_manager import config as _cfg
+
     port = int(os.getenv("DOCKER_MCP_PORT", _cfg.get_mcp_server_port("docker", default=8011)))
     uvicorn.run("tools.docker_mcp:app", host="0.0.0.0", port=port, reload=False)

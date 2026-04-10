@@ -129,11 +129,7 @@ def test_wrapper_can_require_local_model_health_before_runtime_commands():
             encoding="utf-8",
         )
         fake_python.write_text(
-            "#!/usr/bin/env bash\n"
-            "script=\"$1\"\n"
-            "shift\n"
-            "printf '%s %s\\n' \"$script\" \"$*\" >> \"$AURA_WRAPPER_LOG\"\n"
-            "exit 0\n",
+            '#!/usr/bin/env bash\nscript="$1"\nshift\nprintf \'%s %s\\n\' "$script" "$*" >> "$AURA_WRAPPER_LOG"\nexit 0\n',
             encoding="utf-8",
         )
         fake_python.chmod(0o700)

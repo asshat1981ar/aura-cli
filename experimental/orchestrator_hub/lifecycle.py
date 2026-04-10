@@ -2,6 +2,7 @@
 
 Extends the _start_background_command pattern from core/capability_manager.py.
 """
+
 from __future__ import annotations
 
 import os
@@ -197,12 +198,14 @@ class ServerLifecycle:
                 results.append(result)
             elif state.status == "unhealthy" and state.consecutive_failures > max_retries:
                 state.status = "failed"
-                results.append({
-                    "action": "restart",
-                    "name": name,
-                    "status": "max_retries_exceeded",
-                    "consecutive_failures": state.consecutive_failures,
-                })
+                results.append(
+                    {
+                        "action": "restart",
+                        "name": name,
+                        "status": "max_retries_exceeded",
+                        "consecutive_failures": state.consecutive_failures,
+                    }
+                )
         return results
 
     def list_servers(self) -> List[dict]:

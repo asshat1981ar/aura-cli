@@ -4,6 +4,7 @@ Extends the keyword-matching approach from core/capability_manager.py's
 analyze_capability_needs() with agent capability vectors and round-robin
 load balancing.
 """
+
 from __future__ import annotations
 
 from typing import Dict, List, Optional
@@ -69,9 +70,7 @@ class TaskRouter:
 
         return None
 
-    def route_with_fallback(
-        self, task: dict, exclude: Optional[List[str]] = None
-    ) -> Optional[str]:
+    def route_with_fallback(self, task: dict, exclude: Optional[List[str]] = None) -> Optional[str]:
         """Route a task, excluding specific agents.
 
         Useful for retrying with a different agent after failure.
@@ -90,10 +89,7 @@ class TaskRouter:
         ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
         for capability, _ in ranked:
-            agents = [
-                a for a in self._registry.discover(capability)
-                if a.name not in excluded
-            ]
+            agents = [a for a in self._registry.discover(capability) if a.name not in excluded]
             if agents:
                 return self._pick_agent(capability, agents)
 

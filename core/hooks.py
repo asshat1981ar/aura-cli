@@ -22,6 +22,7 @@ Configuration in aura.config.json::
         }
     }
 """
+
 import json
 import os
 import subprocess
@@ -49,6 +50,7 @@ class HookResult(str, Enum):
 @dataclass
 class HookConfig:
     """Configuration for a single hook."""
+
     command: str
     blocking: bool = True
     timeout_seconds: int = 30
@@ -59,13 +61,13 @@ class HookConfig:
     def from_dict(cls, data) -> "HookConfig":
         if isinstance(data, str):
             return cls(command=data)
-        return cls(**{k: v for k, v in data.items()
-                      if k in cls.__dataclass_fields__})
+        return cls(**{k: v for k, v in data.items() if k in cls.__dataclass_fields__})
 
 
 @dataclass
 class HookExecution:
     """Record of a hook execution for audit trail."""
+
     hook: HookConfig
     timing: HookTiming
     phase: str
@@ -87,8 +89,16 @@ class HookEngine:
     """
 
     VALID_PHASES = [
-        "ingest", "skill_dispatch", "plan", "critique", "synthesize",
-        "act", "sandbox", "apply", "verify", "reflect",
+        "ingest",
+        "skill_dispatch",
+        "plan",
+        "critique",
+        "synthesize",
+        "act",
+        "sandbox",
+        "apply",
+        "verify",
+        "reflect",
     ]
 
     def __init__(self, config: dict | None = None):
@@ -108,8 +118,7 @@ class HookEngine:
         key = f"{timing.value}_{phase}"
         return self.hooks.get(key, [])
 
-    def run_pre_hooks(self, phase: str,
-                      phase_input: dict) -> tuple[bool, dict]:
+    def run_pre_hooks(self, phase: str, phase_input: dict) -> tuple[bool, dict]:
         """Run pre-phase hooks.
 
         Returns:
@@ -124,8 +133,7 @@ class HookEngine:
             self.history.append(execution)
 
             if execution.result == HookResult.BLOCK:
-                log_json("WARN", "hook_blocked_phase",
-                         details={"phase": phase, "command": hook.command})
+                log_json("WARN", "hook_blocked_phase", details={"phase": phase, "command": hook.command})
                 return False, current_input
 
             if execution.result == HookResult.MODIFY and execution.modified_input:
@@ -140,8 +148,7 @@ class HookEngine:
             execution = self._execute_hook(hook, HookTiming.POST, phase, phase_output)
             self.history.append(execution)
 
-    def _execute_hook(self, hook: HookConfig, timing: HookTiming,
-                      phase: str, context: dict) -> HookExecution:
+    def _execute_hook(self, hook: HookConfig, timing: HookTiming, phase: str, context: dict) -> HookExecution:
         """Execute a single hook command."""
         env_vars = {
             "AURA_PHASE": phase,
@@ -178,21 +185,30 @@ class HookEngine:
                     pass
 
             return HookExecution(
-                hook=hook, timing=timing, phase=phase, result=result,
-                stdout=proc.stdout[:5000], stderr=proc.stderr[:5000],
-                exit_code=proc.returncode, duration_seconds=duration,
+                hook=hook,
+                timing=timing,
+                phase=phase,
+                result=result,
+                stdout=proc.stdout[:5000],
+                stderr=proc.stderr[:5000],
+                exit_code=proc.returncode,
+                duration_seconds=duration,
                 modified_input=modified_input,
             )
 
         except subprocess.TimeoutExpired:
             return HookExecution(
-                hook=hook, timing=timing, phase=phase,
+                hook=hook,
+                timing=timing,
+                phase=phase,
                 result=HookResult.TIMEOUT,
                 duration_seconds=hook.timeout_seconds,
             )
         except Exception as exc:
             return HookExecution(
-                hook=hook, timing=timing, phase=phase,
+                hook=hook,
+                timing=timing,
+                phase=phase,
                 result=HookResult.ERROR,
                 stderr=str(exc),
                 duration_seconds=time.time() - start,

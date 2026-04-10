@@ -8,6 +8,7 @@ Environment variables
 AURA_AUTO_APPROVE=1   Skip interactive prompt — always approve (useful in CI
                       pipelines where the run has been explicitly sanctioned).
 """
+
 from __future__ import annotations
 
 import os
@@ -35,9 +36,7 @@ class HumanGate:
 
     # ── Public API ───────────────────────────────────────────────────────────
 
-    def should_block(
-        self, verify_result: dict, skill_results: dict
-    ) -> Tuple[bool, str]:
+    def should_block(self, verify_result: dict, skill_results: dict) -> Tuple[bool, str]:
         """Decide whether the current change-set is too risky to auto-apply.
 
         Args:
@@ -55,9 +54,7 @@ class HumanGate:
         sec = skill_results.get("security_scanner", {})
         critical_count = sec.get("critical_count", 0)
         if isinstance(critical_count, int) and critical_count > 0:
-            reason = (
-                f"security_scanner reported {critical_count} critical finding(s)"
-            )
+            reason = f"security_scanner reported {critical_count} critical finding(s)"
             log_json("WARN", "human_gate_blocked", details={"reason": reason})
             return True, reason
 
@@ -68,11 +65,7 @@ class HumanGate:
             if isinstance(current_pct, (int, float)):
                 drop = self.coverage_baseline - float(current_pct)
                 if drop > self.COVERAGE_DROP_THRESHOLD:
-                    reason = (
-                        f"test coverage dropped {drop:.1f}pp "
-                        f"(baseline={self.coverage_baseline:.1f}%, "
-                        f"current={current_pct:.1f}%)"
-                    )
+                    reason = f"test coverage dropped {drop:.1f}pp (baseline={self.coverage_baseline:.1f}%, current={current_pct:.1f}%)"
                     log_json("WARN", "human_gate_blocked", details={"reason": reason})
                     return True, reason
 
@@ -102,8 +95,7 @@ class HumanGate:
             return True
 
         if not sys.stdin.isatty():
-            log_json("WARN", "human_gate_denied_non_interactive",
-                     details={"reason": reason})
+            log_json("WARN", "human_gate_denied_non_interactive", details={"reason": reason})
             return False
 
         # Interactive prompt

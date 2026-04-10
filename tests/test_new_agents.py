@@ -1,4 +1,5 @@
 """Tests for the 5 new agent types."""
+
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -52,8 +53,7 @@ class TestTypeScriptAgentAdapter(unittest.TestCase):
 
     def test_run_analyze_action(self):
         agent = TypeScriptAgentAdapter()
-        with patch.object(agent, "_run_eslint", return_value={"status": "ok"}), \
-             patch.object(agent, "_run_tsc", return_value={"status": "ok"}):
+        with patch.object(agent, "_run_eslint", return_value={"status": "ok"}), patch.object(agent, "_run_tsc", return_value={"status": "ok"}):
             result = agent.run({"task": "Analyze TS code", "action": "analyze"})
         self.assertEqual(result["action"], "analyze")
         self.assertIn("lint_results", result)
@@ -66,8 +66,7 @@ class TestTypeScriptAgentAdapter(unittest.TestCase):
 
     def test_run_skill_not_available(self):
         agent = TypeScriptAgentAdapter()
-        with patch.object(agent, "_run_eslint", return_value={"status": "ok"}), \
-             patch.object(agent, "_run_tsc", return_value={"status": "ok"}):
+        with patch.object(agent, "_run_eslint", return_value={"status": "ok"}), patch.object(agent, "_run_tsc", return_value={"status": "ok"}):
             result = agent.run({"task": "Check API", "action": "analyze"})
         self.assertEqual(result["api_contract"]["status"], "skill_not_available")
 
@@ -92,11 +91,13 @@ class TestExternalLLMAgentAdapter(unittest.TestCase):
         mock_model = MagicMock(spec=[])
         mock_model.generate_for_task = MagicMock(return_value="result")
         agent = ExternalLLMAgentAdapter(model_adapter=mock_model)
-        result = agent.run({
-            "task": "Analyze",
-            "context": "Some context",
-            "category": "analyze",
-        })
+        result = agent.run(
+            {
+                "task": "Analyze",
+                "context": "Some context",
+                "category": "analyze",
+            }
+        )
         call_args = mock_model.generate_for_task.call_args[0][1]
         self.assertIn("Some context", call_args)
 
@@ -170,11 +171,13 @@ class TestNotificationAgentAdapter(unittest.TestCase):
     def test_send_records_history(self):
         agent = NotificationAgentAdapter(notification_mcp_url="http://localhost:1")
         with self._failing_notification_post():
-            result = agent.run({
-                "channel": "webhook",
-                "message": "test",
-                "metadata": {"url": "http://example.com"},
-            })
+            result = agent.run(
+                {
+                    "channel": "webhook",
+                    "message": "test",
+                    "metadata": {"url": "http://example.com"},
+                }
+            )
         # Will fail to connect but should still record in history
         history = agent.get_history()
         self.assertEqual(len(history), 1)
@@ -239,34 +242,54 @@ class TestAgentRegistryIntegration(unittest.TestCase):
 
     def test_default_agents_includes_new_types(self):
         from unittest.mock import MagicMock
+
         brain = MagicMock()
         brain.remember = MagicMock()
         brain.recall_with_budget = MagicMock(return_value=[])
         brain.recall_weaknesses = MagicMock(return_value=[])
 
         from agents.registry import default_agents
+
         agents = default_agents(brain, "test-model")
 
         # Verify all specialized agents exist, including RCA support.
         expected = {
-            "ingest", "plan", "critique", "synthesize", "act",
-            "sandbox", "verify", "reflect",
-            "python_agent", "typescript_agent", "external_llm",
-            "monitoring", "notification", "telemetry", "self_correction",
-            "code_search", "investigation", "root_cause_analysis",
-            "mcp_discovery", "mcp_health", "autogen_group_chat",
-            "meta_conductor", "innovation_swarm",
+            "ingest",
+            "plan",
+            "critique",
+            "synthesize",
+            "act",
+            "sandbox",
+            "verify",
+            "reflect",
+            "python_agent",
+            "typescript_agent",
+            "external_llm",
+            "monitoring",
+            "notification",
+            "telemetry",
+            "self_correction",
+            "code_search",
+            "investigation",
+            "root_cause_analysis",
+            "mcp_discovery",
+            "mcp_health",
+            "autogen_group_chat",
+            "meta_conductor",
+            "innovation_swarm",
         }
         self.assertEqual(set(agents.keys()), expected)
 
     def test_new_agents_have_run_method(self):
         from unittest.mock import MagicMock
+
         brain = MagicMock()
         brain.remember = MagicMock()
         brain.recall_with_budget = MagicMock(return_value=[])
         brain.recall_weaknesses = MagicMock(return_value=[])
 
         from agents.registry import default_agents
+
         agents = default_agents(brain, "test-model")
 
         for name in ["python_agent", "typescript_agent", "external_llm", "monitoring", "notification"]:

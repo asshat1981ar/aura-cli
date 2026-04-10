@@ -1,4 +1,5 @@
 """Tests for memory/lesson_store.py — LessonStore persistence and injection."""
+
 import json
 import pytest
 from pathlib import Path
@@ -90,7 +91,7 @@ class TestOrchestratorIntegration:
         from unittest.mock import MagicMock, patch
         from core.orchestrator import LoopOrchestrator
 
-        with patch.object(LoopOrchestrator, '__init__', lambda self, **kw: None):
+        with patch.object(LoopOrchestrator, "__init__", lambda self, **kw: None):
             orch = LoopOrchestrator()
             orch.lesson_store = None
             # Simulate the guard pattern used in run_cycle

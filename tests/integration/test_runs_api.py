@@ -3,6 +3,7 @@
 Validates auth, env-guard, happy-path acceptance, and run_id presence without
 making real LLM calls — LoopOrchestrator.run_loop is patched throughout.
 """
+
 from __future__ import annotations
 
 import os
@@ -108,9 +109,7 @@ class TestRunEndpointAuth:
             os.environ.pop("AGENT_API_TOKEN", None)
             os.environ.pop("AGENT_API_ENABLE_RUN", None)
 
-        assert resp.status_code in (401, 403), (
-            f"Expected 401 or 403 without auth, got {resp.status_code}"
-        )
+        assert resp.status_code in (401, 403), f"Expected 401 or 403 without auth, got {resp.status_code}"
 
     def test_run_endpoint_wrong_token_rejected(self, client_with_auth: TestClient):
         """A wrong Bearer token must be rejected with 401 or 403."""
@@ -119,9 +118,7 @@ class TestRunEndpointAuth:
             json=_GOAL_BODY,
             headers={"Authorization": "Bearer wrong-token"},
         )
-        assert resp.status_code in (401, 403), (
-            f"Expected 401 or 403 for wrong token, got {resp.status_code}"
-        )
+        assert resp.status_code in (401, 403), f"Expected 401 or 403 for wrong token, got {resp.status_code}"
 
 
 class TestRunEndpointEnvGuard:
@@ -134,9 +131,7 @@ class TestRunEndpointEnvGuard:
             json=_GOAL_BODY,
             headers=_AUTH_HEADER,
         )
-        assert resp.status_code in (403, 404), (
-            f"Expected 403 or 404 when run is disabled, got {resp.status_code}"
-        )
+        assert resp.status_code in (403, 404), f"Expected 403 or 404 when run is disabled, got {resp.status_code}"
 
     def test_run_endpoint_disabled_env_wrong_value(self, client_auth_run_disabled: TestClient):
         """Setting AGENT_API_ENABLE_RUN to a non-'1' value must also be rejected."""
@@ -150,9 +145,7 @@ class TestRunEndpointEnvGuard:
         finally:
             os.environ.pop("AGENT_API_ENABLE_RUN", None)
 
-        assert resp.status_code in (403, 404), (
-            f"Expected 403 or 404 for AGENT_API_ENABLE_RUN=true, got {resp.status_code}"
-        )
+        assert resp.status_code in (403, 404), f"Expected 403 or 404 for AGENT_API_ENABLE_RUN=true, got {resp.status_code}"
 
 
 class TestRunEndpointHappyPath:
@@ -165,9 +158,7 @@ class TestRunEndpointHappyPath:
             json=_GOAL_BODY,
             headers=_AUTH_HEADER,
         )
-        assert resp.status_code == 200, (
-            f"Expected 200 for valid /run request, got {resp.status_code}: {resp.text}"
-        )
+        assert resp.status_code == 200, f"Expected 200 for valid /run request, got {resp.status_code}: {resp.text}"
 
     def test_run_creates_run_id(self, client_with_auth: TestClient):
         """Response body must contain a non-empty 'run_id' string."""
@@ -213,9 +204,7 @@ class TestRunEndpointHappyPath:
             json={},
             headers=_AUTH_HEADER,
         )
-        assert resp.status_code in range(400, 500), (
-            f"Expected 4xx for missing goal, got {resp.status_code}"
-        )
+        assert resp.status_code in range(400, 500), f"Expected 4xx for missing goal, got {resp.status_code}"
 
 
 class TestRunEndpointMockOrchestrator:
@@ -237,6 +226,4 @@ class TestRunEndpointMockOrchestrator:
 
         assert resp.status_code == 200
         body = resp.json()
-        assert body.get("status") == "accepted", (
-            f"Expected status='accepted', got {body}"
-        )
+        assert body.get("status") == "accepted", f"Expected status='accepted', got {body}"

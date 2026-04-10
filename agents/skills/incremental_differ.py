@@ -1,4 +1,5 @@
 """Skill: compute code diffs, detect symbol changes, measure churn, and analyse impact."""
+
 from __future__ import annotations
 
 import ast
@@ -7,19 +8,33 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from agents.skills.base import SkillBase, iter_py_files
+from agents.skills.base import SkillBase
 from core.logging_utils import log_json
 
 _SKIP_DIRS = {
-    ".git", "__pycache__", "node_modules", ".venv", "venv",
-    "env", ".env", "test-aura-env", "site-packages", "dist", "build",
-    "aura_cli.egg-info", "tmp_out", ".mypy_cache", ".ruff_cache", ".pytest_cache",
+    ".git",
+    "__pycache__",
+    "node_modules",
+    ".venv",
+    "venv",
+    "env",
+    ".env",
+    "test-aura-env",
+    "site-packages",
+    "dist",
+    "build",
+    "aura_cli.egg-info",
+    "tmp_out",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
 }
 
 
 # ---------------------------------------------------------------------------
 # Symbol extraction
 # ---------------------------------------------------------------------------
+
 
 def _get_symbols(source: str) -> Dict[str, int]:
     """Return {symbol_name: line_number} for all top-level defs and classes."""
@@ -76,6 +91,7 @@ def _symbols_modified(
 # Impact analysis
 # ---------------------------------------------------------------------------
 
+
 def _find_importers(symbols: List[str], project_root: Path, limit: int = 20) -> List[str]:
     """Find files that reference any of the given symbol names (text search)."""
     seen: Set[str] = set()
@@ -101,6 +117,7 @@ def _find_importers(symbols: List[str], project_root: Path, limit: int = 20) -> 
 # Git diff fallback
 # ---------------------------------------------------------------------------
 
+
 def _git_diff_files(project_root: Path) -> Optional[str]:
     """Return `git diff HEAD` output if git is available, else None."""
     try:
@@ -119,6 +136,7 @@ def _git_diff_files(project_root: Path) -> Optional[str]:
 # ---------------------------------------------------------------------------
 # Churn stats
 # ---------------------------------------------------------------------------
+
 
 def _churn(diff_lines: List[str]) -> Dict[str, int]:
     added = sum(1 for l in diff_lines if l.startswith("+") and not l.startswith("+++"))
@@ -171,13 +189,15 @@ class IncrementalDifferSkill(SkillBase):
         old_lines = old_code.splitlines(keepends=True)
         new_lines = new_code.splitlines(keepends=True)
 
-        diff = list(difflib.unified_diff(
-            old_lines,
-            new_lines,
-            fromfile=f"a/{file_path}",
-            tofile=f"b/{file_path}",
-            lineterm="",
-        ))
+        diff = list(
+            difflib.unified_diff(
+                old_lines,
+                new_lines,
+                fromfile=f"a/{file_path}",
+                tofile=f"b/{file_path}",
+                lineterm="",
+            )
+        )
         diff_summary = "".join(diff[:80]) if diff else "No changes"
         churn = _churn(diff)
 
@@ -195,18 +215,18 @@ class IncrementalDifferSkill(SkillBase):
         if project_root_str and removed:
             impact_files = _find_importers(removed[:10], Path(project_root_str))
 
-        rollback = (
-            f"To rollback: restore '{file_path}' from the old_code snapshot."
-            if old_code
-            else "No rollback info — old_code was not provided."
-        )
+        rollback = f"To rollback: restore '{file_path}' from the old_code snapshot." if old_code else "No rollback info — old_code was not provided."
 
-        log_json("INFO", "incremental_differ_complete", details={
-            "added": len(added),
-            "removed": len(removed),
-            "modified": len(modified),
-            "churn": churn["churn"],
-        })
+        log_json(
+            "INFO",
+            "incremental_differ_complete",
+            details={
+                "added": len(added),
+                "removed": len(removed),
+                "modified": len(modified),
+                "churn": churn["churn"],
+            },
+        )
 
         return {
             "diff_summary": diff_summary,

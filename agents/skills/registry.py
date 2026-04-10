@@ -1,4 +1,5 @@
 """Registry for all AURA skill modules."""
+
 from __future__ import annotations
 from typing import Dict
 
@@ -51,6 +52,7 @@ def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
     from agents.skills.skill_generator import SkillGeneratorSkill
     from agents.skills.ast_analyzer import ASTAnalyzerSkill
     from agents.skills.eval_optimizer import EvalOptimizerSkill
+    from agents.prompt_forge import PromptForgeAgent
 
     return {
         "beads_skill": BeadsSkill(brain=brain, model=model),
@@ -88,4 +90,5 @@ def all_skills(brain=None, model=None) -> Dict[str, SkillBase]:
         "skill_generator": SkillGeneratorSkill(brain=brain, model=model),
         "ast_analyzer": ASTAnalyzerSkill(brain=brain, model=model),
         "eval_optimizer": EvalOptimizerSkill(brain=brain, model=model),
+        "prompt_forge": PromptForgeAgent(project_root="."),
     }

@@ -3,6 +3,7 @@
 Tests TreeOfThought, CodeRAG, SkillCorrelation, QualityTrends, and
 TeamCoordinator working end-to-end and integrated with the orchestrator.
 """
+
 from __future__ import annotations
 
 import json
@@ -33,33 +34,38 @@ class TestTreeOfThoughtOrchestratorWiring(unittest.TestCase):
             if "Score each plan" in prompt or "scoring" in prompt.lower():
                 # Scoring prompt — keys must be strategy names (not indices)
                 # because _parse_scores uses c.strategy to look up scores
-                return json.dumps({
-                    "scores": {
-                        "conservative": {"feasibility": 0.9, "coverage": 0.8, "risk": 0.7,
-                                         "testability": 0.8, "clarity": 0.9},
-                        "aggressive": {"feasibility": 0.5, "coverage": 0.6, "risk": 0.4,
-                                       "testability": 0.5, "clarity": 0.6},
-                        "incremental": {"feasibility": 0.7, "coverage": 0.7, "risk": 0.6,
-                                        "testability": 0.7, "clarity": 0.7},
+                return json.dumps(
+                    {
+                        "scores": {
+                            "conservative": {"feasibility": 0.9, "coverage": 0.8, "risk": 0.7, "testability": 0.8, "clarity": 0.9},
+                            "aggressive": {"feasibility": 0.5, "coverage": 0.6, "risk": 0.4, "testability": 0.5, "clarity": 0.6},
+                            "incremental": {"feasibility": 0.7, "coverage": 0.7, "risk": 0.6, "testability": 0.7, "clarity": 0.7},
+                        }
                     }
-                })
+                )
             # Plan generation prompt
-            return json.dumps({
-                "steps": [
-                    f"Step 1 for strategy variant {call_idx}",
-                    f"Step 2 for strategy variant {call_idx}",
-                ],
-            })
+            return json.dumps(
+                {
+                    "steps": [
+                        f"Step 1 for strategy variant {call_idx}",
+                        f"Step 2 for strategy variant {call_idx}",
+                    ],
+                }
+            )
 
         model = MagicMock()
         model.respond = mock_respond
         model.respond_for_role = None
 
-        candidates = planner.generate_plans(model, "Add user auth", {
-            "memory_snapshot": "past: used JWT tokens",
-            "known_weaknesses": "",
-            "skill_context": {},
-        })
+        candidates = planner.generate_plans(
+            model,
+            "Add user auth",
+            {
+                "memory_snapshot": "past: used JWT tokens",
+                "known_weaknesses": "",
+                "skill_context": {},
+            },
+        )
 
         self.assertEqual(len(candidates), 3)
         strategies = [c.strategy for c in candidates]
@@ -71,8 +77,7 @@ class TestTreeOfThoughtOrchestratorWiring(unittest.TestCase):
         self.assertIsNotNone(winner)
         self.assertGreater(winner.total_score, 0)
         # Conservative got highest scores (0.82 avg), so it should win
-        self.assertEqual(winner.strategy, "conservative",
-                         "Conservative strategy should win with highest mock scores")
+        self.assertEqual(winner.strategy, "conservative", "Conservative strategy should win with highest mock scores")
         self.assertIn("feasibility", winner.scores)
 
     def test_tot_winner_feeds_confidence_router(self):
@@ -92,7 +97,8 @@ class TestTreeOfThoughtOrchestratorWiring(unittest.TestCase):
 
         plan_confidence = min(winner.total_score, 0.95)
         plan_result = PhaseResult(
-            phase="plan", output={"steps": winner.steps},
+            phase="plan",
+            output={"steps": winner.steps},
             confidence=plan_confidence,
         )
         router.record(plan_result)
@@ -203,8 +209,7 @@ class TestSkillCorrelationDispatchWiring(unittest.TestCase):
             # Suggest skills when only linter is active
             suggestions = matrix.suggest_skills(["linter"], goal_type="bugfix")
             suggested_names = [s[0] for s in suggestions]
-            self.assertIn("type_checker", suggested_names,
-                          "type_checker should be suggested when linter is active")
+            self.assertIn("type_checker", suggested_names, "type_checker should be suggested when linter is active")
 
     def test_cluster_discovery(self):
         from core.skill_correlation import SkillCorrelationMatrix, SkillOutcome
@@ -215,15 +220,21 @@ class TestSkillCorrelationDispatchWiring(unittest.TestCase):
             # Build two distinct clusters
             for _ in range(10):
                 # Cluster 1: linter + type_checker always together
-                matrix.record_cycle([
-                    SkillOutcome("linter", "bugfix", True),
-                    SkillOutcome("type_checker", "bugfix", True),
-                ], cycle_success=True)
+                matrix.record_cycle(
+                    [
+                        SkillOutcome("linter", "bugfix", True),
+                        SkillOutcome("type_checker", "bugfix", True),
+                    ],
+                    cycle_success=True,
+                )
                 # Cluster 2: test_coverage + structural_analyzer together
-                matrix.record_cycle([
-                    SkillOutcome("test_coverage", "feature", True),
-                    SkillOutcome("structural_analyzer", "feature", True),
-                ], cycle_success=True)
+                matrix.record_cycle(
+                    [
+                        SkillOutcome("test_coverage", "feature", True),
+                        SkillOutcome("structural_analyzer", "feature", True),
+                    ],
+                    cycle_success=True,
+                )
 
             clusters = matrix.discover_clusters(min_correlation=0.5)
             self.assertGreaterEqual(len(clusters), 1, "Should discover at least one cluster")
@@ -237,10 +248,13 @@ class TestSkillCorrelationDispatchWiring(unittest.TestCase):
 
             # Train: ast_analyzer correlates with linter
             for _ in range(8):
-                matrix.record_cycle([
-                    SkillOutcome("linter", "refactor", True),
-                    SkillOutcome("ast_analyzer", "refactor", True),
-                ], cycle_success=True)
+                matrix.record_cycle(
+                    [
+                        SkillOutcome("linter", "refactor", True),
+                        SkillOutcome("ast_analyzer", "refactor", True),
+                    ],
+                    cycle_success=True,
+                )
 
             # Simulate the orchestrator flow
             base_skills = {"linter": MagicMock()}
@@ -251,8 +265,7 @@ class TestSkillCorrelationDispatchWiring(unittest.TestCase):
                 if suggested_name in all_skills and suggested_name not in base_skills:
                     base_skills[suggested_name] = all_skills[suggested_name]
 
-            self.assertIn("ast_analyzer", base_skills,
-                          "ast_analyzer should be auto-added via correlation")
+            self.assertIn("ast_analyzer", base_skills, "ast_analyzer should be auto-added via correlation")
 
 
 # ── 4. QualityTrends + post-cycle: regression detection ─────────────────
@@ -267,17 +280,19 @@ class TestQualityTrendsPostCycleWiring(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             analyzer = QualityTrendAnalyzer(store_path=Path(tmpdir) / "trends.json")
 
-            alerts = analyzer.record_from_cycle({
-                "cycle_id": "cycle_1",
-                "goal": "Add feature X",
-                "completed_at": time.time(),
-                "duration_s": 30.0,
-                "phase_outputs": {
-                    "quality": {"test_count": 50, "syntax_errors": [], "import_errors": []},
-                    "verification": {"status": "pass"},
-                    "apply_result": {"applied": ["file.py"]},
-                },
-            })
+            alerts = analyzer.record_from_cycle(
+                {
+                    "cycle_id": "cycle_1",
+                    "goal": "Add feature X",
+                    "completed_at": time.time(),
+                    "duration_s": 30.0,
+                    "phase_outputs": {
+                        "quality": {"test_count": 50, "syntax_errors": [], "import_errors": []},
+                        "verification": {"status": "pass"},
+                        "apply_result": {"applied": ["file.py"]},
+                    },
+                }
+            )
 
             self.assertEqual(len(alerts), 0, "Healthy cycle should produce no alerts")
 
@@ -288,21 +303,23 @@ class TestQualityTrendsPostCycleWiring(unittest.TestCase):
             analyzer = QualityTrendAnalyzer(store_path=Path(tmpdir) / "trends.json")
 
             # Record a cycle with many syntax errors and failing verification
-            alerts = analyzer.record_from_cycle({
-                "cycle_id": "cycle_bad",
-                "goal": "Risky refactor",
-                "completed_at": time.time(),
-                "duration_s": 60.0,
-                "phase_outputs": {
-                    "quality": {
-                        "test_count": 5,
-                        "syntax_errors": ["err1", "err2", "err3", "err4"],
-                        "import_errors": ["imp1", "imp2", "imp3"],
+            alerts = analyzer.record_from_cycle(
+                {
+                    "cycle_id": "cycle_bad",
+                    "goal": "Risky refactor",
+                    "completed_at": time.time(),
+                    "duration_s": 60.0,
+                    "phase_outputs": {
+                        "quality": {
+                            "test_count": 5,
+                            "syntax_errors": ["err1", "err2", "err3", "err4"],
+                            "import_errors": ["imp1", "imp2", "imp3"],
+                        },
+                        "verification": {"status": "fail"},
+                        "apply_result": {"applied": []},
                     },
-                    "verification": {"status": "fail"},
-                    "apply_result": {"applied": []},
-                },
-            })
+                }
+            )
 
             self.assertGreater(len(alerts), 0, "Failing cycle should trigger alerts")
             severities = [a.severity for a in alerts]
@@ -318,33 +335,31 @@ class TestQualityTrendsPostCycleWiring(unittest.TestCase):
             # Record a bad cycle — 5 syntax errors + 3 import errors + fail status
             # gives health_score = 0.5 - 0.3 (fail) - 0.25 (syntax) - 0.15 (import) = 0.0
             # which breaches min_health_score=0.4 and max_syntax_errors=3
-            alerts = analyzer.record_from_cycle({
-                "cycle_id": "cycle_fail",
-                "goal": "Break things",
-                "completed_at": time.time(),
-                "duration_s": 120.0,
-                "phase_outputs": {
-                    "quality": {
-                        "test_count": 0,
-                        "syntax_errors": ["e1", "e2", "e3", "e4", "e5"],
-                        "import_errors": ["i1", "i2", "i3"],
+            alerts = analyzer.record_from_cycle(
+                {
+                    "cycle_id": "cycle_fail",
+                    "goal": "Break things",
+                    "completed_at": time.time(),
+                    "duration_s": 120.0,
+                    "phase_outputs": {
+                        "quality": {
+                            "test_count": 0,
+                            "syntax_errors": ["e1", "e2", "e3", "e4", "e5"],
+                            "import_errors": ["i1", "i2", "i3"],
+                        },
+                        "verification": {"status": "fail"},
+                        "apply_result": {"applied": []},
                     },
-                    "verification": {"status": "fail"},
-                    "apply_result": {"applied": []},
-                },
-            })
+                }
+            )
 
             # This input deterministically breaches multiple thresholds
-            self.assertGreater(len(alerts), 0,
-                               "Cycle with 5 syntax errors, 3 import errors, and fail "
-                               "status must trigger alerts")
+            self.assertGreater(len(alerts), 0, "Cycle with 5 syntax errors, 3 import errors, and fail status must trigger alerts")
 
             remediation_goals = analyzer.get_remediation_goals()
             goals_with_suggestions = [a for a in analyzer.alerts if a.suggested_goal]
-            self.assertGreater(len(goals_with_suggestions), 0,
-                               "Threshold breach alerts should include suggested goals")
-            self.assertGreater(len(remediation_goals), 0,
-                               "Alerts with suggested_goal should yield remediation goals")
+            self.assertGreater(len(goals_with_suggestions), 0, "Threshold breach alerts should include suggested goals")
+            self.assertGreater(len(remediation_goals), 0, "Alerts with suggested_goal should yield remediation goals")
 
             # Simulate goal queue addition (as orchestrator does)
             mock_goal_queue = MagicMock()
@@ -361,17 +376,19 @@ class TestQualityTrendsPostCycleWiring(unittest.TestCase):
 
             # Record 3 cycles with improving quality
             for i, status in enumerate(["fail", "fail", "pass"]):
-                analyzer.record_from_cycle({
-                    "cycle_id": f"cycle_{i}",
-                    "goal": f"Goal {i}",
-                    "completed_at": time.time(),
-                    "duration_s": 30.0,
-                    "phase_outputs": {
-                        "quality": {"test_count": 10 + i * 5, "syntax_errors": [], "import_errors": []},
-                        "verification": {"status": status},
-                        "apply_result": {"applied": ["f.py"]},
-                    },
-                })
+                analyzer.record_from_cycle(
+                    {
+                        "cycle_id": f"cycle_{i}",
+                        "goal": f"Goal {i}",
+                        "completed_at": time.time(),
+                        "duration_s": 30.0,
+                        "phase_outputs": {
+                            "quality": {"test_count": 10 + i * 5, "syntax_errors": [], "import_errors": []},
+                            "verification": {"status": status},
+                            "apply_result": {"applied": ["f.py"]},
+                        },
+                    }
+                )
 
             summary = analyzer.get_summary()
             self.assertEqual(summary["total_cycles"], 3)
@@ -389,11 +406,13 @@ class TestTeamCoordinatorEndToEnd(unittest.TestCase):
         from core.team_coordinator import TeamCoordinator
 
         model = MagicMock()
-        model.respond = lambda prompt: json.dumps([
-            {"description": "Create database schema", "priority": 1, "dependencies": []},
-            {"description": "Build API endpoints", "priority": 2, "dependencies": [0]},
-            {"description": "Add input validation", "priority": 1, "dependencies": []},
-        ])
+        model.respond = lambda prompt: json.dumps(
+            [
+                {"description": "Create database schema", "priority": 1, "dependencies": []},
+                {"description": "Build API endpoints", "priority": 2, "dependencies": [0]},
+                {"description": "Add input validation", "priority": 1, "dependencies": []},
+            ]
+        )
         model.respond_for_role = None
 
         coordinator = TeamCoordinator(model=model)
@@ -459,17 +478,19 @@ class TestCrossModuleFlow(unittest.TestCase):
             self.assertFalse(router.should_escalate(act_result))
 
             # Phase 3: Cycle succeeds → record quality
-            alerts = trends.record_from_cycle({
-                "cycle_id": "cross_test",
-                "goal": "Cross-module test",
-                "completed_at": time.time(),
-                "duration_s": 25.0,
-                "phase_outputs": {
-                    "quality": {"test_count": 30, "syntax_errors": [], "import_errors": []},
-                    "verification": {"status": "pass"},
-                    "apply_result": {"applied": ["module.py"]},
-                },
-            })
+            alerts = trends.record_from_cycle(
+                {
+                    "cycle_id": "cross_test",
+                    "goal": "Cross-module test",
+                    "completed_at": time.time(),
+                    "duration_s": 25.0,
+                    "phase_outputs": {
+                        "quality": {"test_count": 30, "syntax_errors": [], "import_errors": []},
+                        "verification": {"status": "pass"},
+                        "apply_result": {"applied": ["module.py"]},
+                    },
+                }
+            )
             self.assertEqual(len(alerts), 0)
 
     def test_skill_correlation_then_quality_regression(self):
@@ -482,27 +503,32 @@ class TestCrossModuleFlow(unittest.TestCase):
             trends = QualityTrendAnalyzer(store_path=Path(tmpdir) / "trends.json")
 
             # Record a cycle where correlated skills were used but cycle failed
-            matrix.record_cycle([
-                SkillOutcome("linter", "bugfix", True),
-                SkillOutcome("type_checker", "bugfix", True),
-            ], cycle_success=False)
+            matrix.record_cycle(
+                [
+                    SkillOutcome("linter", "bugfix", True),
+                    SkillOutcome("type_checker", "bugfix", True),
+                ],
+                cycle_success=False,
+            )
 
             # Failed cycle → quality regression
-            alerts = trends.record_from_cycle({
-                "cycle_id": "fail_cycle",
-                "goal": "Failed bugfix",
-                "completed_at": time.time(),
-                "duration_s": 90.0,
-                "phase_outputs": {
-                    "quality": {
-                        "test_count": 2,
-                        "syntax_errors": ["err1", "err2", "err3", "err4"],
-                        "import_errors": ["imp1", "imp2", "imp3"],
+            alerts = trends.record_from_cycle(
+                {
+                    "cycle_id": "fail_cycle",
+                    "goal": "Failed bugfix",
+                    "completed_at": time.time(),
+                    "duration_s": 90.0,
+                    "phase_outputs": {
+                        "quality": {
+                            "test_count": 2,
+                            "syntax_errors": ["err1", "err2", "err3", "err4"],
+                            "import_errors": ["imp1", "imp2", "imp3"],
+                        },
+                        "verification": {"status": "fail"},
+                        "apply_result": {"applied": []},
                     },
-                    "verification": {"status": "fail"},
-                    "apply_result": {"applied": []},
-                },
-            })
+                }
+            )
 
             self.assertGreater(len(alerts), 0, "Failed cycle should trigger quality alerts")
 
@@ -535,8 +561,7 @@ class TestOrchestratorWithSprint2Modules(unittest.TestCase):
 
         # skill_correlation is optional — may be None if import fails
         # but should be instantiated when the module is available
-        self.assertIsNotNone(orch.skill_correlation,
-                             "SkillCorrelationMatrix should be instantiated in orchestrator")
+        self.assertIsNotNone(orch.skill_correlation, "SkillCorrelationMatrix should be instantiated in orchestrator")
 
 
 # ── 8. CodeRAG + NBest combined flow ─────────────────────────────────────
@@ -564,16 +589,21 @@ class TestCodeRAGWithNBest(unittest.TestCase):
         engine = NBestEngine(n_candidates=2)
 
         call_count = 0
+
         def mock_respond(prompt):
             nonlocal call_count
             call_count += 1
-            return json.dumps({
-                "changes": [{
-                    "file_path": "cache.py",
-                    "old_code": "",
-                    "new_code": f"def cache_v{call_count}(): pass",
-                }]
-            })
+            return json.dumps(
+                {
+                    "changes": [
+                        {
+                            "file_path": "cache.py",
+                            "old_code": "",
+                            "new_code": f"def cache_v{call_count}(): pass",
+                        }
+                    ]
+                }
+            )
 
         model = MagicMock()
         model.respond = mock_respond

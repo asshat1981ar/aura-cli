@@ -1,4 +1,5 @@
 """Tests for the SemanticQuerier read-only query interface."""
+
 from __future__ import annotations
 
 import tempfile
@@ -120,6 +121,7 @@ class TestSemanticQuerier:
     def querier(self, db_path: Path):
         _populate_test_db(db_path)
         from core.agent_sdk.semantic_querier import SemanticQuerier
+
         return SemanticQuerier(db_path)
 
     # ------------------------------------------------------------------

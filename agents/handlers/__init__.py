@@ -49,18 +49,18 @@ Adding a new handler
 
 from __future__ import annotations
 
-from agents.handlers import applicator        # noqa: F401
-from agents.handlers import coder             # noqa: F401
-from agents.handlers import critic            # noqa: F401
-from agents.handlers import debugger          # noqa: F401
-from agents.handlers import planner           # noqa: F401
-from agents.handlers import reflector         # noqa: F401
+from agents.handlers import applicator  # noqa: F401
+from agents.handlers import coder  # noqa: F401
+from agents.handlers import critic  # noqa: F401
+from agents.handlers import debugger  # noqa: F401
+from agents.handlers import planner  # noqa: F401
+from agents.handlers import reflector  # noqa: F401
 
 # High-level ``run_<name>_phase`` wrappers (preferred by dispatch.py)
-from agents.handlers.planner_handler import run_planner_phase      # noqa: F401
-from agents.handlers.coder_handler import run_coder_phase          # noqa: F401
-from agents.handlers.critic_handler import run_critic_phase        # noqa: F401
-from agents.handlers.debugger_handler import run_debugger_phase    # noqa: F401
+from agents.handlers.planner_handler import run_planner_phase  # noqa: F401
+from agents.handlers.coder_handler import run_coder_phase  # noqa: F401
+from agents.handlers.critic_handler import run_critic_phase  # noqa: F401
+from agents.handlers.debugger_handler import run_debugger_phase  # noqa: F401
 from agents.handlers.reflector_handler import run_reflector_phase  # noqa: F401
 from agents.handlers.applicator_handler import run_applicator_phase  # noqa: F401
 
@@ -70,36 +70,36 @@ from agents.handlers.applicator_handler import run_applicator_phase  # noqa: F40
 
 # Low-level: handle(task, context) -> dict
 HANDLER_MAP: dict[str, object] = {
-    "plan":      planner.handle,
-    "code":      coder.handle,
-    "critique":  critic.handle,
-    "debug":     debugger.handle,
-    "reflect":   reflector.handle,
-    "apply":     applicator.handle,
+    "plan": planner.handle,
+    "code": coder.handle,
+    "critique": critic.handle,
+    "debug": debugger.handle,
+    "reflect": reflector.handle,
+    "apply": applicator.handle,
     # Aliases
-    "planner":   planner.handle,
-    "coder":     coder.handle,
-    "critic":    critic.handle,
-    "debugger":  debugger.handle,
+    "planner": planner.handle,
+    "coder": coder.handle,
+    "critic": critic.handle,
+    "debugger": debugger.handle,
     "reflector": reflector.handle,
     "applicator": applicator.handle,
 }
 
 # High-level: run_<name>_phase(context, **kwargs) -> dict
 PHASE_MAP: dict[str, object] = {
-    "planner":   run_planner_phase,
-    "coder":     run_coder_phase,
-    "critic":    run_critic_phase,
-    "debugger":  run_debugger_phase,
+    "planner": run_planner_phase,
+    "coder": run_coder_phase,
+    "critic": run_critic_phase,
+    "debugger": run_debugger_phase,
     "reflector": run_reflector_phase,
     "applicator": run_applicator_phase,
     # Canonical phase-name aliases
-    "plan":    run_planner_phase,
-    "code":    run_coder_phase,
+    "plan": run_planner_phase,
+    "code": run_coder_phase,
     "critique": run_critic_phase,
-    "debug":   run_debugger_phase,
+    "debug": run_debugger_phase,
     "reflect": run_reflector_phase,
-    "apply":   run_applicator_phase,
+    "apply": run_applicator_phase,
 }
 
 __all__ = [

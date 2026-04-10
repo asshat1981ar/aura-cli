@@ -42,6 +42,7 @@ Start:
   # or:
   python tools/agentic_loop_mcp.py
 """
+
 from __future__ import annotations
 
 import os
@@ -96,6 +97,7 @@ _call_errors: Dict[str, int] = {}
 # Auth (R8: Updated to use centralized MCP auth)
 # ---------------------------------------------------------------------------
 
+
 def _check_auth(
     x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
     authorization: Optional[str] = Header(default=None),
@@ -129,8 +131,7 @@ _TOOL_SCHEMAS: Dict[str, Dict] = {
                             "name": {"type": "string"},
                             "skill_name": {"type": "string", "description": "AURA skill name."},
                             "static_inputs": {"type": "object"},
-                            "inputs_from": {"type": "object",
-                                            "description": "{'dest_key': 'step_name.output_key'}"},
+                            "inputs_from": {"type": "object", "description": "{'dest_key': 'step_name.output_key'}"},
                             "skip_if_false": {"type": "string"},
                             "max_attempts": {"type": "integer", "default": 3},
                             "timeout_s": {"type": "number", "default": 120},
@@ -152,10 +153,8 @@ _TOOL_SCHEMAS: Dict[str, Dict] = {
             "type": "object",
             "properties": {
                 "workflow_name": {"type": "string"},
-                "inputs": {"type": "object",
-                           "description": "Initial inputs (e.g. {'project_root': '.'})"},
-                "background": {"type": "boolean", "default": False,
-                               "description": "Run in background thread; returns immediately."},
+                "inputs": {"type": "object", "description": "Initial inputs (e.g. {'project_root': '.'})"},
+                "background": {"type": "boolean", "default": False, "description": "Run in background thread; returns immediately."},
             },
             "required": ["workflow_name"],
         },
@@ -279,8 +278,7 @@ _TOOL_SCHEMAS: Dict[str, Dict] = {
         "inputSchema": {
             "type": "object",
             "properties": {
-                "status": {"type": "string",
-                           "enum": ["running", "paused", "completed", "failed", "stopped"]},
+                "status": {"type": "string", "enum": ["running", "paused", "completed", "failed", "stopped"]},
             },
         },
     },
@@ -295,6 +293,7 @@ def _build_descriptor(name: str) -> Dict:
 # Tool handlers
 # ---------------------------------------------------------------------------
 
+
 def _h_workflow_define(args: Dict) -> Dict:
     name = args.get("name", "").strip()
     if not name:
@@ -308,15 +307,17 @@ def _h_workflow_define(args: Dict) -> Dict:
         if not isinstance(s, dict) or not s.get("name"):
             raise ValueError(f"Each step must have a 'name'. Got: {s!r}")
         retry = RetryPolicy(max_attempts=int(s.get("max_attempts", 3)))
-        steps.append(WorkflowStep(
-            name=s["name"],
-            skill_name=s.get("skill_name"),
-            static_inputs=s.get("static_inputs", {}),
-            inputs_from=s.get("inputs_from", {}),
-            skip_if_false=s.get("skip_if_false"),
-            retry=retry,
-            timeout_s=float(s.get("timeout_s", 120)),
-        ))
+        steps.append(
+            WorkflowStep(
+                name=s["name"],
+                skill_name=s.get("skill_name"),
+                static_inputs=s.get("static_inputs", {}),
+                inputs_from=s.get("inputs_from", {}),
+                skip_if_false=s.get("skip_if_false"),
+                retry=retry,
+                timeout_s=float(s.get("timeout_s", 120)),
+            )
+        )
 
     wf = WorkflowDefinition(
         name=name,
@@ -362,13 +363,12 @@ def _h_workflow_run(args: Dict) -> Dict:
 
         # Fallback: create a stub execution so the caller has an ID to poll
         import uuid as _uuid
+
         stub_id = str(_uuid.uuid4())
-        return {"exec_id": stub_id, "mode": "background_started", "workflow": wf_name,
-                "note": "Poll workflow_status after a moment."}
+        return {"exec_id": stub_id, "mode": "background_started", "workflow": wf_name, "note": "Poll workflow_status after a moment."}
     else:
         exec_id = engine.run_workflow(wf_name, inputs)
-        return {"exec_id": exec_id, "mode": "sync", "workflow": wf_name,
-                "status": engine.execution_status(exec_id)["status"]}
+        return {"exec_id": exec_id, "mode": "sync", "workflow": wf_name, "status": engine.execution_status(exec_id)["status"]}
 
 
 def _h_workflow_status(args: Dict) -> Dict:
@@ -480,28 +480,29 @@ def _h_loop_list(args: Dict) -> Dict:
 
 
 _TOOL_HANDLERS: Dict[str, Any] = {
-    "workflow_define":  _h_workflow_define,
-    "workflow_list":    _h_workflow_list,
-    "workflow_run":     _h_workflow_run,
-    "workflow_status":  _h_workflow_status,
-    "workflow_output":  _h_workflow_output,
-    "workflow_cancel":  _h_workflow_cancel,
-    "workflow_pause":   _h_workflow_pause,
-    "workflow_resume":  _h_workflow_resume,
-    "loop_create":      _h_loop_create,
-    "loop_tick":        _h_loop_tick,
-    "loop_status":      _h_loop_status,
-    "loop_stop":        _h_loop_stop,
-    "loop_pause":       _h_loop_pause,
-    "loop_resume":      _h_loop_resume,
-    "loop_health":      _h_loop_health,
-    "loop_list":        _h_loop_list,
+    "workflow_define": _h_workflow_define,
+    "workflow_list": _h_workflow_list,
+    "workflow_run": _h_workflow_run,
+    "workflow_status": _h_workflow_status,
+    "workflow_output": _h_workflow_output,
+    "workflow_cancel": _h_workflow_cancel,
+    "workflow_pause": _h_workflow_pause,
+    "workflow_resume": _h_workflow_resume,
+    "loop_create": _h_loop_create,
+    "loop_tick": _h_loop_tick,
+    "loop_status": _h_loop_status,
+    "loop_stop": _h_loop_stop,
+    "loop_pause": _h_loop_pause,
+    "loop_resume": _h_loop_resume,
+    "loop_health": _h_loop_health,
+    "loop_list": _h_loop_list,
 }
 
 
 # ---------------------------------------------------------------------------
 # FastAPI routes
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health")
 async def health(auth: str = Depends(require_agentic_loop_auth)) -> Dict:
@@ -564,20 +565,17 @@ async def call_tool(request: ToolCallRequest, auth: str = Depends(require_agenti
     try:
         result = handler(request.args)
         elapsed = round((time.time() - t0) * 1000, 2)
-        log_json("INFO", "agentic_loop_mcp_tool_called",
-                 details={"tool": name, "elapsed_ms": elapsed})
+        log_json("INFO", "agentic_loop_mcp_tool_called", details={"tool": name, "elapsed_ms": elapsed})
         return ToolResult(tool_name=name, result=result, elapsed_ms=elapsed)
     except (ValueError, KeyError) as exc:
         elapsed = round((time.time() - t0) * 1000, 2)
         _call_errors[name] = _call_errors.get(name, 0) + 1
-        log_json("WARN", "agentic_loop_mcp_bad_args",
-                 details={"tool": name, "error": str(exc)})
+        log_json("WARN", "agentic_loop_mcp_bad_args", details={"tool": name, "error": str(exc)})
         return ToolResult(tool_name=name, error=str(exc), elapsed_ms=elapsed)
     except Exception as exc:
         elapsed = round((time.time() - t0) * 1000, 2)
         _call_errors[name] = _call_errors.get(name, 0) + 1
-        log_json("ERROR", "agentic_loop_mcp_error",
-                 details={"tool": name, "error": str(exc)})
+        log_json("ERROR", "agentic_loop_mcp_error", details={"tool": name, "error": str(exc)})
         return ToolResult(tool_name=name, error=f"Internal error: {exc}", elapsed_ms=elapsed)
 
 
@@ -611,6 +609,7 @@ if __name__ == "__main__":
     import uvicorn
     from core.config_manager import config as _cfg
     from tools.mcp_auth import is_auth_enabled
+
     # R4: port from config registry; env var still overrides for backward-compat
     port = int(os.getenv("AGENTIC_LOOP_PORT", _cfg.get_mcp_server_port("agentic_loop")))
     auth_enabled = is_auth_enabled("agentic_loop")

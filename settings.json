@@ -4,10 +4,21 @@
     "llm_timeout": 120,
     "primary_provider": "openrouter",
     "model_routing": {
-        "code_generation": "google/gemini-2.5-pro",
+        "code_generation": [
+            "anthropic/claude-sonnet-4",
+            "openai/codex-mini-latest",
+            "google/gemini-2.5-pro",
+            "deepseek/deepseek-coder-v3",
+            "qwen/qwen3-coder"
+        ],
         "planning": "openai/gpt-4o",
         "analysis": "google/gemini-2.5-flash",
-        "critique": "deepseek/deepseek-r1-0528",
+        "critique": [
+            "deepseek/deepseek-r1-0528",
+            "openai/o3-mini",
+            "anthropic/claude-sonnet-4",
+            "google/gemini-2.5-pro"
+        ],
         "embedding": "openai/text-embedding-3-small",
         "fast": "google/gemini-2.0-flash-001",
         "quality": "openai/o3",

@@ -6,6 +6,7 @@ Covers:
 - A query error does not break planning
 - log_json is called with the 'planner_vector_hints' event
 """
+
 from __future__ import annotations
 
 import json
@@ -19,6 +20,7 @@ from agents.planner import PlannerAgent
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_brain() -> MagicMock:
     brain = MagicMock()
@@ -39,23 +41,25 @@ def _make_model(response: str = "{}") -> MagicMock:
 
 
 # A minimal valid structured planner response
-_VALID_PLAN_JSON = json.dumps({
-    "analysis": "Analysing the goal.",
-    "gap_assessment": "No gaps found.",
-    "approach": "Incremental TDD approach.",
-    "risk_assessment": "Low risk.",
-    "plan": [
-        {
-            "step_number": 1,
-            "description": "Implement feature",
-            "target_file": "src/feature.py",
-            "verification": "pytest tests/",
-        }
-    ],
-    "confidence": 0.9,
-    "total_steps": 1,
-    "estimated_complexity": "low",
-})
+_VALID_PLAN_JSON = json.dumps(
+    {
+        "analysis": "Analysing the goal.",
+        "gap_assessment": "No gaps found.",
+        "approach": "Incremental TDD approach.",
+        "risk_assessment": "Low risk.",
+        "plan": [
+            {
+                "step_number": 1,
+                "description": "Implement feature",
+                "target_file": "src/feature.py",
+                "verification": "pytest tests/",
+            }
+        ],
+        "confidence": 0.9,
+        "total_steps": 1,
+        "estimated_complexity": "low",
+    }
+)
 
 _VALID_LEGACY_JSON = json.dumps(["Step 1: Do something", "Step 2: Verify it"])
 
@@ -63,6 +67,7 @@ _VALID_LEGACY_JSON = json.dumps(["Step 1: Do something", "Step 2: Verify it"])
 # ---------------------------------------------------------------------------
 # test_vector_hints_injected_when_store_set
 # ---------------------------------------------------------------------------
+
 
 class TestVectorHintsInjected:
     """Hints returned by vector_store.query must appear in the LLM prompt."""
@@ -106,6 +111,7 @@ class TestVectorHintsInjected:
 # test_no_hints_when_store_none
 # ---------------------------------------------------------------------------
 
+
 class TestNoHintsWhenStoreNone:
     """When vector_store is None the planner should work normally."""
 
@@ -137,6 +143,7 @@ class TestNoHintsWhenStoreNone:
 # test_vector_store_error_does_not_break_planner
 # ---------------------------------------------------------------------------
 
+
 class TestVectorStoreErrorHandling:
     """If vector_store.query raises an exception planning must still succeed."""
 
@@ -161,14 +168,13 @@ class TestVectorStoreErrorHandling:
 
         # A WARN log must have been emitted for the query failure
         warn_calls = [c for c in mock_log.call_args_list if c.args[0] == "WARN"]
-        assert any("planner_vector_hints_failed" in str(c) for c in warn_calls), (
-            "Expected a WARN log for planner_vector_hints_failed"
-        )
+        assert any("planner_vector_hints_failed" in str(c) for c in warn_calls), "Expected a WARN log for planner_vector_hints_failed"
 
 
 # ---------------------------------------------------------------------------
 # test_hint_count_logged
 # ---------------------------------------------------------------------------
+
 
 class TestHintCountLogged:
     """log_json must be called with the 'planner_vector_hints' event."""

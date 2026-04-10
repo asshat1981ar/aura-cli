@@ -7,6 +7,7 @@ Instead of generating a single plan, ToT expands the planning space by:
 
 This dramatically reduces single-path planning failures.
 """
+
 import json
 import re
 from dataclasses import dataclass, field
@@ -22,6 +23,7 @@ PLAN_STRATEGIES = [
 
 SCORING_CRITERIA = ["feasibility", "coverage", "risk", "testability", "clarity"]
 
+
 @dataclass
 class PlanCandidate:
     strategy: str
@@ -32,6 +34,7 @@ class PlanCandidate:
     total_score: float = 0.0
     reasoning: str = ""
 
+
 class TreeOfThoughtPlanner:
     """Generates N plan candidates with varied strategies and picks the best."""
 
@@ -40,7 +43,7 @@ class TreeOfThoughtPlanner:
 
     def generate_plans(self, model, goal: str, context: dict) -> list[PlanCandidate]:
         """Generate N plan candidates with different strategic approaches."""
-        strategies = PLAN_STRATEGIES[:self.n_candidates]
+        strategies = PLAN_STRATEGIES[: self.n_candidates]
         candidates = []
 
         memory_snapshot = context.get("memory_snapshot", "")
@@ -49,8 +52,7 @@ class TreeOfThoughtPlanner:
 
         for strategy_name, strategy_desc in strategies:
             candidate = PlanCandidate(strategy=strategy_name, strategy_description=strategy_desc)
-            prompt = self._build_plan_prompt(goal, strategy_name, strategy_desc,
-                                             memory_snapshot, known_weaknesses, skill_context)
+            prompt = self._build_plan_prompt(goal, strategy_name, strategy_desc, memory_snapshot, known_weaknesses, skill_context)
             try:
                 respond_fn = getattr(model, "respond_for_role", None)
                 if callable(respond_fn):
@@ -64,9 +66,7 @@ class TreeOfThoughtPlanner:
                 candidate.raw_response = f"ERROR: {exc}"
             candidates.append(candidate)
 
-        log_json("INFO", "tot_plans_generated",
-                 details={"count": len(candidates), "strategies": [c.strategy for c in candidates],
-                          "steps_per_plan": [len(c.steps) for c in candidates]})
+        log_json("INFO", "tot_plans_generated", details={"count": len(candidates), "strategies": [c.strategy for c in candidates], "steps_per_plan": [len(c.steps) for c in candidates]})
         return candidates
 
     def score_plans(self, model, candidates: list[PlanCandidate], goal: str) -> PlanCandidate:
@@ -92,9 +92,7 @@ class TreeOfThoughtPlanner:
                 c.total_score = len(c.steps) * 0.1 + (len(valid) - i) * 0.2
 
         winner = max(valid, key=lambda c: c.total_score)
-        log_json("INFO", "tot_plan_winner",
-                 details={"strategy": winner.strategy, "score": winner.total_score,
-                          "steps": len(winner.steps), "scores": winner.scores})
+        log_json("INFO", "tot_plan_winner", details={"strategy": winner.strategy, "score": winner.total_score, "steps": len(winner.steps), "scores": winner.scores})
         return winner
 
     def _build_plan_prompt(self, goal, strategy_name, strategy_desc, memory, weaknesses, skill_ctx):
@@ -108,9 +106,9 @@ Strategy: {strategy_desc}
 
 Goal: {goal}
 
-Previous memory: {memory[:1000] if memory else 'None'}
-Known weaknesses: {weaknesses[:500] if weaknesses else 'None'}
-Skill analysis: {skill_summary or 'None'}
+Previous memory: {memory[:1000] if memory else "None"}
+Known weaknesses: {weaknesses[:500] if weaknesses else "None"}
+Skill analysis: {skill_summary or "None"}
 
 Generate a step-by-step implementation plan. Each step should be:
 1. Specific and actionable
@@ -122,15 +120,14 @@ Respond as a JSON array of step objects:
 [{{"step": 1, "description": "...", "files": ["..."], "verification": "..."}}]"""
 
     def _build_scoring_prompt(self, candidates, goal):
-        parts = [f"Score each plan for the goal: {goal}\n",
-                 f"Criteria (0.0-1.0): {', '.join(SCORING_CRITERIA)}\n"]
+        parts = [f"Score each plan for the goal: {goal}\n", f"Criteria (0.0-1.0): {', '.join(SCORING_CRITERIA)}\n"]
         for c in candidates:
             parts.append(f"### Plan: {c.strategy}")
             for i, step in enumerate(c.steps[:5]):
                 if isinstance(step, dict):
-                    parts.append(f"  {i+1}. {step.get('description', str(step))[:100]}")
+                    parts.append(f"  {i + 1}. {step.get('description', str(step))[:100]}")
                 else:
-                    parts.append(f"  {i+1}. {str(step)[:100]}")
+                    parts.append(f"  {i + 1}. {str(step)[:100]}")
             parts.append("")
         parts.append('Respond with JSON: {"scores": {"<strategy>": {"feasibility": 0.X, ...}}}')
         return "\n".join(parts)
@@ -150,12 +147,12 @@ Respond as a JSON array of step objects:
         steps = []
         for line in response.split("\n"):
             line = line.strip()
-            if re.match(r'^\d+[\.\)]\s', line):
-                steps.append({"step": len(steps)+1, "description": re.sub(r'^\d+[\.\)]\s*', '', line)})
+            if re.match(r"^\d+[\.\)]\s", line):
+                steps.append({"step": len(steps) + 1, "description": re.sub(r"^\d+[\.\)]\s*", "", line)})
         return steps if steps else [{"step": 1, "description": response[:500]}]
 
     def _parse_scores(self, response, candidates):
-        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        json_match = re.search(r"\{.*\}", response, re.DOTALL)
         if not json_match:
             return
         try:

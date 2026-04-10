@@ -1,4 +1,5 @@
 """Security and error-handling tests for core/file_tools.py."""
+
 import os
 import stat
 from pathlib import Path

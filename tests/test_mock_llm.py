@@ -3,6 +3,7 @@
 Verifies that ``MockModelAdapter`` behaves correctly in isolation so downstream
 tests can rely on it as a stable building block.
 """
+
 from __future__ import annotations
 
 import json
@@ -22,6 +23,7 @@ from tests.fixtures.mock_responses import (
 # ---------------------------------------------------------------------------
 # Default response routing
 # ---------------------------------------------------------------------------
+
 
 class TestDefaultResponses:
     """MockModelAdapter returns the expected built-in response for each phase."""
@@ -57,6 +59,7 @@ class TestDefaultResponses:
 # set_response overrides
 # ---------------------------------------------------------------------------
 
+
 class TestSetResponse:
     """set_response registers new patterns and overrides existing ones."""
 
@@ -90,6 +93,7 @@ class TestSetResponse:
 # Unknown / unmatched prompts
 # ---------------------------------------------------------------------------
 
+
 class TestUnknownPrompts:
     """Unrecognised prompts return DEFAULT_RESPONSE, never raise."""
 
@@ -121,6 +125,7 @@ class TestUnknownPrompts:
 # Alternative entry-points (respond / respond_for_role)
 # ---------------------------------------------------------------------------
 
+
 class TestAliasedMethods:
     """respond and respond_for_role are transparent aliases of generate."""
 
@@ -144,6 +149,7 @@ class TestAliasedMethods:
 # ---------------------------------------------------------------------------
 # Call logging
 # ---------------------------------------------------------------------------
+
 
 class TestCallLog:
     """Every prompt is appended to call_log for post-hoc inspection."""
@@ -170,6 +176,7 @@ class TestCallLog:
 # Constructor with custom responses
 # ---------------------------------------------------------------------------
 
+
 class TestCustomResponses:
     """Passing a custom responses dict overrides all built-in defaults."""
 
@@ -193,6 +200,7 @@ class TestCustomResponses:
 # ---------------------------------------------------------------------------
 # Response content sanity checks
 # ---------------------------------------------------------------------------
+
 
 class TestResponseContent:
     """Pre-built mock responses are parseable as their expected format."""
@@ -221,6 +229,7 @@ class TestResponseContent:
 # ---------------------------------------------------------------------------
 # Pytest fixture smoke-test
 # ---------------------------------------------------------------------------
+
 
 def test_mock_model_adapter_fixture(mock_model_adapter):
     """The pytest fixture wires up a ready-to-use MockModelAdapter."""

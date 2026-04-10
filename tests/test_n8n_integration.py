@@ -38,13 +38,15 @@ def test_emit_n8n_event_posts_json_payload():
 
 
 def test_load_n8n_config_supports_legacy_n8n_connector_shape():
-    cfg = load_n8n_config({
-        "n8n_connector": {
-            "enabled": True,
-            "notification_webhook": "http://localhost:5678/webhook/aura-notify",
-            "timeout_seconds": 3.5,
+    cfg = load_n8n_config(
+        {
+            "n8n_connector": {
+                "enabled": True,
+                "notification_webhook": "http://localhost:5678/webhook/aura-notify",
+                "timeout_seconds": 3.5,
+            }
         }
-    })
+    )
     assert cfg.enabled is True
     assert cfg.webhook_url == "http://localhost:5678/webhook/aura-notify"
     assert cfg.timeout_seconds == 3.5

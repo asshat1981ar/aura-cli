@@ -26,6 +26,7 @@ Requirements:
 Start:
   uvicorn tools.github_copilot_mcp:app --port "${COPILOT_MCP_PORT:-<configured copilot MCP port>}"
 """
+
 from __future__ import annotations
 
 import os
@@ -60,14 +61,15 @@ from core.mcp_registry import get_registered_service, list_registered_services
 # Lazy-loaded singletons
 # ---------------------------------------------------------------------------
 
-_github: Any = None   # GitHubTools
-_model: Any = None    # ModelAdapter
+_github: Any = None  # GitHubTools
+_model: Any = None  # ModelAdapter
 
 
 def _get_github():
     global _github
     if _github is None:
         from tools.github_tools import GitHubTools
+
         _github = GitHubTools()
     return _github
 
@@ -76,6 +78,7 @@ def _get_model():
     global _model
     if _model is None:
         from core.model_adapter import ModelAdapter
+
         _model = ModelAdapter()
     return _model
 
@@ -99,30 +102,31 @@ def _check_auth(
 ) -> str:
     """Validate API key using centralized auth (with legacy fallback)."""
     from tools.mcp_auth import get_mcp_server_api_key
-    
+
     # Check if new centralized auth is configured
     expected_key = get_mcp_server_api_key("copilot")
-    
+
     # Fall back to legacy token
     if not expected_key and _TOKEN:
         expected_key = _TOKEN
-    
+
     # If no key configured, allow through
     if not expected_key:
         return "optional"
-    
+
     # Get provided key
     provided_key = x_api_key
     if not provided_key and authorization and authorization.startswith("Bearer "):
         provided_key = authorization[7:].strip()
-    
+
     if not provided_key:
         raise HTTPException(status_code=401, detail="Missing API key")
-    
+
     import hmac
+
     if not hmac.compare_digest(provided_key, expected_key):
         raise HTTPException(status_code=403, detail="Invalid API key")
-    
+
     return provided_key
 
 
@@ -135,6 +139,7 @@ def _get_copilot_port() -> int:
 # ---------------------------------------------------------------------------
 # AI helper — call ModelAdapter with a structured prompt
 # ---------------------------------------------------------------------------
+
 
 def _ai(prompt: str) -> str:
     """Call the LLM and return stripped response text."""
@@ -160,29 +165,21 @@ def _truncate(text: str, max_chars: int = 12000) -> str:
 
 _TOOL_SCHEMAS: Dict[str, Dict] = {
     "issue_analyze": {
-        "description": (
-            "Fetch a GitHub issue and produce an AI analysis: root cause, affected components, "
-            "risk level, and a numbered implementation plan."
-        ),
+        "description": ("Fetch a GitHub issue and produce an AI analysis: root cause, affected components, risk level, and a numbered implementation plan."),
         "input": {
             "repo": {"type": "string", "description": "Repository in owner/repo format", "required": True},
             "issue_number": {"type": "integer", "description": "Issue number", "required": True},
         },
     },
     "pr_review": {
-        "description": (
-            "Fetch a PR diff and run an AI code review. Returns severity-tagged findings "
-            "(critical/high/medium/low), summary, and overall verdict."
-        ),
+        "description": ("Fetch a PR diff and run an AI code review. Returns severity-tagged findings (critical/high/medium/low), summary, and overall verdict."),
         "input": {
             "repo": {"type": "string", "description": "Repository in owner/repo format", "required": True},
             "pr_number": {"type": "integer", "description": "Pull request number", "required": True},
         },
     },
     "pr_describe": {
-        "description": (
-            "Auto-generate a professional PR title and description from the PR diff and commit messages."
-        ),
+        "description": ("Auto-generate a professional PR title and description from the PR diff and commit messages."),
         "input": {
             "repo": {"type": "string", "description": "Repository in owner/repo format", "required": True},
             "pr_number": {"type": "integer", "description": "Pull request number", "required": True},
@@ -226,10 +223,7 @@ _TOOL_SCHEMAS: Dict[str, Dict] = {
         },
     },
     "issue_to_plan": {
-        "description": (
-            "Convert a GitHub issue into a detailed implementation plan. "
-            "Optionally provide relevant source file contents for context."
-        ),
+        "description": ("Convert a GitHub issue into a detailed implementation plan. Optionally provide relevant source file contents for context."),
         "input": {
             "repo": {"type": "string", "description": "Repository in owner/repo format", "required": True},
             "issue_number": {"type": "integer", "description": "Issue number", "required": True},
@@ -258,6 +252,7 @@ def _build_descriptor(name: str) -> Dict:
 # Tool implementations
 # ---------------------------------------------------------------------------
 
+
 def _tool_issue_analyze(args: Dict) -> Dict:
     repo = args["repo"]
     issue_number = int(args["issue_number"])
@@ -268,24 +263,20 @@ def _tool_issue_analyze(args: Dict) -> Dict:
     body = _truncate(issue.get("body") or "", 4000)
     labels = [l["name"] for l in issue.get("labels", [])]
     comments_data = gh._make_request("GET", f"{gh.BASE_URL}/repos/{repo}/issues/{issue_number}/comments")
-    comments_text = "\n".join(
-        f"[{c.get('user', {}).get('login', 'user') if isinstance(c.get('user'), dict) else 'user'}]: {str(c.get('body') or '')[:300]}"
-        for c in (comments_data if isinstance(comments_data, list) else [])[:5]
-        if isinstance(c, dict)
-    )
+    comments_text = "\n".join(f"[{c.get('user', {}).get('login', 'user') if isinstance(c.get('user'), dict) else 'user'}]: {str(c.get('body') or '')[:300]}" for c in (comments_data if isinstance(comments_data, list) else [])[:5] if isinstance(c, dict))
 
     prompt = textwrap.dedent(f"""
         You are a senior software engineer analyzing a GitHub issue.
 
         Repository: {repo}
         Issue #{issue_number}: {title}
-        Labels: {', '.join(labels) or 'none'}
+        Labels: {", ".join(labels) or "none"}
 
         Issue body:
         {body}
 
         Top comments:
-        {comments_text or 'No comments.'}
+        {comments_text or "No comments."}
 
         Provide a structured analysis with these sections:
         1. **Summary** — one sentence describing the problem
@@ -328,7 +319,7 @@ def _tool_pr_review(args: Dict) -> Dict:
 
         Repository: {repo}
         PR #{pr_number}: {title}
-        Description: {pr_body[:500] or 'No description.'}
+        Description: {pr_body[:500] or "No description."}
 
         Diff:
         {diff_text}
@@ -382,18 +373,11 @@ def _tool_pr_describe(args: Dict) -> Dict:
 
     # Commits
     commits_data = gh._make_request("GET", f"{gh.BASE_URL}/repos/{repo}/pulls/{pr_number}/commits")
-    commit_msgs = "\n".join(
-        f"- {c.get('commit', {}).get('message', '').splitlines()[0]}"
-        for c in (commits_data if isinstance(commits_data, list) else [])[:15]
-    )
+    commit_msgs = "\n".join(f"- {c.get('commit', {}).get('message', '').splitlines()[0]}" for c in (commits_data if isinstance(commits_data, list) else [])[:15])
 
     # Files changed
-    files_data = gh.get_files(repo, pr_number) if hasattr(gh, 'get_files') else \
-        gh._make_request("GET", f"{gh.BASE_URL}/repos/{repo}/pulls/{pr_number}/files")
-    files_changed = "\n".join(
-        f"- {f.get('filename')} (+{f.get('additions',0)}/-{f.get('deletions',0)})"
-        for f in (files_data if isinstance(files_data, list) else [])[:20]
-    )
+    files_data = gh.get_files(repo, pr_number) if hasattr(gh, "get_files") else gh._make_request("GET", f"{gh.BASE_URL}/repos/{repo}/pulls/{pr_number}/files")
+    files_changed = "\n".join(f"- {f.get('filename')} (+{f.get('additions', 0)}/-{f.get('deletions', 0)})" for f in (files_data if isinstance(files_data, list) else [])[:20])
 
     prompt = textwrap.dedent(f"""
         Generate a professional GitHub PR title and description.
@@ -401,10 +385,10 @@ def _tool_pr_describe(args: Dict) -> Dict:
         Branch: {head} → {base}
 
         Commits:
-        {commit_msgs or 'No commit messages available.'}
+        {commit_msgs or "No commit messages available."}
 
         Files changed:
-        {files_changed or 'File list unavailable.'}
+        {files_changed or "File list unavailable."}
 
         Output format (use exactly these headers):
         ## Title
@@ -447,7 +431,7 @@ def _tool_code_explain(args: Dict) -> Dict:
 
     prompt = textwrap.dedent(f"""
         Explain the following {language} code clearly and concisely.
-        {f'Context: {context}' if context else ''}
+        {f"Context: {context}" if context else ""}
 
         Code:
         ```{language.lower()}
@@ -531,7 +515,7 @@ def _tool_commit_message(args: Dict) -> Dict:
     prompt = textwrap.dedent(f"""
         Generate a Conventional Commit message for these changes.
 
-        {'Scope hint: ' + scope if scope else ''}
+        {"Scope hint: " + scope if scope else ""}
 
         Changes:
         {_truncate(diff, 6000)}
@@ -566,15 +550,18 @@ def _tool_repo_health(args: Dict) -> Dict:
 
     repo_info = gh.get_repo(repo)
     open_issues = gh._make_request(
-        "GET", f"{gh.BASE_URL}/repos/{repo}/issues",
+        "GET",
+        f"{gh.BASE_URL}/repos/{repo}/issues",
         params={"state": "open", "per_page": 30, "sort": "created", "direction": "asc"},
     )
     open_prs = gh._make_request(
-        "GET", f"{gh.BASE_URL}/repos/{repo}/pulls",
+        "GET",
+        f"{gh.BASE_URL}/repos/{repo}/pulls",
         params={"state": "open", "per_page": 30, "sort": "updated", "direction": "asc"},
     )
     commits = gh._make_request(
-        "GET", f"{gh.BASE_URL}/repos/{repo}/commits",
+        "GET",
+        f"{gh.BASE_URL}/repos/{repo}/commits",
         params={"per_page": 10},
     )
 
@@ -582,6 +569,7 @@ def _tool_repo_health(args: Dict) -> Dict:
         if not date_str:
             return 0
         import datetime
+
         try:
             dt = datetime.datetime.fromisoformat(date_str.replace("Z", "+00:00"))
             return (datetime.datetime.now(datetime.timezone.utc) - dt).days
@@ -709,9 +697,7 @@ def _tool_find_related_code(args: Dict) -> Dict:
     if not items:
         return {"repo": repo, "query": query, "results": [], "ai_ranking": "No results found."}
 
-    results_summary = "\n".join(
-        f"{i+1}. {r['path']} — {r['name']}" for i, r in enumerate(items)
-    )
+    results_summary = "\n".join(f"{i + 1}. {r['path']} — {r['name']}" for i, r in enumerate(items))
 
     prompt = textwrap.dedent(f"""
         A developer searched a GitHub repository for: "{query}"
@@ -762,6 +748,7 @@ from tools.mcp_types import ToolCallRequest, ToolResult  # noqa: F401, E402
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health")
 async def health(auth: str = Depends(require_copilot_auth)):
@@ -823,6 +810,7 @@ async def call_tool(request: ToolCallRequest, auth: str = Depends(require_copilo
 if __name__ == "__main__":
     import uvicorn
     from tools.mcp_auth import is_auth_enabled
+
     # R4: port from config registry; env var still overrides for backward-compat
     port = _get_copilot_port()
     auth_enabled = is_auth_enabled("copilot")

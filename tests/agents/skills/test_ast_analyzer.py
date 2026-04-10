@@ -1,4 +1,5 @@
 """Unit tests for AST Analyzer Skill."""
+
 from __future__ import annotations
 
 import ast
@@ -29,7 +30,7 @@ class TestASTAnalyzerSkill(TestCase):
 
     def test_skill_run_with_exception_handling(self):
         """Test that run() catches exceptions and returns error dict."""
-        with patch.object(self.skill, '_run', side_effect=Exception("Test error")):
+        with patch.object(self.skill, "_run", side_effect=Exception("Test error")):
             result = self.skill.run({"project_root": "."})
             self.assertIn("error", result)
             self.assertEqual(result["skill"], "ast_analyzer")
@@ -42,7 +43,7 @@ class TestASTAnalyzerSkill(TestCase):
         code = "def hello(): pass"
         tree = ast.parse(code)
         metrics = self.skill._analyze_file(tree, "test.py")
-        
+
         self.assertEqual(metrics.file_path, "test.py")
         self.assertEqual(metrics.functions, 1)
         self.assertEqual(metrics.classes, 0)
@@ -58,7 +59,7 @@ class MyClass:
 """
         tree = ast.parse(code)
         metrics = self.skill._analyze_file(tree, "test.py")
-        
+
         self.assertEqual(metrics.functions, 2)
         self.assertEqual(metrics.classes, 1)
 
@@ -67,7 +68,7 @@ class MyClass:
         code = ""
         tree = ast.parse(code)
         metrics = self.skill._analyze_file(tree, "test.py")
-        
+
         self.assertEqual(metrics.functions, 0)
         self.assertEqual(metrics.classes, 0)
         self.assertEqual(metrics.imports, [])
@@ -80,7 +81,7 @@ class MyClass:
         code = "import os\nimport sys\nfrom collections import defaultdict"
         tree = ast.parse(code)
         metrics = self.skill._analyze_file(tree, "test.py")
-        
+
         self.assertIn("os", metrics.imports)
         self.assertIn("sys", metrics.imports)
         self.assertIn("collections", metrics.imports)
@@ -90,7 +91,7 @@ class MyClass:
         code = "from pathlib import Path\nfrom typing import Dict, List"
         tree = ast.parse(code)
         metrics = self.skill._analyze_file(tree, "test.py")
-        
+
         self.assertIn("pathlib", metrics.imports)
         self.assertIn("typing", metrics.imports)
 
@@ -102,11 +103,11 @@ class MyClass:
         code = "def func(a, b, c, d, e, f, g): pass"
         tree = ast.parse(code)
         metrics = ASTMetrics(file_path="test.py")
-        
+
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
                 self.skill._check_function_smells(node, "test.py", metrics)
-        
+
         self.assertEqual(len(metrics.smells), 1)
         self.assertEqual(metrics.smells[0]["type"], "too_many_args")
         self.assertEqual(metrics.smells[0]["count"], 7)
@@ -116,11 +117,11 @@ class MyClass:
         code = "def long_func():\n" + "\n".join([f"    x = {i}" for i in range(60)])
         tree = ast.parse(code)
         metrics = ASTMetrics(file_path="test.py")
-        
+
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
                 self.skill._check_function_smells(node, "test.py", metrics)
-        
+
         self.assertEqual(len(metrics.smells), 1)
         self.assertEqual(metrics.smells[0]["type"], "long_function")
 
@@ -130,11 +131,11 @@ class MyClass:
         code = f"class GodClass:\n{methods}"
         tree = ast.parse(code)
         metrics = ASTMetrics(file_path="test.py")
-        
+
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
                 self.skill._check_class_smells(node, "test.py", metrics)
-        
+
         self.assertEqual(len(metrics.smells), 1)
         self.assertEqual(metrics.smells[0]["type"], "god_class")
         self.assertEqual(metrics.smells[0]["severity"], "high")
@@ -150,11 +151,11 @@ class MyClass:
 """
         tree = ast.parse(code)
         metrics = ASTMetrics(file_path="test.py")
-        
+
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
                 self.skill._check_function_smells(node, "test.py", metrics)
-        
+
         self.assertEqual(len(metrics.dead_code), 1)
         self.assertEqual(metrics.dead_code[0]["type"], "unreachable_after_return")
 
@@ -166,11 +167,11 @@ class MyClass:
 """
         tree = ast.parse(code)
         metrics = ASTMetrics(file_path="test.py")
-        
+
         for node in ast.walk(tree):
             if isinstance(node, ast.FunctionDef):
                 self.skill._check_function_smells(node, "test.py", metrics)
-        
+
         self.assertEqual(len(metrics.dead_code), 1)
 
     # =========================================================================
@@ -255,9 +256,9 @@ def func2():
             # Create test file
             test_file = Path(tmpdir) / "test_module.py"
             test_file.write_text("def hello(): pass")
-            
+
             result = self.skill._run({"project_root": tmpdir})
-            
+
             self.assertIn("files_analyzed", result)
             self.assertIn("total_functions", result)
             self.assertIn("smells", result)
@@ -270,19 +271,19 @@ def func2():
             # Create normal file
             normal_file = Path(tmpdir) / "normal.py"
             normal_file.write_text("def hello(): pass")
-            
+
             # Create file in __pycache__
             pycache = Path(tmpdir) / "__pycache__"
             pycache.mkdir()
             (pycache / "cached.py").write_text("def cached(): pass")
-            
+
             # Create file in .venv
             venv = Path(tmpdir) / ".venv"
             venv.mkdir()
             (venv / "venv_file.py").write_text("def venv_func(): pass")
-            
+
             result = self.skill._run({"project_root": tmpdir})
-            
+
             # Should only analyze normal.py
             self.assertEqual(result["files_analyzed"], 1)
 
@@ -291,9 +292,9 @@ def func2():
         with tempfile.TemporaryDirectory() as tmpdir:
             test_file = Path(tmpdir) / "bad_syntax.py"
             test_file.write_text("def hello(\n")  # Syntax error
-            
+
             result = self.skill._run({"project_root": tmpdir})
-            
+
             # Should not crash, should report 0 files analyzed
             self.assertIn("files_analyzed", result)
             self.assertEqual(result["files_analyzed"], 0)
@@ -305,9 +306,9 @@ def func2():
             code = "\n".join([f"def func_{i}(a, b, c, d, e, f, g): pass" for i in range(30)])
             test_file = Path(tmpdir) / "many_smells.py"
             test_file.write_text(code)
-            
+
             result = self.skill._run({"project_root": tmpdir})
-            
+
             # Smells should be limited to 20
             self.assertLessEqual(len(result["smells"]), 20)
             # Hotspots should be limited to 10
@@ -328,15 +329,15 @@ def complex_func():
 """
             test_file = Path(tmpdir) / "complex.py"
             test_file.write_text(code)
-            
+
             result = self.skill._run({"project_root": tmpdir})
-            
+
             self.assertGreaterEqual(len(result["complexity_hotspots"]), 1)
 
     def test_run_default_project_root(self):
         """Test run with default project root."""
         result = self.skill._run({})
-        
+
         self.assertIn("files_analyzed", result)
         self.assertIn("smells", result)
 
@@ -359,17 +360,7 @@ class TestASTMetrics(TestCase):
 
     def test_custom_values(self):
         """Test setting custom values."""
-        metrics = ASTMetrics(
-            file_path="test.py",
-            functions=5,
-            classes=2,
-            max_nesting=3,
-            avg_complexity=5.5,
-            type_annotation_pct=80.0,
-            smells=[{"type": "test"}],
-            imports=["os"],
-            dead_code=[{"line": 10}]
-        )
+        metrics = ASTMetrics(file_path="test.py", functions=5, classes=2, max_nesting=3, avg_complexity=5.5, type_annotation_pct=80.0, smells=[{"type": "test"}], imports=["os"], dead_code=[{"line": 10}])
         self.assertEqual(metrics.file_path, "test.py")
         self.assertEqual(metrics.functions, 5)
         self.assertEqual(metrics.smells, [{"type": "test"}])

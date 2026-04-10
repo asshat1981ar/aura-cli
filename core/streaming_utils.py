@@ -2,6 +2,7 @@
 
 Prevents memory exhaustion when processing files larger than 1MB.
 """
+
 from pathlib import Path
 from typing import Iterator, Union
 

@@ -13,10 +13,7 @@ class SynthesizerAgent(Agent):
         intent = "\n".join(plan.get("steps", []))
         issues = critique.get("issues", [])
         if issues:
-            issue_lines = [
-                i if isinstance(i, str) else i.get("description", str(i))
-                for i in issues
-            ]
+            issue_lines = [i if isinstance(i, str) else i.get("description", str(i)) for i in issues]
             intent = f"{intent}\n\nCritique:\n" + "\n".join(issue_lines)
 
         files = input_data.get("files")

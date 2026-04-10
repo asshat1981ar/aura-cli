@@ -28,6 +28,7 @@ Usage::
     # config.hints     — extra context injected into plan phase
     # config.intensity — "normal" | "deep" | "minimal"
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -38,12 +39,12 @@ from core.skill_dispatcher import SKILL_MAP
 
 # Base phase sequence for each goal type
 _BASE_PHASES: Dict[str, List[str]] = {
-    "bug_fix":  ["ingest", "plan", "critique", "synthesize", "act", "verify", "reflect"],
-    "feature":  ["ingest", "plan", "critique", "synthesize", "act", "verify", "reflect"],
+    "bug_fix": ["ingest", "plan", "critique", "synthesize", "act", "verify", "reflect"],
+    "feature": ["ingest", "plan", "critique", "synthesize", "act", "verify", "reflect"],
     "refactor": ["ingest", "plan", "synthesize", "act", "verify", "reflect"],
     "security": ["ingest", "plan", "critique", "synthesize", "act", "verify", "reflect"],
-    "docs":     ["ingest", "plan", "synthesize", "act", "reflect"],
-    "default":  ["ingest", "plan", "synthesize", "act", "verify", "reflect"],
+    "docs": ["ingest", "plan", "synthesize", "act", "reflect"],
+    "default": ["ingest", "plan", "synthesize", "act", "verify", "reflect"],
 }
 
 # Phases that can be skipped when intensity is "minimal"
@@ -51,12 +52,9 @@ _SKIPPABLE_PHASES = {"critique"}
 
 # Phases that get injected when intensity is "deep"
 _DEEP_EXTRA_HINTS = {
-    "bug_fix":  ["Use symbol_indexer results to trace call graph before patching",
-                 "Check git_history_analyzer for hotspot context"],
-    "refactor": ["Check code_clone_detector for duplicate patterns first",
-                 "Validate architecture coupling after every file change"],
-    "security": ["Treat every user-controlled input as untrusted",
-                 "Cross-reference dependency_analyzer for transitive vulns"],
+    "bug_fix": ["Use symbol_indexer results to trace call graph before patching", "Check git_history_analyzer for hotspot context"],
+    "refactor": ["Check code_clone_detector for duplicate patterns first", "Validate architecture coupling after every file change"],
+    "security": ["Treat every user-controlled input as untrusted", "Cross-reference dependency_analyzer for transitive vulns"],
 }
 
 
@@ -75,6 +73,7 @@ class PipelineConfig:
         plan_retries:  How many times to re-plan on structural failure.
         extra_plan_ctx: Free-form dict merged into the plan phase input.
     """
+
     phases: List[str]
     skill_set: List[str]
     hints: List[str] = field(default_factory=list)
@@ -149,8 +148,7 @@ class AdaptivePipeline:
 
         # Boost skill set on deep runs
         if intensity == "deep":
-            extra = [s for s in SKILL_MAP.get(goal_type, [])
-                     if s not in skills][:2]
+            extra = [s for s in SKILL_MAP.get(goal_type, []) if s not in skills][:2]
             skills = skills + extra
 
         # ── 5. Hints from context graph ──────────────────────────────────────
@@ -161,10 +159,7 @@ class AdaptivePipeline:
             # Inject similar past resolutions as planner hints
             similar = self.graph.query_similar_resolutions(goal[:80])
             if similar:
-                hints.append(
-                    "Similar past resolutions: "
-                    + "; ".join(r["goal"][:60] for r in similar[:3])
-                )
+                hints.append("Similar past resolutions: " + "; ".join(r["goal"][:60] for r in similar[:3]))
             # Inject best skills info
             best_skills = self.graph.best_skills_for_goal_type(goal_type, limit=3)
             if best_skills:
@@ -197,14 +192,18 @@ class AdaptivePipeline:
             plan_retries=plan_retries,
             extra_plan_ctx=extra_ctx,
         )
-        log_json("INFO", "adaptive_pipeline_configured", details={
-            "goal_type": goal_type,
-            "intensity": intensity,
-            "confidence": f"{confidence:.2f}",
-            "phases": base,
-            "skills": skills[:4],
-            "hints_count": len(hints),
-        })
+        log_json(
+            "INFO",
+            "adaptive_pipeline_configured",
+            details={
+                "goal_type": goal_type,
+                "intensity": intensity,
+                "confidence": f"{confidence:.2f}",
+                "phases": base,
+                "skills": skills[:4],
+                "hints_count": len(hints),
+            },
+        )
         return config
 
     def _choose_intensity_with_confidence(self, goal_type: str, consecutive_fails: int, past_failures: List[str]) -> Tuple[str, float]:
@@ -213,18 +212,18 @@ class AdaptivePipeline:
         baseline = "normal"
         if consecutive_fails >= 3:
             baseline = "deep"
-            
+
         # Data-driven override
         strategies = ["minimal", "normal", "deep"]
         rates = {s: self.win_rate(goal_type, s) for s in strategies}
-        
+
         # Check if we have any data at all
         has_data = any(self._brain.get(f"__strategy_stats__:{goal_type}:{s}") is not None for s in strategies) if self._brain else False
-        
+
         if has_data:
             best_strategy = max(rates, key=rates.get)
             current_rate = rates.get(baseline, 0.0)
-            
+
             # If baseline is doing poorly (< 30%) and we have a better (or even untested) alternative
             if current_rate < 0.3:
                 # If everything is failing, prefer "deep"
@@ -232,15 +231,15 @@ class AdaptivePipeline:
                     override = "deep"
                 else:
                     override = best_strategy
-                
+
                 log_json("INFO", "adaptive_strategy_override", details={"baseline": baseline, "override": override, "reason": "low_win_rate", "rate": current_rate})
                 return override, rates.get(override, 0.5)
-            
+
             # If another strategy is significantly better, switch
             if rates[best_strategy] > current_rate + 0.2:
                 log_json("INFO", "adaptive_strategy_override", details={"baseline": baseline, "override": best_strategy, "reason": "better_performance", "rate": rates[best_strategy]})
                 return best_strategy, rates[best_strategy]
-        
+
         return baseline, rates.get(baseline, 1.0 if consecutive_fails == 0 else 0.5)
 
     def _choose_intensity(self, consecutive_fails: int, past_failures: List[str]) -> str:
@@ -255,7 +254,7 @@ class AdaptivePipeline:
 
     def record_outcome(self, goal_type: str, strategy: str, success: bool) -> None:
         """Persist win/loss for (goal_type, strategy) to Brain if brain is available."""
-        if not hasattr(self, '_brain') or self._brain is None:
+        if not hasattr(self, "_brain") or self._brain is None:
             return
         key = f"__strategy_stats__:{goal_type}:{strategy}"
         try:
@@ -265,12 +264,12 @@ class AdaptivePipeline:
             else:
                 existing["losses"] += 1
             self._brain.set(key, existing)
-            
+
             # Periodically review performance and optimize parameters
             # Just use a 10-cycle window for optimization
             if (existing["wins"] + existing["losses"]) % 10 == 0:
                 self._optimize_parameters(goal_type, strategy)
-                
+
         except Exception as exc:
             log_json("WARN", "adaptive_pipeline_outcome_record_failed", details={"error": str(exc)})
 
@@ -278,20 +277,20 @@ class AdaptivePipeline:
         """Review performance and adjust aura.config.json parameters."""
         rate = self.win_rate(goal_type, strategy)
         log_json("INFO", "adaptive_pipeline_optimizing_parameters", details={"goal_type": goal_type, "strategy": strategy, "win_rate": f"{rate:.2f}"})
-        
+
         from core.config_manager import config
-        
+
         updates = {}
         # If win rate is low (< 40%), increase context depth or decrease selectivity
         if rate < 0.4:
             current_top_k = config.get("semantic_memory", {}).get("top_k", 10)
             current_min_score = config.get("semantic_memory", {}).get("min_score", 0.65)
-            
+
             if current_top_k < 20:
                 updates["semantic_memory"] = {"top_k": current_top_k + 2}
             elif current_min_score > 0.4:
                 updates["semantic_memory"] = {"min_score": round(current_min_score - 0.05, 2)}
-                
+
         # If win rate is high (> 80%), maybe reduce context depth to save speed/cost
         elif rate > 0.8:
             current_top_k = config.get("semantic_memory", {}).get("top_k", 10)
@@ -310,7 +309,7 @@ class AdaptivePipeline:
 
     def win_rate(self, goal_type: str, strategy: str) -> float:
         """Return win rate 0.0-1.0 for this (goal_type, strategy) pair."""
-        if not hasattr(self, '_brain') or self._brain is None:
+        if not hasattr(self, "_brain") or self._brain is None:
             return 0.0
         key = f"__strategy_stats__:{goal_type}:{strategy}"
         try:

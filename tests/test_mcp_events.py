@@ -1,10 +1,14 @@
 """Tests for MCP bi-directional event system."""
+
 import asyncio
 import json
 import unittest
 
 from core.mcp_events import (
-    EventBus, EventType, MCPEvent, CallbackRegistry,
+    EventBus,
+    EventType,
+    MCPEvent,
+    CallbackRegistry,
 )
 
 
@@ -28,11 +32,13 @@ class TestMCPEvent(unittest.TestCase):
         self.assertIn("data:", sse)
 
     def test_from_dict(self):
-        e = MCPEvent.from_dict({
-            "event_type": "tool.complete",
-            "source": "linter",
-            "data": {"result": "pass"},
-        })
+        e = MCPEvent.from_dict(
+            {
+                "event_type": "tool.complete",
+                "source": "linter",
+                "data": {"result": "pass"},
+            }
+        )
         self.assertEqual(e.event_type, EventType.TOOL_COMPLETE)
         self.assertEqual(e.source, "linter")
 
@@ -147,9 +153,12 @@ class TestConsolidation(unittest.TestCase):
 
     def test_import(self):
         from memory.consolidation import (
-            MemoryEntry, MemoryConsolidator, ConsolidationResult,
+            MemoryEntry,
+            MemoryConsolidator,
+            ConsolidationResult,
             NegativeExampleStore,
         )
+
         self.assertIsNotNone(MemoryEntry)
         self.assertIsNotNone(MemoryConsolidator)
 

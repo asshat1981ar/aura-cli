@@ -3,6 +3,7 @@
 Provides shared file filtering logic to reduce code duplication
 across skills and agents.
 """
+
 from pathlib import Path
 from typing import Set, Union
 
@@ -90,10 +91,7 @@ def filter_paths(
     Returns:
         Filtered list of paths (as Path objects)
     """
-    return [
-        Path(p) for p in paths
-        if not should_skip_path(p, skip_patterns, additional_patterns)
-    ]
+    return [Path(p) for p in paths if not should_skip_path(p, skip_patterns, additional_patterns)]
 
 
 def get_project_files(

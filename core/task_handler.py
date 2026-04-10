@@ -326,18 +326,10 @@ def _compose_loop_goal(task_title: str, grounding_hint: str | None) -> str:
 
 
 def _invalid_path_grounding_hint(file_path: str, reason: str, candidate_files: list[str]) -> str:
-    base = (
-        "Previous IMPLEMENT proposed an invalid file target "
-        f"('{file_path}', reason: {reason}). "
-        "Use an existing repository file path for the next IMPLEMENT and keep edits targeted."
-    )
+    base = f"Previous IMPLEMENT proposed an invalid file target ('{file_path}', reason: {reason}). Use an existing repository file path for the next IMPLEMENT and keep edits targeted."
     if candidate_files:
         primary = candidate_files[0]
-        return (
-            f"{base}\nClosest existing match: {primary}\n"
-            "Do not invent a new top-level directory when an exact filename match already exists.\n"
-            "Candidate existing files (choose one if relevant):\n- " + "\n- ".join(candidate_files)
-        )
+        return f"{base}\nClosest existing match: {primary}\nDo not invent a new top-level directory when an exact filename match already exists.\nCandidate existing files (choose one if relevant):\n- " + "\n- ".join(candidate_files)
     return base
 
 
@@ -357,7 +349,7 @@ def run_goals_loop(args, goal_queue, orchestrator, debugger_instance, planner_in
     """
     task_manager = TaskManager()
     cycle_limit = _goal_cycle_limit(args)
-    
+
     # Safety limits to prevent infinite loops
     max_iterations = 10000  # Absolute upper bound
     iteration_count = 0
@@ -367,7 +359,7 @@ def run_goals_loop(args, goal_queue, orchestrator, debugger_instance, planner_in
         if iteration_count > max_iterations:
             log_json("ERROR", "goals_loop_max_iterations_reached", {"max": max_iterations})
             break
-        
+
         # 1. If queue is empty, poll for external goals (e.g. BEADS)
         if not goal_queue.has_goals() and hasattr(orchestrator, "poll_external_goals"):
             try:
@@ -406,18 +398,10 @@ def run_goals_loop(args, goal_queue, orchestrator, debugger_instance, planner_in
 
                 try:
                     # Execute the goal using the modern orchestrator
-                    result = orchestrator.run_loop(
-                        task.title,
-                        max_cycles=cycle_limit,
-                        dry_run=getattr(args, "dry_run", False)
-                    )
+                    result = orchestrator.run_loop(task.title, max_cycles=cycle_limit, dry_run=getattr(args, "dry_run", False))
                 except Exception as e:
                     log_json("ERROR", "orchestrator_run_loop_failed", {"error": str(e), "goal": task.title})
-                    result = {
-                        "stop_reason": "EXCEPTION",
-                        "error": str(e),
-                        "history": []
-                    }
+                    result = {"stop_reason": "EXCEPTION", "error": str(e), "history": []}
                 finally:
                     tracker.clear()
 
@@ -437,7 +421,7 @@ def run_goals_loop(args, goal_queue, orchestrator, debugger_instance, planner_in
                 task_manager.save()
 
                 # Record outcome in archive
-                final_score = 0.0 # Modern orchestrator doesn't have a single score yet
+                final_score = 0.0  # Modern orchestrator doesn't have a single score yet
                 if history:
                     # We could derive a score from verification or use legacy if available
                     final_score = 1.0 if result.get("stop_reason") == "PASS" else 0.0
@@ -463,7 +447,7 @@ def run_goals_loop(args, goal_queue, orchestrator, debugger_instance, planner_in
                     root_task.status = "failed"
                     log_json("WARN", "goal_failed", goal=goal)
                 task_manager.save()
-                
+
         except Exception as e:
             log_json("ERROR", "goal_processing_failed", {"goal": goal, "error": str(e)})
             # Continue to next goal instead of crashing the entire loop

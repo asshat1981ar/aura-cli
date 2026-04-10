@@ -1,4 +1,5 @@
 """Skill: changelog generator — produce a structured changelog from git commit history."""
+
 from __future__ import annotations
 
 import re
@@ -10,22 +11,20 @@ from agents.skills.base import SkillBase
 
 # Conventional Commits type mapping
 _TYPE_MAP = {
-    "feat":     ("Features",      "minor"),
-    "fix":      ("Bug Fixes",     "patch"),
-    "perf":     ("Performance",   "patch"),
-    "refactor": ("Refactoring",   "patch"),
-    "docs":     ("Documentation", "patch"),
-    "test":     ("Tests",         "patch"),
-    "chore":    ("Chores",        "patch"),
-    "ci":       ("CI/CD",         "patch"),
-    "build":    ("Build",         "patch"),
-    "revert":   ("Reverts",       "patch"),
-    "style":    ("Style",         "patch"),
+    "feat": ("Features", "minor"),
+    "fix": ("Bug Fixes", "patch"),
+    "perf": ("Performance", "patch"),
+    "refactor": ("Refactoring", "patch"),
+    "docs": ("Documentation", "patch"),
+    "test": ("Tests", "patch"),
+    "chore": ("Chores", "patch"),
+    "ci": ("CI/CD", "patch"),
+    "build": ("Build", "patch"),
+    "revert": ("Reverts", "patch"),
+    "style": ("Style", "patch"),
 }
 
-_CONVENTIONAL_RE = re.compile(
-    r"^(?P<type>[a-z]+)(\((?P<scope>[^)]+)\))?(?P<breaking>!)?\s*:\s*(?P<subject>.+)$"
-)
+_CONVENTIONAL_RE = re.compile(r"^(?P<type>[a-z]+)(\((?P<scope>[^)]+)\))?(?P<breaking>!)?\s*:\s*(?P<subject>.+)$")
 
 # Bump priority
 _BUMP_PRIORITY = {"major": 3, "minor": 2, "patch": 1, "none": 0}
@@ -71,15 +70,17 @@ def _parse_commits(log_output: str) -> List[Dict]:
             category = "Other"
             bump = "patch"
 
-        commits.append({
-            "sha": sha[:8],
-            "type": commit_type,
-            "scope": scope,
-            "breaking": breaking,
-            "subject": clean_subject,
-            "category": category,
-            "bump": bump,
-        })
+        commits.append(
+            {
+                "sha": sha[:8],
+                "type": commit_type,
+                "scope": scope,
+                "breaking": breaking,
+                "subject": clean_subject,
+                "category": category,
+                "bump": bump,
+            }
+        )
     return commits
 
 
@@ -118,7 +119,7 @@ class ChangelogGeneratorSkill(SkillBase):
 
     def _run(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         project_root: str = input_data.get("project_root", ".")
-        from_ref: Optional[str] = input_data.get("from_ref")      # e.g. "v1.0.0" or a SHA
+        from_ref: Optional[str] = input_data.get("from_ref")  # e.g. "v1.0.0" or a SHA
         to_ref: str = input_data.get("to_ref", "HEAD")
         limit: int = int(input_data.get("limit", 100))
         include_markdown: bool = input_data.get("include_markdown", True)

@@ -20,7 +20,7 @@ services:
     env_file:
       - .env.n8n
     ports:
-      - "8001:8001"
+      - "8000:8000"
     volumes:
       - aura-memory:/app/memory
       - aura-logs:/app/logs
@@ -30,7 +30,7 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 3

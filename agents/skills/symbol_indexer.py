@@ -6,7 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 from core.logging_utils import log_json
 
 
@@ -102,11 +102,7 @@ class SymbolIndexerSkill(SkillBase):
         files_indexed = 0
         errors: List[str] = []
 
-        _SKIP_PARTS = {".git", "__pycache__", "node_modules", ".pytest_cache"}
-
-        for f in sorted(project_root.rglob("*.py")):
-            if any(p in f.parts for p in _SKIP_PARTS):
-                continue
+        for f in sorted(iter_py_files(project_root)):
             try:
                 source = f.read_text(encoding="utf-8", errors="replace")
             except OSError as exc:

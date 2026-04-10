@@ -4,7 +4,7 @@ import ast
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 from core.logging_utils import log_json
 
 
@@ -83,9 +83,7 @@ class DocGeneratorSkill(SkillBase):
             all_missing: List[Dict] = []
             all_readme: List[str] = []
             total_undocumented = 0
-            for f in root.rglob("*.py"):
-                if ".git" in f.parts or "__pycache__" in f.parts or "node_modules" in f.parts:
-                    continue
+            for f in iter_py_files(root):
                 try:
                     src = f.read_text(encoding="utf-8", errors="replace")
                 except OSError:

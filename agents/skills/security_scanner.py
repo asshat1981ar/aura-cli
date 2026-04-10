@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 from core.logging_utils import log_json
 
 _SECRET_PATTERNS = [
@@ -84,9 +84,7 @@ class SecurityScannerSkill(SkillBase):
             all_findings.extend(_scan_ast(code, file_path))
         elif project_root_str:
             root = Path(project_root_str)
-            for f in root.rglob("*.py"):
-                if ".git" in f.parts or "node_modules" in f.parts or "__pycache__" in f.parts:
-                    continue
+            for f in iter_py_files(root):
                 try:
                     src = f.read_text(encoding="utf-8", errors="replace")
                 except OSError:

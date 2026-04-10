@@ -7,7 +7,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 
 class SecurityHardenerSkill(SkillBase):
     """
@@ -68,9 +68,7 @@ class SecurityHardenerSkill(SkillBase):
     def _scan_project(self, root: Path) -> Dict[str, Any]:
         all_findings = {}
         total_count = 0
-        for py_file in root.rglob("*.py"):
-            if any(skip in py_file.parts for skip in [".git", "__pycache__", "node_modules"]):
-                continue
+        for py_file in iter_py_files(root):
             try:
                 content = py_file.read_text(encoding="utf-8", errors="ignore")
                 findings = self._scan_content(content, str(py_file.relative_to(root)))

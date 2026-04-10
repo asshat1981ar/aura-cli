@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 from core.logging_utils import log_json
 
 # ---------------------------------------------------------------------------
@@ -293,11 +293,8 @@ class DatabaseQueryAnalyzerSkill(SkillBase):
         if project_root:
             root = Path(project_root)
             py_files = [
-                f for f in root.rglob("*.py")
-                if not any(
-                    part.startswith(".") or part in ("__pycache__", "node_modules", "migrations")
-                    for part in f.parts
-                )
+                f for f in iter_py_files(root)
+                if "migrations" not in f.parts
             ]
             if not py_files:
                 return {"error": f"No Python files found under '{project_root}'.", "files_scanned": 0}

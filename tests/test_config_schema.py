@@ -98,3 +98,29 @@ def test_legacy_validate_multiple_errors():
     v.use_pydantic = False
     errors = v._legacy_validate({"max_iterations": "bad", "dry_run": "bad"})
     assert len(errors) == 2
+
+
+# ── validate() – unexpected Exception path (line 197) ────────────────────────
+
+@pytest.mark.skipif(not pydantic_available, reason="pydantic required")
+def test_validate_unexpected_exception(monkeypatch):
+    """validate() catches generic exceptions and returns errors (line 197)."""
+    v = ConfigValidator()
+
+    def boom(**kwargs):
+        raise RuntimeError("unexpected boom")
+
+    monkeypatch.setattr("core.config_schema.AuraConfig", boom)
+    is_valid, _, errors = v.validate({})
+    assert not is_valid
+    assert "unexpected boom" in errors[0]
+
+
+# ── is_pydantic_available() ───────────────────────────────────────────────────
+
+def test_is_pydantic_available_returns_bool():
+    """is_pydantic_available() returns a bool consistent with module flag."""
+    from core.config_schema import is_pydantic_available
+    result = is_pydantic_available()
+    assert isinstance(result, bool)
+    assert result == pydantic_available

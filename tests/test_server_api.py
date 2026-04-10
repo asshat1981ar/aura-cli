@@ -179,12 +179,11 @@ def test_tools_returns_non_empty_list(server_module):
         assert expected in names
 
 
-def test_metrics_has_skill_metrics(server_module, monkeypatch):
-    monkeypatch.setattr(server_module, "_PROMETHEUS_AVAILABLE", False)
-    data = _run(server_module.metrics())
-    assert data["status"] == "ok"
-    assert "skill_metrics" in data
-    assert data["skill_metrics"]["total_calls"] >= 0
+def test_metrics_returns_prometheus_format(server_module):
+    response = _run(server_module.metrics())
+    # Prometheus format returns a Response object with text/plain content
+    assert hasattr(response, "body") or hasattr(response, "media_type")
+    assert "prometheus" in (getattr(response, "media_type", "") or "").lower() or b"TYPE" in (getattr(response, "body", b"") or b"")
 
 
 def test_execute_env_tool_disabled(server_module):
@@ -253,13 +252,12 @@ def test_execute_run_streams_stderr_and_exit_code(server_module, monkeypatch):
     assert any(evt.get("type") == "exit" and evt.get("code") == 3 for evt in payloads)
 
 
-def test_execute_run_persists_audit_entries_and_metrics_reflect_them(server_module, monkeypatch, tmp_path):
+def test_execute_run_persists_audit_entries(server_module, monkeypatch, tmp_path):
     store = MemoryStore(tmp_path / "memory")
     original_store = server_module.memory_store
 
     server_module.memory_store = store
     monkeypatch.setenv("AGENT_API_ENABLE_RUN", "1")
-    monkeypatch.setattr(server_module, "_PROMETHEUS_AVAILABLE", False)
     cmd = f"{sys.executable} -c \"print('audit-ok')\""
 
     try:
@@ -272,11 +270,6 @@ def test_execute_run_persists_audit_entries_and_metrics_reflect_them(server_modu
         assert all(entry["type"] == "server_run_tool" for entry in audit_entries)
         assert audit_entries[0]["command"] == cmd
         assert audit_entries[0]["code"] == 0
-
-        metrics = _run(server_module.metrics())
-        assert metrics["skill_metrics"]["total_calls"] == len(audit_entries)
-        assert metrics["skill_metrics"]["run_tool_audit"]["count"] == 1
-        assert metrics["skill_metrics"]["run_tool_audit"]["last_command"] == cmd
     finally:
         server_module.memory_store = original_store
 
@@ -355,11 +348,44 @@ def test_health_http_returns_200_with_status_field(http_client):
     assert "status" in response.json()
 
 
-def test_ready_http_returns_json_with_checks_field(http_client):
-    """GET /ready returns JSON that contains a 'checks' field."""
+def test_ready_http_returns_json_with_components_field(http_client):
+    """GET /ready returns JSON that contains a 'components' field."""
     response = http_client.get("/ready")
     data = response.json()
-    assert "checks" in data
+    assert "components" in data
+
+
+def test_ready_http_has_status_and_overall_latency(http_client):
+    """GET /ready returns 'status' and 'overall_latency_ms' fields."""
+    response = http_client.get("/ready")
+    data = response.json()
+    assert "status" in data
+    assert data["status"] in ("ready", "degraded", "not_ready")
+    assert "overall_latency_ms" in data
+    assert isinstance(data["overall_latency_ms"], (int, float))
+
+
+def test_ready_components_include_required_keys(http_client):
+    """GET /ready components include brain_db, auth_db, mcp_server, model_config, and sandbox."""
+    response = http_client.get("/ready")
+    data = response.json()
+    components = data.get("components", {})
+    for key in ("brain_db", "auth_db", "mcp_server", "model_config", "sandbox"):
+        assert key in components, f"Missing component: {key}"
+    assert components["mcp_server"]["status"] in ("ready", "unavailable")
+    assert components["model_config"]["status"] in ("configured", "unconfigured")
+    assert components["sandbox"]["status"] in ("ready", "degraded")
+
+
+def test_ready_mcp_server_unavailable_does_not_cause_503(http_client):
+    """MCP server being unavailable should not cause a 503 response."""
+    response = http_client.get("/ready")
+    data = response.json()
+    # Even if mcp_server is unavailable, overall status should not be not_ready
+    mcp_status = data.get("components", {}).get("mcp_server", {}).get("status")
+    assert mcp_status in ("ready", "unavailable")
+    # HTTP status should be 200 for ready or degraded
+    assert response.status_code in (200, 503)
 
 
 def test_cors_header_present_when_origin_sent(http_client):

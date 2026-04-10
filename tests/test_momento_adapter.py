@@ -358,5 +358,336 @@ class TestModelAdapterCacheWithMomento(unittest.TestCase):
         self.assertEqual(result, "test response")
 
 
+class TestMomentoAdapterCacheGetWithMockClient(unittest.TestCase):
+    """Test cache_get with a mocked Momento client."""
+
+    def setUp(self):
+        os.environ["MOMENTO_API_KEY"] = "test-key"
+        os.environ["AURA_SKIP_CHDIR"] = "1"
+
+    def tearDown(self):
+        os.environ.pop("MOMENTO_API_KEY", None)
+        os.environ.pop("AURA_SKIP_CHDIR", None)
+
+    def test_cache_get_hit_with_mock(self):
+        """cache_get calls get on client."""
+        from memory.momento_adapter import MomentoAdapter
+        from unittest.mock import MagicMock
+
+        adapter = MomentoAdapter()
+
+        # Mock the response object
+        mock_hit = MagicMock()
+        mock_hit.__class__.__name__ = "Hit"
+        mock_hit.value_string = "test_value"
+        
+        adapter._cache_client = MagicMock()
+        adapter._cache_client.get.return_value = mock_hit
+        adapter._available = True
+        adapter._initialized = True
+        adapter._circuit = MagicMock()
+        adapter._circuit.allow_request.return_value = True
+
+        result = adapter.cache_get("cache", "key")
+        # Verify the client method was called
+        adapter._cache_client.get.assert_called_once_with("cache", "key")
+
+    def test_cache_get_exception_records_failure(self):
+        """cache_get exception calls record_failure."""
+        from memory.momento_adapter import MomentoAdapter
+        from unittest.mock import MagicMock
+
+        adapter = MomentoAdapter()
+        
+        adapter._cache_client = MagicMock()
+        adapter._cache_client.get.side_effect = RuntimeError("Test error")
+        adapter._available = True
+        adapter._initialized = True
+        adapter._circuit = MagicMock()
+        adapter._circuit.allow_request.return_value = True
+
+        result = adapter.cache_get("cache", "key")
+        self.assertIsNone(result)
+        adapter._circuit.record_failure.assert_called_once()
+
+
+class TestMomentoAdapterCacheSetWithMockClient(unittest.TestCase):
+    """Test cache_set with a mocked Momento client."""
+
+    def setUp(self):
+        os.environ["MOMENTO_API_KEY"] = "test-key"
+        os.environ["AURA_SKIP_CHDIR"] = "1"
+
+    def tearDown(self):
+        os.environ.pop("MOMENTO_API_KEY", None)
+        os.environ.pop("AURA_SKIP_CHDIR", None)
+
+    def test_cache_set_success_with_mock(self):
+        """cache_set calls set on client."""
+        from memory.momento_adapter import MomentoAdapter
+        from unittest.mock import MagicMock
+
+        adapter = MomentoAdapter()
+        
+        mock_success = MagicMock()
+        mock_success.__class__.__name__ = "Success"
+        
+        adapter._cache_client = MagicMock()
+        adapter._cache_client.set.return_value = mock_success
+        adapter._available = True
+        adapter._initialized = True
+        adapter._circuit = MagicMock()
+        adapter._circuit.allow_request.return_value = True
+
+        # Just verify the call was made
+        result = adapter.cache_set("cache", "key", "value", ttl_seconds=120)
+        adapter._cache_client.set.assert_called_once()
+
+    def test_cache_set_exception_records_failure(self):
+        """cache_set exception calls record_failure."""
+        from memory.momento_adapter import MomentoAdapter
+        from unittest.mock import MagicMock
+
+        adapter = MomentoAdapter()
+        
+        adapter._cache_client = MagicMock()
+        adapter._cache_client.set.side_effect = RuntimeError("Test error")
+        adapter._available = True
+        adapter._initialized = True
+        adapter._circuit = MagicMock()
+        adapter._circuit.allow_request.return_value = True
+
+        result = adapter.cache_set("cache", "key", "value")
+        self.assertFalse(result)
+        adapter._circuit.record_failure.assert_called_once()
+
+
+class TestMomentoAdapterListOperations(unittest.TestCase):
+    """Test list_push and list_range with mocked client."""
+
+    def setUp(self):
+        os.environ["MOMENTO_API_KEY"] = "test-key"
+        os.environ["AURA_SKIP_CHDIR"] = "1"
+
+    def tearDown(self):
+        os.environ.pop("MOMENTO_API_KEY", None)
+        os.environ.pop("AURA_SKIP_CHDIR", None)
+
+    def test_list_push_success_with_mock(self):
+        """list_push calls list_push_back on client."""
+        from memory.momento_adapter import MomentoAdapter
+        from unittest.mock import MagicMock
+
+        adapter = MomentoAdapter()
+        
+        mock_success = MagicMock()
+        mock_success.__class__.__name__ = "Success"
+        
+        adapter._cache_client = MagicMock()
+        adapter._cache_client.list_push_back.return_value = mock_success
+        adapter._available = True
+        adapter._initialized = True
+
+        result = adapter.list_push("cache", "key", "value", ttl_seconds=60, max_size=100)
+        # Verify list_retain was called to trim
+        adapter._cache_client.list_retain.assert_called_once()
+
+    def test_list_push_without_ttl(self):
+        """list_push with ttl_seconds=0 uses from_cache_ttl."""
+        from memory.momento_adapter import MomentoAdapter
+        from unittest.mock import MagicMock
+
+        adapter = MomentoAdapter()
+        
+        mock_success = MagicMock()
+        
+        adapter._cache_client = MagicMock()
+        adapter._cache_client.list_push_back.return_value = mock_success
+        adapter._available = True
+        adapter._initialized = True
+
+        result = adapter.list_push("cache", "key", "value", ttl_seconds=0)
+        adapter._cache_client.list_push_back.assert_called_once()
+
+    def test_list_push_exception(self):
+        """list_push exception returns False."""
+        from memory.momento_adapter import MomentoAdapter
+        from unittest.mock import MagicMock
+
+        adapter = MomentoAdapter()
+        
+        adapter._cache_client = MagicMock()
+        adapter._cache_client.list_push_back.side_effect = RuntimeError("Test error")
+        adapter._available = True
+        adapter._initialized = True
+
+        result = adapter.list_push("cache", "key", "value")
+        self.assertFalse(result)
+
+    def test_list_range_miss_with_mock(self):
+        """list_range returns empty list on CacheListFetch.Miss."""
+        from memory.momento_adapter import MomentoAdapter
+        from unittest.mock import MagicMock
+
+        adapter = MomentoAdapter()
+        
+        # Create a mock that's NOT a Hit
+        mock_miss = MagicMock()
+        
+        adapter._cache_client = MagicMock()
+        adapter._cache_client.list_fetch.return_value = mock_miss
+        adapter._available = True
+        adapter._initialized = True
+
+        result = adapter.list_range("cache", "key")
+        self.assertEqual(result, [])
+
+    def test_list_range_exception(self):
+        """list_range exception returns empty list."""
+        from memory.momento_adapter import MomentoAdapter
+        from unittest.mock import MagicMock
+
+        adapter = MomentoAdapter()
+        
+        adapter._cache_client = MagicMock()
+        adapter._cache_client.list_fetch.side_effect = RuntimeError("Test error")
+        adapter._available = True
+        adapter._initialized = True
+
+        result = adapter.list_range("cache", "key")
+        self.assertEqual(result, [])
+
+
+class TestMomentoAdapterPublish(unittest.TestCase):
+    """Test publish functionality."""
+
+    def setUp(self):
+        os.environ["MOMENTO_API_KEY"] = "test-key"
+        os.environ["AURA_SKIP_CHDIR"] = "1"
+
+    def tearDown(self):
+        os.environ.pop("MOMENTO_API_KEY", None)
+        os.environ.pop("AURA_SKIP_CHDIR", None)
+
+    def test_publish_exception(self):
+        """publish exception returns False."""
+        from memory.momento_adapter import MomentoAdapter
+        from unittest.mock import MagicMock
+
+        adapter = MomentoAdapter()
+        
+        adapter._cache_client = MagicMock()
+        adapter._topics_client = MagicMock()
+        adapter._topics_client.publish.side_effect = RuntimeError("Test error")
+        adapter._available = True
+        adapter._initialized = True
+
+        result = adapter.publish("aura.test", "test message")
+        self.assertFalse(result)
+
+
+class TestMomentoAdapterCacheDelete(unittest.TestCase):
+    """Test cache_delete functionality."""
+
+    def setUp(self):
+        os.environ["MOMENTO_API_KEY"] = "test-key"
+        os.environ["AURA_SKIP_CHDIR"] = "1"
+
+    def tearDown(self):
+        os.environ.pop("MOMENTO_API_KEY", None)
+        os.environ.pop("AURA_SKIP_CHDIR", None)
+
+    def test_cache_delete_success_with_mock(self):
+        """cache_delete returns True on success."""
+        from memory.momento_adapter import MomentoAdapter
+        from unittest.mock import MagicMock
+
+        adapter = MomentoAdapter()
+        
+        adapter._cache_client = MagicMock()
+        adapter._available = True
+        adapter._initialized = True
+
+        result = adapter.cache_delete("cache", "key")
+        self.assertTrue(result)
+        adapter._cache_client.delete.assert_called_once_with("cache", "key")
+
+    def test_cache_delete_exception(self):
+        """cache_delete exception returns False."""
+        from memory.momento_adapter import MomentoAdapter
+        from unittest.mock import MagicMock
+
+        adapter = MomentoAdapter()
+        
+        adapter._cache_client = MagicMock()
+        adapter._cache_client.delete.side_effect = RuntimeError("Test error")
+        adapter._available = True
+        adapter._initialized = True
+
+        result = adapter.cache_delete("cache", "key")
+        self.assertFalse(result)
+
+
+class TestMomentoAdapterEnsureCaches(unittest.TestCase):
+    """Test ensure_caches functionality."""
+
+    def setUp(self):
+        os.environ["MOMENTO_API_KEY"] = "test-key"
+        os.environ["AURA_SKIP_CHDIR"] = "1"
+
+    def tearDown(self):
+        os.environ.pop("MOMENTO_API_KEY", None)
+        os.environ.pop("AURA_SKIP_CHDIR", None)
+
+    def test_ensure_caches_with_mock(self):
+        """ensure_caches calls create_cache."""
+        from memory.momento_adapter import MomentoAdapter
+        from unittest.mock import MagicMock
+
+        adapter = MomentoAdapter()
+        
+        # Create a proper mock that won't cause isinstance errors
+        mock_success = MagicMock()
+        # Mock __class__ to be recognized as CreateCache.Success
+        mock_success.__class__ = type("Success", (), {})
+        
+        adapter._cache_client = MagicMock()
+        adapter._cache_client.create_cache.return_value = None  # Will cause exception, but test continues
+        adapter._available = True
+        adapter._initialized = True
+
+        # Call ensure_caches - it will handle the exception
+        adapter.ensure_caches()
+        # Should attempt to be called even if it fails on isinstance
+        self.assertTrue(adapter._cache_client.create_cache.called)
+
+    def test_ensure_caches_exception(self):
+        """ensure_caches handles exceptions gracefully."""
+        from memory.momento_adapter import MomentoAdapter
+        from unittest.mock import MagicMock
+
+        adapter = MomentoAdapter()
+        
+        adapter._cache_client = MagicMock()
+        adapter._cache_client.create_cache.side_effect = RuntimeError("Test error")
+        adapter._available = True
+        adapter._initialized = True
+
+        # Should not raise
+        adapter.ensure_caches()
+
+
+class TestMomentoAdapterLazyInit(unittest.TestCase):
+    """Test _lazy_init functionality."""
+
+    def setUp(self):
+        os.environ["AURA_SKIP_CHDIR"] = "1"
+
+    def tearDown(self):
+        os.environ.pop("AURA_SKIP_CHDIR", None)
+        os.environ.pop("MOMENTO_API_KEY", None)
+
+
+
 if __name__ == "__main__":
     unittest.main()

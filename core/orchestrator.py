@@ -562,6 +562,117 @@ class LoopOrchestrator(PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin):
     # ── Phase execution, verification, learning, and capability methods are
     # ── provided by PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin.
 
+    def _run_pre_plan_phases(
+        self, goal: str, goal_type: str, cycle_id: str, pipeline_cfg: Dict,
+        phase_outputs: Dict, started_at: float, dry_run: bool,
+    ) -> tuple:
+        """Run ingest, MCP discovery, skill dispatch, beads gate, and coverage backfill.
+
+        Returns (context, skill_context, early_return) where early_return is
+        non-None if the cycle should stop early.
+        """
+        # Inject lessons from previous cycles into planner context
+        if self.lesson_store:
+            try:
+                lessons = self.lesson_store.injectable_lessons()
+                if lessons:
+                    phase_outputs["injected_lessons"] = lessons
+            except (OSError, TypeError):
+                pass
+
+        context = self._run_ingest_phase(goal, cycle_id, phase_outputs)
+        if self.strict_schema and validate_phase_output("context", context):
+            return context, {}, self._build_early_stop_entry(
+                cycle_id=cycle_id, goal=goal, goal_type=goal_type,
+                phase_outputs=phase_outputs, started_at=started_at,
+                stop_reason="INVALID_OUTPUT",
+            )
+
+        # Autonomous MCP capability injection
+        mcp_discovery = self._run_mcp_discovery_phase(phase_outputs)
+        if mcp_discovery.get("status") == "success" and mcp_discovery.get("discovered"):
+            log_json("INFO", "mcp_servers_discovered", details={"count": len(mcp_discovery["discovered"])})
+
+        skill_context = self._dispatch_skills(goal_type, pipeline_cfg, phase_outputs)
+
+        # Beads gate
+        early = self._check_beads_gate(goal, goal_type, context, skill_context, cycle_id, phase_outputs, started_at)
+        if early is not None:
+            return context, skill_context, early
+
+        # Coverage Backfill
+        gaps = skill_context.get("structural_analyzer", {}).get("coverage_gaps", [])
+        if getattr(self, "auto_backfill_coverage", False) and self.goal_queue:
+            for gap in gaps:
+                f = gap.get("file")
+                priority = gap.get("risk_priority", "MEDIUM")
+                backfill_goal = f"test_backfill: Write missing unit tests for '{f}' to resolve coverage gap (priority: {priority})"
+                self.goal_queue.add(backfill_goal)
+                log_json("INFO", "backfill_goal_enqueued", details={"file": f, "priority": priority})
+
+        if gaps:
+            context["backfill_context"] = gaps
+
+        return context, skill_context, None
+
+    def _check_beads_gate(
+        self, goal: str, goal_type: str, context: Dict, skill_context: Dict,
+        cycle_id: str, phase_outputs: Dict, started_at: float,
+    ) -> Optional[Dict]:
+        """Run beads gate checks and return an early-stop entry if blocked, else None."""
+        if not self._beads_gate_applies():
+            return None
+
+        beads_gate = self._run_beads_gate(goal, goal_type, context, skill_context)
+        phase_outputs["beads_gate"] = beads_gate
+
+        if not beads_gate.get("ok") and self.beads_required:
+            return self._build_early_stop_entry(
+                cycle_id=cycle_id, goal=goal, goal_type=goal_type,
+                phase_outputs=phase_outputs, started_at=started_at,
+                stop_reason="BEADS_UNAVAILABLE", beads=beads_gate,
+            )
+
+        status = beads_gate.get("status")
+        if status == "block":
+            return self._build_early_stop_entry(
+                cycle_id=cycle_id, goal=goal, goal_type=goal_type,
+                phase_outputs=phase_outputs, started_at=started_at,
+                stop_reason=beads_gate.get("stop_reason") or "BEADS_BLOCKED",
+                beads=beads_gate,
+            )
+        if status == "revise":
+            return self._build_early_stop_entry(
+                cycle_id=cycle_id, goal=goal, goal_type=goal_type,
+                phase_outputs=phase_outputs, started_at=started_at,
+                stop_reason=beads_gate.get("stop_reason") or "BEADS_REVISE_REQUIRED",
+                beads=beads_gate,
+            )
+        return None
+
+    def _run_post_verify_phases(
+        self, goal: str, goal_type: str, cycle_id: str,
+        phase_outputs: Dict, started_at: float,
+        verification: Dict, skill_context: Dict,
+    ) -> Optional[Dict]:
+        """Run reflection, learning, confidence recording, and outcome persistence.
+
+        Returns the early-stop entry if reflection validation fails, else None
+        (caller should use _record_cycle_outcome result).
+        """
+        reflection = self._run_reflection_phase(verification, skill_context, goal_type, cycle_id, phase_outputs)
+        if self.strict_schema and validate_phase_output("reflection", reflection):
+            return self._build_early_stop_entry(
+                cycle_id=cycle_id, goal=goal, goal_type=goal_type,
+                phase_outputs=phase_outputs, started_at=started_at,
+                stop_reason="INVALID_OUTPUT",
+                beads=phase_outputs.get("beads_gate"),
+            )
+
+        phase_outputs["cycle_confidence"] = self.confidence_router.get_cycle_confidence()
+        phase_outputs.pop("_failure_context", None)
+        return None
+
     def run_cycle(self, goal: str, dry_run: bool = False, context_injection: Optional[Dict] = None) -> Dict:
         """Execute a single complete plan-act-verify cycle for *goal*.
 
@@ -587,102 +698,26 @@ class LoopOrchestrator(PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin):
         goal_type = classify_goal(goal)
         self.current_goal = goal
         self.active_cycle_summary = build_cycle_summary(
-            cycle_id=cycle_id,
-            goal=goal,
-            goal_type=goal_type,
-            phase_outputs=phase_outputs,
-            state="running",
-            started_at=started_at,
+            cycle_id=cycle_id, goal=goal, goal_type=goal_type,
+            phase_outputs=phase_outputs, state="running", started_at=started_at,
         )
         pipeline_cfg = self._configure_pipeline(goal, goal_type, phase_outputs)
         self._handle_capabilities(goal, pipeline_cfg, phase_outputs, dry_run)
 
-        # Inject lessons from previous cycles into planner context
-        if self.lesson_store:
-            try:
-                lessons = self.lesson_store.injectable_lessons()
-                if lessons:
-                    phase_outputs["injected_lessons"] = lessons
-            except (OSError, TypeError):
-                pass
-
-        context = self._run_ingest_phase(goal, cycle_id, phase_outputs)
-        if self.strict_schema and validate_phase_output("context", context):
-            return self._build_early_stop_entry(
-                cycle_id=cycle_id,
-                goal=goal,
-                goal_type=goal_type,
-                phase_outputs=phase_outputs,
-                started_at=started_at,
-                stop_reason="INVALID_OUTPUT",
-            )
-
-        # Autonomous MCP capability injection
-        mcp_discovery = self._run_mcp_discovery_phase(phase_outputs)
-        if mcp_discovery.get("status") == "success" and mcp_discovery.get("discovered"):
-            log_json("INFO", "mcp_servers_discovered", details={"count": len(mcp_discovery["discovered"])})
-
-        skill_context = self._dispatch_skills(goal_type, pipeline_cfg, phase_outputs)
-
-        if self._beads_gate_applies():
-            beads_gate = self._run_beads_gate(goal, goal_type, context, skill_context)
-            phase_outputs["beads_gate"] = beads_gate
-            if not beads_gate.get("ok") and self.beads_required:
-                return self._build_early_stop_entry(
-                    cycle_id=cycle_id,
-                    goal=goal,
-                    goal_type=goal_type,
-                    phase_outputs=phase_outputs,
-                    started_at=started_at,
-                    stop_reason="BEADS_UNAVAILABLE",
-                    beads=beads_gate,
-                )
-            if beads_gate.get("status") == "block":
-                return self._build_early_stop_entry(
-                    cycle_id=cycle_id,
-                    goal=goal,
-                    goal_type=goal_type,
-                    phase_outputs=phase_outputs,
-                    started_at=started_at,
-                    stop_reason=beads_gate.get("stop_reason") or "BEADS_BLOCKED",
-                    beads=beads_gate,
-                )
-            if beads_gate.get("status") == "revise":
-                return self._build_early_stop_entry(
-                    cycle_id=cycle_id,
-                    goal=goal,
-                    goal_type=goal_type,
-                    phase_outputs=phase_outputs,
-                    started_at=started_at,
-                    stop_reason=beads_gate.get("stop_reason") or "BEADS_REVISE_REQUIRED",
-                    beads=beads_gate,
-                )
-
-        # ── Coverage Backfill ──
-        gaps = skill_context.get("structural_analyzer", {}).get("coverage_gaps", [])
-        if getattr(self, "auto_backfill_coverage", False) and self.goal_queue:
-            for gap in gaps:
-                f = gap.get("file")
-                priority = gap.get("risk_priority", "MEDIUM")
-                backfill_goal = f"test_backfill: Write missing unit tests for '{f}' to resolve coverage gap (priority: {priority})"
-                self.goal_queue.add(backfill_goal)
-                log_json("INFO", "backfill_goal_enqueued", details={"file": f, "priority": priority})
-
-        # Inject gaps into context for the planner
-        if gaps:
-            context["backfill_context"] = gaps
-
-        verification, early_return = self._run_plan_loop(
-            goal=goal,
-            context=context,
-            skill_context=skill_context,
-            pipeline_cfg=pipeline_cfg,
-            cycle_id=cycle_id,
-            phase_outputs=phase_outputs,
-            dry_run=dry_run,
+        # ── Pre-plan phases: ingest, MCP, skills, beads, backfill ──
+        context, skill_context, early_return = self._run_pre_plan_phases(
+            goal, goal_type, cycle_id, pipeline_cfg, phase_outputs, started_at, dry_run,
         )
         if early_return is not None:
-            # Fire n8n feedback even on early exit so P4/P5 see every cycle
+            return early_return
+
+        # ── Plan loop ──
+        verification, early_return = self._run_plan_loop(
+            goal=goal, context=context, skill_context=skill_context,
+            pipeline_cfg=pipeline_cfg, cycle_id=cycle_id,
+            phase_outputs=phase_outputs, dry_run=dry_run,
+        )
+        if early_return is not None:
             log_json("INFO", "n8n_early_exit_attempting", details={"cycle_id": cycle_id, "goal": goal[:80]})
             try:
                 self._notify_n8n_feedback(goal, cycle_id, False, phase_outputs)
@@ -691,22 +726,13 @@ class LoopOrchestrator(PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin):
                 log_json("WARN", "n8n_early_exit_feedback_failed", details={"error": str(exc), "cycle_id": cycle_id})
             return early_return
 
-        reflection = self._run_reflection_phase(verification, skill_context, goal_type, cycle_id, phase_outputs)
-        if self.strict_schema and validate_phase_output("reflection", reflection):
-            return self._build_early_stop_entry(
-                cycle_id=cycle_id,
-                goal=goal,
-                goal_type=goal_type,
-                phase_outputs=phase_outputs,
-                started_at=started_at,
-                stop_reason="INVALID_OUTPUT",
-                beads=phase_outputs.get("beads_gate"),
-            )
+        # ── Post-verify phases: reflection, confidence ──
+        early_stop = self._run_post_verify_phases(
+            goal, goal_type, cycle_id, phase_outputs, started_at, verification, skill_context,
+        )
+        if early_stop is not None:
+            return early_stop
 
-        # Record cycle confidence for telemetry
-        phase_outputs["cycle_confidence"] = self.confidence_router.get_cycle_confidence()
-
-        phase_outputs.pop("_failure_context", None)
         result = self._record_cycle_outcome(cycle_id, goal, goal_type, phase_outputs, started_at)
 
         # Record lesson from this cycle

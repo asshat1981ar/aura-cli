@@ -41,6 +41,143 @@ def _parse_dockerfile(content: str) -> List[Dict]:
     return instructions
 
 
+def _check_base_image(cmd: str, args: str, ln: int, metadata: Dict[str, Any]) -> List[Dict]:
+    """Check FROM instructions for base image issues."""
+    findings: List[Dict] = []
+    if cmd != "FROM":
+        return findings
+
+    base = args.split()[0].lower() if args.split() else ""
+    metadata["base_images"].append(base)
+
+    if base == "latest" or base.endswith(":latest"):
+        findings.append({
+            "severity": "high",
+            "issue": "pinned_tag_missing",
+            "detail": f"Base image '{base}' uses :latest — pin to a specific version for reproducible builds.",
+            "line": ln,
+        })
+    if any(heavy in base for heavy in _HEAVY_BASES):
+        findings.append({
+            "severity": "medium",
+            "issue": "heavy_base_image",
+            "detail": f"'{base}' is a large base image. Consider a slim or distroless variant.",
+            "line": ln,
+        })
+    return findings
+
+
+def _check_security_issues(cmd: str, args: str, ln: int, metadata: Dict[str, Any]) -> List[Dict]:
+    """Check for security-related issues (secrets, root, curl-pipe, privileged ports)."""
+    findings: List[Dict] = []
+
+    if cmd in ("ENV", "ARG"):
+        if _SECRET_ENV_RE.search(args):
+            findings.append({
+                "severity": "critical",
+                "issue": "secret_in_dockerfile",
+                "detail": f"{cmd} instruction appears to contain a secret: '{args[:80]}'.",
+                "line": ln,
+            })
+
+    elif cmd == "USER":
+        metadata["user_set"] = True
+        if args.strip() in ("0", "root"):
+            findings.append({
+                "severity": "high",
+                "issue": "running_as_root",
+                "detail": "Container is explicitly set to run as root. Use a non-root user.",
+                "line": ln,
+            })
+
+    elif cmd == "RUN":
+        if re.search(r"\bcurl\b.*\|\s*(sh|bash)", args):
+            findings.append({
+                "severity": "high",
+                "issue": "curl_pipe_to_shell",
+                "detail": "Piping curl output directly to a shell is a supply-chain risk.",
+                "line": ln,
+            })
+
+    elif cmd == "EXPOSE":
+        ports = args.split()
+        metadata["exposed_ports"].extend(ports)
+        for p in ports:
+            port_num = int(p.split("/")[0]) if p.split("/")[0].isdigit() else None
+            if port_num and port_num < 1024:
+                findings.append({
+                    "severity": "medium",
+                    "issue": "privileged_port_exposed",
+                    "detail": f"Port {port_num} is a privileged port (<1024); containers typically run as non-root.",
+                    "line": ln,
+                })
+
+    return findings
+
+
+def _check_best_practices(cmd: str, args: str, ln: int, metadata: Dict[str, Any]) -> List[Dict]:
+    """Check for Dockerfile best-practice issues (RUN hygiene, ADD vs COPY, HEALTHCHECK)."""
+    findings: List[Dict] = []
+
+    if cmd == "RUN":
+        if re.search(r"\bsudo\b", args):
+            findings.append({
+                "severity": "medium",
+                "issue": "sudo_in_run",
+                "detail": "Avoid 'sudo' in RUN; use USER or run as root explicitly.",
+                "line": ln,
+            })
+        if re.search(r"apt-get install(?!.*-y)", args):
+            findings.append({
+                "severity": "low",
+                "issue": "apt_get_missing_y_flag",
+                "detail": "Use 'apt-get install -y' to prevent interactive prompts.",
+                "line": ln,
+            })
+        if re.search(r"&&\s*rm\s+-rf\s+/var/lib/apt", args) is None and "apt-get install" in args:
+            findings.append({
+                "severity": "low",
+                "issue": "apt_cache_not_cleaned",
+                "detail": "Clean apt cache in the same RUN layer: '&& rm -rf /var/lib/apt/lists/*'",
+                "line": ln,
+            })
+
+    elif cmd == "ADD":
+        if not (re.search(r"https?://", args) or args.endswith(".tar.gz") or args.endswith(".tgz")):
+            findings.append({
+                "severity": "low",
+                "issue": "add_instead_of_copy",
+                "detail": "Prefer COPY over ADD unless you need URL fetching or tar auto-extraction.",
+                "line": ln,
+            })
+
+    elif cmd == "HEALTHCHECK":
+        if args.strip().upper() != "NONE":
+            metadata["has_healthcheck"] = True
+
+    return findings
+
+
+def _check_post_scan(metadata: Dict[str, Any]) -> List[Dict]:
+    """Run post-scan checks for missing HEALTHCHECK and USER instructions."""
+    findings: List[Dict] = []
+    if not metadata["has_healthcheck"]:
+        findings.append({
+            "severity": "low",
+            "issue": "no_healthcheck",
+            "detail": "No HEALTHCHECK instruction. Consider adding one for orchestration health monitoring.",
+            "line": None,
+        })
+    if not metadata["user_set"]:
+        findings.append({
+            "severity": "medium",
+            "issue": "no_user_instruction",
+            "detail": "No USER instruction found. Container will run as root by default.",
+            "line": None,
+        })
+    return findings
+
+
 def _analyse(content: str, file_path: str) -> Dict[str, Any]:
     instructions = _parse_dockerfile(content)
     findings: List[Dict] = []
@@ -61,127 +198,17 @@ def _analyse(content: str, file_path: str) -> Dict[str, Any]:
         args = instr["args"]
         ln = instr["line_no"]
 
-        # ---- FROM ----
         if cmd == "FROM":
             from_count += 1
-            # strip alias (AS name)
-            base = args.split()[0].lower() if args.split() else ""
-            metadata["base_images"].append(base)
+            findings.extend(_check_base_image(cmd, args, ln, metadata))
 
-            if base == "latest" or base.endswith(":latest"):
-                findings.append({
-                    "severity": "high",
-                    "issue": "pinned_tag_missing",
-                    "detail": f"Base image '{base}' uses :latest — pin to a specific version for reproducible builds.",
-                    "line": ln,
-                })
-            if any(heavy in base for heavy in _HEAVY_BASES):
-                findings.append({
-                    "severity": "medium",
-                    "issue": "heavy_base_image",
-                    "detail": f"'{base}' is a large base image. Consider a slim or distroless variant.",
-                    "line": ln,
-                })
-
-        # ---- RUN ----
-        elif cmd == "RUN":
-            if re.search(r"\bsudo\b", args):
-                findings.append({
-                    "severity": "medium",
-                    "issue": "sudo_in_run",
-                    "detail": "Avoid 'sudo' in RUN; use USER or run as root explicitly.",
-                    "line": ln,
-                })
-            if re.search(r"apt-get install(?!.*-y)", args):
-                findings.append({
-                    "severity": "low",
-                    "issue": "apt_get_missing_y_flag",
-                    "detail": "Use 'apt-get install -y' to prevent interactive prompts.",
-                    "line": ln,
-                })
-            if re.search(r"&&\s*rm\s+-rf\s+/var/lib/apt", args) is None and "apt-get install" in args:
-                findings.append({
-                    "severity": "low",
-                    "issue": "apt_cache_not_cleaned",
-                    "detail": "Clean apt cache in the same RUN layer: '&& rm -rf /var/lib/apt/lists/*'",
-                    "line": ln,
-                })
-            if re.search(r"\bcurl\b.*\|\s*(sh|bash)", args):
-                findings.append({
-                    "severity": "high",
-                    "issue": "curl_pipe_to_shell",
-                    "detail": "Piping curl output directly to a shell is a supply-chain risk.",
-                    "line": ln,
-                })
-
-        # ---- ENV / ARG — secrets ----
-        elif cmd in ("ENV", "ARG"):
-            if _SECRET_ENV_RE.search(args):
-                findings.append({
-                    "severity": "critical",
-                    "issue": "secret_in_dockerfile",
-                    "detail": f"{cmd} instruction appears to contain a secret: '{args[:80]}'.",
-                    "line": ln,
-                })
-
-        # ---- EXPOSE ----
-        elif cmd == "EXPOSE":
-            ports = args.split()
-            metadata["exposed_ports"].extend(ports)
-            for p in ports:
-                port_num = int(p.split("/")[0]) if p.split("/")[0].isdigit() else None
-                if port_num and port_num < 1024:
-                    findings.append({
-                        "severity": "medium",
-                        "issue": "privileged_port_exposed",
-                        "detail": f"Port {port_num} is a privileged port (<1024); containers typically run as non-root.",
-                        "line": ln,
-                    })
-
-        # ---- USER ----
-        elif cmd == "USER":
-            metadata["user_set"] = True
-            if args.strip() in ("0", "root"):
-                findings.append({
-                    "severity": "high",
-                    "issue": "running_as_root",
-                    "detail": "Container is explicitly set to run as root. Use a non-root user.",
-                    "line": ln,
-                })
-
-        # ---- HEALTHCHECK ----
-        elif cmd == "HEALTHCHECK":
-            if args.strip().upper() != "NONE":
-                metadata["has_healthcheck"] = True
-
-        # ---- ADD (prefer COPY) ----
-        elif cmd == "ADD":
-            if not (re.search(r"https?://", args) or args.endswith(".tar.gz") or args.endswith(".tgz")):
-                findings.append({
-                    "severity": "low",
-                    "issue": "add_instead_of_copy",
-                    "detail": "Prefer COPY over ADD unless you need URL fetching or tar auto-extraction.",
-                    "line": ln,
-                })
+        findings.extend(_check_security_issues(cmd, args, ln, metadata))
+        findings.extend(_check_best_practices(cmd, args, ln, metadata))
 
     metadata["stages"] = from_count
     metadata["is_multistage"] = from_count > 1
 
-    # Post-scan checks
-    if not metadata["has_healthcheck"]:
-        findings.append({
-            "severity": "low",
-            "issue": "no_healthcheck",
-            "detail": "No HEALTHCHECK instruction. Consider adding one for orchestration health monitoring.",
-            "line": None,
-        })
-    if not metadata["user_set"]:
-        findings.append({
-            "severity": "medium",
-            "issue": "no_user_instruction",
-            "detail": "No USER instruction found. Container will run as root by default.",
-            "line": None,
-        })
+    findings.extend(_check_post_scan(metadata))
 
     severity_order = {"critical": 0, "high": 1, "medium": 2, "low": 3}
     findings.sort(key=lambda f: severity_order.get(f["severity"], 9))

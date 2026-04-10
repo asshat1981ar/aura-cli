@@ -47,16 +47,12 @@ class LearnMixin:
             self.last_cycle_summary = summary
         return summary
 
-    def _record_cycle_outcome(self, cycle_id: str, goal: str, goal_type: str, phase_outputs: Dict, started_at: float):
-        """Final persistence and loop notification."""
-        from core.quality_snapshot import run_quality_snapshot
+    def _build_cycle_outcome(self, goal: str, goal_type: str, started_at: float, phase_outputs: Dict, passed: bool) -> tuple:
+        """Create CycleOutcome and build the cycle entry dict.
 
-        verify_status = phase_outputs.get("verification", {}).get("status", "skip")
-        passed = verify_status in ("pass", "skip")
-        if passed:
-            self._consecutive_fails = 0
-        elif verify_status == "fail":
-            self._consecutive_fails += 1
+        Returns (entry, outcome, changed_files, quality) tuple.
+        """
+        from core.quality_snapshot import run_quality_snapshot
 
         # Phase 8: measure()
         self._notify_ui("on_phase_start", "measure")
@@ -66,25 +62,6 @@ class LearnMixin:
         phase_outputs["quality"] = quality
         self._notify_ui("on_phase_complete", "measure", (time.time() - t0_measure) * 1000)
 
-        # ── Quality Trend Analysis ──
-        try:
-            alerts = self.quality_trends.record_from_cycle(
-                {
-                    "cycle_id": cycle_id,
-                    "goal": goal,
-                    "completed_at": time.time(),
-                    "duration_s": time.time() - started_at,
-                    "phase_outputs": phase_outputs,
-                }
-            )
-            if alerts and self.goal_queue:
-                for goal_text in self.quality_trends.get_remediation_goals():
-                    self.goal_queue.add(goal_text)
-                    log_json("INFO", "quality_remediation_goal_enqueued", details={"goal": goal_text[:100]})
-        except Exception as exc:
-            log_json("WARN", "quality_trend_record_failed", details={"error": str(exc)})
-
-        # ── Learning Loop: CycleOutcome ──
         outcome = CycleOutcome(
             goal=goal,
             goal_type=goal_type,
@@ -97,15 +74,14 @@ class LearnMixin:
 
         if self.adaptive_pipeline:
             try:
-                strategy = outcome.strategy_used
-                self.adaptive_pipeline.record_outcome(goal_type, strategy, passed)
+                self.adaptive_pipeline.record_outcome(goal_type, outcome.strategy_used, passed)
             except Exception as exc:
                 log_json("WARN", "adaptive_pipeline_outcome_record_failed", details={"error": str(exc)})
 
         completed_at = time.time()
         outcome.mark_complete(success=passed)
         entry = {
-            "cycle_id": cycle_id,
+            "cycle_id": None,  # filled by caller
             "goal": goal,
             "goal_type": goal_type,
             "phase_outputs": phase_outputs,
@@ -117,18 +93,23 @@ class LearnMixin:
             "duration_s": outcome.duration_s(),
             "outcome": dataclasses.asdict(outcome),
         }
+        return entry, outcome, changed_files, quality
 
-        # Phase 9: learn()
+    def _persist_cycle_entry(self, entry: Dict, goal: str, cycle_id: str, outcome: "CycleOutcome", passed: bool) -> None:
+        """Phase 9: learn -- persist cycle entry to memory stores and brain."""
         self._notify_ui("on_phase_start", "learn")
         t0_learn = time.time()
         summary = self._refresh_cycle_summary(entry)
         self._notify_ui("on_cycle_complete", summary)
         self.current_goal = None
         self.active_cycle_summary = None
+
         if self.memory_controller.persistent_store:
             self.memory_controller.persistent_store.append_log(entry)
-            # Store structured outcome for learning
-            self.memory_controller.store(MemoryTier.PROJECT, json.dumps(summary), metadata={"type": "cycle_summary", "goal": goal, "cycle_id": cycle_id})
+            self.memory_controller.store(
+                MemoryTier.PROJECT, json.dumps(summary),
+                metadata={"type": "cycle_summary", "goal": goal, "cycle_id": cycle_id},
+            )
 
         if self.brain:
             try:
@@ -139,7 +120,9 @@ class LearnMixin:
 
         self._notify_ui("on_phase_complete", "learn", (time.time() - t0_learn) * 1000)
 
-        # ── P4 Feedback Loop: POST reflection + skill summary to n8n ──
+    def _run_post_cycle_hooks(self, entry: Dict, goal: str, cycle_id: str, phase_outputs: Dict, passed: bool) -> None:
+        """Run n8n feedback, context graph, improvement loops, discovery, evolution, propagation, and memory consolidation."""
+        # P4 Feedback Loop
         log_json("INFO", "n8n_feedback_attempting", details={"cycle_id": cycle_id, "passed": passed})
         try:
             self._notify_n8n_feedback(goal, cycle_id, passed, phase_outputs)
@@ -160,12 +143,10 @@ class LearnMixin:
 
         # Phase 10: discover()
         self._notify_ui("on_phase_start", "discover")
-        # Discovery now happens via on_cycle_complete (TRIGGER_EVERY_N=15)
         self._notify_ui("on_phase_complete", "discover", 0)
 
         # Phase 11: evolve()
         self._notify_ui("on_phase_start", "evolve")
-        # Evolution now happens via on_cycle_complete (TRIGGER_EVERY_N=20)
         self._notify_ui("on_phase_complete", "evolve", 0)
 
         if self.propagation_engine is not None:
@@ -174,22 +155,58 @@ class LearnMixin:
             except Exception as exc:
                 log_json("WARN", "propagation_engine_error", details={"error": str(exc)})
 
-        # ── Memory Consolidation (periodic) ──
-        # Run every 10 cycles to prune, merge, and summarize old memories
+        # Memory Consolidation (periodic, every 10 cycles)
         cycle_num = int(cycle_id.split("_")[-1], 16) if "_" in cycle_id else 0
         if self.brain and cycle_num % 10 == 0:
             try:
                 from memory.consolidation import MemoryConsolidator, MemoryEntry
 
                 consolidator = MemoryConsolidator()
-                # Convert brain memories to MemoryEntry format
                 raw_memories = self.brain.recall_with_budget(max_tokens=50000)
                 entries = [MemoryEntry(id=str(i), content=m, memory_type="decision") for i, m in enumerate(raw_memories)]
                 if len(entries) > 50:
                     retained, result = consolidator.consolidate(entries)
-                    log_json("INFO", "memory_consolidation_complete", details={"before": result.memories_before, "after": result.memories_after, "compression": f"{result.compression_ratio:.1%}"})
+                    log_json("INFO", "memory_consolidation_complete", details={
+                        "before": result.memories_before, "after": result.memories_after,
+                        "compression": f"{result.compression_ratio:.1%}",
+                    })
             except Exception as exc:
                 log_json("WARN", "memory_consolidation_error", details={"error": str(exc)})
+
+    def _record_cycle_outcome(self, cycle_id: str, goal: str, goal_type: str, phase_outputs: Dict, started_at: float):
+        """Final persistence and loop notification."""
+        verify_status = phase_outputs.get("verification", {}).get("status", "skip")
+        passed = verify_status in ("pass", "skip")
+        if passed:
+            self._consecutive_fails = 0
+        elif verify_status == "fail":
+            self._consecutive_fails += 1
+
+        # Build outcome and entry
+        entry, outcome, changed_files, quality = self._build_cycle_outcome(
+            goal, goal_type, started_at, phase_outputs, passed,
+        )
+        entry["cycle_id"] = cycle_id
+
+        # Quality Trend Analysis
+        try:
+            alerts = self.quality_trends.record_from_cycle({
+                "cycle_id": cycle_id,
+                "goal": goal,
+                "completed_at": time.time(),
+                "duration_s": time.time() - started_at,
+                "phase_outputs": phase_outputs,
+            })
+            if alerts and self.goal_queue:
+                for goal_text in self.quality_trends.get_remediation_goals():
+                    self.goal_queue.add(goal_text)
+                    log_json("INFO", "quality_remediation_goal_enqueued", details={"goal": goal_text[:100]})
+        except Exception as exc:
+            log_json("WARN", "quality_trend_record_failed", details={"error": str(exc)})
+
+        # Persist and run post-cycle hooks
+        self._persist_cycle_entry(entry, goal, cycle_id, outcome, passed)
+        self._run_post_cycle_hooks(entry, goal, cycle_id, phase_outputs, passed)
 
         return entry
 

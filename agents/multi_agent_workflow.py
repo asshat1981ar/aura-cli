@@ -343,6 +343,193 @@ def suggest_architectural_improvements(architecture_results: Dict[str, Any]) -> 
     return suggestions
 
 
+def _build_header_section(timestamp: str) -> List[str]:
+    """Build the header and table of contents for the architecture summary."""
+    return [
+        "# Architecture Analysis Summary",
+        "",
+        f"**Generated:** {timestamp}",
+        "**Project:** AURA CLI",
+        "",
+        "---",
+        "",
+        "## Table of Contents",
+        "",
+        "1. [Python Analysis Results](#python-analysis-results)",
+        "2. [TypeScript Analysis Results](#typescript-analysis-results)",
+        "3. [Execution Plan](#execution-plan)",
+        "4. [Predicted Failure Modes](#predicted-failure-modes)",
+        "5. [Architectural Improvement Suggestions](#architectural-improvement-suggestions)",
+        "",
+        "---",
+        "",
+    ]
+
+
+def _build_python_analysis_section(python_results: Dict[str, Any]) -> List[str]:
+    """Build the Python analysis results section."""
+    lines: List[str] = ["## Python Analysis Results", "", "### Linting"]
+
+    lint_results = python_results.get("lint_results", {})
+    if lint_results.get("status") == "skill_not_available":
+        lines.append(f"- Status: {lint_results.get('skill', 'Linter')} not available")
+    else:
+        errors = lint_results.get("errors", [])
+        lines.append(f"- Issues found: {len(errors)}")
+        if errors:
+            lines.append("- Top issues:")
+            for error in errors[:5]:
+                lines.append(f"  - {error}")
+
+    lines.extend(["", "### Type Checking"])
+    type_results = python_results.get("type_check_results", {})
+    if type_results.get("status") == "skill_not_available":
+        lines.append(f"- Status: {type_results.get('skill', 'Type checker')} not available")
+    else:
+        type_errors = type_results.get("errors", "")
+        lines.append(f"- Errors: {type_errors if type_errors else 'None'}")
+
+    lines.extend(["", "### Complexity"])
+    complexity = python_results.get("complexity", {})
+    if complexity.get("status") == "skill_not_available":
+        lines.append(f"- Status: {complexity.get('skill', 'Complexity scorer')} not available")
+    else:
+        score = complexity.get("score", "N/A")
+        lines.append(f"- Complexity score: {score}")
+
+    lines.extend(["", "### Test Coverage"])
+    coverage = python_results.get("coverage", {})
+    if coverage.get("status") == "skill_not_available":
+        lines.append(f"- Status: {coverage.get('skill', 'Coverage analyzer')} not available")
+    else:
+        pct = coverage.get("percentage", "N/A")
+        lines.append(f"- Coverage: {pct}%")
+
+    return lines
+
+
+def _build_typescript_section(typescript_results: Dict[str, Any]) -> List[str]:
+    """Build the TypeScript analysis results section."""
+    lines: List[str] = ["", "---", "", "## TypeScript Analysis Results", ""]
+
+    action = typescript_results.get("action", "unknown")
+    task = typescript_results.get("task", "N/A")
+    lines.extend([f"- Action: {action}", f"- Task: {task}", ""])
+
+    ts_lint = typescript_results.get("lint_results", {})
+    if ts_lint:
+        lines.append(f"- ESLint exit code: {ts_lint.get('exit_code', 0)}")
+
+    ts_type = typescript_results.get("type_check_results", {})
+    if ts_type:
+        lines.append(f"- TypeScript compiler exit code: {ts_type.get('exit_code', 0)}")
+
+    return lines
+
+
+def _build_execution_plan_section(execution_plan: Dict[str, Any]) -> List[str]:
+    """Build the execution plan section."""
+    lines: List[str] = ["", "---", "", "## Execution Plan", ""]
+
+    plan_status = execution_plan.get("status", "unknown")
+    query = execution_plan.get("query", "N/A")
+    results = execution_plan.get("results", [])
+
+    lines.extend([
+        f"- Status: {plan_status}",
+        f"- Query: {query}",
+        f"- Results found: {len(results)}",
+        "",
+    ])
+
+    if results:
+        lines.append("### Key Findings")
+        for result in results[:3]:
+            file_path = result.get("file", "unknown")
+            score = result.get("score", 0)
+            lines.append(f"- {file_path} (relevance: {score:.2f})")
+
+    return lines
+
+
+def _build_failure_modes_section(classified_failure_modes: List[Dict[str, Any]]) -> List[str]:
+    """Build the predicted failure modes section."""
+    lines: List[str] = ["", "---", "", "## Predicted Failure Modes", ""]
+
+    if classified_failure_modes:
+        lines.append("| Component | Failure Type | Risk Level | Likelihood | Description |")
+        lines.append("|-----------|--------------|------------|------------|-------------|")
+        for mode in classified_failure_modes:
+            component = mode.get("component", "")
+            failure_type = mode.get("failure_type", "")
+            risk_level = mode.get("risk_level", "")
+            likelihood = mode.get("likelihood", "")
+            description = mode.get("description", "")[:50] + "..."
+            lines.append(f"| {component} | {failure_type} | {risk_level} | {likelihood} | {description} |")
+    else:
+        lines.append("No failure modes predicted.")
+
+    return lines
+
+
+def _build_suggestions_section(architectural_suggestions: List[Dict[str, Any]]) -> List[str]:
+    """Build the architectural improvement suggestions section."""
+    lines: List[str] = ["", "---", "", "## Architectural Improvement Suggestions", ""]
+
+    if architectural_suggestions:
+        for i, suggestion in enumerate(architectural_suggestions, 1):
+            target = suggestion.get("target_component", "")
+            imp_type = suggestion.get("improvement_type", "")
+            description = suggestion.get("description", "")
+            benefit = suggestion.get("expected_benefit", "")
+            effort = suggestion.get("implementation_effort", "")
+
+            lines.extend([
+                f"### {i}. {imp_type}",
+                "",
+                f"**Target:** {target}",
+                f"**Effort:** {effort}",
+                "",
+                f"{description}",
+                "",
+                f"**Expected Benefit:** {benefit}",
+                "",
+            ])
+    else:
+        lines.append("No improvement suggestions generated.")
+
+    return lines
+
+
+def _build_recommendations_section(
+    classified_failure_modes: List[Dict[str, Any]],
+    architectural_suggestions: List[Dict[str, Any]],
+) -> List[str]:
+    """Build the recommendations section based on analysis findings."""
+    lines: List[str] = [
+        "",
+        "---",
+        "",
+        "## Recommendations",
+        "",
+        "Based on the analysis above, the following actions are recommended:",
+        "",
+    ]
+
+    recommendations: List[str] = []
+    if any(m.get("severity") == "high" for m in classified_failure_modes):
+        recommendations.append("1. **Address high-severity failure modes** before adding new features")
+    if len(architectural_suggestions) > 3:
+        recommendations.append("2. **Prioritize low-effort improvements** for quick wins")
+    if not recommendations:
+        recommendations.append("1. **Maintain current practices** - no critical issues identified")
+
+    lines.extend(recommendations)
+    lines.extend(["", "---", "", "*Generated by AURA Multi-Agent Workflow*"])
+
+    return lines
+
+
 def compile_summary(
     python_results: Dict[str, Any],
     typescript_results: Dict[str, Any],
@@ -368,204 +555,14 @@ def compile_summary(
     """
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
 
-    lines = [
-        "# Architecture Analysis Summary",
-        "",
-        f"**Generated:** {timestamp}",
-        "**Project:** AURA CLI",
-        "",
-        "---",
-        "",
-        "## Table of Contents",
-        "",
-        "1. [Python Analysis Results](#python-analysis-results)",
-        "2. [TypeScript Analysis Results](#typescript-analysis-results)",
-        "3. [Execution Plan](#execution-plan)",
-        "4. [Predicted Failure Modes](#predicted-failure-modes)",
-        "5. [Architectural Improvement Suggestions](#architectural-improvement-suggestions)",
-        "",
-        "---",
-        "",
-        "## Python Analysis Results",
-        "",
-        "### Linting",
-    ]
-
-    # Python lint results
-    lint_results = python_results.get("lint_results", {})
-    if lint_results.get("status") == "skill_not_available":
-        lines.append(f"- Status: {lint_results.get('skill', 'Linter')} not available")
-    else:
-        errors = lint_results.get("errors", [])
-        lines.append(f"- Issues found: {len(errors)}")
-        if errors:
-            lines.append("- Top issues:")
-            for error in errors[:5]:
-                lines.append(f"  - {error}")
-
-    lines.extend(["", "### Type Checking"])
-
-    # Python type check results
-    type_results = python_results.get("type_check_results", {})
-    if type_results.get("status") == "skill_not_available":
-        lines.append(f"- Status: {type_results.get('skill', 'Type checker')} not available")
-    else:
-        type_errors = type_results.get("errors", "")
-        lines.append(f"- Errors: {type_errors if type_errors else 'None'}")
-
-    lines.extend(["", "### Complexity"])
-
-    # Complexity results
-    complexity = python_results.get("complexity", {})
-    if complexity.get("status") == "skill_not_available":
-        lines.append(f"- Status: {complexity.get('skill', 'Complexity scorer')} not available")
-    else:
-        score = complexity.get("score", "N/A")
-        lines.append(f"- Complexity score: {score}")
-
-    lines.extend(["", "### Test Coverage"])
-
-    # Coverage results
-    coverage = python_results.get("coverage", {})
-    if coverage.get("status") == "skill_not_available":
-        lines.append(f"- Status: {coverage.get('skill', 'Coverage analyzer')} not available")
-    else:
-        pct = coverage.get("percentage", "N/A")
-        lines.append(f"- Coverage: {pct}%")
-
-    lines.extend([
-        "",
-        "---",
-        "",
-        "## TypeScript Analysis Results",
-        "",
-    ])
-
-    # TypeScript results
-    action = typescript_results.get("action", "unknown")
-    task = typescript_results.get("task", "N/A")
-    lines.extend([
-        f"- Action: {action}",
-        f"- Task: {task}",
-        "",
-    ])
-
-    ts_lint = typescript_results.get("lint_results", {})
-    if ts_lint:
-        exit_code = ts_lint.get("exit_code", 0)
-        lines.append(f"- ESLint exit code: {exit_code}")
-
-    ts_type = typescript_results.get("type_check_results", {})
-    if ts_type:
-        exit_code = ts_type.get("exit_code", 0)
-        lines.append(f"- TypeScript compiler exit code: {exit_code}")
-
-    lines.extend([
-        "",
-        "---",
-        "",
-        "## Execution Plan",
-        "",
-    ])
-
-    # Execution plan
-    plan_status = execution_plan.get("status", "unknown")
-    query = execution_plan.get("query", "N/A")
-    results = execution_plan.get("results", [])
-
-    lines.extend([
-        f"- Status: {plan_status}",
-        f"- Query: {query}",
-        f"- Results found: {len(results)}",
-        "",
-    ])
-
-    if results:
-        lines.append("### Key Findings")
-        for result in results[:3]:
-            file_path = result.get("file", "unknown")
-            score = result.get("score", 0)
-            lines.append(f"- {file_path} (relevance: {score:.2f})")
-
-    lines.extend([
-        "",
-        "---",
-        "",
-        "## Predicted Failure Modes",
-        "",
-    ])
-
-    # Classified failure modes
-    if classified_failure_modes:
-        lines.append("| Component | Failure Type | Risk Level | Likelihood | Description |")
-        lines.append("|-----------|--------------|------------|------------|-------------|")
-        for mode in classified_failure_modes:
-            component = mode.get("component", "")
-            failure_type = mode.get("failure_type", "")
-            risk_level = mode.get("risk_level", "")
-            likelihood = mode.get("likelihood", "")
-            description = mode.get("description", "")[:50] + "..."
-            lines.append(f"| {component} | {failure_type} | {risk_level} | {likelihood} | {description} |")
-    else:
-        lines.append("No failure modes predicted.")
-
-    lines.extend([
-        "",
-        "---",
-        "",
-        "## Architectural Improvement Suggestions",
-        "",
-    ])
-
-    # Architectural suggestions
-    if architectural_suggestions:
-        for i, suggestion in enumerate(architectural_suggestions, 1):
-            target = suggestion.get("target_component", "")
-            imp_type = suggestion.get("improvement_type", "")
-            description = suggestion.get("description", "")
-            benefit = suggestion.get("expected_benefit", "")
-            effort = suggestion.get("implementation_effort", "")
-
-            lines.extend([
-                f"### {i}. {imp_type}",
-                "",
-                f"**Target:** {target}",
-                f"**Effort:** {effort}",
-                "",
-                f"{description}",
-                "",
-                f"**Expected Benefit:** {benefit}",
-                "",
-            ])
-    else:
-        lines.append("No improvement suggestions generated.")
-
-    lines.extend([
-        "",
-        "---",
-        "",
-        "## Recommendations",
-        "",
-        "Based on the analysis above, the following actions are recommended:",
-        "",
-    ])
-
-    # Generate recommendations based on findings
-    recommendations = []
-    if any(m.get("severity") == "high" for m in classified_failure_modes):
-        recommendations.append("1. **Address high-severity failure modes** before adding new features")
-    if len(architectural_suggestions) > 3:
-        recommendations.append("2. **Prioritize low-effort improvements** for quick wins")
-    if not recommendations:
-        recommendations.append("1. **Maintain current practices** - no critical issues identified")
-
-    lines.extend(recommendations)
-    lines.extend([
-        "",
-        "---",
-        "",
-        "*Generated by AURA Multi-Agent Workflow*",
-    ])
+    lines: List[str] = []
+    lines.extend(_build_header_section(timestamp))
+    lines.extend(_build_python_analysis_section(python_results))
+    lines.extend(_build_typescript_section(typescript_results))
+    lines.extend(_build_execution_plan_section(execution_plan))
+    lines.extend(_build_failure_modes_section(classified_failure_modes))
+    lines.extend(_build_suggestions_section(architectural_suggestions))
+    lines.extend(_build_recommendations_section(classified_failure_modes, architectural_suggestions))
 
     return "\n".join(lines)
 

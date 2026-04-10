@@ -8,20 +8,10 @@ from __future__ import annotations
 
 from typing import Dict, Any, List, Optional, Literal, Union
 
-pydantic_available = False
-try:
-    from pydantic import BaseModel, Field, field_validator, ValidationError
-
-    pydantic_available = True
-except ImportError:
-    # Fallback when Pydantic is not installed
-    BaseModel = object
-    Field = lambda **kwargs: None
-    field_validator = lambda *args, **kwargs: lambda f: f
-    ValidationError = Exception
+from pydantic import BaseModel, Field, field_validator, ValidationError
 
 
-class SemanticMemoryConfig(BaseModel if pydantic_available else object):
+class SemanticMemoryConfig(BaseModel):
     """Configuration for semantic memory (ASCM v2)."""
 
     enabled: bool = True
@@ -34,7 +24,7 @@ class SemanticMemoryConfig(BaseModel if pydantic_available else object):
     eval_sampling_rate: float = Field(default=0.1, ge=0.0, le=1.0)
 
 
-class ModelRoutingConfig(BaseModel if pydantic_available else object):
+class ModelRoutingConfig(BaseModel):
     """Model routing configuration for different task types.
 
     Each route key accepts either a single model string or a list of model
@@ -51,7 +41,7 @@ class ModelRoutingConfig(BaseModel if pydantic_available else object):
     quality: Union[str, List[str]] = "anthropic/claude-3.5-sonnet"
 
 
-class BeadsConfig(BaseModel if pydantic_available else object):
+class BeadsConfig(BaseModel):
     """BEADS (Behavioral Evolution and Design System) configuration."""
 
     enabled: bool = True
@@ -62,7 +52,7 @@ class BeadsConfig(BaseModel if pydantic_available else object):
     persist_artifacts: bool = True
 
 
-class McpServersConfig(BaseModel if pydantic_available else object):
+class McpServersConfig(BaseModel):
     """MCP server port registry."""
 
     dev_tools: int = Field(default=8001, ge=1024, le=65535)
@@ -72,7 +62,7 @@ class McpServersConfig(BaseModel if pydantic_available else object):
     copilot: int = Field(default=8007, ge=1024, le=65535)
 
 
-class AuraConfig(BaseModel if pydantic_available else object):
+class AuraConfig(BaseModel):
     """Main AURA configuration schema with validation.
 
     This Pydantic model validates configuration at startup,
@@ -156,13 +146,7 @@ class AuraConfig(BaseModel if pydantic_available else object):
 
 
 class ConfigValidator:
-    """Configuration validator with Pydantic support.
-
-    Falls back to legacy validation when Pydantic is not available.
-    """
-
-    def __init__(self):
-        self.use_pydantic = pydantic_available
+    """Configuration validator using Pydantic."""
 
     def validate(self, config_dict: Dict[str, Any]) -> tuple[bool, Dict[str, Any], list[str]]:
         """Validate configuration dictionary.
@@ -173,13 +157,7 @@ class ConfigValidator:
         Returns:
             Tuple of (is_valid, validated_config, error_messages)
         """
-        if not self.use_pydantic:
-            # Fallback: return config as-is with basic type checking
-            errors = self._legacy_validate(config_dict)
-            return len(errors) == 0, config_dict, errors
-
         try:
-            # Use Pydantic for validation
             config = AuraConfig(**config_dict)
             return True, config.model_dump(), []
         except ValidationError as e:
@@ -188,28 +166,9 @@ class ConfigValidator:
         except Exception as e:
             return False, config_dict, [str(e)]
 
-    def _legacy_validate(self, config_dict: Dict[str, Any]) -> list[str]:
-        """Legacy validation when Pydantic is unavailable."""
-        errors = []
-
-        # Basic type validation
-        int_fields = ["max_iterations", "max_cycles", "policy_max_cycles", "policy_max_seconds", "llm_timeout"]
-        for field in int_fields:
-            if field in config_dict and not isinstance(config_dict[field], int):
-                errors.append(f"{field} must be an integer")
-
-        bool_fields = ["dry_run", "decompose", "strict_schema", "auto_add_capabilities"]
-        for field in bool_fields:
-            if field in config_dict and not isinstance(config_dict[field], bool):
-                errors.append(f"{field} must be a boolean")
-
-        return errors
-
     def get_defaults(self) -> Dict[str, Any]:
         """Get default configuration values."""
-        if self.use_pydantic:
-            return AuraConfig().model_dump()
-        return {}
+        return AuraConfig().model_dump()
 
 
 def validate_config(config_dict: Dict[str, Any]) -> tuple[bool, list[str]]:
@@ -225,8 +184,3 @@ def validate_config(config_dict: Dict[str, Any]) -> tuple[bool, list[str]]:
     is_valid, _, errors = validator.validate(config_dict)
     return is_valid, errors
 
-
-# Feature flag check
-def is_pydantic_available() -> bool:
-    """Check if Pydantic is available for config validation."""
-    return pydantic_available

@@ -301,5 +301,390 @@ class TestProfileHelpers(unittest.TestCase):
         self.assertNotIn("fast", mixin._local_profile_cooldown_reasons)
 
 
+class TestCallOpenAI(unittest.TestCase):
+    """Tests for call_openai."""
+
+    @patch("core.model_providers.resolve_openai_api_key", return_value=None)
+    def test_no_key_raises(self, _):
+        mixin = _make_mixin()
+        with patch.dict("os.environ", {}, clear=True):
+            with self.assertRaises(ValueError, msg="Should raise when no OpenAI key"):
+                mixin.call_openai("hello")
+
+    @patch("core.model_providers.resolve_openai_api_key", return_value="sk-test")
+    def test_successful_call(self, _):
+        mixin = _make_mixin()
+        mixin._log_telemetry = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"choices": [{"message": {"content": "gpt answer"}}]}
+        mixin._make_request_with_retries = MagicMock(return_value=mock_resp)
+
+        result = mixin.call_openai("hello")
+        self.assertEqual(result, "gpt answer")
+        mixin._log_telemetry.assert_called_once()
+
+    @patch("core.model_providers.resolve_openai_api_key", return_value="sk-test")
+    def test_sends_correct_url_and_model(self, _):
+        mixin = _make_mixin()
+        mixin._log_telemetry = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
+        mixin._make_request_with_retries = MagicMock(return_value=mock_resp)
+
+        mixin.call_openai("test")
+        call_args = mixin._make_request_with_retries.call_args[0]
+        self.assertEqual(call_args[0], "POST")
+        self.assertIn("openai.com", call_args[1])
+        self.assertEqual(call_args[3]["model"], "gpt-4o-mini")
+
+    @patch("core.model_providers.resolve_openai_api_key", return_value=None)
+    def test_falls_back_to_env_key(self, _):
+        mixin = _make_mixin()
+        mixin._log_telemetry = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"choices": [{"message": {"content": "env key"}}]}
+        mixin._make_request_with_retries = MagicMock(return_value=mock_resp)
+
+        with patch.dict("os.environ", {"OPENAI_API_KEY": "env-sk-test"}):
+            result = mixin.call_openai("hello")
+        self.assertEqual(result, "env key")
+
+
+class TestCallAnthropic(unittest.TestCase):
+    """Tests for call_anthropic."""
+
+    @patch("core.model_providers.resolve_anthropic_api_key", return_value=None)
+    def test_no_key_raises(self, _):
+        mixin = _make_mixin()
+        with patch.dict("os.environ", {}, clear=True):
+            with self.assertRaises(ValueError):
+                mixin.call_anthropic("hello")
+
+    @patch("core.model_providers.resolve_anthropic_api_key", return_value="ant-test")
+    def test_successful_call(self, _):
+        mixin = _make_mixin()
+        mixin._log_telemetry = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"content": [{"text": "claude answer"}]}
+        mixin._make_request_with_retries = MagicMock(return_value=mock_resp)
+
+        result = mixin.call_anthropic("hello")
+        self.assertEqual(result, "claude answer")
+
+    @patch("core.model_providers.resolve_anthropic_api_key", return_value="ant-test")
+    def test_sends_correct_headers(self, _):
+        mixin = _make_mixin()
+        mixin._log_telemetry = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"content": [{"text": "ok"}]}
+        mixin._make_request_with_retries = MagicMock(return_value=mock_resp)
+
+        mixin.call_anthropic("test")
+        headers = mixin._make_request_with_retries.call_args[0][2]
+        self.assertIn("x-api-key", headers)
+        self.assertIn("anthropic-version", headers)
+
+    @patch("core.model_providers.resolve_anthropic_api_key", return_value=None)
+    def test_falls_back_to_env_key(self, _):
+        mixin = _make_mixin()
+        mixin._log_telemetry = MagicMock()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"content": [{"text": "env claude"}]}
+        mixin._make_request_with_retries = MagicMock(return_value=mock_resp)
+
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "env-ant-test"}):
+            result = mixin.call_anthropic("hello")
+        self.assertEqual(result, "env claude")
+
+
+class TestCallLocal(unittest.TestCase):
+    """Tests for call_local (legacy command-based path)."""
+
+    @patch("core.model_providers.config")
+    def test_not_configured_returns_message(self, mock_config):
+        mixin = _make_mixin()
+        mock_config.get.return_value = None
+        mixin._resolve_local_profile_name = MagicMock(return_value=None)
+        result = mixin.call_local("hello")
+        self.assertIn("not configured", result.lower())
+
+    @patch("core.model_providers.config")
+    @patch("subprocess.run")
+    def test_command_success(self, mock_run, mock_config):
+        mixin = _make_mixin()
+        mock_config.get.return_value = "my-local-model"
+        mixin._resolve_local_profile_name = MagicMock(return_value=None)
+        mock_proc = MagicMock()
+        mock_proc.stdout = "local response"
+        mock_run.return_value = mock_proc
+        result = mixin.call_local("prompt")
+        self.assertEqual(result, "local response")
+
+    @patch("core.model_providers.config")
+    @patch("subprocess.run", side_effect=FileNotFoundError)
+    def test_command_not_found(self, mock_run, mock_config):
+        mixin = _make_mixin()
+        mock_config.get.return_value = "nonexistent-model"
+        mixin._resolve_local_profile_name = MagicMock(return_value=None)
+        result = mixin.call_local("prompt")
+        self.assertIn("not found", result.lower())
+
+    @patch("core.model_providers.config")
+    @patch("subprocess.run")
+    def test_command_process_error(self, mock_run, mock_config):
+        import subprocess
+
+        mixin = _make_mixin()
+        mock_config.get.return_value = "my-local-model"
+        mixin._resolve_local_profile_name = MagicMock(return_value=None)
+        mock_run.side_effect = subprocess.CalledProcessError(1, "cmd", stderr="oops")
+        result = mixin.call_local("prompt")
+        self.assertIn("Error", result)
+
+
+class TestCallGeminiCLI(unittest.TestCase):
+    """Tests for call_gemini."""
+
+    def test_no_path_raises(self):
+        mixin = _make_mixin(gemini_cli_path=None)
+        with self.assertRaises(ValueError):
+            mixin.call_gemini("hello")
+
+    @patch("subprocess.run")
+    def test_successful_call(self, mock_run):
+        mixin = _make_mixin(gemini_cli_path="/usr/bin/gemini")
+        mock_proc = MagicMock()
+        mock_proc.stdout = "  gemini answer  "
+        mock_run.return_value = mock_proc
+        result = mixin.call_gemini("hello")
+        self.assertEqual(result, "gemini answer")
+
+    @patch("subprocess.run")
+    def test_subprocess_error(self, mock_run):
+        import subprocess
+
+        mixin = _make_mixin(gemini_cli_path="/usr/bin/gemini")
+        mock_run.side_effect = subprocess.CalledProcessError(1, "gemini", stderr="api error")
+        with self.assertRaises(RuntimeError, msg="Should raise RuntimeError on CLI failure"):
+            mixin.call_gemini("hello")
+
+
+class TestCallCodexCLI(unittest.TestCase):
+    """Tests for call_codex."""
+
+    def test_no_path_raises(self):
+        mixin = _make_mixin(codex_cli_path=None)
+        with self.assertRaises(ValueError):
+            mixin.call_codex("hello")
+
+    @patch("subprocess.run")
+    def test_successful_call(self, mock_run):
+        mixin = _make_mixin(codex_cli_path="/usr/bin/codex")
+        mock_proc = MagicMock()
+        mock_proc.stdout = "  codex answer  "
+        mock_run.return_value = mock_proc
+        result = mixin.call_codex("hello")
+        self.assertEqual(result, "codex answer")
+
+    @patch("subprocess.run")
+    def test_subprocess_error(self, mock_run):
+        import subprocess
+
+        mixin = _make_mixin(codex_cli_path="/usr/bin/codex")
+        mock_run.side_effect = subprocess.CalledProcessError(1, "codex", stderr="fail")
+        with self.assertRaises(RuntimeError):
+            mixin.call_codex("hello")
+
+
+class TestCallLocalOllama(unittest.TestCase):
+    """Tests for _call_local_ollama."""
+
+    def test_missing_model_raises(self):
+        mixin = _make_mixin()
+        with self.assertRaises(ValueError):
+            mixin._call_local_ollama({"base_url": "http://localhost:11434"}, "prompt")
+
+    def test_successful_response(self):
+        mixin = _make_mixin()
+        profile = {"model": "llama3", "base_url": "http://localhost:11434"}
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"response": "ollama output"}
+        mixin._make_request_with_retries = MagicMock(return_value=mock_resp)
+
+        result = mixin._call_local_ollama(profile, "hello")
+        self.assertEqual(result, "ollama output")
+
+    def test_temperature_and_max_tokens_in_payload(self):
+        mixin = _make_mixin()
+        profile = {"model": "llama3", "temperature": 0.5, "max_tokens": 512}
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"response": "ok"}
+        mixin._make_request_with_retries = MagicMock(return_value=mock_resp)
+
+        mixin._call_local_ollama(profile, "test")
+        payload = mixin._make_request_with_retries.call_args[0][3]
+        self.assertIn("options", payload)
+        self.assertAlmostEqual(payload["options"]["temperature"], 0.5)
+        self.assertEqual(payload["options"]["num_predict"], 512)
+
+    def test_uses_default_base_url(self):
+        mixin = _make_mixin()
+        profile = {"model": "llama3"}
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"response": "default url"}
+        mixin._make_request_with_retries = MagicMock(return_value=mock_resp)
+
+        mixin._call_local_ollama(profile, "test")
+        url = mixin._make_request_with_retries.call_args[0][1]
+        self.assertIn("11434", url)
+
+
+class TestCallLocalOpenAICompatible(unittest.TestCase):
+    """Tests for _call_local_openai_compatible."""
+
+    def test_missing_model_raises(self):
+        mixin = _make_mixin()
+        with self.assertRaises(ValueError):
+            mixin._call_local_openai_compatible({"base_url": "http://localhost:8080/v1"}, "prompt")
+
+    def test_successful_response(self):
+        mixin = _make_mixin()
+        profile = {"model": "local-model", "base_url": "http://localhost:8080/v1"}
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"choices": [{"message": {"content": "local answer"}}]}
+        mixin._make_request_with_retries = MagicMock(return_value=mock_resp)
+
+        result = mixin._call_local_openai_compatible(profile, "hello")
+        self.assertEqual(result, "local answer")
+
+    def test_api_key_added_to_headers(self):
+        mixin = _make_mixin()
+        profile = {"model": "local-model", "api_key": "secret"}
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
+        mixin._make_request_with_retries = MagicMock(return_value=mock_resp)
+
+        mixin._call_local_openai_compatible(profile, "hello")
+        headers = mixin._make_request_with_retries.call_args[0][2]
+        self.assertIn("Authorization", headers)
+        self.assertIn("secret", headers["Authorization"])
+
+    def test_base_url_auto_append_v1(self):
+        mixin = _make_mixin()
+        profile = {"model": "m", "base_url": "http://localhost:8080"}
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"choices": [{"message": {"content": "ok"}}]}
+        mixin._make_request_with_retries = MagicMock(return_value=mock_resp)
+
+        mixin._call_local_openai_compatible(profile, "test")
+        url = mixin._make_request_with_retries.call_args[0][1]
+        self.assertIn("/v1/chat/completions", url)
+
+
+class TestCallLocalCommandProfile(unittest.TestCase):
+    """Tests for _call_local_command_profile."""
+
+    @patch("subprocess.run")
+    def test_command_with_prompt_placeholder(self, mock_run):
+        mixin = _make_mixin()
+        mock_proc = MagicMock()
+        mock_proc.stdout = "cmd output"
+        mock_run.return_value = mock_proc
+        profile = {"command": "mymodel --input {prompt}"}
+
+        result = mixin._call_local_command_profile(profile, "test input")
+        self.assertEqual(result, "cmd output")
+        called_cmd = mock_run.call_args[0][0]
+        self.assertFalse(any("{prompt}" in part for part in called_cmd))
+
+    @patch("subprocess.run")
+    def test_command_via_stdin(self, mock_run):
+        mixin = _make_mixin()
+        mock_proc = MagicMock()
+        mock_proc.stdout = "stdin output"
+        mock_run.return_value = mock_proc
+        profile = {"command": "mymodel --stream"}
+
+        result = mixin._call_local_command_profile(profile, "hello")
+        self.assertEqual(result, "stdin output")
+        kwargs = mock_run.call_args[1]
+        self.assertEqual(kwargs.get("input"), "hello")
+
+    def test_invalid_command_raises(self):
+        mixin = _make_mixin()
+        with self.assertRaises(ValueError):
+            mixin._call_local_command_profile({"command": 123}, "prompt")
+
+
+class TestResolveLocalProfileName(unittest.TestCase):
+    """Tests for _resolve_local_profile_name."""
+
+    @patch("core.model_providers.config")
+    def test_resolves_existing_profile(self, mock_config):
+        mixin = _make_mixin()
+        mock_config.get.return_value = {"fast": "fast-profile"}
+        mixin._get_local_profiles = MagicMock(return_value={"fast-profile": {}})
+
+        result = mixin._resolve_local_profile_name("fast")
+        self.assertEqual(result, "fast-profile")
+
+    @patch("core.model_providers.config")
+    def test_returns_none_for_unknown_route(self, mock_config):
+        mixin = _make_mixin()
+        mock_config.get.return_value = {}
+        mixin._get_local_profiles = MagicMock(return_value={})
+
+        result = mixin._resolve_local_profile_name("missing")
+        self.assertIsNone(result)
+
+    @patch("core.model_providers.config")
+    def test_returns_none_if_profile_not_in_profiles(self, mock_config):
+        mixin = _make_mixin()
+        mock_config.get.return_value = {"fast": "nonexistent"}
+        mixin._get_local_profiles = MagicMock(return_value={})
+
+        result = mixin._resolve_local_profile_name("fast")
+        self.assertIsNone(result)
+
+
+class TestExecuteTool(unittest.TestCase):
+    """Tests for _execute_tool."""
+
+    @patch("core.model_adapter.requests")
+    def test_known_mcp_tool_success(self, mock_requests):
+        mixin = _make_mixin()
+        mock_resp = MagicMock()
+        mock_resp.json.return_value = {"result": "data"}
+        mock_resp.raise_for_status.return_value = None
+        mock_requests.post.return_value = mock_resp
+        mock_requests.exceptions.RequestException = Exception
+
+        result = mixin._execute_tool("get_repo", {"owner": "me"})
+        import json as _json
+
+        self.assertEqual(_json.loads(result), {"result": "data"})
+
+    @patch("core.model_adapter.requests")
+    def test_known_mcp_tool_request_error(self, mock_requests):
+        mixin = _make_mixin()
+        mock_requests.post.side_effect = Exception("connection refused")
+        mock_requests.exceptions.RequestException = Exception
+
+        result = mixin._execute_tool("get_repo", {"owner": "me"})
+        self.assertIn("failed", result.lower())
+
+    @patch("subprocess.run")
+    def test_unknown_tool_uses_npx(self, mock_run):
+        mixin = _make_mixin()
+        mock_proc = MagicMock()
+        mock_proc.stdout = "tool result"
+        mock_run.return_value = mock_proc
+
+        result = mixin._execute_tool("custom_tool", {"key": "val"})
+        self.assertEqual(result, "tool result")
+        called_cmd = mock_run.call_args[0][0]
+        self.assertIn("npx", called_cmd)
+
+
 if __name__ == "__main__":
     unittest.main()

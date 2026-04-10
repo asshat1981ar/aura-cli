@@ -3,6 +3,7 @@
 import argparse
 import json
 import tempfile
+import types
 from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 
@@ -23,6 +24,7 @@ from core.task_handler import (
     _invalid_path_grounding_hint,
     _mismatch_overwrite_blocked_grounding_hint,
     _REPO_SCAN_SKIP_PARTS,
+    run_goals_loop,
 )
 
 
@@ -349,3 +351,177 @@ class TestMismatchOverwriteBlockedGroundingHint:
 
         assert "target.py" in result
         assert "overwrite" in result.lower() or "mismatch" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# run_goals_loop helpers
+# ---------------------------------------------------------------------------
+
+
+def _make_args(**kwargs):
+    defaults = {"max_cycles": 3, "dry_run": False}
+    defaults.update(kwargs)
+    return types.SimpleNamespace(**defaults)
+
+
+def _make_goal_queue(goals):
+    """Return a mock goal_queue that pops goals in order then returns empty."""
+    remaining = list(goals)
+    q = MagicMock()
+
+    def has_goals():
+        return bool(remaining)
+
+    def next_goal():
+        return remaining.pop(0)
+
+    q.has_goals.side_effect = has_goals
+    q.next.side_effect = next_goal
+    return q
+
+
+@patch("core.task_handler.log_json")
+@patch("core.task_handler.InFlightTracker")
+@patch("core.task_handler.TaskManager")
+class TestRunGoalsLoop:
+    """Tests for run_goals_loop."""
+
+    def test_empty_queue_exits_without_processing(self, MockTM, MockIFT, mock_log):
+        q = _make_goal_queue([])
+        orch = MagicMock()
+        archive = MagicMock()
+        run_goals_loop(_make_args(), q, orch, None, None, archive, Path("/tmp"))
+        orch.run_loop.assert_not_called()
+
+    def test_single_goal_pass_marks_completed(self, MockTM, MockIFT, mock_log):
+        orch = MagicMock()
+        orch.run_loop.return_value = {"stop_reason": "PASS", "history": ["h"]}
+        q = _make_goal_queue(["implement X"])
+        archive = MagicMock()
+        run_goals_loop(_make_args(), q, orch, None, None, archive, Path("/tmp"))
+        orch.run_loop.assert_called_once()
+        archive.record.assert_called_once()
+        _, score = archive.record.call_args[0]
+        assert score == 1.0
+
+    def test_goal_max_cycles_scores_zero(self, MockTM, MockIFT, mock_log):
+        orch = MagicMock()
+        orch.run_loop.return_value = {"stop_reason": "MAX_CYCLES", "history": ["h"]}
+        q = _make_goal_queue(["run task"])
+        archive = MagicMock()
+        run_goals_loop(_make_args(), q, orch, None, None, archive, Path("/tmp"))
+        _, score = archive.record.call_args[0]
+        assert score == 0.0
+
+    def test_empty_history_scores_zero_even_on_pass(self, MockTM, MockIFT, mock_log):
+        orch = MagicMock()
+        orch.run_loop.return_value = {"stop_reason": "PASS", "history": []}
+        q = _make_goal_queue(["go"])
+        archive = MagicMock()
+        run_goals_loop(_make_args(), q, orch, None, None, archive, Path("/tmp"))
+        _, score = archive.record.call_args[0]
+        assert score == 0.0
+
+    def test_orchestrator_exception_handled_gracefully(self, MockTM, MockIFT, mock_log):
+        orch = MagicMock()
+        orch.run_loop.side_effect = RuntimeError("boom")
+        q = _make_goal_queue(["broken goal"])
+        archive = MagicMock()
+        run_goals_loop(_make_args(), q, orch, None, None, archive, Path("/tmp"))
+        archive.record.assert_called_once()
+
+    def test_tracker_write_called_for_each_goal(self, MockTM, MockIFT, mock_log):
+        orch = MagicMock()
+        orch.run_loop.return_value = {"stop_reason": "PASS", "history": []}
+        q = _make_goal_queue(["g1", "g2"])
+        archive = MagicMock()
+        tracker = MockIFT.return_value
+        run_goals_loop(_make_args(), q, orch, None, None, archive, Path("/tmp"))
+        assert tracker.write.call_count == 2
+
+    def test_tracker_clear_called_even_on_exception(self, MockTM, MockIFT, mock_log):
+        orch = MagicMock()
+        orch.run_loop.side_effect = ValueError("err")
+        q = _make_goal_queue(["bad goal"])
+        archive = MagicMock()
+        tracker = MockIFT.return_value
+        run_goals_loop(_make_args(), q, orch, None, None, archive, Path("/tmp"))
+        tracker.clear.assert_called_once()
+
+    def test_external_goals_polled_when_queue_empty(self, MockTM, MockIFT, mock_log):
+        orch = MagicMock()
+        orch.poll_external_goals.return_value = []
+        q = _make_goal_queue([])
+        archive = MagicMock()
+        run_goals_loop(_make_args(), q, orch, None, None, archive, Path("/tmp"))
+        orch.poll_external_goals.assert_called()
+
+    def test_poll_external_goals_exception_continues(self, MockTM, MockIFT, mock_log):
+        orch = MagicMock()
+        orch.poll_external_goals.side_effect = ConnectionError("network down")
+        q = _make_goal_queue([])
+        archive = MagicMock()
+        # Should not raise
+        run_goals_loop(_make_args(), q, orch, None, None, archive, Path("/tmp"))
+
+    def test_polled_goals_added_to_queue(self, MockTM, MockIFT, mock_log):
+        orch = MagicMock()
+        orch.run_loop.return_value = {"stop_reason": "PASS", "history": []}
+
+        added = []
+        call_count = [0]
+
+        def has_goals():
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return False  # triggers poll
+            if call_count[0] == 2:
+                return True  # goal was added
+            return False
+
+        orch.poll_external_goals.return_value = ["polled goal"]
+        q = MagicMock()
+        q.has_goals.side_effect = has_goals
+        q.next.return_value = "polled goal"
+        q.add.side_effect = lambda g: added.append(g)
+
+        archive = MagicMock()
+        run_goals_loop(_make_args(), q, orch, None, None, archive, Path("/tmp"))
+        assert "polled goal" in added
+
+    def test_multiple_goals_all_processed(self, MockTM, MockIFT, mock_log):
+        orch = MagicMock()
+        orch.run_loop.return_value = {"stop_reason": "PASS", "history": []}
+        q = _make_goal_queue(["g1", "g2", "g3"])
+        archive = MagicMock()
+        run_goals_loop(_make_args(), q, orch, None, None, archive, Path("/tmp"))
+        assert orch.run_loop.call_count == 3
+        assert archive.record.call_count == 3
+
+    def test_decompose_mode_calls_decompose_goal(self, MockTM, MockIFT, mock_log):
+        orch = MagicMock()
+        orch.run_loop.return_value = {"stop_reason": "PASS", "history": []}
+
+        tm = MockTM.return_value
+        subtask = MagicMock()
+        subtask.status = "pending"
+        subtask.title = "sub"
+        root = MagicMock()
+        root.subtasks = [subtask]
+        tm.decompose_goal.return_value = root
+
+        planner = MagicMock()
+        q = _make_goal_queue(["big goal"])
+        archive = MagicMock()
+        run_goals_loop(_make_args(), q, orch, None, planner, archive, Path("/tmp"), decompose=True)
+        tm.decompose_goal.assert_called_once_with("big goal", planner)
+
+    def test_goal_processing_exception_does_not_crash_loop(self, MockTM, MockIFT, mock_log):
+        orch = MagicMock()
+        orch.run_loop.return_value = {"stop_reason": "PASS", "history": []}
+        tracker = MockIFT.return_value
+        tracker.write.side_effect = [OSError("disk full"), None]
+        q = _make_goal_queue(["g1", "g2"])
+        archive = MagicMock()
+        # Should not raise; loop continues despite exception
+        run_goals_loop(_make_args(), q, orch, None, None, archive, Path("/tmp"))

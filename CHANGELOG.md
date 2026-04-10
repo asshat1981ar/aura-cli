@@ -8,7 +8,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased] - feat/code-quality-dx-sprint
 
 ### Added
-- Pydantic v2 native — v1 compatibility shim removed (106 lines)
+- Pre-commit CI job in `.github/workflows/ci.yml` (cached, non-blocking)
+- `docs/adr/ADR-006-multi-stage-docker-build.md` — architecture decision record for Docker multi-stage build
+- `docs/adr/ADR-007-openapi-first-contract.md` — architecture decision record for OpenAPI-first API design
+- `docs/RELEASE_CHECKLIST.md` — full pre-release quality gate checklist (ruff, bandit, pip-audit, tests, OpenAPI drift, Docker smoke test)
+- `.env.example`: `AURA_AUTH_DB_PATH` and `AURA_TEST_MODE` documented with safety warning
+- `tests/test_api_routers.py` — 41 tests for `aura_cli/api/routers/runs.py` + `ws.py` (7 test classes)
+- `tests/test_dispatch_commands.py` — 59 tests for `aura_cli/dispatch.py` + `aura_cli/commands.py`
+- `tests/test_orchestrator_phases.py` — 68 new tests for `core/orchestrator.py` + `core/orchestrator_phases.py` + `core/orchestrator_verify.py`
+
+### Fixed
+- `core/orchestrator.py`: re-export `analyze_capability_needs`, `dispatch_skills`, and related functions from `core.capability_manager` / `core.skill_dispatcher` — resolves `AttributeError` when `auto_add_capabilities=True`
+
+### Changed
+- Test suite: 456 → 628 tests (+172); 0 failures
+- Coverage: 12.93% → 14.55% (624 passing, 17 skipped legacy tests)
+- Coverage gate: `fail_under` 13 → 14 in `pyproject.toml`
+
+
 - Token bucket rate limiter with per-endpoint limits (5/10/100 req/min)
 - DB migrations wired to FastAPI lifespan (idempotent, SHA256-verified)
 - 6-component /ready readiness probe (brain_db, auth_db, redis, mcp_server, model_config, sandbox)

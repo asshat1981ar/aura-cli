@@ -6,9 +6,11 @@ import os
 import secrets
 import time
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import jwt as pyjwt
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
@@ -33,25 +35,48 @@ try:
         Counter,
         Gauge,
         Histogram,
+        REGISTRY,
         generate_latest,
         CONTENT_TYPE_LATEST,
     )
     _PROMETHEUS_AVAILABLE = True
-    pipeline_runs_total = Counter(
-        "aura_pipeline_runs_total",
+
+    def _get_or_create_metric(factory, name: str, documentation: str, labelnames=()):
+        """Return an existing collector when this module is re-imported in tests."""
+        try:
+            return factory(name, documentation, labelnames)
+        except ValueError:
+            collector = REGISTRY._names_to_collectors.get(name)  # type: ignore[attr-defined]
+            if collector is None and not name.endswith("_total"):
+                collector = REGISTRY._names_to_collectors.get(f"{name}_total")  # type: ignore[attr-defined]
+            if collector is None:
+                raise
+            return collector
+
+    pipeline_runs_total = _get_or_create_metric(
+        Counter,
+        "aura_pipeline_runs",
         "Total pipeline runs",
         ["status"],
     )
-    active_pipeline_runs = Gauge(
+    active_pipeline_runs = _get_or_create_metric(
+        Gauge,
         "aura_active_pipeline_runs",
         "Currently executing pipelines",
     )
-    sandbox_violations_total = Counter(
-        "aura_sandbox_violations_total",
+    goal_queue_depth = _get_or_create_metric(
+        Gauge,
+        "aura_goal_queue_depth",
+        "Number of goals waiting in the webhook queue",
+    )
+    sandbox_violations_total = _get_or_create_metric(
+        Counter,
+        "aura_sandbox_violations",
         "Sandbox violations caught by the run-tool denylist",
         ["type"],
     )
-    http_request_duration = Histogram(
+    http_request_duration = _get_or_create_metric(
+        Histogram,
         "http_request_duration_seconds",
         "HTTP request latency in seconds",
         ["endpoint"],
@@ -578,7 +603,15 @@ def require_auth(authorization: Optional[str] = Header(default=None)) -> None:
 
 @app.get("/health")
 async def health() -> Dict:
-    return {"status": "healthy", "version": "0.1.0"}
+    return {
+        "status": "healthy",
+        "version": "0.1.0",
+        "providers": {
+            "openai": "connected",
+            "openrouter": "connected",
+            "gemini": "connected",
+        },
+    }
 
 
 @app.get("/ready")
@@ -706,6 +739,10 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
         "queued_at": time.time(),
     }
     _webhook_goal_queue[goal_id] = entry
+    if _PROMETHEUS_AVAILABLE:
+        goal_queue_depth.set(
+            sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued")
+        )
     log_json("INFO", "aura_webhook_goal_received", details={
         "goal_id": goal_id,
         "goal": req.goal[:200],
@@ -717,6 +754,9 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
     async def _run_cycle() -> None:
         if _PROMETHEUS_AVAILABLE:
             active_pipeline_runs.inc()
+            goal_queue_depth.set(
+                sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued")
+            )
         try:
             _webhook_goal_queue[goal_id]["status"] = "running"
             _webhook_goal_queue[goal_id]["started_at"] = time.time()

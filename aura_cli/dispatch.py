@@ -68,16 +68,8 @@ def _run_async_safely(coro):
         raise
 
 
-# Idempotency flag for _sync_cli_compat (P0 BUG FIX)
-_sync_cli_compat_done = False
-
-
 def _sync_cli_compat() -> None:
-    """Synchronize CLI compatibility layer (idempotent)."""
-    global _sync_cli_compat_done
-    if _sync_cli_compat_done:
-        return
-    
+    """Synchronize CLI compatibility bindings from aura_cli.cli_main."""
     cli_main = importlib.import_module("aura_cli.cli_main")
     for name in (
         "log_json",
@@ -106,8 +98,6 @@ def _sync_cli_compat() -> None:
         "unknown_command_help_topic_payload",
     ):
         setattr(sys.modules[__name__], name, getattr(cli_main, name))
-    
-    _sync_cli_compat_done = True
 
 
 @dataclass
@@ -299,41 +289,39 @@ def _print_json_payload(payload: dict, *, parsed=None, **json_kwargs) -> None:
     print(json.dumps(attach_cli_warnings(payload, parsed), **json_kwargs))
 
 
-def _run_json_printing_callable_with_warnings(ctx: DispatchContext, func, *args, **kwargs) -> None:
+def _run_json_printing_callable_with_warnings(ctx: DispatchContext, func, *args, **kwargs) -> int:
     warning_records = getattr(ctx.parsed, "warning_records", None) or []
     if not warning_records:
-        func(*args, **kwargs)
-        return
+        result = func(*args, **kwargs)
+        return result if isinstance(result, int) else 0
 
     buf = io.StringIO()
     with redirect_stdout(buf):
-        func(*args, **kwargs)
+        result = func(*args, **kwargs)
     raw = buf.getvalue()
     if raw == "":
-        return
+        return result if isinstance(result, int) else 0
 
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
         print(raw, end="")
-        return
+        return result if isinstance(result, int) else 0
 
     _print_json_payload(payload, parsed=ctx.parsed, indent=2)
+    return result if isinstance(result, int) else 0
 
 
 def _handle_mcp_tools_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_tools)
-    return 0
+    return _run_json_printing_callable_with_warnings(ctx, cmd_mcp_tools)
 
 
 def _handle_mcp_call_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_call, ctx.args.mcp_call, ctx.args.mcp_args)
-    return 0
+    return _run_json_printing_callable_with_warnings(ctx, cmd_mcp_call, ctx.args.mcp_call, ctx.args.mcp_args)
 
 
 def _handle_diag_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_diag)
-    return 0
+    return _run_json_printing_callable_with_warnings(ctx, cmd_diag)
 
 
 def _handle_logs_dispatch(ctx: DispatchContext) -> int:
@@ -1587,5 +1575,3 @@ def dispatch_command(parsed, *, project_root: Path, runtime_factory=create_runti
             return prep_rc
 
     return rule.handler(ctx)
-
-

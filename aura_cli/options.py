@@ -605,6 +605,7 @@ CLI_ACTION_SPECS_BY_ACTION: dict[str, CLIActionSpec] = {spec.action: spec for sp
 _ACTION_SMOKE_OVERRIDES: dict[str, tuple[str, ...]] = {
     "interactive": (),
     "json_help": ("--json-help",),
+    "config_set": ("config", "set", "example.key", "example-value"),
     "goal_add_run": ("goal", "add", "example-goal", "--run"),
     "sadd_run": ("sadd", "run", "--spec", "example-spec.md", "--dry-run"),
     "sadd_resume": ("sadd", "resume", "--session-id", "example-id"),

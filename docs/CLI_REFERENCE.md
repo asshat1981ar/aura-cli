@@ -116,6 +116,7 @@ Known record codes:
   - [`aura credentials store`](#aura-credentials-store)
   - [`aura credentials delete`](#aura-credentials-delete)
   - [`aura credentials status`](#aura-credentials-status)
+- [`cancel`](#cancel)
 
 ## `help`
 
@@ -821,3 +822,21 @@ Display information about the credential store configuration and stored credenti
 Examples:
 - `python3 main.py credentials status`
 - `python3 main.py credentials status --json`
+
+## `cancel`
+
+### `aura cancel`
+
+Cancel an active pipeline run
+
+Send a cancellation signal to a running AURA pipeline and verify that no partial filesystem changes remain on disk.
+
+Exit codes:
+  0 — run cancelled and filesystem restored
+  1 — run_id not found in the active-run registry
+  2 — cancellation signal sent but rollback verification failed
+
+`action`: `cancel` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py cancel <run-id>`

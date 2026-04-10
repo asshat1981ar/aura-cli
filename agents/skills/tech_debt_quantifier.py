@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 from core.logging_utils import log_json
 
 _DEBT_TAGS = re.compile(r"#\s*(TODO|FIXME|HACK|XXX|NOQA|TEMP|BUG)\b", re.IGNORECASE)
@@ -31,7 +31,7 @@ class TechDebtQuantifierSkill(SkillBase):
         total_funcs = 0
         total_todos = 0
 
-        py_files = [f for f in project_root.rglob("*.py") if ".git" not in f.parts and "node_modules" not in f.parts and "__pycache__" not in f.parts]
+        py_files = list(iter_py_files(project_root))
 
         for f in py_files:
             try:

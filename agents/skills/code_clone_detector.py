@@ -6,7 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 from core.logging_utils import log_json
 
 
@@ -54,9 +54,7 @@ class CodeCloneDetectorSkill(SkillBase):
         threshold = float(input_data.get("similarity_threshold", 0.8))
 
         all_funcs: List[Tuple] = []
-        for f in project_root.rglob("*.py"):
-            if ".git" in f.parts or "node_modules" in f.parts or "__pycache__" in f.parts:
-                continue
+        for f in iter_py_files(project_root):
             try:
                 src = f.read_text(encoding="utf-8", errors="replace")
             except OSError:

@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Set
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 
 _STOPWORDS: Set[str] = {
     "a", "an", "the", "in", "on", "at", "to", "for", "of", "and", "or",
@@ -13,7 +13,11 @@ _STOPWORDS: Set[str] = {
     "are", "was", "were", "has", "have", "had", "do", "does", "did",
 }
 
-_SKIP_DIRS: Set[str] = {"__pycache__", ".git", "node_modules", "venv", ".venv", ".tox"}
+_SKIP_DIRS: Set[str] = {
+    "__pycache__", ".git", "node_modules", "venv", ".venv", ".tox",
+    "env", ".env", "test-aura-env", "site-packages", "dist", "build",
+    "aura_cli.egg-info", "tmp_out", ".mypy_cache", ".ruff_cache", ".pytest_cache",
+}
 
 
 def _keywords(goal: str) -> List[str]:

@@ -32,6 +32,8 @@ jobs:
     - name: Test with pytest + coverage
       run: |
         pytest -q --maxfail=3 --cov=aura_cli --cov=core --cov=agents --cov=memory --cov-report=xml --cov-report=term-missing
+    - name: Verify OpenAPI contract
+      run: python3 -m pytest tests/test_openapi_contract.py -v --no-cov --tb=short
     - name: Upload coverage
       if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.11'
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -56,6 +58,11 @@ jobs:
     - name: Ruff format check
       run: ruff format --check .
       continue-on-error: true  # Advisory — existing codebase not yet fully formatted
+    - name: Check Python file size limits
+      # Sprint 0 gate s0-file-size-lint: fail if any NEW .py file exceeds 500 lines.
+      # Known pre-existing violators are allow-listed in scripts/check_file_sizes.py
+      # with TODO notes for future refactoring.
+      run: python3 scripts/check_file_sizes.py
 
   security:
     runs-on: ubuntu-latest

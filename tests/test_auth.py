@@ -184,7 +184,7 @@ class TestPasswordHashing:
     
     def test_hash_password(self):
         """Test password hashing produces different hashes."""
-        auth = AuthManager(secret_key="test")
+        auth = AuthManager(secret_key="test-secret-key-for-password-hashing")
         hash1 = auth.hash_password("password")
         hash2 = auth.hash_password("password")
         
@@ -195,13 +195,13 @@ class TestPasswordHashing:
     
     def test_verify_password_correct(self):
         """Test password verification with correct password."""
-        auth = AuthManager(secret_key="test")
+        auth = AuthManager(secret_key="test-secret-key-for-password-hashing")
         hashed = auth.hash_password("mypassword")
         assert auth.verify_password("mypassword", hashed) is True
     
     def test_verify_password_incorrect(self):
         """Test password verification with incorrect password."""
-        auth = AuthManager(secret_key="test")
+        auth = AuthManager(secret_key="test-secret-key-for-password-hashing")
         hashed = auth.hash_password("mypassword")
         assert auth.verify_password("wrongpassword", hashed) is False
 

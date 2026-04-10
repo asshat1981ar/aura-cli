@@ -5,6 +5,68 @@ All notable changes to AURA CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-04-09
+
+### Added
+
+#### Sprint 1: Server Decomposition
+- `aura_cli/api/` — Modular FastAPI application structure
+  - `app.py` — Thin composition root with lifespan management
+  - `middleware/auth.py` — JWT authentication middleware
+  - `routers/health.py` — Health, readiness, liveness endpoints
+  - `routers/runs.py` — Pipeline execution and webhook endpoints
+  - `routers/ws.py` — WebSocket endpoints for real-time updates
+
+#### Sprint 3: Sandbox Security Hardening
+- Network blocking via proxy environment variables (`_SANDBOX_NETWORK_ENV`)
+- Resource limits: 30s CPU, 512 MiB memory (`RLIMIT_CPU`, `RLIMIT_AS`)
+- Filesystem restrictions via runtime `open()` wrapper
+- Security audit document (`docs/security/sandbox-audit-v1.0.md`)
+
+#### Sprint 4/5: Test Coverage
+- `tests/agents/test_applicator_handler.py` — Unit tests for applicator handler
+- `tests/agents/test_sandbox_unit.py` — Unit tests for sandbox module
+- `tests/integration/test_e2e_sandbox_retry.py` — E2E tests for sandbox retry
+
+#### Sprint 6: CLI Infrastructure
+- `core/circuit_breaker.py` — Three-state circuit breaker for LLM resilience
+- `core/cost_tracker.py` — Cost tracking with `AURA_COST_CAP_USD` enforcement
+- `memory/redis_cache_adapter.py` — Optional Redis L0/L1 caching
+- JWT hardening and improved auth in `aura_cli/server.py`
+- Prometheus metrics resilience for test reimports
+
+#### Sprint 8: Infrastructure Hardening
+- Docker Compose security: `no-new-privileges`, user restrictions, tmpfs
+- Resource limits: mem_limit, cpus for all services
+- Logging rotation: max-size 10m, max-file 3
+- Pinned base images: nginx:1.25-alpine, redis:7.2-alpine
+
+#### Sprint 9: Documentation
+- Production deployment guide (`docs/deployment/production-guide.md`)
+- Kubernetes deployment manifests
+- Security hardening checklist
+- Backup & recovery procedures
+
+### Changed
+
+- `agents/sandbox.py` — Wrapped code execution with filesystem restrictions
+- `agents/skills/base.py` — Added `SKIP_DIRS` and `iter_py_files()` helpers
+- `aura_cli/cli_options.py` — Improved CLI contract reporting
+- `docker-compose.prod.yml` — Hardened production configuration
+
+### Security
+
+- Sandbox violations now logged to `aura_sandbox_violations_total` metric
+- API token required for all mutating endpoints
+- Cost cap prevents runaway LLM spending
+- All subprocesses run with restricted network and filesystem access
+
+### Compliance
+
+- OWASP ASVS L1: Input Validation (V5.2) ✅
+- OWASP ASVS L1: File Execution (V12.3) ✅
+- NIST 800-53: Process Isolation (SC-39) ✅
+
 ## [Sprint S004] - 2026-03-27
 
 ### Added

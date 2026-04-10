@@ -2787,3 +2787,371 @@
 {"timestamp": 1775761354.2040417, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
 {"timestamp": 1775761354.2347465, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
 {"timestamp": 1775761354.2662666, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772661.5844715, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775772661.6485255, "goal": "test rollback on apply failure", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.675, "failure_context": ""}
+{"timestamp": 1775772661.673058, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775772661.8328469, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772661.857935, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772661.928953, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772663.046897, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772666.1286764, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775772666.1921797, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775772666.2124662, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772666.2324758, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772666.2531412, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772666.2745833, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772666.2924507, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772666.3098156, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772666.3326576, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775772666.3982925, "goal": "fix sandbox error", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775772666.4282985, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775772670.67264, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772670.696882, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772670.7754915, "goal": "goal one", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772670.8250723, "goal": "goal two", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772670.8539586, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772670.8756373, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772670.8865676, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772670.9214745, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772670.9591098, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772670.9804792, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772723.3720405, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775772723.438254, "goal": "test rollback on apply failure", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.675, "failure_context": ""}
+{"timestamp": 1775772723.4624484, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775772723.6145666, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772723.639597, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772723.6881406, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772724.7524722, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772727.8247144, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775772727.8773072, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775772727.8987143, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772727.9210472, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772727.948393, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772727.9680183, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772727.9877448, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772728.0071363, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772728.0392485, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775772728.1177566, "goal": "fix sandbox error", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775772728.1456141, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775772730.6380816, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772730.6625292, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772730.7392733, "goal": "goal one", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772730.7848005, "goal": "goal two", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772730.809448, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772730.8343275, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772730.8441727, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772730.8697062, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772730.8938675, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772730.9156117, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772796.7513258, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775772796.8122842, "goal": "test rollback on apply failure", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.675, "failure_context": ""}
+{"timestamp": 1775772796.838434, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775772797.0192244, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772797.0475218, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772797.1396956, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772798.2819598, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772801.3657951, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775772801.4211564, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775772801.4426498, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772801.464848, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772801.4888873, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772801.511182, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772801.5322247, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772801.5541518, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775772801.582802, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775772801.6541932, "goal": "fix sandbox error", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775772801.6819506, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775772804.7911212, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772804.8143466, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772804.9039948, "goal": "goal one", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772804.9406426, "goal": "goal two", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772804.9621127, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772804.9838028, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772804.992352, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772805.0150855, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772805.0377507, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775772805.0649765, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773596.3923903, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775773596.4597747, "goal": "test rollback on apply failure", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.675, "failure_context": ""}
+{"timestamp": 1775773596.4864264, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775773596.6519985, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773596.6785462, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773596.7384253, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773597.81827, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773600.896926, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775773600.9513607, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775773600.971114, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773600.9893363, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773601.0077443, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773601.0269692, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773601.0454726, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773601.0646381, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773601.0880718, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775773601.1452773, "goal": "fix sandbox error", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775773601.1850865, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775773605.2895706, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773605.3116045, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773605.3575437, "goal": "goal one", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773605.3980615, "goal": "goal two", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773605.424838, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773605.4482121, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773605.4581995, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773605.4812596, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773605.504866, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773605.5280724, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773667.6721761, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775773667.7326488, "goal": "test rollback on apply failure", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.675, "failure_context": ""}
+{"timestamp": 1775773667.7588897, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775773667.9074564, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773667.9340532, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773667.9940393, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773669.080531, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773672.1577468, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775773672.2306023, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775773672.2710972, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773672.3036482, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773672.3270042, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773672.3508255, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773672.3734965, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773672.3966901, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773672.424692, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775773672.4944978, "goal": "fix sandbox error", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775773672.5367658, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775773675.7336884, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773675.7618225, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773675.8251336, "goal": "goal one", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773675.8671744, "goal": "goal two", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773675.894488, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773675.9201958, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773675.9360282, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773675.9694908, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773676.0010037, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773676.0287054, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773729.7493455, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775773729.8153138, "goal": "test rollback on apply failure", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.675, "failure_context": ""}
+{"timestamp": 1775773729.8415532, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775773730.0553536, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773730.0834851, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773730.1567013, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773731.2285967, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773734.3605585, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775773734.4770973, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775773734.5240102, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773734.568012, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773734.608241, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773734.6381643, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773734.6640594, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773734.6877503, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775773734.7183044, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775773734.7734106, "goal": "fix sandbox error", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775773734.8015835, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775773737.8199975, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773737.8451629, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773737.9317813, "goal": "goal one", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773737.9646451, "goal": "goal two", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773737.9904673, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773738.0171084, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773738.0309424, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773738.0676947, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773738.093634, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775773738.1200686, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775774376.2336135, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775774376.3073456, "goal": "test rollback on apply failure", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.675, "failure_context": ""}
+{"timestamp": 1775774376.3491278, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775774376.527615, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774376.5598233, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774376.6198564, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774377.6920931, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774380.764456, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775774380.9012988, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775774380.9362128, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774380.9811182, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774381.0014992, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774381.0216882, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774381.0427961, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774381.063468, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774381.0900607, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775774381.1525488, "goal": "fix sandbox error", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775774381.180377, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775774385.1897042, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775774385.2175348, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775774385.3122928, "goal": "goal one", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775774385.3590791, "goal": "goal two", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775774385.3851025, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775774385.410711, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775774385.421928, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775774385.447642, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775774385.4727163, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775774385.4988854, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775774944.9263413, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775774945.013605, "goal": "test rollback on apply failure", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.675, "failure_context": ""}
+{"timestamp": 1775774945.0438807, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775774945.2141814, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774945.2481203, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774945.3313165, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774946.4063032, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774949.503408, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775774949.5657277, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775774949.5893416, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774949.6133018, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774949.636294, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774949.6599236, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774949.68401, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774949.70731, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775774949.7372143, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775774949.807861, "goal": "fix sandbox error", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775774949.8572514, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775775036.1477008, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775775036.2101026, "goal": "test rollback on apply failure", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.675, "failure_context": ""}
+{"timestamp": 1775775036.23513, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775775036.39112, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775775036.4174192, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775775036.4685674, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775775037.5268745, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775775040.5961661, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775775040.6606236, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775775040.680436, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775775040.700462, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775775040.7203104, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775775040.7387643, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775775040.7570944, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775775040.7762535, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775775040.8018224, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775775040.8571353, "goal": "fix sandbox error", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775775040.8881552, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775775043.322119, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775775043.3448668, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775775043.3941567, "goal": "goal one", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775775043.4494553, "goal": "goal two", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775775043.475429, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775775043.499621, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775775043.5086372, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775775043.5306823, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775775043.553149, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775775043.5741096, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775775339.533261, "goal": "Implement new feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775775341.3462584, "goal": "Implement new feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775778726.099302, "goal": "Implement new feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775778727.1293173, "goal": "Implement new feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775779506.0927603, "goal": "Implement new feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775779510.4224627, "goal": "Implement new feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781284.211736, "goal": "Implement new feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781284.2349064, "goal": "Implement new feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781310.122338, "goal": "Test dry run functionality", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775781310.2019567, "goal": "Test normal run functionality", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775781329.169489, "goal": "print hello world", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775781362.5965683, "goal": "add a comment to main.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781416.1260977, "goal": "Implement new feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781416.153059, "goal": "Implement new feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781419.4088345, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775781419.5805945, "goal": "test rollback on apply failure", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.675, "failure_context": ""}
+{"timestamp": 1775781419.6701021, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775781419.9408925, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781419.9775908, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781420.0777802, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781421.173947, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781424.3246756, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775781424.4381614, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775781424.4683907, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781424.4983296, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781424.5271437, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781424.5557842, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781424.5838666, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781424.6115339, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781424.648313, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775781424.7345476, "goal": "fix sandbox error", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775781424.781095, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775781428.5039165, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775781428.5455184, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775781428.625966, "goal": "goal one", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775781428.6922708, "goal": "goal two", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775781428.7239845, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775781428.810872, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775781428.831075, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775781428.8606346, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775781428.889888, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775781428.9206111, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775781543.793013, "goal": "Implement new feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781543.817803, "goal": "Implement new feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781580.2824678, "goal": "Test dry run functionality", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775781580.3685856, "goal": "Test normal run functionality", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775781606.6203656, "goal": "print hello world", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775781657.8915174, "goal": "add a comment to main.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781717.612951, "goal": "refactor imports", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775781728.7473712, "goal": "Test logging apply mismatch", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775781728.8087301, "goal": "Test logging dry run", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775781760.4700708, "goal": "Test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781760.5155392, "goal": "Test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781815.3488345, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781840.8240952, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781866.9959176, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781878.1413636, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781910.1975367, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781933.9767885, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781956.2671502, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781975.8369367, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775781998.0930586, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782047.1037064, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782067.0619113, "goal": "test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782068.9008043, "goal": "Test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782068.987071, "goal": "Test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782069.0371373, "goal": "Test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782069.073946, "goal": "Test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782069.116809, "goal": "Test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782069.1664472, "goal": "Test goal", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782164.3566966, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775782164.4315116, "goal": "test rollback on apply failure", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.675, "failure_context": ""}
+{"timestamp": 1775782164.4572675, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775782164.6672752, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782164.6989357, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782164.751486, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782165.8249974, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782168.9519384, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775782169.0202649, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775782169.0475473, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782169.068703, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782169.088202, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782169.1146772, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782169.1458676, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782169.1652167, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782169.2021945, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775782169.2845511, "goal": "fix sandbox error", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775782169.3173156, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775782172.2665915, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782172.2911365, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782172.343587, "goal": "goal one", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782172.3908353, "goal": "goal two", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782172.4145098, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782172.4392352, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782172.449234, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782172.4722133, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782172.494947, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782172.5184197, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782268.9826255, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775782269.051955, "goal": "test rollback on apply failure", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.675, "failure_context": ""}
+{"timestamp": 1775782269.1444345, "goal": "Implement feature", "goal_type": "feat", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775782269.2930934, "goal": "demo", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782269.3184538, "goal": "add a feature", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782269.3877635, "goal": "fix sandbox", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782270.4965842, "goal": "fix test", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782273.7368577, "goal": "fix wrapper", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.7249999999999999, "failure_context": ""}
+{"timestamp": 1775782273.9327347, "goal": "write file", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6499999999999999, "failure_context": ""}
+{"timestamp": 1775782273.9602525, "goal": "risky", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782273.9808953, "goal": "Improve Docker logging and observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782274.0014896, "goal": "Review GitHub pull requests and release notes", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782274.0232222, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782274.0435474, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782274.0684376, "goal": "Improve Docker observability coverage", "goal_type": "refactor", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.5, "failure_context": ""}
+{"timestamp": 1775782274.0954356, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775782274.1563458, "goal": "fix sandbox error", "goal_type": "bug_fix", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775782274.187206, "goal": "Add a hello() function to core/utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.525, "failure_context": ""}
+{"timestamp": 1775782283.5679784, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782283.6015558, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782283.7799985, "goal": "goal one", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782283.8341002, "goal": "goal two", "goal_type": "default", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782283.864471, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782283.8954198, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782283.9085631, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782283.9377506, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782283.9656842, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}
+{"timestamp": 1775782283.9994752, "goal": "add hello() to utils.py", "goal_type": "feature", "stop_reason": null, "status": "", "verify_status": "", "cycle_confidence": 0.6, "failure_context": ""}

@@ -182,6 +182,29 @@ jobs:
         continue-on-error: true
 
   # ────────────────────────────────────────────────────────────
+  # Job 4b: Pre-commit Hooks
+  # ────────────────────────────────────────────────────────────
+  pre-commit:
+    name: Pre-commit Hooks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install pre-commit
+        run: pip install pre-commit
+      - name: Cache pre-commit environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: Run pre-commit on all files
+        run: pre-commit run --all-files --show-diff-on-failure
+        continue-on-error: true
+
+  # ────────────────────────────────────────────────────────────
   # Job 5: Docker Build
   # ────────────────────────────────────────────────────────────
   docker-build:

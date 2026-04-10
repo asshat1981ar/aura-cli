@@ -13,6 +13,8 @@ New ADRs should be added here when created.
 | 003 | [ADR-003-agent-handlers-package.md](ADR-003-agent-handlers-package.md) | Agent Handlers Package | Accepted | 2025-01-01 | Agent handler logic is encapsulated in a dedicated `agents/` package; each agent (Planner, Coder, Critic, Sandbox) is a self-contained class with a standard interface. |
 | 004 | [ADR-004-pydantic-v2-migration.md](ADR-004-pydantic-v2-migration.md) | Pydantic v2 Migration | Accepted | 2026-03-24 | Migrate all agent schemas from Pydantic v1 to Pydantic v2 (2.x) for improved performance, stricter validation, and long-term support. |
 | 005 | [ADR-005-rate-limiting-token-bucket.md](ADR-005-rate-limiting-token-bucket.md) | Rate Limiting — Token Bucket Algorithm | Accepted | 2026-04-09 | Implement per-endpoint, per-user rate limiting using the token-bucket algorithm as in-process FastAPI middleware; Redis-backed distributed limiter deferred to v1.1. |
+| 006 | [ADR-006-multi-stage-docker-build.md](ADR-006-multi-stage-docker-build.md) | Multi-Stage Docker Build | Accepted | 2026-04-10 | Switch to two-stage Dockerfile (builder + runtime) to exclude build tools from production image; add .dockerignore; align entry point to uvicorn aura_cli.server:app on port 8000. |
+| 007 | [ADR-007-openapi-first-contract.md](ADR-007-openapi-first-contract.md) | OpenAPI-First API Contract | Accepted | 2026-04-10 | Commit generated docs/api/openapi.json as the machine-readable API contract; validate and drift-check in CI via openapi-validate job in ci-enhanced.yml. |
 
 ---
 

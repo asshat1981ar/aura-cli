@@ -1,8 +1,10 @@
+# Install: pip install pre-commit && pre-commit install
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.6.0
     hooks:
       - id: check-yaml
+        args: ["--unsafe"]
       - id: check-merge-conflict
       - id: check-added-large-files
         args: ['--maxkb=500']
@@ -11,15 +13,16 @@ repos:
         exclude: 'tests/snapshots/'
       - id: check-json
         exclude: 'node_modules/'
+      - id: check-toml
+      - id: debug-statements
       - id: detect-private-key
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.4.8
+    rev: v0.5.0
     hooks:
       - id: ruff
-        args: ['--fix']
+        args: [--fix, --exit-non-zero-on-fix]
       - id: ruff-format
-        args: ['--check']
 
   - repo: https://github.com/PyCQA/bandit
     rev: 1.7.9
@@ -35,3 +38,27 @@ repos:
       - id: detect-secrets
         args: ['--baseline', '.secrets.baseline']
         exclude: '(package-lock\.json|\.secrets\.baseline)$'
+
+  - repo: local
+    hooks:
+      - id: no-jwt-algorithm-none
+        name: Block JWT algorithm=none in production code
+        entry: "bash -c 'if grep -rn algorithm.*none --include=*.py aura_cli/ core/ agents/ memory/ 2>/dev/null; then echo ERROR: algorithm=none found - security vulnerability; exit 1; fi'"
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: check-aura-auth-db
+        name: Ensure aura_auth.db is not committed
+        entry: "bash -c 'if git diff --cached --name-only 2>/dev/null | grep -q aura_auth.db; then echo ERROR: Do not commit aura_auth.db; exit 1; fi'"
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: validate-config
+        name: Validate AURA configuration files
+        entry: python scripts/validate_config.py
+        language: python
+        pass_filenames: false
+        files: '(aura\.config\.json|settings\.json)$'
+        additional_dependencies: []

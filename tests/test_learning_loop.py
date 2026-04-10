@@ -33,7 +33,7 @@ class TestCycleOutcome:
 
     def test_mark_complete_failure_with_reason(self):
         co = CycleOutcome()
-        co.mark_complete(False, failure_phase="verify", failure_reason="lint fail")
+        co.mark_complete(False, failure_failure_summary="fail", failure_reason="lint fail")
         assert co.success is False
         assert co.failure_phase == "verify"
         assert co.failure_reason == "lint fail"
@@ -361,3 +361,293 @@ class TestCycleOutcomeBrainIntegration:
         goals = [o.goal for o in outcomes]
         assert "goal 0" in goals
         assert "goal 4" in goals
+
+
+# ── Tests for memory/learning_loop.py ────────────────────────────────────────
+
+
+class TestMemoryLearningLoopLessonStore:
+    """Tests for memory.learning_loop.LessonStore (async version)."""
+
+    @pytest.fixture
+    def tmp_dir(self, tmp_path):
+        """Provide a temporary directory for lesson storage."""
+        return tmp_path
+
+    @pytest.mark.asyncio
+    async def test_init_creates_directory(self, tmp_dir):
+        """Test that __init__ creates root directory."""
+        from memory.learning_loop import LessonStore
+        
+        store = LessonStore(root_dir=tmp_dir)
+        assert store.root_dir == tmp_dir
+        assert store.root_dir.exists()
+
+    @pytest.mark.asyncio
+    async def test_init_with_existing_directory(self, tmp_dir):
+        """Test __init__ with already existing directory."""
+        from memory.learning_loop import LessonStore
+        
+        store = LessonStore(root_dir=tmp_dir)
+        # Second instance should work fine
+        store2 = LessonStore(root_dir=tmp_dir)
+        assert store2.root_dir == tmp_dir
+
+    @pytest.mark.asyncio
+    async def test_record_cycle_no_lessons(self, tmp_dir):
+        """Test record_cycle with no lessons."""
+        from memory.learning_loop import LessonStore
+        from core.swarm_models import CycleReport
+        
+        store = LessonStore(root_dir=tmp_dir)
+        report = CycleReport(cycle_number=1, story_id="story-1")
+        
+        await store.record_cycle(report)
+        
+        # File should not be created if no lessons
+        assert not store.lessons_file.exists()
+
+    @pytest.mark.asyncio
+    async def test_record_cycle_with_lessons(self, tmp_dir):
+        """Test record_cycle with lessons."""
+        from memory.learning_loop import LessonStore
+        from core.swarm_models import CycleReport, CycleLesson
+        import json
+        
+        store = LessonStore(root_dir=tmp_dir)
+        lesson = CycleLesson(
+            cycle_number=1,
+            lesson="test lesson",
+            source_task_id="task-1",
+            confidence=0.9
+        )
+        report = CycleReport(cycle_number=1, story_id="story-1", lessons_injected=[lesson])
+        
+        await store.record_cycle(report)
+        
+        assert store.lessons_file.exists()
+        content = store.lessons_file.read_text()
+        assert "test lesson" in content
+
+    @pytest.mark.asyncio
+    async def test_record_cycle_with_debug_report(self, tmp_dir):
+        """Test record_cycle creates lesson from debug_report."""
+        from memory.learning_loop import LessonStore
+        from core.swarm_models import CycleReport, DebugReport
+        
+        store = LessonStore(root_dir=tmp_dir)
+        debug = DebugReport(
+            task_id="task-1",
+            failure_summary="test error",
+            
+            recovery_plan=["step1", "step2"]
+        )
+        report = CycleReport(
+            cycle_number=1,
+            story_id="story-1",
+            debug_report=debug
+        )
+        
+        await store.record_cycle(report)
+        
+        assert store.lessons_file.exists()
+        content = store.lessons_file.read_text()
+        assert "Debugger recovery plan" in content
+        assert "step1; step2" in content
+
+    @pytest.mark.asyncio
+    async def test_record_cycle_multiple_lessons(self, tmp_dir):
+        """Test record_cycle with multiple lessons and debug report."""
+        from memory.learning_loop import LessonStore
+        from core.swarm_models import CycleReport, CycleLesson, DebugReport
+        
+        store = LessonStore(root_dir=tmp_dir)
+        lessons = [
+            CycleLesson(cycle_number=1, lesson="lesson1", source_task_id="t1", confidence=0.8),
+            CycleLesson(cycle_number=1, lesson="lesson2", source_task_id="t2", confidence=0.9),
+        ]
+        debug = DebugReport(
+            task_id="task-1",
+            failure_summary="fail",
+            
+            recovery_plan=["recover"]
+        )
+        report = CycleReport(
+            cycle_number=1,
+            story_id="story-1",
+            lessons_injected=lessons,
+            debug_report=debug
+        )
+        
+        await store.record_cycle(report)
+        
+        content = store.lessons_file.read_text()
+        lines = [l for l in content.splitlines() if l.strip()]
+        assert len(lines) == 3  # 2 lessons + 1 debug lesson
+
+    @pytest.mark.asyncio
+    async def test_injectable_lessons_empty(self, tmp_dir):
+        """Test injectable_lessons with no file."""
+        from memory.learning_loop import LessonStore
+        
+        store = LessonStore(root_dir=tmp_dir)
+        lessons = await store.injectable_lessons()
+        
+        assert lessons == []
+
+    @pytest.mark.asyncio
+    async def test_injectable_lessons_default_limit(self, tmp_dir):
+        """Test injectable_lessons returns last 5 by default."""
+        from memory.learning_loop import LessonStore
+        from core.swarm_models import CycleReport, CycleLesson
+        
+        store = LessonStore(root_dir=tmp_dir)
+        
+        # Record 8 lessons
+        for i in range(8):
+            lesson = CycleLesson(
+                cycle_number=i,
+                lesson=f"lesson-{i}",
+                source_task_id=f"task-{i}",
+                confidence=0.8
+            )
+            report = CycleReport(
+                cycle_number=i,
+                story_id=f"story-{i}",
+                lessons_injected=[lesson]
+            )
+            await store.record_cycle(report)
+        
+        lessons = await store.injectable_lessons()
+        
+        assert len(lessons) == 5
+        # Should be last 5 (3-7)
+        assert lessons[0].lesson == "lesson-3"
+        assert lessons[4].lesson == "lesson-7"
+
+    @pytest.mark.asyncio
+    async def test_injectable_lessons_custom_limit(self, tmp_dir):
+        """Test injectable_lessons with custom limit."""
+        from memory.learning_loop import LessonStore
+        from core.swarm_models import CycleReport, CycleLesson
+        
+        store = LessonStore(root_dir=tmp_dir)
+        
+        # Record 5 lessons
+        for i in range(5):
+            lesson = CycleLesson(
+                cycle_number=i,
+                lesson=f"lesson-{i}",
+                source_task_id=f"task-{i}",
+                confidence=0.8
+            )
+            report = CycleReport(
+                cycle_number=i,
+                story_id=f"story-{i}",
+                lessons_injected=[lesson]
+            )
+            await store.record_cycle(report)
+        
+        lessons = await store.injectable_lessons(limit=2)
+        
+        assert len(lessons) == 2
+        assert lessons[0].lesson == "lesson-3"
+        assert lessons[1].lesson == "lesson-4"
+
+    @pytest.mark.asyncio
+    async def test_injectable_lessons_with_empty_lines(self, tmp_dir):
+        """Test injectable_lessons skips empty lines."""
+        from memory.learning_loop import LessonStore
+        from core.swarm_models import CycleLesson
+        import json
+        
+        store = LessonStore(root_dir=tmp_dir)
+        
+        # Manually create file with empty lines
+        lesson_data = {
+            "cycle_number": 1,
+            "lesson": "test",
+            "source_task_id": "t1",
+            "confidence": 0.8
+        }
+        content = f"{json.dumps(lesson_data)}\n\n\n{json.dumps(lesson_data)}\n   \n"
+        store.lessons_file.write_text(content)
+        
+        lessons = await store.injectable_lessons()
+        
+        assert len(lessons) == 2
+
+    @pytest.mark.asyncio
+    async def test_append_text_creates_file(self, tmp_dir):
+        """Test _append_text creates file if missing."""
+        from memory.learning_loop import LessonStore
+        
+        store = LessonStore(root_dir=tmp_dir)
+        
+        store._append_text("test content\n")
+        
+        assert store.lessons_file.exists()
+        assert store.lessons_file.read_text() == "test content\n"
+
+    @pytest.mark.asyncio
+    async def test_append_text_appends(self, tmp_dir):
+        """Test _append_text appends to existing file."""
+        from memory.learning_loop import LessonStore
+        
+        store = LessonStore(root_dir=tmp_dir)
+        
+        store._append_text("first\n")
+        store._append_text("second\n")
+        
+        content = store.lessons_file.read_text()
+        assert content == "first\nsecond\n"
+
+    @pytest.mark.asyncio
+    async def test_lesson_confidence_preserved(self, tmp_dir):
+        """Test that lesson confidence is preserved."""
+        from memory.learning_loop import LessonStore
+        from core.swarm_models import CycleReport, CycleLesson
+        
+        store = LessonStore(root_dir=tmp_dir)
+        lesson = CycleLesson(
+            cycle_number=1,
+            lesson="high confidence",
+            source_task_id="t1",
+            confidence=0.95
+        )
+        report = CycleReport(
+            cycle_number=1,
+            story_id="s1",
+            lessons_injected=[lesson]
+        )
+        
+        await store.record_cycle(report)
+        lessons = await store.injectable_lessons()
+        
+        assert lessons[0].confidence == 0.95
+
+    @pytest.mark.asyncio
+    async def test_debug_lesson_confidence(self, tmp_dir):
+        """Test that debug lesson has hardcoded 0.9 confidence."""
+        from memory.learning_loop import LessonStore
+        from core.swarm_models import CycleReport, DebugReport
+        import json
+        
+        store = LessonStore(root_dir=tmp_dir)
+        debug = DebugReport(
+            task_id="t1",
+            failure_summary="fail",
+            
+            recovery_plan=["recover"]
+        )
+        report = CycleReport(
+            cycle_number=1,
+            story_id="s1",
+            debug_report=debug
+        )
+        
+        await store.record_cycle(report)
+        
+        content = store.lessons_file.read_text()
+        lesson_dict = json.loads(content.strip())
+        assert lesson_dict["confidence"] == 0.9

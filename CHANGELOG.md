@@ -5,7 +5,7 @@ All notable changes to AURA CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2026-04-09
+## [1.0.0] - 2026-04-10
 
 ### Added
 
@@ -16,6 +16,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `routers/health.py` — Health, readiness, liveness endpoints
   - `routers/runs.py` — Pipeline execution and webhook endpoints
   - `routers/ws.py` — WebSocket endpoints for real-time updates
+
+#### Sprint 3: JWT Hardening + Auth Router
+- `aura_cli/api/routers/auth.py` — JWT auth endpoints: POST /api/v1/auth/login, /refresh, /logout
+  - Login issues HS256 access (≤24h) and refresh tokens
+  - Refresh exchanges refresh token for new access token
+  - Logout revokes token JTI in SQLite blocklist
+- `tests/test_jwt_hardening.py` — 22 integration tests (key length, HS256, expiry cap, JTI revocation)
 
 #### Sprint 3: Sandbox Security Hardening
 - Network blocking via proxy environment variables (`_SANDBOX_NETWORK_ENV`)
@@ -29,23 +36,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `tests/integration/test_e2e_sandbox_retry.py` — E2E tests for sandbox retry
 
 #### Sprint 6: CLI Infrastructure
+- `aura history [--limit N] [--json]` — List completed goals from GoalArchive (FR-011)
 - `core/circuit_breaker.py` — Three-state circuit breaker for LLM resilience
 - `core/cost_tracker.py` — Cost tracking with `AURA_COST_CAP_USD` enforcement
-- `memory/redis_cache_adapter.py` — Optional Redis L0/L1 caching
-- JWT hardening and improved auth in `aura_cli/server.py`
+- `memory/redis_cache_adapter.py` — Optional Redis L0/L1 caching (activated via `REDIS_URL`)
 - Prometheus metrics resilience for test reimports
 
-#### Sprint 8: Infrastructure Hardening
+#### Sprint 8: Infrastructure Hardening + Logging
 - Docker Compose security: `no-new-privileges`, user restrictions, tmpfs
 - Resource limits: mem_limit, cpus for all services
 - Logging rotation: max-size 10m, max-file 3
 - Pinned base images: nginx:1.25-alpine, redis:7.2-alpine
 
-#### Sprint 9: Documentation
-- Production deployment guide (`docs/deployment/production-guide.md`)
+- Migrated 28+ `print()` calls to `logging` in agents and core library code
+
+#### Sprint 9: Documentation + Coverage
+- Production deployment guide (`docs/deployment/production-guide.md`) — 546 lines
 - Kubernetes deployment manifests
 - Security hardening checklist
 - Backup & recovery procedures
+- Coverage gate: `fail_under=8` scoped to `aura_cli`, `core`, `agents`, `memory`
+- `tests/test_correlation.py` — 13 tests for CorrelationManager / TraceContext (98% coverage)
+- `tests/test_config_schema.py` — 13 tests for ConfigValidator / validate_config (95% coverage)
+- `tests/test_sanitizer.py` — Extended to 10 tests for sanitize_path / sanitize_command (95% coverage)
 
 ### Changed
 
@@ -53,9 +66,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `agents/skills/base.py` — Added `SKIP_DIRS` and `iter_py_files()` helpers
 - `aura_cli/cli_options.py` — Improved CLI contract reporting
 - `docker-compose.prod.yml` — Hardened production configuration
+- `pyproject.toml` — Coverage scoped to 4 measured dirs; `fail_under=8`
+
+### Fixed
+
+- `tests/test_server_api.py` — TypeError in `test_metrics_has_skill_metrics` and `test_execute_run_persists_audit_entries` when `prometheus_client` is installed
 
 ### Security
 
+- `pycryptodomex` upgraded 3.11.0 → 3.23.0 (fixes PYSEC-2024-3 Manger OAEP side-channel)
+- JWT: algorithm:none confusion prevented; 256-bit minimum key; JTI revocation in SQLite
 - Sandbox violations now logged to `aura_sandbox_violations_total` metric
 - API token required for all mutating endpoints
 - Cost cap prevents runaway LLM spending
@@ -66,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - OWASP ASVS L1: Input Validation (V5.2) ✅
 - OWASP ASVS L1: File Execution (V12.3) ✅
 - NIST 800-53: Process Isolation (SC-39) ✅
+- NIST 800-53: Identification and Authentication (IA-5) ✅ (JWT hardening)
 
 ## [Sprint S004] - 2026-03-27
 

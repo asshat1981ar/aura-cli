@@ -116,7 +116,7 @@ def test_metrics_panel_renders_run_tool_audit_summary():
             "last_command": "python3 -m pytest -q",
             "recent": [
                 {"command": "python3 -m pytest -q", "code": 0, "timed_out": False, "truncated": False},
-                {"command": "python3 -c \"import time; time.sleep(1)\"", "code": -15, "timed_out": True, "truncated": False},
+                {"command": 'python3 -c "import time; time.sleep(1)"', "code": -15, "timed_out": True, "truncated": False},
                 {"command": "python3 -c \"print('x' * 9999)\"", "code": 0, "timed_out": False, "truncated": True},
             ],
         },

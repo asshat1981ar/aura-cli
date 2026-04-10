@@ -75,7 +75,7 @@ class LessonStore:
         Returns the most recent ``max_injectable`` lessons, formatted
         for inclusion in the planner's input data.
         """
-        recent = self._lessons[-self.max_injectable:]
+        recent = self._lessons[-self.max_injectable :]
         return [
             {
                 "goal": l.get("goal", ""),

@@ -1,4 +1,5 @@
 """35+ tests for PRD-003: Autonomous Learning Loop."""
+
 from __future__ import annotations
 import warnings
 from pathlib import Path
@@ -12,6 +13,7 @@ from core.autonomous_discovery import AutonomousDiscovery
 
 
 # ── TestCycleOutcome ─────────────────────────────────────────────────────────
+
 
 class TestCycleOutcome:
     def test_default_fields(self):
@@ -75,6 +77,7 @@ class TestCycleOutcome:
 
 # ── TestQualitySnapshot ──────────────────────────────────────────────────────
 
+
 class TestQualitySnapshot:
     def test_returns_dict(self, tmp_path):
         result = run_quality_snapshot(tmp_path)
@@ -129,14 +132,18 @@ class TestQualitySnapshot:
 
 # ── TestAdaptivePipelineOutcome ──────────────────────────────────────────────
 
+
 class TestAdaptivePipelineOutcome:
     def _make_brain(self):
         brain = MagicMock()
         brain._kv = {}
+
         def set_kv(key, value):
             brain._kv[key] = value
+
         def get_kv(key, default=None):
             return brain._kv.get(key, default)
+
         brain.set.side_effect = set_kv
         brain.get.side_effect = get_kv
         return brain
@@ -203,6 +210,7 @@ class TestAdaptivePipelineOutcome:
 
 # ── TestHybridClosedLoopDeprecation ──────────────────────────────────────────
 
+
 class TestHybridClosedLoopDeprecation:
     def _make_deps(self):
         model = MagicMock()
@@ -213,6 +221,7 @@ class TestHybridClosedLoopDeprecation:
 
     def test_instantiation_warns(self):
         from core.hybrid_loop import HybridClosedLoop
+
         model, brain, git = self._make_deps()
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -221,6 +230,7 @@ class TestHybridClosedLoopDeprecation:
 
     def test_warning_message_contains_looporch(self):
         from core.hybrid_loop import HybridClosedLoop
+
         model, brain, git = self._make_deps()
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -230,6 +240,7 @@ class TestHybridClosedLoopDeprecation:
 
     def test_warning_is_deprecation_warning(self):
         from core.hybrid_loop import HybridClosedLoop
+
         model, brain, git = self._make_deps()
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
@@ -240,12 +251,15 @@ class TestHybridClosedLoopDeprecation:
 
 # ── TestAutonomousDiscoveryEnqueue ───────────────────────────────────────────
 
+
 class TestAutonomousDiscoveryEnqueue:
     def _make_queue(self):
         q = MagicMock()
         q.added = []
+
         def batch_add(goals):
             q.added.extend(goals)
+
         q.batch_add.side_effect = batch_add
         return q
 
@@ -262,14 +276,17 @@ class TestAutonomousDiscoveryEnqueue:
         memory = MagicMock()
         memory.query.return_value = []
         ad = AutonomousDiscovery(
-            MagicMock(), memory,
+            MagicMock(),
+            memory,
             project_root=str(tmp_path),
             goal_queue_extra=q,
         )
-        findings = {"suggestions": [
-            {"suggested_goal": "goal one"},
-            {"suggested_goal": "goal two"},
-        ]}
+        findings = {
+            "suggestions": [
+                {"suggested_goal": "goal one"},
+                {"suggested_goal": "goal two"},
+            ]
+        }
         count = ad._enqueue_findings(findings)
         assert count == 2
         assert q.batch_add.called
@@ -279,13 +296,12 @@ class TestAutonomousDiscoveryEnqueue:
         memory = MagicMock()
         memory.query.return_value = []
         ad = AutonomousDiscovery(
-            MagicMock(), memory,
+            MagicMock(),
+            memory,
             project_root=str(tmp_path),
             goal_queue_extra=q,
         )
-        findings = {"suggestions": [
-            {"suggested_goal": f"goal {i}"} for i in range(6)
-        ]}
+        findings = {"suggestions": [{"suggested_goal": f"goal {i}"} for i in range(6)]}
         count = ad._enqueue_findings(findings)
         assert count == 3
 
@@ -294,7 +310,8 @@ class TestAutonomousDiscoveryEnqueue:
         memory = MagicMock()
         memory.query.return_value = []
         ad = AutonomousDiscovery(
-            MagicMock(), memory,
+            MagicMock(),
+            memory,
             project_root=str(tmp_path),
             goal_queue_extra=q,
         )
@@ -303,6 +320,7 @@ class TestAutonomousDiscoveryEnqueue:
 
 
 # ── TestCycleOutcomeBrainIntegration ─────────────────────────────────────────
+
 
 class TestCycleOutcomeBrainIntegration:
     def _make_brain(self):

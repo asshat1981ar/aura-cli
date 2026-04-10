@@ -1,4 +1,5 @@
 """Tests for _CircuitBreaker in memory/momento_adapter.py."""
+
 import time
 import unittest
 

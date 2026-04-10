@@ -48,9 +48,7 @@ def test_repeated_failure_queues_follow_up_goal():
     memory.query.return_value = []
 
     engine = PropagationEngine(queue, context_graph=None, memory_store=memory)
-    queued = engine.on_cycle_complete(
-        _entry_with_remediation(route="replan", repeated=True, signals=["syntax_error"])
-    )
+    queued = engine.on_cycle_complete(_entry_with_remediation(route="replan", repeated=True, signals=["syntax_error"]))
 
     assert len(queued) == 1
     assert any("Investigate repeated failure" in goal for goal in queued)
@@ -63,9 +61,7 @@ def test_skip_route_queues_external_blocker_goal():
     memory.query.return_value = []
 
     engine = PropagationEngine(queue, context_graph=None, memory_store=memory)
-    queued = engine.on_cycle_complete(
-        _entry_with_remediation(route="skip", repeated=False, signals=["environment"], goal="Sync secrets")
-    )
+    queued = engine.on_cycle_complete(_entry_with_remediation(route="skip", repeated=False, signals=["environment"], goal="Sync secrets"))
 
     assert any("Review external blocker" in goal for goal in queued)
 
@@ -76,8 +72,6 @@ def test_one_off_act_retry_does_not_queue_remediation_goal():
     memory.query.return_value = []
 
     engine = PropagationEngine(queue, context_graph=None, memory_store=memory)
-    queued = engine.on_cycle_complete(
-        _entry_with_remediation(route="retry", repeated=False, signals=["assertion_failure"])
-    )
+    queued = engine.on_cycle_complete(_entry_with_remediation(route="retry", repeated=False, signals=["assertion_failure"]))
 
     assert queued == []

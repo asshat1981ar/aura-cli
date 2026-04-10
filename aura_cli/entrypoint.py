@@ -14,7 +14,6 @@ from aura_cli.cli_options import CLIParseError, attach_cli_warnings, cli_parse_e
 from aura_cli.dispatch import dispatch_command
 
 
-
 def _resolve_project_root(project_root_override=None) -> Path:
     if project_root_override:
         return Path(project_root_override)

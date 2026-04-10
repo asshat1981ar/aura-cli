@@ -20,6 +20,7 @@ Usage example:
   })
   status = engine.execution_status(exec_id)
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -46,15 +47,17 @@ _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
 # Data models
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class RetryPolicy:
     """Exponential-backoff retry configuration for a single step."""
+
     max_attempts: int = 3
-    backoff_base: float = 0.5   # seconds; sleep = backoff_base * 2^attempt
-    max_backoff: float = 30.0   # cap on sleep duration
+    backoff_base: float = 0.5  # seconds; sleep = backoff_base * 2^attempt
+    max_backoff: float = 30.0  # cap on sleep duration
 
     def sleep_for(self, attempt: int) -> float:
-        return min(self.backoff_base * (2 ** attempt), self.max_backoff)
+        return min(self.backoff_base * (2**attempt), self.max_backoff)
 
 
 @dataclass
@@ -76,12 +79,13 @@ class WorkflowStep:
         retry:          Retry/backoff policy (default: 3 attempts).
         timeout_s:      Hard wall-clock timeout in seconds (0 = no limit).
     """
+
     name: str
     skill_name: Optional[str] = None
     fn: Optional[Callable[[Dict], Dict]] = None
     static_inputs: Dict[str, Any] = field(default_factory=dict)
     inputs_from: Dict[str, str] = field(default_factory=dict)
-    skip_if_false: Optional[str] = None   # e.g. "check_security.critical_count"
+    skip_if_false: Optional[str] = None  # e.g. "check_security.critical_count"
     retry: RetryPolicy = field(default_factory=RetryPolicy)
     timeout_s: float = 120.0
 
@@ -93,6 +97,7 @@ class WorkflowDefinition:
     execution can be composed by grouping steps with a fan-out/fan-in pattern
     via the `inputs_from` wiring.
     """
+
     name: str
     steps: List[WorkflowStep]
     description: str = ""
@@ -115,7 +120,7 @@ class WorkflowExecution:
     workflow_name: str
     status: Literal["pending", "running", "paused", "completed", "failed", "cancelled"]
     current_step_index: int
-    step_outputs: Dict[str, Dict]   # {step_name: output_dict}
+    step_outputs: Dict[str, Dict]  # {step_name: output_dict}
     history: List[StepResult]
     initial_inputs: Dict[str, Any]
     error: Optional[str]
@@ -157,6 +162,7 @@ class AgenticLoop:
 # ---------------------------------------------------------------------------
 # SQLite journal
 # ---------------------------------------------------------------------------
+
 
 def _open_db() -> sqlite3.Connection:
     conn = sqlite3.connect(str(_DB_PATH), check_same_thread=False)
@@ -204,10 +210,12 @@ def _db():
 # Skill runner (lazy import to avoid circular deps)
 # ---------------------------------------------------------------------------
 
+
 def _run_skill(skill_name: str, inputs: Dict) -> Dict:
     """Lazily load skill from registry and call it."""
     try:
         from agents.skills.registry import all_skills
+
         skills = all_skills()
         if skill_name not in skills:
             return {"error": f"Unknown skill '{skill_name}'. Available: {sorted(skills)}"}
@@ -219,6 +227,7 @@ def _run_skill(skill_name: str, inputs: Dict) -> Dict:
 # ---------------------------------------------------------------------------
 # Input wiring
 # ---------------------------------------------------------------------------
+
 
 def _wire_inputs(
     step: WorkflowStep,
@@ -247,6 +256,7 @@ def _wire_inputs(
 # ---------------------------------------------------------------------------
 # Core execution logic
 # ---------------------------------------------------------------------------
+
 
 def _run_step_callable_with_timeout(fn: Callable[[], Any], timeout_s: float) -> tuple[bool, Any]:
     """Run *fn* in a daemon thread and enforce a wall-clock timeout when requested."""
@@ -298,6 +308,7 @@ def _execute_step(
     for attempt in range(max(1, step.retry.max_attempts)):
         t0 = time.time()
         try:
+
             def _invoke() -> Any:
                 if step.skill_name:
                     return _run_skill(step.skill_name, inputs)
@@ -313,9 +324,7 @@ def _execute_step(
 
             if isinstance(output, dict) and "error" in output:
                 last_error = output["error"]
-                log_json("WARN", "workflow_step_error", details={
-                    "step": step.name, "attempt": attempt + 1, "error": last_error
-                })
+                log_json("WARN", "workflow_step_error", details={"step": step.name, "attempt": attempt + 1, "error": last_error})
             else:
                 return StepResult(
                     step_name=step.name,
@@ -329,24 +338,34 @@ def _execute_step(
             elapsed = (time.time() - t0) * 1000
             last_error = str(exc)
             timed_out = True
-            log_json("WARN", "workflow_step_timeout", details={
-                "step": step.name, "attempt": attempt + 1, "timeout_s": step.timeout_s,
-            })
+            log_json(
+                "WARN",
+                "workflow_step_timeout",
+                details={
+                    "step": step.name,
+                    "attempt": attempt + 1,
+                    "timeout_s": step.timeout_s,
+                },
+            )
             break
         except Exception as exc:
             elapsed = (time.time() - t0) * 1000
             last_error = f"{type(exc).__name__}: {exc}"
-            log_json("WARN", "workflow_step_exception", details={
-                "step": step.name, "attempt": attempt + 1, "error": last_error,
-                "traceback": traceback.format_exc()[-500:],
-            })
+            log_json(
+                "WARN",
+                "workflow_step_exception",
+                details={
+                    "step": step.name,
+                    "attempt": attempt + 1,
+                    "error": last_error,
+                    "traceback": traceback.format_exc()[-500:],
+                },
+            )
 
         # Backoff before retry
         if attempt < step.retry.max_attempts - 1:
             sleep_t = step.retry.sleep_for(attempt)
-            log_json("INFO", "workflow_step_retry", details={
-                "step": step.name, "attempt": attempt + 1, "sleep_s": sleep_t
-            })
+            log_json("INFO", "workflow_step_retry", details={"step": step.name, "attempt": attempt + 1, "sleep_s": sleep_t})
             time.sleep(sleep_t)
 
     return StepResult(
@@ -362,6 +381,7 @@ def _execute_step(
 # ---------------------------------------------------------------------------
 # WorkflowEngine
 # ---------------------------------------------------------------------------
+
 
 class WorkflowEngine:
     """
@@ -475,9 +495,7 @@ class WorkflowEngine:
                     break
 
                 step = steps[exc.current_step_index]
-                log_json("INFO", "workflow_step_start", details={
-                    "exec_id": exc.id, "step": step.name, "index": exc.current_step_index
-                })
+                log_json("INFO", "workflow_step_start", details={"exec_id": exc.id, "step": step.name, "index": exc.current_step_index})
 
                 result = _execute_step(step, exc.step_outputs, exc.initial_inputs)
                 exc.history.append(result)
@@ -500,9 +518,7 @@ class WorkflowEngine:
                     exc.error = f"Step '{step.name}' {failure_kind}: {result.error}"
                     exc.status = "failed"
                     self._journal_execution(exc)
-                    log_json("ERROR", "workflow_execution_failed", details={
-                        "exec_id": exc.id, "step": step.name, "error": result.error, "result_status": result.status
-                    })
+                    log_json("ERROR", "workflow_execution_failed", details={"exec_id": exc.id, "step": step.name, "error": result.error, "result_status": result.status})
                     return
 
                 exc.current_step_index += 1
@@ -512,9 +528,7 @@ class WorkflowEngine:
                 exc.status = "completed"
                 exc.updated_at = time.time()
                 self._journal_execution(exc)
-                log_json("INFO", "workflow_execution_completed", details={
-                    "exec_id": exc.id, "steps": len(exc.history)
-                })
+                log_json("INFO", "workflow_execution_completed", details={"exec_id": exc.id, "steps": len(exc.history)})
 
     def pause_execution(self, exec_id: str) -> None:
         exc = self._get_execution(exec_id)
@@ -629,7 +643,8 @@ class WorkflowEngine:
         lock = self._locks.get(loop_id, threading.Lock())
         with lock:
             loop = self._get_loop(loop_id)  # re-read under lock
-            if not loop: return {"error": "Loop deleted during tick"}
+            if not loop:
+                return {"error": "Loop deleted during tick"}
             if loop.current_cycle >= loop.max_cycles:
                 loop.status = "completed"
                 loop.stop_reason = "max_cycles_reached"
@@ -638,9 +653,7 @@ class WorkflowEngine:
                 return {"stop_reason": loop.stop_reason, "cycles": loop.current_cycle}
 
             cycle_num = loop.current_cycle + 1
-            log_json("INFO", "agentic_loop_tick", details={
-                "loop_id": loop_id, "cycle": cycle_num, "goal": loop.goal[:60]
-            })
+            log_json("INFO", "agentic_loop_tick", details={"loop_id": loop_id, "cycle": cycle_num, "goal": loop.goal[:60]})
 
             t0 = time.time()
             try:
@@ -654,8 +667,7 @@ class WorkflowEngine:
                 cycle = LoopCycle(
                     cycle_number=cycle_num,
                     status="ok",
-                    phase_outputs={k: list(v.keys()) if isinstance(v, dict) else str(v)
-                                   for k, v in phase_outputs.items()},
+                    phase_outputs={k: list(v.keys()) if isinstance(v, dict) else str(v) for k, v in phase_outputs.items()},
                     elapsed_ms=elapsed,
                     stop_reason=stop_reason,
                 )
@@ -682,9 +694,7 @@ class WorkflowEngine:
                 loop.status = "failed"
                 loop.stop_reason = f"cycle_{cycle_num}_exception"
                 loop.updated_at = time.time()
-                log_json("ERROR", "agentic_loop_cycle_failed", details={
-                    "loop_id": loop_id, "cycle": cycle_num, "error": err
-                })
+                log_json("ERROR", "agentic_loop_cycle_failed", details={"loop_id": loop_id, "cycle": cycle_num, "error": err})
 
             self._journal_loop(loop)
             return {
@@ -699,7 +709,8 @@ class WorkflowEngine:
 
     def stop_loop(self, loop_id: str, reason: str = "user_requested") -> None:
         loop = self._get_loop(loop_id)
-        if not loop: raise KeyError(f"Loop {loop_id} not found")
+        if not loop:
+            raise KeyError(f"Loop {loop_id} not found")
         if loop.is_terminal():
             raise ValueError(f"Loop {loop_id} is already terminal ({loop.status}).")
         loop.status = "stopped"
@@ -710,7 +721,8 @@ class WorkflowEngine:
 
     def pause_loop(self, loop_id: str) -> None:
         loop = self._get_loop(loop_id)
-        if not loop: raise KeyError(f"Loop {loop_id} not found")
+        if not loop:
+            raise KeyError(f"Loop {loop_id} not found")
         if loop.is_terminal():
             raise ValueError(f"Loop {loop_id} already terminal ({loop.status}).")
         loop.status = "paused"
@@ -719,7 +731,8 @@ class WorkflowEngine:
 
     def resume_loop(self, loop_id: str) -> None:
         loop = self._get_loop(loop_id)
-        if not loop: raise KeyError(f"Loop {loop_id} not found")
+        if not loop:
+            raise KeyError(f"Loop {loop_id} not found")
         if loop.status != "paused":
             raise ValueError(f"Loop {loop_id} is '{loop.status}', not 'paused'.")
         loop.status = "running"
@@ -779,7 +792,8 @@ class WorkflowEngine:
         Returns {"healthy": bool, "warnings": [...], "recommendation": str}
         """
         loop = self._get_loop(loop_id)
-        if not loop: return {"healthy": False, "error": "Loop not found"}
+        if not loop:
+            return {"healthy": False, "error": "Loop not found"}
         warnings: List[str] = []
 
         if loop.is_terminal():
@@ -809,48 +823,55 @@ class WorkflowEngine:
 
     def _register_builtin_workflows(self) -> None:
         """Pre-register useful AURA skill workflows."""
-        self.define(WorkflowDefinition(
-            name="security_audit",
-            description="Scan for vulnerabilities, lint issues, and dependency CVEs.",
-            steps=[
-                WorkflowStep("security_scan",  skill_name="security_scanner"),
-                WorkflowStep("lint_check",     skill_name="linter_enforcer"),
-                WorkflowStep("dep_audit",      skill_name="dependency_analyzer"),
-                WorkflowStep("observability",  skill_name="observability_checker"),
-            ],
-        ))
-        self.define(WorkflowDefinition(
-            name="code_quality",
-            description="Full code quality sweep: complexity, type coverage, architecture.",
-            steps=[
-                WorkflowStep("complexity",    skill_name="complexity_scorer"),
-                WorkflowStep("type_check",    skill_name="type_checker"),
-                WorkflowStep("arch_validate", skill_name="architecture_validator"),
-                WorkflowStep("tech_debt",     skill_name="tech_debt_quantifier"),
-                WorkflowStep("refactor_tips", skill_name="refactoring_advisor",
-                             inputs_from={"project_root": "complexity.project_root"}),
-            ],
-        ))
-        self.define(WorkflowDefinition(
-            name="release_prep",
-            description="Pre-release pipeline: lint, test coverage, changelog, deps.",
-            steps=[
-                WorkflowStep("lint",      skill_name="linter_enforcer"),
-                WorkflowStep("coverage",  skill_name="test_coverage_analyzer"),
-                WorkflowStep("changelog", skill_name="changelog_generator"),
-                WorkflowStep("dep_check", skill_name="dependency_analyzer"),
-            ],
-        ))
-        self.define(WorkflowDefinition(
-            name="onboarding_analysis",
-            description="Deep-dive for new contributors: architecture, symbols, clone detection.",
-            steps=[
-                WorkflowStep("symbols",      skill_name="symbol_indexer"),
-                WorkflowStep("arch",         skill_name="architecture_validator"),
-                WorkflowStep("clones",       skill_name="code_clone_detector"),
-                WorkflowStep("git_history",  skill_name="git_history_analyzer"),
-            ],
-        ))
+        self.define(
+            WorkflowDefinition(
+                name="security_audit",
+                description="Scan for vulnerabilities, lint issues, and dependency CVEs.",
+                steps=[
+                    WorkflowStep("security_scan", skill_name="security_scanner"),
+                    WorkflowStep("lint_check", skill_name="linter_enforcer"),
+                    WorkflowStep("dep_audit", skill_name="dependency_analyzer"),
+                    WorkflowStep("observability", skill_name="observability_checker"),
+                ],
+            )
+        )
+        self.define(
+            WorkflowDefinition(
+                name="code_quality",
+                description="Full code quality sweep: complexity, type coverage, architecture.",
+                steps=[
+                    WorkflowStep("complexity", skill_name="complexity_scorer"),
+                    WorkflowStep("type_check", skill_name="type_checker"),
+                    WorkflowStep("arch_validate", skill_name="architecture_validator"),
+                    WorkflowStep("tech_debt", skill_name="tech_debt_quantifier"),
+                    WorkflowStep("refactor_tips", skill_name="refactoring_advisor", inputs_from={"project_root": "complexity.project_root"}),
+                ],
+            )
+        )
+        self.define(
+            WorkflowDefinition(
+                name="release_prep",
+                description="Pre-release pipeline: lint, test coverage, changelog, deps.",
+                steps=[
+                    WorkflowStep("lint", skill_name="linter_enforcer"),
+                    WorkflowStep("coverage", skill_name="test_coverage_analyzer"),
+                    WorkflowStep("changelog", skill_name="changelog_generator"),
+                    WorkflowStep("dep_check", skill_name="dependency_analyzer"),
+                ],
+            )
+        )
+        self.define(
+            WorkflowDefinition(
+                name="onboarding_analysis",
+                description="Deep-dive for new contributors: architecture, symbols, clone detection.",
+                steps=[
+                    WorkflowStep("symbols", skill_name="symbol_indexer"),
+                    WorkflowStep("arch", skill_name="architecture_validator"),
+                    WorkflowStep("clones", skill_name="code_clone_detector"),
+                    WorkflowStep("git_history", skill_name="git_history_analyzer"),
+                ],
+            )
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -883,6 +904,7 @@ class WorkflowEngine:
                 from agents.registry import default_agents
                 from memory.brain import Brain
                 from core.model_adapter import ModelAdapter
+
                 project_config = ConfigManager(config_file=project_root / "aura.config.json")
                 brain_db_path = resolve_project_path(
                     project_root,
@@ -911,9 +933,7 @@ class WorkflowEngine:
                     """INSERT OR REPLACE INTO executions
                        (id, workflow, status, step_index, created_at, updated_at, summary)
                        VALUES (?,?,?,?,?,?,?)""",
-                    (exc.id, exc.workflow_name, exc.status, exc.current_step_index,
-                     exc.started_at, exc.updated_at,
-                     f"{len(exc.history)} steps run, error={exc.error}"),
+                    (exc.id, exc.workflow_name, exc.status, exc.current_step_index, exc.started_at, exc.updated_at, f"{len(exc.history)} steps run, error={exc.error}"),
                 )
         except Exception as e:
             log_json("WARN", "workflow_journal_failed", details={"error": str(e)})
@@ -926,9 +946,7 @@ class WorkflowEngine:
                        (id, goal, max_cycles, current_cycle, status, score,
                         stop_reason, created_at, updated_at)
                        VALUES (?,?,?,?,?,?,?,?,?)""",
-                    (loop.id, loop.goal, loop.max_cycles, loop.current_cycle,
-                     loop.status, loop.score, loop.stop_reason,
-                     loop.started_at, loop.updated_at),
+                    (loop.id, loop.goal, loop.max_cycles, loop.current_cycle, loop.status, loop.score, loop.stop_reason, loop.started_at, loop.updated_at),
                 )
         except Exception as e:
             log_json("WARN", "loop_journal_failed", details={"error": str(e)})

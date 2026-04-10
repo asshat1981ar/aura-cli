@@ -1,10 +1,12 @@
 """Unit tests for individual orchestrator phases (Phase 1-11)."""
+
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch, call
 
 from core.orchestrator import BeadsSyncLoop, LoopOrchestrator
 from core.policy import Policy
+
 
 class TestOrchestratorPhases(unittest.TestCase):
     def setUp(self):
@@ -13,10 +15,10 @@ class TestOrchestratorPhases(unittest.TestCase):
         self.mock_brain.recall_all.return_value = []
         self.mock_brain.recall_recent.return_value = []
         self.mock_brain.recall_with_budget.return_value = []
-        
+
         self.mock_model = MagicMock()
         self.mock_model.respond.return_value = "model response"
-        
+
         self.agents = {
             "ingest": MagicMock(),
             "plan": MagicMock(),
@@ -104,10 +106,10 @@ class TestOrchestratorPhases(unittest.TestCase):
     def test_phase_11_evolve(self):
         mock_evolution = MagicMock()
         self.orchestrator.attach_improvement_loops(mock_evolution)
-        
+
         # We need to make sure the loop is recognized as EvolutionLoop
         type(mock_evolution).__name__ = "EvolutionLoop"
-        
+
         self.orchestrator.run_cycle("test goal", dry_run=True)
         assert mock_evolution.on_cycle_complete.called
 
@@ -248,6 +250,7 @@ class TestOrchestratorPhases(unittest.TestCase):
 
         self.assertEqual(goals, ["bead:bd-1: Fix tests", "bead:bd-2: Refresh snapshots"])
         beads_skill.run.assert_called_once_with({"cmd": "ready"})
+
 
 if __name__ == "__main__":
     unittest.main()

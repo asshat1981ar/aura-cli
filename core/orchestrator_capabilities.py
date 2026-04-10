@@ -1,4 +1,5 @@
 """Capability management, pipeline configuration, and BEADS gate methods."""
+
 from __future__ import annotations
 
 import time
@@ -42,7 +43,8 @@ class CapabilitiesMixin:
     def _handle_capabilities(self, goal: str, pipeline_cfg: Any, phase_outputs: Dict, dry_run: bool):
         """Section 0.1: CAPABILITY MANAGEMENT."""
         import sys
-        _orch = sys.modules['core.orchestrator']
+
+        _orch = sys.modules["core.orchestrator"]
 
         capability_plan = {"matched_capabilities": [], "recommended_skills": [], "missing_skills": [], "mcp_tools": [], "provisioning_actions": []}
         capability_goal_queue = {"attempted": False, "queued": [], "skipped": [], "queue_strategy": None}

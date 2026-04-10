@@ -68,14 +68,16 @@ RATE_LIMIT_PER_MIN: int = int(os.getenv("MCP_RATE_LIMIT_PER_MIN", "0"))
 
 #: Allowed environment variable names returned by ``env_snapshot`` when no
 #: explicit key list is provided.  Prevents disclosure of secrets/tokens.
-ENV_WHITELIST: frozenset = frozenset({
-    "PYTHONPATH",
-    "PATH",
-    "HOME",
-    "USER",
-    "AURA_SKIP_CHDIR",
-    "AURA_ENABLE_SWARM",
-})
+ENV_WHITELIST: frozenset = frozenset(
+    {
+        "PYTHONPATH",
+        "PATH",
+        "HOME",
+        "USER",
+        "AURA_SKIP_CHDIR",
+        "AURA_ENABLE_SWARM",
+    }
+)
 
 
 def _env_snapshot(args: dict) -> dict:
@@ -142,7 +144,7 @@ def _require_auth(
     authorization: Optional[str] = Header(default=None),
 ) -> str:
     """Validate API key using centralized auth; fail closed; rate-limit all auth attempts.
-    
+
     Supports:
     - X-API-Key header (preferred)
     - Authorization: Bearer <token> (legacy)
@@ -257,7 +259,7 @@ TOOLS_MANIFEST: List[Dict[str, str]] = [
 
 
 @app.get("/health")
-async def health(auth: str = Depends(require_dev_tools_auth)): 
+async def health(auth: str = Depends(require_dev_tools_auth)):
     """Return server health, current limits, and runtime metrics."""
     auth_status = "enabled" if os.getenv("MCP_DEV_TOOLS_API_KEY") or os.getenv("MCP_API_TOKEN") else "disabled"
     return {
@@ -767,10 +769,11 @@ if __name__ == "__main__":
 
     # R4: port from config registry; env var PORT still overrides for backward-compat
     port = int(os.getenv("PORT", _cfg.get_mcp_server_port("dev_tools")))
-    
+
     # R8: Log auth status on startup
     from tools.mcp_auth import is_auth_enabled
+
     auth_enabled = is_auth_enabled("dev_tools")
     print(f"[MCP dev_tools] Starting on port {port} (auth: {'enabled' if auth_enabled else 'optional'})")
-    
+
     uvicorn.run(app, host="0.0.0.0", port=port)

@@ -1,7 +1,7 @@
 # ruff: noqa: F821
 def run_architecture_validation_after_refactor():
     # Step 1: Analyze the current system architecture to identify any circular dependencies.
-    tools_used = ['static code analysis tools', 'dependency graphs']
+    tools_used = ["static code analysis tools", "dependency graphs"]
     architecture_analysis = analyze_system_architecture(tools_used)
     compare_with_previous_architecture(architecture_analysis)
 

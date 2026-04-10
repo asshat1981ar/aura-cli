@@ -5,15 +5,7 @@ from agents.mutator import MutatorAgent
 
 
 def _replace_in_file_block(file_path: str, old_content: str, new_content: str) -> str:
-    return (
-        f"REPLACE_IN_FILE {file_path}\n"
-        "---OLD_CONTENT_START---\n"
-        f"{old_content}\n"
-        "---OLD_CONTENT_END---\n"
-        "---NEW_CONTENT_START---\n"
-        f"{new_content}\n"
-        "---NEW_CONTENT_END---\n"
-    )
+    return f"REPLACE_IN_FILE {file_path}\n---OLD_CONTENT_START---\n{old_content}\n---OLD_CONTENT_END---\n---NEW_CONTENT_START---\n{new_content}\n---NEW_CONTENT_END---\n"
 
 
 def test_mutator_replace_in_file_blocks_stale_mismatch_and_preserves_file(tmp_path: Path):
@@ -28,8 +20,7 @@ def test_mutator_replace_in_file_blocks_stale_mismatch_and_preserves_file(tmp_pa
         "print('after')",
     )
 
-    with patch("core.file_tools.recover_old_code_from_git", return_value=None), \
-         patch("agents.mutator.log_json") as mock_log:
+    with patch("core.file_tools.recover_old_code_from_git", return_value=None), patch("agents.mutator.log_json") as mock_log:
         agent.apply_mutation(proposal)
 
     assert target.read_text(encoding="utf-8") == "print('before')\n"
@@ -39,10 +30,7 @@ def test_mutator_replace_in_file_blocks_stale_mismatch_and_preserves_file(tmp_pa
     assert "mutator_replace_in_file_failed" in events
     assert "mutator_replace_in_file_success" not in events
 
-    blocked_logs = [
-        c for c in mock_log.call_args_list
-        if len(c.args) >= 2 and c.args[1] == "old_code_mismatch_overwrite_blocked"
-    ]
+    blocked_logs = [c for c in mock_log.call_args_list if len(c.args) >= 2 and c.args[1] == "old_code_mismatch_overwrite_blocked"]
     assert blocked_logs[0].kwargs["details"]["policy"] == "explicit_overwrite_file_required"
 
 

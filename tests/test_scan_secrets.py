@@ -3,6 +3,7 @@
 Run with:
     python3 -m pytest tests/test_scan_secrets.py -v
 """
+
 from __future__ import annotations
 
 import subprocess
@@ -55,7 +56,7 @@ def test_empty_directory_exits_zero(tmp_path: Path) -> None:
         ("secret = 'mysupersecret'\n", "bare secret assignment"),
         ("token = 'abcdefghijklmno'\n", "bare token assignment"),
         ("password = 'hunter2'\n", "bare password assignment"),
-        ('Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\n', "bearer token"),
+        ("Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\n", "bearer token"),
         ("aws_access_key = 'AKIAIOSFODNN7EXAMPLE'\n", "AWS AKIA key"),
         ("openai_key = 'sk-abcdef1234567890abcdef1234567890'\n", "OpenAI sk- key"),
         ("gh_token = 'ghp_abcdef1234567890abcdef1234'\n", "GitHub PAT ghp_"),

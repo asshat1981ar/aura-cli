@@ -6,6 +6,7 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict
 
+
 class MockMCPServer:
     def __init__(self, port: int):
         self.port = port
@@ -69,6 +70,7 @@ class MockMCPServer:
             self.httpd.server_close()
         if self.thread is not None:
             self.thread.join(timeout=1)
+
 
 @pytest.fixture
 def mock_mcp_server():

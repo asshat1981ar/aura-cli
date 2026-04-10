@@ -890,11 +890,7 @@ def _documented_default_actions() -> set[str]:
 
 
 def _action_canonical_paths() -> set[tuple[str, ...]]:
-    return {
-        spec.canonical_path
-        for spec in CLI_ACTION_SPECS_BY_ACTION.values()
-        if spec.canonical_path is not None
-    }
+    return {spec.canonical_path for spec in CLI_ACTION_SPECS_BY_ACTION.values() if spec.canonical_path is not None}
 
 
 def _smoke_invocation_and_dispatch_failures(
@@ -1014,9 +1010,7 @@ def cli_contract_report(dispatch_registry: Mapping[str, Any] | None = None) -> d
         "customizers_on_non_leaf_paths": sorted(customizer_paths - leaf_paths),
         # Parent commands that are also canonical invocations (for example
         # `config`) do not need to force a subcommand to satisfy the contract.
-        "missing_required_parent_paths": sorted(
-            path for path in (parent_paths - required_parent_paths) if path not in action_canonical_paths
-        ),
+        "missing_required_parent_paths": sorted(path for path in (parent_paths - required_parent_paths) if path not in action_canonical_paths),
         "extra_required_parent_paths": sorted(required_parent_paths - parent_paths),
         "action_spec_actions": action_spec_actions,
         "help_actions": help_actions,

@@ -1,4 +1,5 @@
 """Tests for core.team_coordinator — multi-agent team coordination."""
+
 import json
 import unittest
 from unittest.mock import MagicMock, patch
@@ -16,10 +17,12 @@ class TestDecomposeGoal(unittest.TestCase):
 
     def test_decompose_with_model(self):
         model = MagicMock(spec=["respond"])
-        model.respond.return_value = json.dumps([
-            {"description": "Write unit tests", "priority": 2, "dependencies": []},
-            {"description": "Refactor module", "priority": 1, "dependencies": []},
-        ])
+        model.respond.return_value = json.dumps(
+            [
+                {"description": "Write unit tests", "priority": 2, "dependencies": []},
+                {"description": "Refactor module", "priority": 1, "dependencies": []},
+            ]
+        )
         coord = TeamCoordinator(model=model)
         sub_goals = coord.decompose_goal("Improve code quality")
 
@@ -31,9 +34,11 @@ class TestDecomposeGoal(unittest.TestCase):
 
     def test_decompose_uses_respond_for_role_when_available(self):
         model = MagicMock()
-        model.respond_for_role.return_value = json.dumps([
-            {"description": "Task A", "priority": 1, "dependencies": []},
-        ])
+        model.respond_for_role.return_value = json.dumps(
+            [
+                {"description": "Task A", "priority": 1, "dependencies": []},
+            ]
+        )
         coord = TeamCoordinator(model=model)
         sub_goals = coord.decompose_goal("Do something")
 
@@ -44,10 +49,12 @@ class TestDecomposeGoal(unittest.TestCase):
 
     def test_decompose_with_dependencies(self):
         model = MagicMock(spec=["respond"])
-        model.respond.return_value = json.dumps([
-            {"description": "Setup DB", "priority": 2, "dependencies": []},
-            {"description": "Run migrations", "priority": 1, "dependencies": [0]},
-        ])
+        model.respond.return_value = json.dumps(
+            [
+                {"description": "Setup DB", "priority": 2, "dependencies": []},
+                {"description": "Run migrations", "priority": 1, "dependencies": [0]},
+            ]
+        )
         coord = TeamCoordinator(model=model)
         sub_goals = coord.decompose_goal("Database setup")
 
@@ -129,8 +136,7 @@ class TestExecuteTeamDependencies(unittest.TestCase):
         factory.return_value = mock_orch
 
         sg_a = SubGoal(id="aaa", description="Independent", parent_goal="Goal")
-        sg_b = SubGoal(id="bbb", description="Dependent", parent_goal="Goal",
-                       dependencies=["aaa"])
+        sg_b = SubGoal(id="bbb", description="Dependent", parent_goal="Goal", dependencies=["aaa"])
 
         coord = TeamCoordinator(orchestrator_factory=factory)
         result = coord.execute_team("Goal", [sg_a, sg_b])
@@ -147,8 +153,7 @@ class TestExecuteTeamDependencies(unittest.TestCase):
         factory.return_value = mock_orch
 
         sg_a = SubGoal(id="aaa", description="Independent", parent_goal="Goal")
-        sg_b = SubGoal(id="bbb", description="Dependent", parent_goal="Goal",
-                       dependencies=["aaa"])
+        sg_b = SubGoal(id="bbb", description="Dependent", parent_goal="Goal", dependencies=["aaa"])
 
         coord = TeamCoordinator(orchestrator_factory=factory)
         result = coord.execute_team("Goal", [sg_a, sg_b])
@@ -238,10 +243,8 @@ class TestTeamResultAggregation(unittest.TestCase):
 
     def test_get_team_status(self):
         coord = TeamCoordinator()
-        sg = SubGoal(id="abc", description="Do something long", parent_goal="Goal",
-                     status=WorkerStatus.COMPLETED, priority=3)
-        result = TeamResult(goal="Goal", sub_goals=[sg], success_count=1,
-                            failure_count=0, total_duration=1.5)
+        sg = SubGoal(id="abc", description="Do something long", parent_goal="Goal", status=WorkerStatus.COMPLETED, priority=3)
+        result = TeamResult(goal="Goal", sub_goals=[sg], success_count=1, failure_count=0, total_duration=1.5)
         coord.active_teams["t1"] = result
 
         status = coord.get_team_status("t1")
@@ -262,10 +265,12 @@ class TestParseSubGoals(unittest.TestCase):
 
     def test_valid_json_array(self):
         coord = TeamCoordinator()
-        response = json.dumps([
-            {"description": "Task 1", "priority": 2, "dependencies": []},
-            {"description": "Task 2", "priority": 1, "dependencies": [0]},
-        ])
+        response = json.dumps(
+            [
+                {"description": "Task 1", "priority": 2, "dependencies": []},
+                {"description": "Task 2", "priority": 1, "dependencies": [0]},
+            ]
+        )
         result = coord._parse_sub_goals(response, "Parent")
 
         self.assertEqual(len(result), 2)

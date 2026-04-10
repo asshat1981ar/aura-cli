@@ -58,11 +58,7 @@ class TestCLIContract(unittest.TestCase):
     def test_required_subcommand_parent_paths_match_non_leaf_command_paths(self):
         parent_paths = parser_parent_command_paths()
         required_paths = parser_required_subcommand_parent_paths()
-        canonical_paths = {
-            spec.canonical_path
-            for spec in cli_options_meta.CLI_ACTION_SPECS_BY_ACTION.values()
-            if spec.canonical_path is not None
-        }
+        canonical_paths = {spec.canonical_path for spec in cli_options_meta.CLI_ACTION_SPECS_BY_ACTION.values() if spec.canonical_path is not None}
         self.assertEqual(
             sorted(required_paths),
             sorted(path for path in parent_paths if path not in canonical_paths),
@@ -77,7 +73,7 @@ class TestCLIContract(unittest.TestCase):
                 continue
 
             smoke_argv = cli_options_meta.action_smoke_argv(action)
-            tail_tokens = smoke_argv[len(canonical_path):]
+            tail_tokens = smoke_argv[len(canonical_path) :]
             has_positional_tail = any(token and not token.startswith("-") for token in tail_tokens)
             if has_positional_tail:
                 self.assertIn(
@@ -179,8 +175,7 @@ class TestCLIContract(unittest.TestCase):
             with self.subTest(action=action_spec.action):
                 self.assertTrue(
                     expected_flags.issubset(documented_flags),
-                    f"Missing documented legacy flags for action '{action_spec.action}': "
-                    f"expected {sorted(expected_flags)}, saw {sorted(documented_flags)}",
+                    f"Missing documented legacy flags for action '{action_spec.action}': expected {sorted(expected_flags)}, saw {sorted(documented_flags)}",
                 )
 
     def test_dispatch_registry_matches_action_specs_and_runtime_flags(self):
@@ -206,10 +201,7 @@ class TestCLIContract(unittest.TestCase):
                     parse_cli_args(argv)
 
     def test_leaf_command_examples_resolve_to_documented_actions(self):
-        action_by_path = {
-            tuple(item["path"]): item.get("action")
-            for item in cli_options_meta.help_schema().get("commands", [])
-        }
+        action_by_path = {tuple(item["path"]): item.get("action") for item in cli_options_meta.help_schema().get("commands", [])}
         additional_allowed_actions_by_path = {
             ("goal", "add"): {"goal_add_run"},
         }

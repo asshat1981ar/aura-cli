@@ -3,6 +3,7 @@
 Wraps core/model_adapter.py's multi-provider support to expose it as a
 routable agent for tasks requiring external AI services.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict

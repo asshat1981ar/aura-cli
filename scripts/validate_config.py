@@ -11,6 +11,7 @@ Checks:
 Usage:
     python3 scripts/validate_config.py [--strict]
 """
+
 import json
 import os
 import sys
@@ -48,29 +49,17 @@ def validate_aura_config(path: Path) -> List[ValidationError]:
 
     profiles = config.get("models", config.get("model_profiles", {}))
     if not profiles:
-        errors.append(ValidationError(
-            "warning", "aura.config.json",
-            "No 'models' or 'model_profiles' key found"
-        ))
+        errors.append(ValidationError("warning", "aura.config.json", "No 'models' or 'model_profiles' key found"))
     elif isinstance(profiles, dict):
         for name, profile in profiles.items():
             if isinstance(profile, dict):
                 if "provider" not in profile:
-                    errors.append(ValidationError(
-                        "error", "aura.config.json",
-                        f"Model profile '{name}' missing 'provider' field"
-                    ))
+                    errors.append(ValidationError("error", "aura.config.json", f"Model profile '{name}' missing 'provider' field"))
                 if "model" not in profile and "model_name" not in profile:
-                    errors.append(ValidationError(
-                        "warning", "aura.config.json",
-                        f"Model profile '{name}' missing 'model' field"
-                    ))
+                    errors.append(ValidationError("warning", "aura.config.json", f"Model profile '{name}' missing 'model' field"))
                 port = profile.get("port")
                 if port is not None and (not isinstance(port, int) or not 1 <= port <= 65535):
-                    errors.append(ValidationError(
-                        "error", "aura.config.json",
-                        f"Model profile '{name}' has invalid port: {port}"
-                    ))
+                    errors.append(ValidationError("error", "aura.config.json", f"Model profile '{name}' has invalid port: {port}"))
     return errors
 
 
@@ -102,11 +91,7 @@ def validate_settings(path: Path, config_path: Path) -> List[ValidationError]:
     if isinstance(model_refs, dict) and config_profiles:
         for role, model_ref in model_refs.items():
             if isinstance(model_ref, str) and model_ref not in config_profiles:
-                errors.append(ValidationError(
-                    "warning", "settings.json",
-                    f"Role '{role}' references model '{model_ref}' "
-                    f"not found in aura.config.json"
-                ))
+                errors.append(ValidationError("warning", "settings.json", f"Role '{role}' references model '{model_ref}' not found in aura.config.json"))
     return errors
 
 
@@ -123,10 +108,7 @@ def validate_pyproject(path: Path) -> List[ValidationError]:
             try:
                 import tomli as tomllib  # type: ignore
             except ImportError:
-                errors.append(ValidationError(
-                    "info", "pyproject.toml",
-                    "Cannot validate: tomllib/tomli not available"
-                ))
+                errors.append(ValidationError("info", "pyproject.toml", "Cannot validate: tomllib/tomli not available"))
                 return errors
 
         with open(path, "rb") as f:
@@ -134,20 +116,11 @@ def validate_pyproject(path: Path) -> List[ValidationError]:
 
         pytest_config = pyproject.get("tool", {}).get("pytest", {}).get("ini_options", {})
         if "timeout" not in pytest_config:
-            errors.append(ValidationError(
-                "warning", "pyproject.toml",
-                "No global pytest timeout — tests may hang. Add: timeout = 30"
-            ))
+            errors.append(ValidationError("warning", "pyproject.toml", "No global pytest timeout — tests may hang. Add: timeout = 30"))
 
-        fail_under = (
-            pyproject.get("tool", {}).get("coverage", {})
-            .get("report", {}).get("fail_under", 0)
-        )
+        fail_under = pyproject.get("tool", {}).get("coverage", {}).get("report", {}).get("fail_under", 0)
         if fail_under and fail_under < 15:
-            errors.append(ValidationError(
-                "warning", "pyproject.toml",
-                f"Coverage fail_under={fail_under}% is very low. Target: ≥15%"
-            ))
+            errors.append(ValidationError("warning", "pyproject.toml", f"Coverage fail_under={fail_under}% is very low. Target: ≥15%"))
     except Exception as e:
         errors.append(ValidationError("error", "pyproject.toml", f"Parse error: {e}"))
 
@@ -156,9 +129,7 @@ def validate_pyproject(path: Path) -> List[ValidationError]:
 
 def validate_gitignore(path: Path) -> List[ValidationError]:
     errors = []
-    sensitive_patterns = [
-        "aura_auth.db", ".env", "*.pyc", "__pycache__", "aura_auth.db-wal"
-    ]
+    sensitive_patterns = ["aura_auth.db", ".env", "*.pyc", "__pycache__", "aura_auth.db-wal"]
     if not path.exists():
         errors.append(ValidationError("error", ".gitignore", "File not found"))
         return errors
@@ -166,15 +137,13 @@ def validate_gitignore(path: Path) -> List[ValidationError]:
     content = path.read_text()
     for pattern in sensitive_patterns:
         if pattern not in content:
-            errors.append(ValidationError(
-                "warning", ".gitignore",
-                f"Pattern '{pattern}' not found — sensitive file may be committed"
-            ))
+            errors.append(ValidationError("warning", ".gitignore", f"Pattern '{pattern}' not found — sensitive file may be committed"))
     return errors
 
 
 def main():
     import argparse
+
     parser = argparse.ArgumentParser(description="Validate AURA CLI configuration")
     parser.add_argument("--strict", action="store_true", help="Treat warnings as errors")
     args = parser.parse_args()
@@ -183,27 +152,24 @@ def main():
     print("🔍 Validating AURA CLI configuration...\n")
 
     all_errors.extend(validate_aura_config(REPO_ROOT / "aura.config.json"))
-    all_errors.extend(validate_settings(
-        REPO_ROOT / "settings.json",
-        REPO_ROOT / "aura.config.json"
-    ))
+    all_errors.extend(validate_settings(REPO_ROOT / "settings.json", REPO_ROOT / "aura.config.json"))
     all_errors.extend(validate_pyproject(REPO_ROOT / "pyproject.toml"))
     all_errors.extend(validate_gitignore(REPO_ROOT / ".gitignore"))
 
     for severity in ["error", "warning", "info"]:
         items = [e for e in all_errors if e.severity == severity]
         if items:
-            print(f"\n{'='*50}")
+            print(f"\n{'=' * 50}")
             print(f" {severity.upper()}S ({len(items)})")
-            print(f"{'='*50}")
+            print(f"{'=' * 50}")
             for e in items:
                 print(f"  {e}")
 
     error_count = len([e for e in all_errors if e.severity == "error"])
     warning_count = len([e for e in all_errors if e.severity == "warning"])
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"Summary: {error_count} errors, {warning_count} warnings")
-    print(f"{'='*50}")
+    print(f"{'=' * 50}")
 
     if error_count > 0:
         print("\n❌ Validation FAILED")

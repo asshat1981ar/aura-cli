@@ -2,8 +2,10 @@ import ast
 from pathlib import Path
 from typing import List, Dict, Set
 
+
 class CircularDependencyError(Exception):
     pass
+
 
 def find_circular_dependencies(root_dir: Path) -> List[List[Path]]:
     """Finds circular dependencies in a Python project.
@@ -78,6 +80,7 @@ def find_circular_dependencies(root_dir: Path) -> List[List[Path]]:
 
     return cycles
 
+
 def resolve_import_path(root_dir: Path, current_file: Path, module_name: str) -> Path | None:
     """Resolves the path of an imported module.
 
@@ -100,6 +103,7 @@ def resolve_import_path(root_dir: Path, current_file: Path, module_name: str) ->
         return package_path.parent  # Return the parent directory (the package directory)
 
     return None
+
 
 if __name__ == "__main__":
     # Example usage

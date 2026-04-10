@@ -1,4 +1,5 @@
 """Skill: extract and validate FastAPI/Flask endpoint contracts."""
+
 from __future__ import annotations
 import ast
 from pathlib import Path

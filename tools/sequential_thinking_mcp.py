@@ -25,6 +25,7 @@ Auth:  set MCP_THINKING_TOKEN env var
 Start:
   uvicorn tools.sequential_thinking_mcp:app --port 8004
 """
+
 from __future__ import annotations
 
 import os
@@ -128,6 +129,7 @@ def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
 # Pydantic models
 # ---------------------------------------------------------------------------
 
+
 class SessionCreateRequest(BaseModel):
     goal: str
     context: Optional[str] = None
@@ -166,6 +168,7 @@ class SearchRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _get_session(conn: sqlite3.Connection, session_id: str) -> sqlite3.Row:
     row = conn.execute("SELECT * FROM sessions WHERE id = ?", (session_id,)).fetchone()
@@ -285,6 +288,7 @@ def _build_descriptor(name: str) -> Dict:
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @app.get("/health")
 async def health(_: None = Depends(_check_auth)):
     with _db() as conn:
@@ -328,8 +332,7 @@ async def think(req: ThinkRequest, _: None = Depends(_check_auth)):
         step_no = _next_step_number(conn, req.session_id)
         step_id = str(uuid.uuid4())
         conn.execute(
-            "INSERT INTO steps (id, session_id, step_number, content, confidence, is_revision, revision_index, created_at)"
-            " VALUES (?,?,?,?,?,0,0,?)",
+            "INSERT INTO steps (id, session_id, step_number, content, confidence, is_revision, revision_index, created_at) VALUES (?,?,?,?,?,0,0,?)",
             (step_id, req.session_id, step_no, req.thought, req.confidence, now),
         )
         conn.execute("UPDATE sessions SET updated_at=? WHERE id=?", (now, req.session_id))
@@ -363,8 +366,7 @@ async def revise(req: ReviseRequest, _: None = Depends(_check_auth)):
         if req.reason:
             content = f"[Revision reason: {req.reason}]\n{content}"
         conn.execute(
-            "INSERT INTO steps (id, session_id, step_number, content, is_revision, revision_index, revises_step_id, created_at)"
-            " VALUES (?,?,?,?,1,?,?,?)",
+            "INSERT INTO steps (id, session_id, step_number, content, is_revision, revision_index, revises_step_id, created_at) VALUES (?,?,?,?,1,?,?,?)",
             (rev_id, req.session_id, req.step_number, content, next_rev_idx, orig["id"], now),
         )
         # Update the original step to the new content
@@ -401,15 +403,13 @@ async def branch(req: BranchRequest, _: None = Depends(_check_auth)):
             (req.session_id, req.from_step),
         ).fetchall():
             conn.execute(
-                "INSERT INTO steps (id, session_id, step_number, content, confidence, is_revision, revision_index, created_at)"
-                " VALUES (?,?,?,?,?,0,0,?)",
+                "INSERT INTO steps (id, session_id, step_number, content, confidence, is_revision, revision_index, created_at) VALUES (?,?,?,?,?,0,0,?)",
                 (str(uuid.uuid4()), new_sid, row["step_number"], row["content"], row["confidence"], now),
             )
         # Add first thought of branch
         first_id = str(uuid.uuid4())
         conn.execute(
-            "INSERT INTO steps (id, session_id, step_number, content, is_revision, revision_index, created_at)"
-            " VALUES (?,?,?,?,0,0,?)",
+            "INSERT INTO steps (id, session_id, step_number, content, is_revision, revision_index, created_at) VALUES (?,?,?,?,0,0,?)",
             (first_id, new_sid, req.from_step + 1, req.first_thought, now),
         )
     log_json("INFO", "thinking_branch_created", details={"parent": req.session_id, "new": new_sid, "from_step": req.from_step})
@@ -467,14 +467,12 @@ async def session_list(status: Optional[str] = None, limit: int = 50, _: None = 
     with _db() as conn:
         if status:
             rows = conn.execute(
-                "SELECT *, (SELECT COUNT(*) FROM steps WHERE session_id=sessions.id AND is_revision=0) as step_count "
-                "FROM sessions WHERE status=? ORDER BY updated_at DESC LIMIT ?",
+                "SELECT *, (SELECT COUNT(*) FROM steps WHERE session_id=sessions.id AND is_revision=0) as step_count FROM sessions WHERE status=? ORDER BY updated_at DESC LIMIT ?",
                 (status, limit),
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT *, (SELECT COUNT(*) FROM steps WHERE session_id=sessions.id AND is_revision=0) as step_count "
-                "FROM sessions ORDER BY updated_at DESC LIMIT ?",
+                "SELECT *, (SELECT COUNT(*) FROM steps WHERE session_id=sessions.id AND is_revision=0) as step_count FROM sessions ORDER BY updated_at DESC LIMIT ?",
                 (limit,),
             ).fetchall()
     return {"sessions": [dict(r) for r in rows], "count": len(rows)}
@@ -528,19 +526,21 @@ async def call_tool(req: ToolCallRequest, _: None = Depends(_check_auth)):
     if not handler:
         raise HTTPException(status_code=404, detail=f"Tool '{req.tool_name}' not found.")
     import inspect
+
     t0 = time.time()
     try:
         result = handler(req.args)
         if inspect.isawaitable(result):
             result = await result
-        return {"tool_name": req.tool_name, "result": result, "error": None, "elapsed_ms": round((time.time()-t0)*1000, 2)}
+        return {"tool_name": req.tool_name, "result": result, "error": None, "elapsed_ms": round((time.time() - t0) * 1000, 2)}
     except HTTPException:
         raise
     except Exception as exc:
-        return {"tool_name": req.tool_name, "result": None, "error": str(exc), "elapsed_ms": round((time.time()-t0)*1000, 2)}
+        return {"tool_name": req.tool_name, "result": None, "error": str(exc), "elapsed_ms": round((time.time() - t0) * 1000, 2)}
 
 
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.getenv("MCP_THINKING_PORT", "8004"))
     uvicorn.run("tools.sequential_thinking_mcp:app", host="0.0.0.0", port=port, reload=False)

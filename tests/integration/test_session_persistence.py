@@ -12,6 +12,7 @@ Scenarios covered
 2. ``test_phase_outputs_persisted_between_cycles`` — verify that ``phase_outputs``
    is populated and accessible on the cycle result dict after a completed cycle.
 """
+
 from __future__ import annotations
 
 import sys
@@ -53,36 +54,50 @@ class _FakeAgent:
 def _make_agents(**overrides: Any) -> Dict[str, Any]:
     """Return a complete agent mapping, optionally overriding specific phases."""
     agents: Dict[str, Any] = {
-        "ingest": _FakeAgent({
-            "goal": "add hello() to utils.py",
-            "snapshot": "core/utils.py",
-            "memory_summary": "",
-            "constraints": {},
-        }),
-        "plan": _FakeAgent({
-            "steps": ["define hello()", "write docstring"],
-            "risks": [],
-        }),
-        "critique": _FakeAgent({
-            "issues": [],
-            "fixes": [],
-        }),
-        "synthesize": _FakeAgent({
-            "tasks": [{"id": "t1", "title": "add hello", "intent": "", "files": [], "tests": []}],
-        }),
-        "act": _FakeAgent({
-            "changes": [],
-        }),
-        "verify": _FakeAgent({
-            "status": "pass",
-            "failures": [],
-            "logs": "",
-        }),
-        "reflect": _FakeAgent({
-            "summary": "ok",
-            "learnings": [],
-            "next_actions": [],
-        }),
+        "ingest": _FakeAgent(
+            {
+                "goal": "add hello() to utils.py",
+                "snapshot": "core/utils.py",
+                "memory_summary": "",
+                "constraints": {},
+            }
+        ),
+        "plan": _FakeAgent(
+            {
+                "steps": ["define hello()", "write docstring"],
+                "risks": [],
+            }
+        ),
+        "critique": _FakeAgent(
+            {
+                "issues": [],
+                "fixes": [],
+            }
+        ),
+        "synthesize": _FakeAgent(
+            {
+                "tasks": [{"id": "t1", "title": "add hello", "intent": "", "files": [], "tests": []}],
+            }
+        ),
+        "act": _FakeAgent(
+            {
+                "changes": [],
+            }
+        ),
+        "verify": _FakeAgent(
+            {
+                "status": "pass",
+                "failures": [],
+                "logs": "",
+            }
+        ),
+        "reflect": _FakeAgent(
+            {
+                "summary": "ok",
+                "learnings": [],
+                "next_actions": [],
+            }
+        ),
     }
     agents.update(overrides)
     return agents
@@ -130,19 +145,14 @@ class TestPhaseOutputsPersistedBetweenCycles:
             dry_run=True,
         )
 
-        assert "phase_outputs" in result, (
-            "run_cycle result must contain 'phase_outputs'"
-        )
+        assert "phase_outputs" in result, "run_cycle result must contain 'phase_outputs'"
         phase_outputs = result["phase_outputs"]
         assert isinstance(phase_outputs, dict), "phase_outputs must be a dict"
         assert len(phase_outputs) > 0, "phase_outputs must not be empty after a cycle"
 
         # Canonical phases that a dry-run cycle should always populate.
         for expected_key in ("plan", "critique", "task_bundle"):
-            assert expected_key in phase_outputs, (
-                f"Expected phase key '{expected_key}' in phase_outputs; got keys: "
-                f"{list(phase_outputs.keys())}"
-            )
+            assert expected_key in phase_outputs, f"Expected phase key '{expected_key}' in phase_outputs; got keys: {list(phase_outputs.keys())}"
 
     def test_plan_phase_output_shape(
         self,
@@ -176,9 +186,7 @@ class TestPhaseOutputsPersistedBetweenCycles:
         result1 = orch.run_cycle("goal one", dry_run=True)
         result2 = orch.run_cycle("goal two", dry_run=True)
 
-        assert result1["phase_outputs"] is not result2["phase_outputs"], (
-            "Each cycle must produce an independent phase_outputs dict"
-        )
+        assert result1["phase_outputs"] is not result2["phase_outputs"], "Each cycle must produce an independent phase_outputs dict"
 
     def test_run_loop_history_contains_phase_outputs(
         self,
@@ -192,12 +200,8 @@ class TestPhaseOutputsPersistedBetweenCycles:
         )
         assert "history" in loop_result, "run_loop result must contain 'history'"
         for i, cycle in enumerate(loop_result["history"]):
-            assert "phase_outputs" in cycle, (
-                f"Cycle {i} in history missing 'phase_outputs'"
-            )
-            assert isinstance(cycle["phase_outputs"], dict), (
-                f"Cycle {i} phase_outputs must be a dict"
-            )
+            assert "phase_outputs" in cycle, f"Cycle {i} in history missing 'phase_outputs'"
+            assert isinstance(cycle["phase_outputs"], dict), f"Cycle {i} phase_outputs must be a dict"
 
 
 class TestPipelineResumesFromPhase:
@@ -230,15 +234,11 @@ class TestPipelineResumesFromPhase:
 
         cycle1 = orch.run_cycle("add hello() to utils.py", dry_run=True)
         plan_from_cycle1 = cycle1["phase_outputs"].get("plan", {})
-        assert "steps" in plan_from_cycle1, (
-            "Cycle 1 must produce a plan with 'steps'"
-        )
+        assert "steps" in plan_from_cycle1, "Cycle 1 must produce a plan with 'steps'"
 
         # Cycle 2 — independent run; critique must also be populated.
         cycle2 = orch.run_cycle("add hello() to utils.py", dry_run=True)
-        assert "critique" in cycle2["phase_outputs"], (
-            "Cycle 2 must produce a 'critique' phase output (resuming from plan)"
-        )
+        assert "critique" in cycle2["phase_outputs"], "Cycle 2 must produce a 'critique' phase output (resuming from plan)"
 
     def test_plan_output_carried_into_critique(
         self,
@@ -276,9 +276,7 @@ class TestPipelineResumesFromPhase:
 
         result = orch.run_cycle("add hello() to utils.py", dry_run=True)
 
-        assert "plan" in result["phase_outputs"], (
-            "phase_outputs must contain 'plan' after a dry-run cycle"
-        )
+        assert "plan" in result["phase_outputs"], "phase_outputs must contain 'plan' after a dry-run cycle"
 
     def test_phase_outputs_include_dry_run_flag(
         self,
@@ -286,9 +284,7 @@ class TestPipelineResumesFromPhase:
     ) -> None:
         """phase_outputs must record the dry_run flag set by the caller."""
         result = orchestrator.run_cycle("add hello() to utils.py", dry_run=True)
-        assert result["phase_outputs"].get("dry_run") is True, (
-            "phase_outputs['dry_run'] must be True when dry_run=True"
-        )
+        assert result["phase_outputs"].get("dry_run") is True, "phase_outputs['dry_run'] must be True when dry_run=True"
 
     def test_stop_reason_set_after_cycle(
         self,
@@ -300,6 +296,4 @@ class TestPipelineResumesFromPhase:
             max_cycles=1,
             dry_run=True,
         )
-        assert loop_result.get("stop_reason"), (
-            "run_loop must always set a non-empty 'stop_reason'"
-        )
+        assert loop_result.get("stop_reason"), "run_loop must always set a non-empty 'stop_reason'"

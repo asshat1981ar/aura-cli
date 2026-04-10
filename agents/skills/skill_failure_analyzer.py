@@ -1,4 +1,5 @@
 """Skill: analyzes cycle summaries to identify frequently failing skills."""
+
 from __future__ import annotations
 import json
 import os
@@ -20,9 +21,7 @@ _REMEDIATIONS = {
     "multi_file_editor": "Supply a specific 'goal' and ensure project_root is writable.",
 }
 
-_CYCLE_SUMMARIES_PATH = os.path.join(
-    os.path.dirname(__file__), "..", "..", "memory", "store", "cycle_summaries.json"
-)
+_CYCLE_SUMMARIES_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "memory", "store", "cycle_summaries.json")
 
 
 class SkillFailureAnalyzerSkill(SkillBase):

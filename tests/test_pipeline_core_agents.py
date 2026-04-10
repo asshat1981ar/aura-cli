@@ -3,6 +3,7 @@
 Sprint 4 — s4-unit-tests-core-pipeline
 Coverage target: planner.py, coder.py, reflector.py, applicator.py
 """
+
 from __future__ import annotations
 
 import json
@@ -18,6 +19,7 @@ import pytest
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
 
 def _mock_brain(memories: list[str] | None = None) -> MagicMock:
     brain = MagicMock()
@@ -35,11 +37,13 @@ def _mock_model(response: str = "[]") -> MagicMock:
 # PlannerAgent
 # ===========================================================================
 
+
 class TestPlannerAgentRun:
     """Tests for PlannerAgent.run() standard interface."""
 
     def _make(self, response="[]", vector_store=None):
         from agents.planner import PlannerAgent
+
         agent = PlannerAgent(
             brain=_mock_brain(),
             model=_mock_model(response),
@@ -81,6 +85,7 @@ class TestPlannerAgentRun:
     def test_run_already_returns_plan_dict(self):
         """If model returns a JSON object with 'plan' key, run() passes it through."""
         from agents.planner import PlannerAgent
+
         agent = PlannerAgent(brain=_mock_brain(), model=_mock_model(), vector_store=None)
         agent.use_structured = False
 
@@ -95,6 +100,7 @@ class TestPlannerAgentLegacy:
 
     def _make(self, response: str) -> Any:
         from agents.planner import PlannerAgent
+
         agent = PlannerAgent(brain=_mock_brain(), model=_mock_model(response))
         agent.use_structured = False
         return agent
@@ -118,19 +124,23 @@ class TestPlannerAgentLegacy:
 
     def test_backfill_context_included_in_prompt(self):
         from agents.planner import PlannerAgent
+
         agent = PlannerAgent(brain=_mock_brain(), model=_mock_model('["Step 1: x"]'))
         agent.use_structured = False
         captured = []
         original_respond = agent._respond
+
         def capture(p):
             captured.append(p)
             return original_respond(p)
+
         agent._respond = capture
         agent.plan("goal", "", "", "", backfill_context=[{"file": "foo.py", "coverage_pct": 5}])
         assert any("foo.py" in p for p in captured)
 
     def test_hints_included_in_prompt(self):
         from agents.planner import PlannerAgent
+
         agent = PlannerAgent(brain=_mock_brain(), model=_mock_model('["Step 1: x"]'))
         agent.use_structured = False
         captured = []
@@ -144,6 +154,7 @@ class TestPlannerAgentUpdatePlan:
 
     def test_update_plan_returns_list(self):
         from agents.planner import PlannerAgent
+
         agent = PlannerAgent(brain=_mock_brain(), model=_mock_model('["Step 1: revised"]'))
         agent.use_structured = False
         result = agent._update_plan(["Step 1: old"], "make it better")
@@ -151,6 +162,7 @@ class TestPlannerAgentUpdatePlan:
 
     def test_update_plan_accepts_dict_input(self):
         from agents.planner import PlannerAgent
+
         agent = PlannerAgent(brain=_mock_brain(), model=_mock_model('["Step 1: new"]'))
         agent.use_structured = False
         result = agent._update_plan({"steps": ["Step 1: old"]}, "feedback")
@@ -158,6 +170,7 @@ class TestPlannerAgentUpdatePlan:
 
     def test_update_plan_falls_back_on_bad_json(self):
         from agents.planner import PlannerAgent
+
         agent = PlannerAgent(brain=_mock_brain(), model=_mock_model("not json"))
         agent.use_structured = False
         original = ["Step 1: keep this"]
@@ -170,6 +183,7 @@ class TestPlannerAgentRespond:
 
     def test_falls_back_to_model_respond_when_no_role_method(self):
         from agents.planner import PlannerAgent
+
         model = _mock_model('["Step 1: x"]')
         del model.respond_for_role  # ensure attribute doesn't exist
         agent = PlannerAgent(brain=_mock_brain(), model=model)
@@ -180,6 +194,7 @@ class TestPlannerAgentRespond:
 
     def test_uses_respond_for_role_when_available(self):
         from agents.planner import PlannerAgent
+
         model = MagicMock(spec=["respond", "respond_for_role"])
         # Must set as a real attribute so inspect.getattr_static finds it
         model.respond_for_role = MagicMock(return_value='["Step 1: role-routed"]')
@@ -193,18 +208,9 @@ class TestPlannerAgentRespond:
 # CoderAgent
 # ===========================================================================
 
-_VALID_CODE_BLOCK = (
-    "```python\n"
-    "# AURA_TARGET: agents/new_feature.py\n"
-    "def hello():\n"
-    "    return 'world'\n"
-    "```"
-)
+_VALID_CODE_BLOCK = "```python\n# AURA_TARGET: agents/new_feature.py\ndef hello():\n    return 'world'\n```"
 
-_LEGACY_JSON = json.dumps({
-    "aura_target": "agents/out.py",
-    "code": "def foo(): pass"
-})
+_LEGACY_JSON = json.dumps({"aura_target": "agents/out.py", "code": "def foo(): pass"})
 
 
 class TestCoderAgentImplement:
@@ -212,6 +218,7 @@ class TestCoderAgentImplement:
 
     def _make(self, response: str = _LEGACY_JSON, tester=None) -> Any:
         from agents.coder import CoderAgent
+
         agent = CoderAgent(brain=_mock_brain(), model=_mock_model(response), tester=tester)
         agent.use_structured = False
         return agent
@@ -251,6 +258,7 @@ class TestCoderAgentImplement:
 
     def test_max_iterations_respected(self):
         from agents.coder import CoderAgent
+
         model = MagicMock()
         model.respond.return_value = _LEGACY_JSON
         tester = MagicMock()
@@ -263,6 +271,7 @@ class TestCoderAgentImplement:
 
     def test_error_result_on_first_iteration_returns_error_comment(self):
         from agents.coder import CoderAgent
+
         agent = CoderAgent(brain=_mock_brain(), model=_mock_model("not parseable at all"), tester=None)
         agent.use_structured = False
         # Even with bad JSON, the legacy extractor should produce something
@@ -275,6 +284,7 @@ class TestCoderAgentLegacyParser:
 
     def _make(self, response: str) -> Any:
         from agents.coder import CoderAgent
+
         agent = CoderAgent(brain=_mock_brain(), model=_mock_model(response))
         agent.use_structured = False
         return agent
@@ -286,7 +296,7 @@ class TestCoderAgentLegacyParser:
         assert "core/thing.py" in result
 
     def test_json_embedded_in_prose(self):
-        response = 'Here is the code:\n' + json.dumps({"aura_target": "a.py", "code": "y=2"})
+        response = "Here is the code:\n" + json.dumps({"aura_target": "a.py", "code": "y=2"})
         agent = self._make(response)
         result = agent.implement("task")
         assert "AURA_TARGET" in result
@@ -307,6 +317,7 @@ class TestCoderAgentStructuredInfo:
 
     def test_returns_dict_with_expected_keys(self):
         from agents.coder import CoderAgent
+
         agent = CoderAgent(brain=_mock_brain(), model=_mock_model())
         info = agent.get_structured_info()
         assert "structured_output_available" in info
@@ -317,12 +328,14 @@ class TestCoderAgentStructuredInfo:
 # ReflectorAgent
 # ===========================================================================
 
+
 class TestReflectorAgentRun:
     """Tests for ReflectorAgent.run() output contract."""
 
     @pytest.fixture
     def agent(self):
         from agents.reflector import ReflectorAgent
+
         return ReflectorAgent()
 
     def _base_input(self, **kwargs):
@@ -368,6 +381,7 @@ class TestReflectorAgentRun:
 
     def test_output_is_json_serialisable(self, agent):
         import json as _json
+
         result = agent.run(self._base_input())
         _json.dumps(result)  # must not raise
 
@@ -378,6 +392,7 @@ class TestReflectorSkillLearnings:
     @pytest.fixture
     def agent(self):
         from agents.reflector import ReflectorAgent
+
         return ReflectorAgent()
 
     def test_security_critical_count_generates_alert(self, agent):
@@ -425,15 +440,19 @@ class TestReflectorContextAnalysis:
     @pytest.fixture
     def agent(self):
         from agents.reflector import ReflectorAgent
+
         return ReflectorAgent()
 
-    @pytest.mark.parametrize("error,expected_signal", [
-        ("NameError: name 'foo' is not defined", "NameError"),
-        ("ImportError: cannot import name 'Bar'", "ImportError"),
-        ("ModuleNotFoundError: No module named 'xyz'", "ModuleNotFoundError"),
-        ("AttributeError: 'NoneType' object has no attribute 'run'", "AttributeError"),
-        ("variable not defined in scope", "not defined"),
-    ])
+    @pytest.mark.parametrize(
+        "error,expected_signal",
+        [
+            ("NameError: name 'foo' is not defined", "NameError"),
+            ("ImportError: cannot import name 'Bar'", "ImportError"),
+            ("ModuleNotFoundError: No module named 'xyz'", "ModuleNotFoundError"),
+            ("AttributeError: 'NoneType' object has no attribute 'run'", "AttributeError"),
+            ("variable not defined in scope", "not defined"),
+        ],
+    )
     def test_detects_context_gap_signals(self, agent, error, expected_signal):
         gaps = agent._analyze_context_quality([error])
         assert len(gaps) > 0
@@ -454,6 +473,7 @@ class TestReflectorBuildSkillSummary:
     @pytest.fixture
     def agent(self):
         from agents.reflector import ReflectorAgent
+
         return ReflectorAgent()
 
     def test_empty_context_returns_empty_summary(self, agent):
@@ -487,6 +507,7 @@ class TestReflectorBuildSkillSummary:
 # ApplicatorAgent
 # ===========================================================================
 
+
 @pytest.fixture
 def tmp_workspace(tmp_path):
     backup_dir = tmp_path / "backups"
@@ -497,17 +518,12 @@ def tmp_workspace(tmp_path):
 @pytest.fixture
 def applicator(tmp_workspace):
     from agents.applicator import ApplicatorAgent
+
     _, backup_dir = tmp_workspace
     return ApplicatorAgent(brain=_mock_brain(), backup_dir=str(backup_dir))
 
 
-_GOOD_OUTPUT = (
-    "```python\n"
-    "# AURA_TARGET: agents/generated.py\n"
-    "def answer():\n"
-    "    return 42\n"
-    "```"
-)
+_GOOD_OUTPUT = "```python\n# AURA_TARGET: agents/generated.py\ndef answer():\n    return 42\n```"
 
 _NO_FENCE_OUTPUT = "def answer(): return 42"
 _NO_TARGET_OUTPUT = "```python\ndef answer(): return 42\n```"
@@ -521,11 +537,7 @@ class TestApplicatorAgentApply:
         target = tmp / "agents" / "generated.py"
         result = applicator.apply(_GOOD_OUTPUT, target_path=str(target))
         assert result.success
-        assert target.read_text(encoding="utf-8").strip() == (
-            "# AURA_TARGET: agents/generated.py\n"
-            "def answer():\n"
-            "    return 42"
-        )
+        assert target.read_text(encoding="utf-8").strip() == ("# AURA_TARGET: agents/generated.py\ndef answer():\n    return 42")
 
     def test_result_has_target_path(self, applicator, tmp_workspace):
         tmp, _ = tmp_workspace
@@ -548,7 +560,9 @@ class TestApplicatorAgentApply:
     def test_no_target_path_uses_directive(self, applicator, tmp_workspace):
         tmp, _ = tmp_workspace
         # AURA_TARGET in code points to a relative path; set cwd so it resolves
-        import os; orig = os.getcwd()
+        import os
+
+        orig = os.getcwd()
         os.chdir(tmp)
         try:
             result = applicator.apply(_GOOD_OUTPUT)
@@ -668,6 +682,7 @@ class TestApplicatorExtractCode:
     @pytest.fixture
     def ag(self):
         from agents.applicator import ApplicatorAgent
+
         return ApplicatorAgent(brain=_mock_brain(), backup_dir=tempfile.mkdtemp())
 
     def test_extracts_python_fenced_block(self, ag):

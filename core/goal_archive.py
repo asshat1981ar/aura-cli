@@ -1,6 +1,7 @@
 import json
-from pathlib import Path # Import Path
-from core.logging_utils import log_json # Import log_json
+from pathlib import Path  # Import Path
+from core.logging_utils import log_json  # Import log_json
+
 
 class GoalArchive:
     """
@@ -17,7 +18,7 @@ class GoalArchive:
             archive_path (str): The path to the JSON file where the archive is persisted.
                                 Defaults to "memory/goal_archive.json".
         """
-        self.archive_path = Path(archive_path) # Convert to Path object
+        self.archive_path = Path(archive_path)  # Convert to Path object
         self.completed = self._load_archive()
 
     def record(self, goal, score):
@@ -36,8 +37,8 @@ class GoalArchive:
         Persists the current state of the goal archive to the configured JSON file.
         Ensures the parent directory exists before writing.
         """
-        self.archive_path.parent.mkdir(parents=True, exist_ok=True) # Use Path.parent and mkdir
-        with open(self.archive_path, 'w') as f:
+        self.archive_path.parent.mkdir(parents=True, exist_ok=True)  # Use Path.parent and mkdir
+        with open(self.archive_path, "w") as f:
             json.dump(self.completed, f, indent=4)
 
     def _load_archive(self):
@@ -48,8 +49,8 @@ class GoalArchive:
         Returns:
             list: The loaded list of completed goals and their scores.
         """
-        if self.archive_path.exists(): # Use Path.exists()
-            with open(self.archive_path, 'r') as f:
+        if self.archive_path.exists():  # Use Path.exists()
+            with open(self.archive_path, "r") as f:
                 try:
                     return json.load(f)
                 except json.JSONDecodeError:

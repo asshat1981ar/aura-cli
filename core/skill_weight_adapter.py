@@ -15,6 +15,7 @@ Usage::
     adapter.on_cycle_complete(cycle_entry)   # call after every run_cycle()
     ordered = adapter.ranked_skills("bug_fix")
 """
+
 from __future__ import annotations
 
 import json
@@ -89,14 +90,7 @@ class SkillWeightAdapter:
 
     def get_weights_summary(self) -> Dict:
         """Return a snapshot of all EMA weights (useful for reflection reports)."""
-        return {
-            gt: {
-                sk: {"ema": round(v["ema"], 3), "runs": v["runs"],
-                     "suspended": v.get("suspended", False)}
-                for sk, v in skills.items()
-            }
-            for gt, skills in self._weights.items()
-        }
+        return {gt: {sk: {"ema": round(v["ema"], 3), "runs": v["runs"], "suspended": v.get("suspended", False)} for sk, v in skills.items()} for gt, skills in self._weights.items()}
 
     # ── Internal ─────────────────────────────────────────────────────────────
 
@@ -120,28 +114,19 @@ class SkillWeightAdapter:
             info["runs"] += 1
 
             # Suspension check
-            if (
-                info["runs"] >= MIN_RUNS_BEFORE_SUSPEND
-                and info["ema"] < SUSPEND_THRESHOLD
-                and not info["suspended"]
-            ):
+            if info["runs"] >= MIN_RUNS_BEFORE_SUSPEND and info["ema"] < SUSPEND_THRESHOLD and not info["suspended"]:
                 info["suspended"] = True
-                log_json("INFO", "skill_weight_adapter_suspended",
-                         details={"skill": skill_name, "goal_type": goal_type,
-                                  "ema": round(info["ema"], 3), "runs": info["runs"]})
+                log_json("INFO", "skill_weight_adapter_suspended", details={"skill": skill_name, "goal_type": goal_type, "ema": round(info["ema"], 3), "runs": info["runs"]})
 
             # Un-suspend if signal improves significantly
             elif info.get("suspended") and info["ema"] > SUSPEND_THRESHOLD * 2:
                 info["suspended"] = False
-                log_json("INFO", "skill_weight_adapter_unsuspended",
-                         details={"skill": skill_name, "goal_type": goal_type,
-                                  "ema": round(info["ema"], 3)})
+                log_json("INFO", "skill_weight_adapter_unsuspended", details={"skill": skill_name, "goal_type": goal_type, "ema": round(info["ema"], 3)})
 
             updated.append(skill_name)
 
         self._save()
-        log_json("INFO", "skill_weight_adapter_updated",
-                 details={"goal_type": goal_type, "skills_updated": updated})
+        log_json("INFO", "skill_weight_adapter_updated", details={"goal_type": goal_type, "skills_updated": updated})
 
     def _measure_signal(self, result: Dict) -> float:
         """Score a skill result 0.0–1.0 based on how much useful content it has."""
@@ -149,22 +134,22 @@ class SkillWeightAdapter:
             return 0.0
 
         # Count non-empty, non-trivial values
-        useful = sum(
-            1 for k, v in result.items()
-            if k != "error" and v not in (None, [], {}, "", 0, False)
-        )
+        useful = sum(1 for k, v in result.items() if k != "error" and v not in (None, [], {}, "", 0, False))
         total = max(len(result), 1)
         base_score = useful / total
 
         # Bonus for skills that explicitly flag issues (high-signal)
         bonus_keys = [
-            "findings", "violations", "type_errors", "circular_deps",
-            "debt_items", "suggestions", "high_risk_count", "critical_count",
+            "findings",
+            "violations",
+            "type_errors",
+            "circular_deps",
+            "debt_items",
+            "suggestions",
+            "high_risk_count",
+            "critical_count",
         ]
-        has_findings = any(
-            result.get(k) not in (None, [], {}, 0)
-            for k in bonus_keys
-        )
+        has_findings = any(result.get(k) not in (None, [], {}, 0) for k in bonus_keys)
         if has_findings:
             base_score = min(1.0, base_score + 0.25)
 
@@ -175,6 +160,7 @@ class SkillWeightAdapter:
         if self._momento and self._momento.is_available():
             try:
                 from memory.momento_adapter import WORKING_MEMORY_CACHE
+
                 raw = self._momento.cache_get(WORKING_MEMORY_CACHE, "skill_weights:all")
                 if raw:
                     log_json("INFO", "skill_weights_l1_hit")
@@ -195,9 +181,12 @@ class SkillWeightAdapter:
         if self._momento and self._momento.is_available():
             try:
                 from memory.momento_adapter import WORKING_MEMORY_CACHE
+
                 self._momento.cache_set(
-                    WORKING_MEMORY_CACHE, "skill_weights:all",
-                    serialized, ttl_seconds=0,
+                    WORKING_MEMORY_CACHE,
+                    "skill_weights:all",
+                    serialized,
+                    ttl_seconds=0,
                 )
             except Exception as exc:
                 log_json("WARN", "skill_weights_l1_save_failed", details={"error": str(exc)})

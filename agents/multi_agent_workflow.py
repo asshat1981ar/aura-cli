@@ -12,6 +12,7 @@ from core.logging_utils import log_json
 
 class _AgentStub:
     """Placeholder for unimplemented external agent."""
+
     @classmethod
     def analyze_architecture(cls, *args: Any, **kwargs: Any) -> Dict[str, Any]:
         return {}
@@ -47,11 +48,11 @@ def create_multi_agent_workflow():
         str: Completion status message
     """
     # Step 1: Analyze Current Project Architecture
-    python_analysis_tools = ['pylint', 'mypy', 'bandit']
+    python_analysis_tools = ["pylint", "mypy", "bandit"]
     python_results = PythonAgent.analyze_architecture(python_analysis_tools)
 
     # Step 2: Assess Typescript Capabilities
-    typescript_analysis_metrics = ['dependency metrics', 'code complexity']
+    typescript_analysis_metrics = ["dependency metrics", "code complexity"]
     typescript_results = TypeScriptAgent.assess_capabilities(typescript_analysis_metrics)
 
     # Step 3: Create Execution Plan with CodeSearchAgent
@@ -65,14 +66,8 @@ def create_multi_agent_workflow():
     architectural_suggestions = suggest_architectural_improvements(python_results)
 
     # Step 6: Compile Findings into 'architecture_summary.md'
-    summary_content = compile_summary(
-        python_results,
-        typescript_results,
-        execution_plan,
-        classified_failure_modes,
-        architectural_suggestions
-    )
-    with open('architecture_summary.md', 'w') as summary_file:
+    summary_content = compile_summary(python_results, typescript_results, execution_plan, classified_failure_modes, architectural_suggestions)
+    with open("architecture_summary.md", "w") as summary_file:
         summary_file.write(summary_content)
 
     log_json("INFO", "multi_agent_workflow_summary_generated", {"file": "architecture_summary.md"})
@@ -83,7 +78,7 @@ def create_multi_agent_workflow():
     # Step 8: Engage Stakeholders
     engage_stakeholders(validation_results)
 
-    return 'Multi-agent workflow completed and architecture_summary.md generated.'
+    return "Multi-agent workflow completed and architecture_summary.md generated."
 
 
 def predict_failure_modes(architecture_results: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -114,62 +109,52 @@ def predict_failure_modes(architecture_results: Dict[str, Any]) -> List[Dict[str
     if lint_results.get("status") != "skill_not_available":
         errors = lint_results.get("errors", [])
         if errors:
-            failure_modes.append({
-                "component": "Code Quality",
-                "failure_type": "Runtime Error",
-                "description": f"Linting detected {len(errors)} issues that may cause runtime failures",
-                "triggering_conditions": ["High error density in modified files", "Missing exception handling"],
-                "severity": "high" if len(errors) > 10 else "medium"
-            })
+            failure_modes.append(
+                {
+                    "component": "Code Quality",
+                    "failure_type": "Runtime Error",
+                    "description": f"Linting detected {len(errors)} issues that may cause runtime failures",
+                    "triggering_conditions": ["High error density in modified files", "Missing exception handling"],
+                    "severity": "high" if len(errors) > 10 else "medium",
+                }
+            )
 
     # Analyze type check results for type-related failures
     if type_check_results.get("status") != "skill_not_available":
         type_errors = type_check_results.get("errors", "")
         if type_errors:
-            failure_modes.append({
-                "component": "Type System",
-                "failure_type": "Type Mismatch",
-                "description": "Type checking inconsistencies detected that may lead to AttributeError or TypeError",
-                "triggering_conditions": ["Dynamic type usage", "Missing type annotations"],
-                "severity": "high"
-            })
+            failure_modes.append({"component": "Type System", "failure_type": "Type Mismatch", "description": "Type checking inconsistencies detected that may lead to AttributeError or TypeError", "triggering_conditions": ["Dynamic type usage", "Missing type annotations"], "severity": "high"})
 
     # Analyze complexity for maintainability failures
     complexity_score = complexity.get("score", 0)
     if complexity_score and complexity_score > 7:
-        failure_modes.append({
-            "component": "Maintainability",
-            "failure_type": "Technical Debt Accumulation",
-            "description": f"High cyclomatic complexity ({complexity_score}) indicates difficult-to-maintain code",
-            "triggering_conditions": ["Frequent modifications to complex functions", "Lack of unit tests"],
-            "severity": "medium"
-        })
+        failure_modes.append(
+            {
+                "component": "Maintainability",
+                "failure_type": "Technical Debt Accumulation",
+                "description": f"High cyclomatic complexity ({complexity_score}) indicates difficult-to-maintain code",
+                "triggering_conditions": ["Frequent modifications to complex functions", "Lack of unit tests"],
+                "severity": "medium",
+            }
+        )
 
     # Analyze test coverage for quality failures
     coverage_pct = coverage.get("percentage", 100)
     if coverage_pct < 70:
-        failure_modes.append({
-            "component": "Test Coverage",
-            "failure_type": "Regression",
-            "description": f"Low test coverage ({coverage_pct}%) increases risk of undetected regressions",
-            "triggering_conditions": ["Code changes in uncovered regions", "Refactoring without tests"],
-            "severity": "high" if coverage_pct < 50 else "medium"
-        })
+        failure_modes.append(
+            {
+                "component": "Test Coverage",
+                "failure_type": "Regression",
+                "description": f"Low test coverage ({coverage_pct}%) increases risk of undetected regressions",
+                "triggering_conditions": ["Code changes in uncovered regions", "Refactoring without tests"],
+                "severity": "high" if coverage_pct < 50 else "medium",
+            }
+        )
 
     # Check for missing skills which indicate operational gaps
-    missing_skills = [
-        result.get("skill")
-        for result in [lint_results, type_check_results, complexity, coverage]
-        if result.get("status") == "skill_not_available"
-    ]
+    missing_skills = [result.get("skill") for result in [lint_results, type_check_results, complexity, coverage] if result.get("status") == "skill_not_available"]
     if missing_skills:
-        failure_modes.append({
-            "component": "Operational",
-            "failure_type": "Capability Gap",
-            "description": f"Missing analysis skills: {', '.join(set(missing_skills))}",
-            "triggering_conditions": ["Incomplete toolchain setup", "Missing dependencies"],
-            "severity": "low"
-        })
+        failure_modes.append({"component": "Operational", "failure_type": "Capability Gap", "description": f"Missing analysis skills: {', '.join(set(missing_skills))}", "triggering_conditions": ["Incomplete toolchain setup", "Missing dependencies"], "severity": "low"})
 
     log_json("INFO", "failure_modes_predicted", {"count": len(failure_modes)})
     return failure_modes
@@ -198,44 +183,18 @@ def classify_failure_modes(failure_modes: List[Dict[str, Any]]) -> List[Dict[str
         component = mode.get("component", "")
 
         # Estimate likelihood based on component type and severity
-        likelihood_map = {
-            "Code Quality": "high",
-            "Type System": "medium",
-            "Maintainability": "medium",
-            "Test Coverage": "high",
-            "Operational": "low"
-        }
+        likelihood_map = {"Code Quality": "high", "Type System": "medium", "Maintainability": "medium", "Test Coverage": "high", "Operational": "low"}
         likelihood = likelihood_map.get(component, "medium")
 
         # Calculate risk level using risk matrix
-        risk_matrix = {
-            ("high", "high"): "Critical",
-            ("high", "medium"): "High",
-            ("high", "low"): "Medium",
-            ("medium", "high"): "High",
-            ("medium", "medium"): "Medium",
-            ("medium", "low"): "Low",
-            ("low", "high"): "Medium",
-            ("low", "medium"): "Low",
-            ("low", "low"): "Low"
-        }
+        risk_matrix = {("high", "high"): "Critical", ("high", "medium"): "High", ("high", "low"): "Medium", ("medium", "high"): "High", ("medium", "medium"): "Medium", ("medium", "low"): "Low", ("low", "high"): "Medium", ("low", "medium"): "Low", ("low", "low"): "Low"}
         risk_level = risk_matrix.get((severity, likelihood), "Medium")
 
         # Assign priority score (higher = more urgent)
-        priority_map = {
-            "Critical": 4,
-            "High": 3,
-            "Medium": 2,
-            "Low": 1
-        }
+        priority_map = {"Critical": 4, "High": 3, "Medium": 2, "Low": 1}
         priority = priority_map.get(risk_level, 2)
 
-        classified_mode = {
-            **mode,
-            "risk_level": risk_level,
-            "likelihood": likelihood,
-            "priority": priority
-        }
+        classified_mode = {**mode, "risk_level": risk_level, "likelihood": likelihood, "priority": priority}
         classified.append(classified_mode)
 
     # Sort by priority (descending)
@@ -273,71 +232,43 @@ def suggest_architectural_improvements(architecture_results: Dict[str, Any]) -> 
     if lint_results.get("status") != "skill_not_available":
         errors = lint_results.get("errors", [])
         if len(errors) > 5:
-            suggestions.append({
-                "target_component": "Code Quality",
-                "improvement_type": "Linting Automation",
-                "description": "Integrate automated linting into pre-commit hooks to catch issues early",
-                "expected_benefit": "Reduced runtime errors and consistent code style",
-                "implementation_effort": "low"
-            })
+            suggestions.append(
+                {"target_component": "Code Quality", "improvement_type": "Linting Automation", "description": "Integrate automated linting into pre-commit hooks to catch issues early", "expected_benefit": "Reduced runtime errors and consistent code style", "implementation_effort": "low"}
+            )
 
     # Suggest type checking improvements
     if type_check_results.get("status") != "skill_not_available":
         type_errors = type_check_results.get("errors", "")
         if type_errors:
-            suggestions.append({
-                "target_component": "Type System",
-                "improvement_type": "Type Annotation Coverage",
-                "description": "Add comprehensive type annotations to public APIs and critical functions",
-                "expected_benefit": "Early detection of type errors and better IDE support",
-                "implementation_effort": "medium"
-            })
+            suggestions.append(
+                {
+                    "target_component": "Type System",
+                    "improvement_type": "Type Annotation Coverage",
+                    "description": "Add comprehensive type annotations to public APIs and critical functions",
+                    "expected_benefit": "Early detection of type errors and better IDE support",
+                    "implementation_effort": "medium",
+                }
+            )
 
     # Suggest complexity reduction
     complexity_score = complexity.get("score", 0)
     if complexity_score and complexity_score > 7:
-        suggestions.append({
-            "target_component": "Maintainability",
-            "improvement_type": "Refactoring Complex Functions",
-            "description": "Refactor high-complexity functions into smaller, testable units",
-            "expected_benefit": "Improved maintainability and testability",
-            "implementation_effort": "high"
-        })
+        suggestions.append({"target_component": "Maintainability", "improvement_type": "Refactoring Complex Functions", "description": "Refactor high-complexity functions into smaller, testable units", "expected_benefit": "Improved maintainability and testability", "implementation_effort": "high"})
 
     # Suggest test coverage improvements
     coverage_pct = coverage.get("percentage", 100)
     if coverage_pct < 80:
-        suggestions.append({
-            "target_component": "Test Coverage",
-            "improvement_type": "Test Suite Expansion",
-            "description": f"Increase test coverage from {coverage_pct}% to at least 80%",
-            "expected_benefit": "Reduced regression risk and safer refactoring",
-            "implementation_effort": "medium"
-        })
+        suggestions.append({"target_component": "Test Coverage", "improvement_type": "Test Suite Expansion", "description": f"Increase test coverage from {coverage_pct}% to at least 80%", "expected_benefit": "Reduced regression risk and safer refactoring", "implementation_effort": "medium"})
 
     # Suggest CI/CD improvements if skills are missing
-    missing_skills = [
-        result.get("skill")
-        for result in [lint_results, type_check_results, complexity, coverage]
-        if result.get("status") == "skill_not_available"
-    ]
+    missing_skills = [result.get("skill") for result in [lint_results, type_check_results, complexity, coverage] if result.get("status") == "skill_not_available"]
     if missing_skills:
-        suggestions.append({
-            "target_component": "Toolchain",
-            "improvement_type": "Skill Dependencies",
-            "description": f"Install missing analysis tools: {', '.join(set(missing_skills))}",
-            "expected_benefit": "Complete analysis coverage and better insights",
-            "implementation_effort": "low"
-        })
+        suggestions.append({"target_component": "Toolchain", "improvement_type": "Skill Dependencies", "description": f"Install missing analysis tools: {', '.join(set(missing_skills))}", "expected_benefit": "Complete analysis coverage and better insights", "implementation_effort": "low"})
 
     # Always suggest documentation improvement
-    suggestions.append({
-        "target_component": "Documentation",
-        "improvement_type": "Architecture Documentation",
-        "description": "Create or update architecture decision records (ADRs) for key design choices",
-        "expected_benefit": "Better onboarding and architectural alignment",
-        "implementation_effort": "medium"
-    })
+    suggestions.append(
+        {"target_component": "Documentation", "improvement_type": "Architecture Documentation", "description": "Create or update architecture decision records (ADRs) for key design choices", "expected_benefit": "Better onboarding and architectural alignment", "implementation_effort": "medium"}
+    )
 
     log_json("INFO", "architectural_improvements_suggested", {"count": len(suggestions)})
     return suggestions
@@ -435,12 +366,14 @@ def _build_execution_plan_section(execution_plan: Dict[str, Any]) -> List[str]:
     query = execution_plan.get("query", "N/A")
     results = execution_plan.get("results", [])
 
-    lines.extend([
-        f"- Status: {plan_status}",
-        f"- Query: {query}",
-        f"- Results found: {len(results)}",
-        "",
-    ])
+    lines.extend(
+        [
+            f"- Status: {plan_status}",
+            f"- Query: {query}",
+            f"- Results found: {len(results)}",
+            "",
+        ]
+    )
 
     if results:
         lines.append("### Key Findings")
@@ -484,17 +417,19 @@ def _build_suggestions_section(architectural_suggestions: List[Dict[str, Any]]) 
             benefit = suggestion.get("expected_benefit", "")
             effort = suggestion.get("implementation_effort", "")
 
-            lines.extend([
-                f"### {i}. {imp_type}",
-                "",
-                f"**Target:** {target}",
-                f"**Effort:** {effort}",
-                "",
-                f"{description}",
-                "",
-                f"**Expected Benefit:** {benefit}",
-                "",
-            ])
+            lines.extend(
+                [
+                    f"### {i}. {imp_type}",
+                    "",
+                    f"**Target:** {target}",
+                    f"**Effort:** {effort}",
+                    "",
+                    f"{description}",
+                    "",
+                    f"**Expected Benefit:** {benefit}",
+                    "",
+                ]
+            )
     else:
         lines.append("No improvement suggestions generated.")
 
@@ -530,13 +465,7 @@ def _build_recommendations_section(
     return lines
 
 
-def compile_summary(
-    python_results: Dict[str, Any],
-    typescript_results: Dict[str, Any],
-    execution_plan: Dict[str, Any],
-    classified_failure_modes: List[Dict[str, Any]],
-    architectural_suggestions: List[Dict[str, Any]]
-) -> str:
+def compile_summary(python_results: Dict[str, Any], typescript_results: Dict[str, Any], execution_plan: Dict[str, Any], classified_failure_modes: List[Dict[str, Any]], architectural_suggestions: List[Dict[str, Any]]) -> str:
     """Compile and format the summary content into markdown.
 
     Creates a comprehensive architecture summary document combining results
@@ -581,13 +510,7 @@ def validate_with_mcp_server(summary_content: str) -> Dict[str, Any]:
         Dictionary containing validation status, score, feedback, and
         any errors encountered during validation.
     """
-    validation_result = {
-        "status": "pending",
-        "score": 0.0,
-        "feedback": [],
-        "errors": [],
-        "timestamp": datetime.utcnow().isoformat()
-    }
+    validation_result = {"status": "pending", "score": 0.0, "feedback": [], "errors": [], "timestamp": datetime.utcnow().isoformat()}
 
     try:
         # Attempt to use MCP client for validation
@@ -598,14 +521,12 @@ def validate_with_mcp_server(summary_content: str) -> Dict[str, Any]:
 
         # Check server health
         import asyncio
+
         health = asyncio.run(client.get_health())
 
         if health.get("status") == "healthy":
             # Submit content for validation
-            response = asyncio.run(client.call_tool(
-                "validate_document",
-                {"content": summary_content, "type": "architecture_summary"}
-            ))
+            response = asyncio.run(client.call_tool("validate_document", {"content": summary_content, "type": "architecture_summary"}))
 
             validation_result["status"] = "validated"
             validation_result["score"] = response.get("score", 0.0)
@@ -627,10 +548,7 @@ def validate_with_mcp_server(summary_content: str) -> Dict[str, Any]:
     return validation_result
 
 
-def _perform_fallback_validation(
-    summary_content: str,
-    partial_result: Dict[str, Any]
-) -> Dict[str, Any]:
+def _perform_fallback_validation(summary_content: str, partial_result: Dict[str, Any]) -> Dict[str, Any]:
     """Perform basic local validation of summary content.
 
     Args:
@@ -657,13 +575,7 @@ def _perform_fallback_validation(
         score += 0.1
 
     partial_result["score"] = round(min(score, 1.0), 2)
-    partial_result["feedback"] = [
-        f"Content length: {content_length} characters",
-        f"Has proper headers: {has_headers}",
-        f"Contains tables: {has_tables}",
-        f"Includes recommendations: {has_recommendations}",
-        "Note: This is fallback validation (MCP server unavailable)"
-    ]
+    partial_result["feedback"] = [f"Content length: {content_length} characters", f"Has proper headers: {has_headers}", f"Contains tables: {has_tables}", f"Includes recommendations: {has_recommendations}", "Note: This is fallback validation (MCP server unavailable)"]
 
     log_json("INFO", "fallback_validation_completed", {"score": partial_result["score"]})
     return partial_result
@@ -684,10 +596,7 @@ def engage_stakeholders(validation_results: Dict[str, Any]) -> None:
     score = validation_results.get("score", 0.0)
     feedback = validation_results.get("feedback", [])
 
-    log_json("INFO", "stakeholder_engagement_started", {
-        "validation_status": status,
-        "score": score
-    })
+    log_json("INFO", "stakeholder_engagement_started", {"validation_status": status, "score": score})
 
     # Determine engagement level based on validation score
     if score >= 0.8:
@@ -701,21 +610,10 @@ def engage_stakeholders(validation_results: Dict[str, Any]) -> None:
         message = "Architecture summary validation failed - requires immediate attention."
 
     # Log engagement action
-    log_json("INFO", "stakeholder_engagement_action", {
-        "level": engagement_level,
-        "message": message,
-        "feedback_count": len(feedback)
-    })
+    log_json("INFO", "stakeholder_engagement_action", {"level": engagement_level, "message": message, "feedback_count": len(feedback)})
 
     # Simulate notification (in production, this would send actual notifications)
-    notification = {
-        "timestamp": datetime.utcnow().isoformat(),
-        "level": engagement_level,
-        "subject": f"AURA Architecture Analysis - {engagement_level.upper()}",
-        "message": message,
-        "validation_score": score,
-        "action_required": engagement_level in ("review", "block")
-    }
+    notification = {"timestamp": datetime.utcnow().isoformat(), "level": engagement_level, "subject": f"AURA Architecture Analysis - {engagement_level.upper()}", "message": message, "validation_score": score, "action_required": engagement_level in ("review", "block")}
 
     # Log the notification for audit trail
     log_json("INFO", "stakeholder_notification_prepared", notification)

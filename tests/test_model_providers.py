@@ -9,6 +9,7 @@ from core.model_adapter import ModelAdapter
 
 class _TestableAdapter(ModelAdapter):
     """Subclass that makes LLM_TIMEOUT settable for tests."""
+
     _llm_timeout_override = 60
 
     @property

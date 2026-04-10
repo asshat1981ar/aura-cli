@@ -23,7 +23,7 @@ def divide(a, b):
 
 
 def power(base, exp):
-    return base ** exp
+    return base**exp
 
 
 def average(numbers):

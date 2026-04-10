@@ -21,6 +21,7 @@ import pytest
 JWT_AVAILABLE: bool
 try:
     from jose import jwt as jose_jwt
+
     JWT_AVAILABLE = True
 except ImportError:
     JWT_AVAILABLE = False
@@ -31,6 +32,7 @@ from core.auth import AuthManager, AuthenticationError, TokenError, User, UserRo
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def tmp_db(tmp_path):
@@ -56,6 +58,7 @@ def user_alice(auth):
 # Key length enforcement
 # ---------------------------------------------------------------------------
 
+
 class TestSecretKeyLength:
     def test_short_key_rejected(self, tmp_db):
         with pytest.raises(ValueError, match="32 bytes"):
@@ -79,6 +82,7 @@ class TestSecretKeyLength:
 # HS256 algorithm enforcement
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(not JWT_AVAILABLE, reason="python-jose not installed")
 class TestHS256Enforcement:
     def test_access_token_uses_hs256(self, auth, user_alice):
@@ -90,6 +94,7 @@ class TestHS256Enforcement:
         """A token signed with alg:none must be rejected by verify_token."""
         # Craft a token with alg:none
         from jose import jwt as _jwt
+
         payload = {"sub": "alice", "type": "access", "jti": "test"}
         evil_token = _jwt.encode(payload, "", algorithm="HS256")
         # Tamper: rewrite header to alg:none (jose won't verify this)
@@ -111,12 +116,14 @@ class TestHS256Enforcement:
 # 24-hour token expiry cap
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(not JWT_AVAILABLE, reason="python-jose not installed")
 class TestTokenExpiryCap:
     def test_default_expiry_within_24h(self, auth, user_alice):
         token = auth.create_access_token(user_alice)
         payload = jose_jwt.decode(token, auth.secret_key, algorithms=[auth.algorithm])
         from datetime import datetime, timezone
+
         delta = datetime.fromtimestamp(payload["exp"], tz=timezone.utc) - datetime.now(timezone.utc)
         assert delta.total_seconds() <= 24 * 3600 + 5  # 5s tolerance
 
@@ -124,6 +131,7 @@ class TestTokenExpiryCap:
         token = auth.create_access_token(user_alice, expires_delta=timedelta(days=7))
         payload = jose_jwt.decode(token, auth.secret_key, algorithms=[auth.algorithm])
         from datetime import datetime, timezone
+
         delta = datetime.fromtimestamp(payload["exp"], tz=timezone.utc) - datetime.now(timezone.utc)
         # Must not exceed 24h
         assert delta.total_seconds() <= 24 * 3600 + 5
@@ -132,6 +140,7 @@ class TestTokenExpiryCap:
         token = auth.create_access_token(user_alice, expires_delta=timedelta(minutes=5))
         payload = jose_jwt.decode(token, auth.secret_key, algorithms=[auth.algorithm])
         from datetime import datetime, timezone
+
         delta = datetime.fromtimestamp(payload["exp"], tz=timezone.utc) - datetime.now(timezone.utc)
         assert delta.total_seconds() <= 5 * 60 + 5
 
@@ -139,6 +148,7 @@ class TestTokenExpiryCap:
 # ---------------------------------------------------------------------------
 # Token revocation (JTI SQLite blocklist)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.skipif(not JWT_AVAILABLE, reason="python-jose not installed")
 class TestTokenRevocation:
@@ -179,6 +189,7 @@ class TestTokenRevocation:
 # Refresh token flow
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(not JWT_AVAILABLE, reason="python-jose not installed")
 class TestRefreshTokenFlow:
     def test_refresh_token_type(self, auth, user_alice):
@@ -202,6 +213,7 @@ class TestRefreshTokenFlow:
 # Auth router endpoints (FastAPI integration)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.skipif(not JWT_AVAILABLE, reason="python-jose not installed")
 class TestAuthRouterEndpoints:
     @pytest.fixture()
@@ -217,6 +229,7 @@ class TestAuthRouterEndpoints:
 
         app = FastAPI()
         from aura_cli.api.routers.auth import router
+
         app.include_router(router)
         yield TestClient(app)
 
@@ -248,6 +261,7 @@ class TestAuthRouterEndpoints:
 
     def test_logout_then_verify_rejected(self, app_client, tmp_db, secret):
         import core.auth as _auth_module
+
         login = app_client.post("/api/v1/auth/login", json={"username": "bob", "password": "password123"})
         at = login.json()["access_token"]
         app_client.post("/api/v1/auth/logout", json={"token": at})

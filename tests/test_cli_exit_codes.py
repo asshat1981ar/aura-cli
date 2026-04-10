@@ -1,4 +1,5 @@
 """Tests for structured CLI exit codes."""
+
 import subprocess
 import sys
 import os
@@ -41,6 +42,7 @@ class TestExitCodes:
             EXIT_CANCELLED,
             EXIT_LLM_ERROR,
         )
+
         assert EXIT_SUCCESS == 0
         assert EXIT_FAILURE == 1
         assert EXIT_SANDBOX_ERROR == 2
@@ -58,6 +60,7 @@ class TestExitCodes:
             EXIT_CANCELLED,
             EXIT_LLM_ERROR,
         )
+
         codes = [EXIT_SUCCESS, EXIT_FAILURE, EXIT_SANDBOX_ERROR, EXIT_APPLY_ERROR, EXIT_CANCELLED, EXIT_LLM_ERROR]
         assert len(codes) == len(set(codes)), "Exit code values must be unique"
 

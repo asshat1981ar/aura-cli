@@ -2,6 +2,7 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import List
 
+
 @dataclass
 class DataProcessor:
     data_path: Path
@@ -19,6 +20,7 @@ class DataProcessor:
         """Process the loaded data to extract meaningful insights."""
         # Processing logic (e.g., filtering, mapping) here...
         return data
+
 
 # Example usage:
 # processor = DataProcessor(data_path=Path('path/to/data.txt'))

@@ -1,4 +1,5 @@
 """Tests for phase confidence scoring and routing."""
+
 import unittest
 
 from core.phase_result import PhaseResult, NextAction, ConfidenceRouter
@@ -24,9 +25,7 @@ class TestPhaseResult(unittest.TestCase):
         self.assertTrue(r.is_low_confidence)
 
     def test_to_dict(self):
-        r = PhaseResult(phase="verify", confidence=0.75,
-                        suggested_next=NextAction.RETRY,
-                        reasoning="test flaky")
+        r = PhaseResult(phase="verify", confidence=0.75, suggested_next=NextAction.RETRY, reasoning="test flaky")
         d = r.to_dict()
         self.assertEqual(d["phase"], "verify")
         self.assertEqual(d["confidence"], 0.75)
@@ -112,12 +111,14 @@ class TestConfidenceRouter(unittest.TestCase):
         self.assertEqual(len(self.router.phase_history), 0)
 
     def test_custom_thresholds(self):
-        router = ConfidenceRouter(thresholds={
-            "replan_below": 0.5,
-            "escalate_below": 0.3,
-            "retry_below": 0.6,
-            "skip_above": 0.95,
-        })
+        router = ConfidenceRouter(
+            thresholds={
+                "replan_below": 0.5,
+                "escalate_below": 0.3,
+                "retry_below": 0.6,
+                "skip_above": 0.95,
+            }
+        )
         r = PhaseResult(phase="plan", confidence=0.4)
         self.assertTrue(router.should_replan(r))
 

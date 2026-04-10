@@ -32,6 +32,7 @@ Usage::
     store.put("cycle_summaries", {"goal": "...", "status": "pass"})
     store.append_log(cycle_entry)   # also fires aura.cycle_complete
 """
+
 from __future__ import annotations
 
 import json
@@ -87,8 +88,7 @@ class MomentoMemoryStore(MemoryStore):
                 max_size=_LIST_MAX,
             )
         except Exception as exc:
-            log_json("WARN", "momento_memstore_put_l1_failed",
-                     details={"tier": tier, "error": str(exc)})
+            log_json("WARN", "momento_memstore_put_l1_failed", details={"tier": tier, "error": str(exc)})
 
     def query(self, tier: str, limit: int = 100) -> List[Dict[str, Any]]:
         """Return last *limit* records — from L1 if available, else L2 JSON."""
@@ -107,16 +107,14 @@ class MomentoMemoryStore(MemoryStore):
                         except json.JSONDecodeError:
                             pass
                     if parsed:
-                        log_json("DEBUG", "momento_memstore_query_l1_hit",
-                                 details={"tier": tier, "count": len(parsed)})
+                        log_json("DEBUG", "momento_memstore_query_l1_hit", details={"tier": tier, "count": len(parsed)})
                         return parsed
                 # L1 miss — load from L2 and backfill
                 results = super().query(tier, limit=limit)
                 self._backfill_tier(tier, results)
                 return results
             except Exception as exc:
-                log_json("WARN", "momento_memstore_query_l1_failed",
-                         details={"tier": tier, "error": str(exc)})
+                log_json("WARN", "momento_memstore_query_l1_failed", details={"tier": tier, "error": str(exc)})
         return super().query(tier, limit=limit)
 
     # ── Decision log + topic publish ──────────────────────────────────────────
@@ -131,16 +129,15 @@ class MomentoMemoryStore(MemoryStore):
             po = entry.get("phase_outputs", {})
             verify_status = po.get("verification", {}).get("status", "unknown")
             event = {
-                "cycle_id":     entry.get("cycle_id", ""),
-                "goal_type":    entry.get("goal_type", ""),
+                "cycle_id": entry.get("cycle_id", ""),
+                "goal_type": entry.get("goal_type", ""),
                 "verify_status": verify_status,
-                "stop_reason":  entry.get("stop_reason"),
-                "ts":           time.time(),
+                "stop_reason": entry.get("stop_reason"),
+                "ts": time.time(),
             }
             self._m.publish(TOPIC_CYCLE_COMPLETE, json.dumps(event))
         except Exception as exc:
-            log_json("WARN", "momento_memstore_publish_failed",
-                     details={"error": str(exc)})
+            log_json("WARN", "momento_memstore_publish_failed", details={"error": str(exc)})
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -156,5 +153,4 @@ class MomentoMemoryStore(MemoryStore):
                     max_size=_LIST_MAX,
                 )
         except Exception as exc:
-            log_json("WARN", "momento_memstore_backfill_failed",
-                     details={"tier": tier, "error": str(exc)})
+            log_json("WARN", "momento_memstore_backfill_failed", details={"tier": tier, "error": str(exc)})

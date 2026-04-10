@@ -36,14 +36,10 @@ def _config_get_with_profiles(key, default=None):
 
 
 def test_respond_for_role_uses_openai_compatible_profile():
-    with patch("core.model_adapter.config.get", side_effect=_config_get_with_profiles), \
-         patch("core.model_adapter.log_json"), \
-         patch.object(ModelAdapter, "_make_request_with_retries") as mock_request:
+    with patch("core.model_adapter.config.get", side_effect=_config_get_with_profiles), patch("core.model_adapter.log_json"), patch.object(ModelAdapter, "_make_request_with_retries") as mock_request:
         adapter = ModelAdapter()
         mock_response = MagicMock()
-        mock_response.json.return_value = {
-            "choices": [{"message": {"content": '{"aura_target":"core/demo.py","code":"print(1)"}'}}]
-        }
+        mock_response.json.return_value = {"choices": [{"message": {"content": '{"aura_target":"core/demo.py","code":"print(1)"}'}}]}
         mock_request.return_value = mock_response
 
         result = adapter.respond_for_role("code_generation", "write code")
@@ -55,9 +51,7 @@ def test_respond_for_role_uses_openai_compatible_profile():
 
 
 def test_respond_for_role_uses_ollama_profile():
-    with patch("core.model_adapter.config.get", side_effect=_config_get_with_profiles), \
-         patch("core.model_adapter.log_json"), \
-         patch.object(ModelAdapter, "_make_request_with_retries") as mock_request:
+    with patch("core.model_adapter.config.get", side_effect=_config_get_with_profiles), patch("core.model_adapter.log_json"), patch.object(ModelAdapter, "_make_request_with_retries") as mock_request:
         adapter = ModelAdapter()
         mock_response = MagicMock()
         mock_response.json.return_value = {"response": '["step 1", "step 2"]'}
@@ -81,9 +75,7 @@ def test_respond_for_role_falls_back_to_default_path_when_profile_missing():
             return {"planning": "missing_profile"}
         return default
 
-    with patch("core.model_adapter.config.get", side_effect=_config_get), \
-         patch("core.model_adapter.log_json"), \
-         patch.object(ModelAdapter, "respond", return_value='["fallback"]') as mock_respond:
+    with patch("core.model_adapter.config.get", side_effect=_config_get), patch("core.model_adapter.log_json"), patch.object(ModelAdapter, "respond", return_value='["fallback"]') as mock_respond:
         adapter = ModelAdapter()
         result = adapter.respond_for_role("planning", "plan it")
 
@@ -125,9 +117,7 @@ def test_local_profile_failure_uses_configured_fallback_profile():
             raise RuntimeError("planner endpoint down")
         return '["fallback step"]'
 
-    with patch("core.model_adapter.config.get", side_effect=_config_get), \
-         patch("core.model_adapter.log_json"), \
-         patch.object(ModelAdapter, "_call_local_openai_compatible", side_effect=_call):
+    with patch("core.model_adapter.config.get", side_effect=_config_get), patch("core.model_adapter.log_json"), patch.object(ModelAdapter, "_call_local_openai_compatible", side_effect=_call):
         adapter = ModelAdapter()
         result = adapter.respond_for_role("planning", "plan the task")
 
@@ -170,9 +160,7 @@ def test_local_profile_cooldown_skips_failed_profile_on_next_call():
             raise RuntimeError("planner endpoint down")
         return '["fallback step"]'
 
-    with patch("core.model_adapter.config.get", side_effect=_config_get), \
-         patch("core.model_adapter.log_json"), \
-         patch.object(ModelAdapter, "_call_local_openai_compatible", side_effect=_call):
+    with patch("core.model_adapter.config.get", side_effect=_config_get), patch("core.model_adapter.log_json"), patch.object(ModelAdapter, "_call_local_openai_compatible", side_effect=_call):
         adapter = ModelAdapter()
         first = adapter.respond_for_role("planning", "plan the task")
         second = adapter.respond_for_role("planning", "plan the task again")

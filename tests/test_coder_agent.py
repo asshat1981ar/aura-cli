@@ -19,6 +19,7 @@ Covers:
 - get_structured_info() both availability states
 - get_cache_stats() both availability states
 """
+
 from __future__ import annotations
 
 import json
@@ -33,6 +34,7 @@ from tests.fixtures.mock_llm import MockModelAdapter
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_brain() -> MagicMock:
     brain = MagicMock()
@@ -67,20 +69,16 @@ VALID_CODER_DICT: dict = {
 }
 
 # Legacy JSON response the agent should parse successfully
-LEGACY_JSON_RESPONSE: str = json.dumps(
-    {"aura_target": "core/bar.py", "code": "def bar(): return 42"}
-)
+LEGACY_JSON_RESPONSE: str = json.dumps({"aura_target": "core/bar.py", "code": "def bar(): return 42"})
 
 # Markdown response with AURA_TARGET directive
-MARKDOWN_RESPONSE: str = (
-    "# AURA_TARGET: core/baz.py\n"
-    "```python\ndef baz(): return 'baz'\n```"
-)
+MARKDOWN_RESPONSE: str = "# AURA_TARGET: core/baz.py\n```python\ndef baz(): return 'baz'\n```"
 
 
 # ---------------------------------------------------------------------------
 # __init__
 # ---------------------------------------------------------------------------
+
 
 class TestCoderAgentInit:
     def test_stores_brain_model_and_tester(self):
@@ -120,6 +118,7 @@ class TestCoderAgentInit:
 # _respond()
 # ---------------------------------------------------------------------------
 
+
 class TestCoderRespond:
     def test_falls_back_to_respond_when_no_role_method(self):
         """MagicMock spec=["respond"] has no respond_for_role → fallback."""
@@ -136,6 +135,7 @@ class TestCoderRespond:
         inspect.getattr_static cannot see.  We use a concrete stub so the
         static lookup succeeds and _respond() takes the role-dispatch path.
         """
+
         class _ModelWithRole:
             def respond_for_role(self, route_key: str, prompt: str) -> str:  # noqa: D401
                 return "role-based response"
@@ -161,6 +161,7 @@ class TestCoderRespond:
 # ---------------------------------------------------------------------------
 # _implement_legacy()
 # ---------------------------------------------------------------------------
+
 
 class TestImplementLegacy:
     def _agent(self, response: str) -> CoderAgent:
@@ -210,6 +211,7 @@ class TestImplementLegacy:
 # _implement_structured()
 # ---------------------------------------------------------------------------
 
+
 class TestImplementStructured:
     def _agent_with_structured_response(self, response_text: str) -> CoderAgent:
         model = _make_model(response_text)
@@ -247,6 +249,7 @@ class TestImplementStructured:
     def test_json_decode_error_falls_back_to_legacy(self):
         """When _aura_safe_loads raises JSONDecodeError, legacy is called."""
         import json as _json
+
         agent = self._agent_with_structured_response("not json at all")
         with (
             patch("agents.coder.SCHEMAS_AVAILABLE", True),
@@ -278,6 +281,7 @@ class TestImplementStructured:
 # _format_final_code()
 # ---------------------------------------------------------------------------
 
+
 class TestFormatFinalCode:
     def _agent(self) -> CoderAgent:
         return CoderAgent(_make_brain(), _make_model())
@@ -308,6 +312,7 @@ class TestFormatFinalCode:
 # _remember_output()
 # ---------------------------------------------------------------------------
 
+
 class TestRememberOutput:
     def test_stores_code_memory(self):
         brain = _make_brain()
@@ -331,6 +336,7 @@ class TestRememberOutput:
 # ---------------------------------------------------------------------------
 # get_structured_info() and get_cache_stats()
 # ---------------------------------------------------------------------------
+
 
 class TestCoderAgentInfo:
     def test_get_structured_info_true(self):
@@ -366,6 +372,7 @@ class TestCoderAgentInfo:
 # ---------------------------------------------------------------------------
 # implement() — high-level integration
 # ---------------------------------------------------------------------------
+
 
 class TestImplementHappyPath:
     """implement() without a tester — single-iteration fast exit."""
@@ -506,6 +513,7 @@ class TestImplementErrorHandling:
 # Edge cases: empty / minimal task dicts passed as strings
 # ---------------------------------------------------------------------------
 
+
 class TestImplementEdgeCases:
     def test_empty_string_task(self):
         brain = _make_brain()
@@ -536,6 +544,7 @@ class TestImplementEdgeCases:
 # ---------------------------------------------------------------------------
 # MockModelAdapter integration (verify fixture works with CoderAgent)
 # ---------------------------------------------------------------------------
+
 
 class TestMockModelAdapterIntegration:
     def test_mock_model_adapter_coder_response(self):

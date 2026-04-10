@@ -8,6 +8,7 @@ from pydantic import ValidationError
 try:
     from agents.schemas import CoderOutput
     from agents.prompt_manager import render_prompt, get_cached_prompt_stats
+
     SCHEMAS_AVAILABLE = True
 except ImportError:
     SCHEMAS_AVAILABLE = False
@@ -17,7 +18,7 @@ class CoderAgent:
     """
     The CoderAgent generates code with Chain-of-Thought reasoning
     and structured outputs for better reliability and maintainability.
-    
+
     Uses role-based system prompts (Expert Python Developer) and prompt caching.
     """
 
@@ -57,18 +58,12 @@ class CoderAgent:
             feedback_section = f"Sandbox feedback:\n{feedback}" if feedback else ""
 
             if self.use_structured:
-                result = self._implement_structured(
-                    task, memory_text, code_section, tests_section, feedback_section
-                )
+                result = self._implement_structured(task, memory_text, code_section, tests_section, feedback_section)
             else:
-                result = self._implement_legacy(
-                    task, memory_text, code_section, tests_section, feedback_section
-                )
+                result = self._implement_legacy(task, memory_text, code_section, tests_section, feedback_section)
 
             if result.get("error"):
-                log_json("ERROR", "coder_iteration_error", details={
-                    "iteration": i + 1, "error": result["error"]
-                })
+                log_json("ERROR", "coder_iteration_error", details={"iteration": i + 1, "error": result["error"]})
                 if i == 0:
                     return f"# Error: {result['error']}"
                 break
@@ -82,17 +77,11 @@ class CoderAgent:
                 feedback = evaluation.get("summary", "")
 
                 if "likely pass" in feedback.lower():
-                    log_json("INFO", "coder_iteration_pass", details={
-                        "iteration": i + 1,
-                        "confidence": result.get("confidence", 0),
-                        "target": result.get("aura_target", "unknown")
-                    })
+                    log_json("INFO", "coder_iteration_pass", details={"iteration": i + 1, "confidence": result.get("confidence", 0), "target": result.get("aura_target", "unknown")})
                     self._remember_output(task, result, tests)
                     return self._format_final_code(result)
                 else:
-                    log_json("WARN", "coder_iteration_feedback", details={
-                        "iteration": i + 1, "feedback": feedback[:100]
-                    })
+                    log_json("WARN", "coder_iteration_feedback", details={"iteration": i + 1, "feedback": feedback[:100]})
             else:
                 self._remember_output(task, result, tests)
                 return self._format_final_code(result)
@@ -104,17 +93,7 @@ class CoderAgent:
 
     def _implement_structured(self, task, memory, code_section, tests_section, feedback_section):
         """Generate code using structured output with CoT and role-based prompt."""
-        prompt = render_prompt(
-            template_name="coder",
-            role="coder",
-            params={
-                "task": task,
-                "memory": memory,
-                "code_section": code_section,
-                "tests_section": tests_section,
-                "feedback_section": feedback_section
-            }
-        )
+        prompt = render_prompt(template_name="coder", role="coder", params={"task": task, "memory": memory, "code_section": code_section, "tests_section": tests_section, "feedback_section": feedback_section})
 
         response = self._respond(prompt)
 
@@ -122,12 +101,7 @@ class CoderAgent:
             parsed = _aura_safe_loads(response, "coder_structured_response")
             coder_output = CoderOutput(**parsed)
 
-            log_json("INFO", "coder_cot_reasoning", details={
-                "problem_analysis": coder_output.problem_analysis[:100],
-                "approach": coder_output.approach_selection[:100],
-                "confidence": coder_output.confidence,
-                "target": coder_output.aura_target
-            })
+            log_json("INFO", "coder_cot_reasoning", details={"problem_analysis": coder_output.problem_analysis[:100], "approach": coder_output.approach_selection[:100], "confidence": coder_output.confidence, "target": coder_output.aura_target})
 
             return {
                 "structured_output": coder_output.dict(),
@@ -137,13 +111,8 @@ class CoderAgent:
                 "dependencies": coder_output.dependencies,
                 "edge_cases": coder_output.edge_cases_handled,
                 "confidence": coder_output.confidence,
-                "reasoning": {
-                    "problem_analysis": coder_output.problem_analysis,
-                    "approach_selection": coder_output.approach_selection,
-                    "design_considerations": coder_output.design_considerations,
-                    "testing_strategy": coder_output.testing_strategy
-                },
-                "error": None
+                "reasoning": {"problem_analysis": coder_output.problem_analysis, "approach_selection": coder_output.approach_selection, "design_considerations": coder_output.design_considerations, "testing_strategy": coder_output.testing_strategy},
+                "error": None,
             }
 
         except (json.JSONDecodeError, ValidationError) as e:
@@ -175,17 +144,9 @@ Respond with JSON: {{"aura_target": "path/to/file.py", "code": "<python code>"}}
             stripped = response.strip()
             brace_idx = stripped.find("{")
             if brace_idx != -1:
-                obj = json.loads(stripped[brace_idx:stripped.rfind("}") + 1])
+                obj = json.loads(stripped[brace_idx : stripped.rfind("}") + 1])
                 if "aura_target" in obj and "code" in obj:
-                    return {
-                        "aura_target": obj["aura_target"],
-                        "code": obj["code"],
-                        "explanation": "",
-                        "dependencies": [],
-                        "confidence": 0.5,
-                        "structured_output": None,
-                        "error": None
-                    }
+                    return {"aura_target": obj["aura_target"], "code": obj["code"], "explanation": "", "dependencies": [], "confidence": 0.5, "structured_output": None, "error": None}
         except Exception as e:
             log_json("WARN", "coder_legacy_parse_failed", details={"error": str(e)})
 
@@ -193,7 +154,7 @@ Respond with JSON: {{"aura_target": "path/to/file.py", "code": "<python code>"}}
         target = None
         for line in response.splitlines():
             if line.startswith(self.AURA_TARGET_DIRECTIVE):
-                target = line[len(self.AURA_TARGET_DIRECTIVE):].strip()
+                target = line[len(self.AURA_TARGET_DIRECTIVE) :].strip()
                 break
 
         code_match = self.CODE_BLOCK_RE.search(response)
@@ -202,14 +163,7 @@ Respond with JSON: {{"aura_target": "path/to/file.py", "code": "<python code>"}}
         if target and not code.startswith(self.AURA_TARGET_DIRECTIVE):
             code = f"{self.AURA_TARGET_DIRECTIVE}{target}\n{code}"
 
-        return {
-            "aura_target": target or "unknown.py",
-            "code": code,
-            "explanation": "Extracted from legacy format",
-            "confidence": 0.3,
-            "structured_output": None,
-            "error": None
-        }
+        return {"aura_target": target or "unknown.py", "code": code, "explanation": "Extracted from legacy format", "confidence": 0.3, "structured_output": None, "error": None}
 
     def _format_final_code(self, result):
         """Format the final code output."""
@@ -229,10 +183,7 @@ Respond with JSON: {{"aura_target": "path/to/file.py", "code": "<python code>"}}
 
     def get_structured_info(self):
         """Get info about structured output availability."""
-        return {
-            "structured_output_available": self.use_structured,
-            "schema_version": "1.0.0" if SCHEMAS_AVAILABLE else None
-        }
+        return {"structured_output_available": self.use_structured, "schema_version": "1.0.0" if SCHEMAS_AVAILABLE else None}
 
     def get_cache_stats(self) -> dict:
         """Get prompt cache statistics."""

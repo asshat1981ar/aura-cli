@@ -19,6 +19,7 @@ Start:
 Auth (optional):
   Set WEAVIATE_MCP_TOKEN env var
 """
+
 from __future__ import annotations
 
 import os
@@ -55,10 +56,7 @@ def _get_client():
     """Lazy-load and return the Weaviate client singleton."""
     global _weaviate_client
     if not _weaviate_available:
-        raise RuntimeError(
-            "weaviate-client Python package is not installed. "
-            "Install it with: pip install weaviate-client"
-        )
+        raise RuntimeError("weaviate-client Python package is not installed. Install it with: pip install weaviate-client")
     if _weaviate_client is None:
         url = os.getenv("WEAVIATE_URL", "http://localhost:8080")
         _weaviate_client = _weaviate_mod.Client(url=url)
@@ -79,6 +77,7 @@ _call_errors: Dict[str, int] = {}
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
+
 
 def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
     if not _TOKEN:
@@ -152,6 +151,7 @@ def _build_descriptor(name: str) -> Dict:
 # Tool implementations
 # ---------------------------------------------------------------------------
 
+
 def _vector_upsert(args: Dict) -> Any:
     collection = args.get("collection", "").strip()
     if not collection:
@@ -207,14 +207,7 @@ def _vector_search(args: Dict) -> Any:
     limit = int(args.get("limit", 10))
 
     client = _get_client()
-    result = (
-        client.query
-        .get(collection)
-        .with_near_vector({"vector": query_vector})
-        .with_limit(limit)
-        .with_additional(["id", "distance"])
-        .do()
-    )
+    result = client.query.get(collection).with_near_vector({"vector": query_vector}).with_limit(limit).with_additional(["id", "distance"]).do()
 
     data = result.get("data", {}).get("Get", {}).get(collection, [])
     return {"collection": collection, "results": data, "count": len(data)}
@@ -287,14 +280,7 @@ def _hybrid_search(args: Dict) -> Any:
     alpha = float(args.get("alpha", 0.5))
 
     client = _get_client()
-    result = (
-        client.query
-        .get(collection)
-        .with_hybrid(query=query, alpha=alpha)
-        .with_limit(limit)
-        .with_additional(["id", "score"])
-        .do()
-    )
+    result = client.query.get(collection).with_hybrid(query=query, alpha=alpha).with_limit(limit).with_additional(["id", "score"]).do()
 
     data = result.get("data", {}).get("Get", {}).get(collection, [])
     return {"collection": collection, "query": query, "alpha": alpha, "results": data, "count": len(data)}
@@ -313,6 +299,7 @@ _TOOL_HANDLERS = {
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health")
 async def health(_: None = Depends(_check_auth)):
@@ -391,5 +378,6 @@ async def get_metrics(_: None = Depends(_check_auth)) -> Dict:
 if __name__ == "__main__":
     import uvicorn
     from core.config_manager import config as _cfg
+
     port = int(os.getenv("WEAVIATE_MCP_PORT", _cfg.get_mcp_server_port("weaviate", default=8017)))
     uvicorn.run("tools.weaviate_mcp:app", host="0.0.0.0", port=port, reload=False)

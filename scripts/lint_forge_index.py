@@ -66,7 +66,7 @@ def collect_index_stories(index: dict) -> dict[str, str]:
     stories: dict[str, str] = {}
     by_status = index.get("by_status", {})
     for bucket, ids in by_status.items():
-        for sid in (ids or []):
+        for sid in ids or []:
             stories[str(sid)] = bucket
     return stories
 
@@ -76,7 +76,7 @@ def collect_index_lanes(index: dict) -> dict[str, str]:
     lanes: dict[str, str] = {}
     by_lane = index.get("by_lane", {})
     for lane, ids in by_lane.items():
-        for sid in (ids or []):
+        for sid in ids or []:
             lanes[str(sid)] = lane
     return lanes
 
@@ -101,25 +101,18 @@ def main() -> int:
 
     # 0. Stories that exist in multiple lanes on disk (single-lane invariant violation)
     for sid, lanes in sorted(disk_duplicates.items()):
-        errors.append(
-            f"  DUPLICATE ON DISK (multiple lanes): {sid}  [{', '.join(lanes)}]"
-            f"\n    → keep only the most-advanced copy and delete the rest"
-        )
+        errors.append(f"  DUPLICATE ON DISK (multiple lanes): {sid}  [{', '.join(lanes)}]\n    → keep only the most-advanced copy and delete the rest")
     # Include duplicates in disk set for downstream checks (use most-advanced lane)
-    _lane_rank = {l: i for i, l in enumerate(["inbox","refined","ready","in_progress","review","done"])}
+    _lane_rank = {l: i for i, l in enumerate(["inbox", "refined", "ready", "in_progress", "review", "done"])}
     for sid, lanes in disk_duplicates.items():
         disk[sid] = max(lanes, key=lambda l: _lane_rank.get(l, -1))
 
     # 1. Files on disk missing from index
     for sid, lane in sorted(disk.items()):
         if sid not in indexed_status:
-            errors.append(
-                f"  MISSING FROM INDEX (by_status): {sid}  [disk lane: {lane}]"
-            )
+            errors.append(f"  MISSING FROM INDEX (by_status): {sid}  [disk lane: {lane}]")
         if sid not in indexed_lane:
-            errors.append(
-                f"  MISSING FROM INDEX (by_lane):   {sid}  [disk lane: {lane}]"
-            )
+            errors.append(f"  MISSING FROM INDEX (by_lane):   {sid}  [disk lane: {lane}]")
 
     # 2. Index entries with no file on disk
     # Entries that exist only in examples/ are exempt (foundational reference artifacts).
@@ -127,31 +120,25 @@ def main() -> int:
     all_indexed = set(indexed_status) | set(indexed_lane)
     for sid in sorted(all_indexed):
         if sid not in disk and sid not in example_ids:
-            errors.append(
-                f"  INDEXED BUT NO FILE:            {sid}"
-            )
+            errors.append(f"  INDEXED BUT NO FILE:            {sid}")
 
     # 3. Stories in multiple by_status buckets
     seen_status: dict[str, list[str]] = {}
     for bucket, ids in (index.get("by_status") or {}).items():
-        for sid in (ids or []):
+        for sid in ids or []:
             seen_status.setdefault(str(sid), []).append(bucket)
     for sid, buckets in sorted(seen_status.items()):
         if len(buckets) > 1:
-            errors.append(
-                f"  DUPLICATE STATUS BUCKET:        {sid}  [{', '.join(buckets)}]"
-            )
+            errors.append(f"  DUPLICATE STATUS BUCKET:        {sid}  [{', '.join(buckets)}]")
 
     # 4. Stories in multiple by_lane buckets
     seen_lane: dict[str, list[str]] = {}
     for lane, ids in (index.get("by_lane") or {}).items():
-        for sid in (ids or []):
+        for sid in ids or []:
             seen_lane.setdefault(str(sid), []).append(lane)
     for sid, lanes in sorted(seen_lane.items()):
         if len(lanes) > 1:
-            errors.append(
-                f"  DUPLICATE LANE BUCKET:          {sid}  [{', '.join(lanes)}]"
-            )
+            errors.append(f"  DUPLICATE LANE BUCKET:          {sid}  [{', '.join(lanes)}]")
 
     if errors:
         print(f"Forge index lint FAILED — {len(errors)} issue(s):\n")

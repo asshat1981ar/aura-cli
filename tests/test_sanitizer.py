@@ -1,4 +1,3 @@
-
 import pytest
 
 from core.sanitizer import SecurityError, sanitize_path, sanitize_command, get_allowed_commands

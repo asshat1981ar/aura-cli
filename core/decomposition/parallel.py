@@ -14,10 +14,10 @@ from core.decomposition.base import DecompositionStrategy, DecompositionResult, 
 
 class ParallelDecomposition(DecompositionStrategy):
     """Decompose goals into parallel independent subtasks.
-    
+
     This strategy identifies independent work items that can be
     executed in parallel without dependencies.
-    
+
     Example:
         Goal: "Update all config files in the project"
         Tasks:
@@ -26,9 +26,9 @@ class ParallelDecomposition(DecompositionStrategy):
         - Update setup.py
         - Update requirements.txt
     """
-    
+
     name = "parallel"
-    
+
     def decompose(
         self,
         goal: str,
@@ -36,10 +36,10 @@ class ParallelDecomposition(DecompositionStrategy):
     ) -> DecompositionResult:
         """Decompose goal into parallel independent tasks."""
         context = context or {}
-        
+
         # Extract items that can be processed in parallel
         items = self._extract_parallel_items(goal, context)
-        
+
         subtasks: List[SubTask] = []
         for i, item in enumerate(items, 1):
             subtask = SubTask(
@@ -52,17 +52,19 @@ class ParallelDecomposition(DecompositionStrategy):
                 acceptance_criteria=item.get("criteria", [f"Complete: {item['description']}"]),
             )
             subtasks.append(subtask)
-        
+
         # If no items extracted, treat as single task
         if not subtasks:
-            subtasks.append(SubTask(
-                id="task_1",
-                description=goal,
-                priority=TaskPriority.NORMAL,
-                dependencies=[],
-                estimated_effort=5,
-            ))
-        
+            subtasks.append(
+                SubTask(
+                    id="task_1",
+                    description=goal,
+                    priority=TaskPriority.NORMAL,
+                    dependencies=[],
+                    estimated_effort=5,
+                )
+            )
+
         return DecompositionResult(
             original_goal=goal,
             subtasks=subtasks,
@@ -71,7 +73,7 @@ class ParallelDecomposition(DecompositionStrategy):
             confidence=0.8 if len(subtasks) > 1 else 0.5,
             metadata={"parallel_items": len(subtasks)},
         )
-    
+
     def _extract_parallel_items(
         self,
         goal: str,
@@ -79,26 +81,28 @@ class ParallelDecomposition(DecompositionStrategy):
     ) -> List[Dict[str, Any]]:
         """Extract items that can be processed in parallel."""
         items: List[Dict[str, Any]] = []
-        
+
         # Look for lists with commas or "and"
-        if ',' in goal or ' and ' in goal:
+        if "," in goal or " and " in goal:
             # Split on commas and 'and'
-            parts = re.split(r',\s*|\s+and\s+', goal)
+            parts = re.split(r",\s*|\s+and\s+", goal)
             parts = [p.strip() for p in parts if p.strip() and len(p.strip()) > 5]
-            
+
             for part in parts:
-                items.append({
-                    "description": part,
-                    "priority": "normal",
-                    "effort": 4,
-                })
-        
+                items.append(
+                    {
+                        "description": part,
+                        "priority": "normal",
+                        "effort": 4,
+                    }
+                )
+
         # Check for "all" or "every" patterns (bulk operations)
         bulk_patterns = [
-            r'(?:update|fix|refactor|test)\s+all\s+(\w+)',
-            r'(?:update|fix|refactor|test)\s+every\s+(\w+)',
+            r"(?:update|fix|refactor|test)\s+all\s+(\w+)",
+            r"(?:update|fix|refactor|test)\s+every\s+(\w+)",
         ]
-        
+
         for pattern in bulk_patterns:
             match = re.search(pattern, goal, re.IGNORECASE)
             if match:
@@ -106,11 +110,13 @@ class ParallelDecomposition(DecompositionStrategy):
                 # Would expand based on context (e.g., files of type)
                 if "files" in context:
                     for file_path in context["files"]:
-                        items.append({
-                            "description": f"Process {target_type}: {file_path}",
-                            "priority": "normal",
-                            "effort": 3,
-                            "context": {"file": file_path},
-                        })
-        
+                        items.append(
+                            {
+                                "description": f"Process {target_type}: {file_path}",
+                                "priority": "normal",
+                                "effort": 3,
+                                "context": {"file": file_path},
+                            }
+                        )
+
         return items

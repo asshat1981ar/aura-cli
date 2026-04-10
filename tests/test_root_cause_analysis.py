@@ -1,4 +1,5 @@
 """Unit tests for agents/root_cause_analysis.py."""
+
 from __future__ import annotations
 
 import pytest
@@ -64,10 +65,12 @@ class TestConfidenceAndSummary:
         assert "refactor module" in result["summary"]
 
     def test_summary_contains_phase_from_context(self):
-        result = self.agent.run({
-            "failures": ["SyntaxError: x"],
-            "context": {"phase": "apply"},
-        })
+        result = self.agent.run(
+            {
+                "failures": ["SyntaxError: x"],
+                "context": {"phase": "apply"},
+            }
+        )
         assert "apply" in result["summary"]
 
     def test_repeated_failure_detected(self):

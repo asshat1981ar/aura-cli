@@ -50,11 +50,7 @@ class N8nPipelineBridge:
             return None
         try:
             data = json.dumps(payload).encode()
-            req = urllib.request.Request(
-                url, data=data,
-                headers={"Content-Type": "application/json"},
-                method="POST"
-            )
+            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 body = resp.read().decode()
                 try:
@@ -69,12 +65,15 @@ class N8nPipelineBridge:
 
     def route_goal(self, ws_id: str, goal_text: str, tags: list[str] | None = None) -> Dict[str, Any]:
         """Classify workstream complexity via P1. Returns routing decision."""
-        result = self._post(self.goal_route_url, {
-            "source": "sadd",
-            "ws_id": ws_id,
-            "goal": goal_text,
-            "tags": tags or [],
-        })
+        result = self._post(
+            self.goal_route_url,
+            {
+                "source": "sadd",
+                "ws_id": ws_id,
+                "goal": goal_text,
+                "tags": tags or [],
+            },
+        )
         if result and result.get("complexity"):
             return result
         # Default: local execution
@@ -86,12 +85,15 @@ class N8nPipelineBridge:
         """Run plan through P2 quality gate. Returns verdict."""
         if not self.quality_gate_enabled:
             return {"verdict": "pass", "skipped": True}
-        result = self._post(self.quality_gate_url, {
-            "source": "sadd",
-            "ws_id": ws_id,
-            "goal": goal_text,
-            "plan": plan,
-        })
+        result = self._post(
+            self.quality_gate_url,
+            {
+                "source": "sadd",
+                "ws_id": ws_id,
+                "goal": goal_text,
+                "plan": plan,
+            },
+        )
         if result and result.get("verdict"):
             return result
         return {"verdict": "pass", "skipped": True}
@@ -102,27 +104,32 @@ class N8nPipelineBridge:
         """Route complex workstreams through P3 for full pipeline orchestration."""
         if not self.route_complex_through_p3:
             return None
-        return self._post(self.pipeline_coordinator_url, {
-            "source": "sadd",
-            "ws_id": ws_id,
-            "goal": goal_text,
-            "context": context,
-        })
+        return self._post(
+            self.pipeline_coordinator_url,
+            {
+                "source": "sadd",
+                "ws_id": ws_id,
+                "goal": goal_text,
+                "context": context,
+            },
+        )
 
     # -- P4: Feedback Loop --
 
-    def send_feedback(self, ws_id: str, cycle_id: str, passed: bool,
-                      phase_outputs: Dict[str, Any]) -> None:
+    def send_feedback(self, ws_id: str, cycle_id: str, passed: bool, phase_outputs: Dict[str, Any]) -> None:
         """Send cycle feedback to P4."""
-        self._post(self.feedback_url, {
-            "source": "sadd",
-            "ws_id": ws_id,
-            "cycle_id": cycle_id,
-            "passed": passed,
-            "verification_status": phase_outputs.get("verification", {}).get("status", "skip"),
-            "learnings": phase_outputs.get("reflection", {}).get("learnings", []),
-            "quality": phase_outputs.get("quality", {}),
-        })
+        self._post(
+            self.feedback_url,
+            {
+                "source": "sadd",
+                "ws_id": ws_id,
+                "cycle_id": cycle_id,
+                "passed": passed,
+                "verification_status": phase_outputs.get("verification", {}).get("status", "skip"),
+                "learnings": phase_outputs.get("reflection", {}).get("learnings", []),
+                "quality": phase_outputs.get("quality", {}),
+            },
+        )
 
     # -- P5a: Trace Store --
 
@@ -130,29 +137,38 @@ class N8nPipelineBridge:
         """Emit observability trace to P5a."""
         if not self.trace_enabled:
             return
-        self._post(self.trace_url, {
-            "source": "sadd",
-            "event_type": event_type,
-            "timestamp": time.time(),
-            **payload,
-        })
+        self._post(
+            self.trace_url,
+            {
+                "source": "sadd",
+                "event_type": event_type,
+                "timestamp": time.time(),
+                **payload,
+            },
+        )
 
     # -- WF-7: Session Manager --
 
     def notify_session(self, event_type: str, payload: Dict[str, Any]) -> None:
         """Send session lifecycle event to WF-7."""
-        self._post(self.session_manager_url, {
-            "event_type": event_type,
-            "source": "sadd",
-            **payload,
-        })
+        self._post(
+            self.session_manager_url,
+            {
+                "event_type": event_type,
+                "source": "sadd",
+                **payload,
+            },
+        )
 
     # -- WF-8: Workstream Monitor --
 
     def notify_workstream(self, event_type: str, payload: Dict[str, Any]) -> None:
         """Send workstream telemetry to WF-8."""
-        self._post(self.workstream_monitor_url, {
-            "event_type": event_type,
-            "source": "sadd",
-            **payload,
-        })
+        self._post(
+            self.workstream_monitor_url,
+            {
+                "event_type": event_type,
+                "source": "sadd",
+                **payload,
+            },
+        )

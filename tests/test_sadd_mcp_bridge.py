@@ -2,6 +2,7 @@ import unittest
 from unittest.mock import patch, MagicMock
 from core.sadd.mcp_tool_bridge import MCPToolBridge
 
+
 class TestMCPToolBridge(unittest.TestCase):
     def test_discover_tools_returns_list(self):
         bridge = MCPToolBridge()

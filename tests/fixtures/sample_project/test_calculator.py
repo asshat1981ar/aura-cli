@@ -1,4 +1,5 @@
 """Basic tests for calculator.py in sample_project fixture."""
+
 import pytest
 from .calculator import add, subtract, multiply, divide, power, average
 

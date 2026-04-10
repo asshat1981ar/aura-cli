@@ -3,16 +3,18 @@
 Provides type-safe failure classification and routing decisions
 for the AURA orchestration loop.
 """
+
 from enum import Enum, auto
 from typing import Dict, List
 
 
 class FailureAction(Enum):
     """Action to take after a phase failure."""
-    RETRY_ACT = auto()   # Retry the act phase (code-level fix)
-    REPLAN = auto()      # Replan from scratch (structural/design issue)
-    SKIP = auto()        # Skip due to external/environmental issue
-    ABORT = auto()       # Abort the cycle (unrecoverable)
+
+    RETRY_ACT = auto()  # Retry the act phase (code-level fix)
+    REPLAN = auto()  # Replan from scratch (structural/design issue)
+    SKIP = auto()  # Skip due to external/environmental issue
+    ABORT = auto()  # Abort the cycle (unrecoverable)
 
 
 # Environmental/external failure keywords
@@ -45,7 +47,7 @@ STRUCTURAL_KEYWORDS: List[str] = [
 
 class FailureRouter:
     """Routes phase failures to appropriate recovery actions.
-    
+
     Extracted from LoopOrchestrator to reduce coupling and enable
     independent testing.
     """
@@ -86,7 +88,7 @@ class FailureRouter:
 
     def route(self, verification: Dict) -> str:
         """Legacy-compatible routing returning string literals.
-        
+
         Returns:
             One of: "act", "plan", "skip"
         """

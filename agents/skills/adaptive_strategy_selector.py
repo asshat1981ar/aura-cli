@@ -1,4 +1,5 @@
 """Skill: track and recommend execution strategies based on past performance."""
+
 from __future__ import annotations
 import json
 from collections import defaultdict
@@ -112,7 +113,7 @@ class AdaptiveStrategySelectorSkill(SkillBase):
             confidence = 0.4
         else:
             best_name = best["strategy"]
-            reasoning = f"Strategy '{best_name}' had {best['success_rate']*100:.0f}% success on '{best['goal_type']}' goals (n={best['sample_size']}, avg {best['avg_cycles']} cycles)."
+            reasoning = f"Strategy '{best_name}' had {best['success_rate'] * 100:.0f}% success on '{best['goal_type']}' goals (n={best['sample_size']}, avg {best['avg_cycles']} cycles)."
             confidence = min(0.95, best["success_rate"] * (min(best["sample_size"], 10) / 10))
 
         log_json("INFO", "adaptive_strategy_selector_complete", details={"recommended": best_name, "confidence": confidence})

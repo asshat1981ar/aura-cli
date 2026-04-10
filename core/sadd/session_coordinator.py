@@ -58,6 +58,7 @@ def create_orchestrator_factory(
         else:
             _model = model_adapter
         import json as _json
+
         _config_path = _root / "aura.config.json"
         _file_config = _json.loads(_config_path.read_text()) if _config_path.exists() else {}
         agents = default_agents(brain, _model, config=_file_config)
@@ -249,11 +250,7 @@ class SessionCoordinator:
                 node.status = "pending"
                 node.result = None
 
-        remaining = [
-            ws_id
-            for ws_id, node in graph.iter_nodes()
-            if node.status != "completed"
-        ]
+        remaining = [ws_id for ws_id, node in graph.iter_nodes() if node.status != "completed"]
         self._logger.info(
             "SADD session %s resuming — %d workstreams, %d already completed, %d remaining",
             self._session_id,

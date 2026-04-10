@@ -1,4 +1,5 @@
 """Unit tests for agents/mcp_discovery_agent.py."""
+
 from __future__ import annotations
 
 import json
@@ -14,6 +15,7 @@ class TestMCPDiscoveryAgent(unittest.TestCase):
 
     def _make_agent(self, config_path=".mcp.json"):
         from agents.mcp_discovery_agent import MCPDiscoveryAgent
+
         return MCPDiscoveryAgent(config_path=config_path)
 
     def _write_config(self, tmpdir, data):
@@ -23,6 +25,7 @@ class TestMCPDiscoveryAgent(unittest.TestCase):
 
     def test_agent_name(self):
         from agents.mcp_discovery_agent import MCPDiscoveryAgent
+
         self.assertEqual(MCPDiscoveryAgent.name, "mcp_discovery")
 
     def test_default_config_path(self):
@@ -64,8 +67,7 @@ class TestMCPDiscoveryAgent(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             self._write_config(tmpdir, config)
             agent = self._make_agent()
-            with patch("agents.mcp_discovery_agent.log_json") as mock_log, \
-                 patch.object(agent, "_register_mcp_agents_for_discovered"):
+            with patch("agents.mcp_discovery_agent.log_json") as mock_log, patch.object(agent, "_register_mcp_agents_for_discovered"):
                 result = agent.run({"project_root": tmpdir})
 
         self.assertEqual(result["status"], "success")

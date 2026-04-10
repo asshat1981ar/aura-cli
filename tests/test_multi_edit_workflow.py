@@ -17,16 +17,16 @@ from memory.brain import Brain
 from core.model_adapter import ModelAdapter
 from core.file_tools import OldCodeNotFoundError
 
+
 @unittest.skip("Legacy loop removed; logic handled by orchestrator")
 class TestMultiEditWorkflow(unittest.TestCase):
-
     def setUp(self):
         # Create a temporary directory for test files
         self.test_dir = Path(os.getcwd()).absolute() / f"test_workspace_{os.getpid()}"
         self.test_dir.mkdir(parents=True, exist_ok=True)
         self.original_cwd = os.getcwd()
         os.environ["AURA_SKIP_CHDIR"] = "1"
-        os.chdir(self.test_dir) # Change CWD to the temporary directory
+        os.chdir(self.test_dir)  # Change CWD to the temporary directory
 
         # Create dummy test files
         (self.test_dir / "file1.txt").write_text("initial content 1")
@@ -58,6 +58,7 @@ class TestMultiEditWorkflow(unittest.TestCase):
             del os.environ["AURA_SKIP_CHDIR"]
         # Clean up the temporary directory and its contents
         import shutil
+
         for item in self.test_dir.iterdir():
             if item.is_file():
                 item.unlink()
@@ -77,22 +78,22 @@ class TestMultiEditWorkflow(unittest.TestCase):
     def _get_captured_logs(self):
         output = sys.stdout.getvalue()
         entries = []
-        for line in output.strip().split('\n'):
+        for line in output.strip().split("\n"):
             if line:
                 try:
                     entries.append(json.loads(line))
                 except json.JSONDecodeError:
-                    pass # Ignore non-JSON lines
+                    pass  # Ignore non-JSON lines
         return entries
-    
+
     def _simulate_cli_commands(self, commands: list):
-        sys.stdin.seek(0) # Reset stdin buffer
+        sys.stdin.seek(0)  # Reset stdin buffer
         sys.stdin.truncate(0)
         sys.stdin.write("\n".join(commands) + "\n")
-        sys.stdin.seek(0) # Rewind to beginning for main_cli to read
+        sys.stdin.seek(0)  # Rewind to beginning for main_cli to read
 
-    @patch('core.task_handler.apply_change_with_explicit_overwrite_policy')
-    @patch('aura_cli.cli_main.GitTools')
+    @patch("core.task_handler.apply_change_with_explicit_overwrite_policy")
+    @patch("aura_cli.cli_main.GitTools")
     def test_old_implement_format_works(self, mock_main_GitTools, mock_apply_change):
         # mock_apply_change.return_value = None # Assume success
 
@@ -102,37 +103,31 @@ class TestMultiEditWorkflow(unittest.TestCase):
         mock_git_instance.commit_all.return_value = None
         mock_git_instance.rollback_last_commit.return_value = None
         mock_git_instance.stash_pop.return_value = None
-        mock_main_GitTools.return_value = mock_git_instance # Ensure GitTools returns our mock
+        mock_main_GitTools.return_value = mock_git_instance  # Ensure GitTools returns our mock
 
         model_response = {
             "DEFINE": "Test old format.",
             "PLAN": "Plan.",
-            "IMPLEMENT": {
-                "file_path": "file1.txt",
-                "old_code": "initial content 1",
-                "new_code": "updated content 1"
-            },
+            "IMPLEMENT": {"file_path": "file1.txt", "old_code": "initial content 1", "new_code": "updated content 1"},
             "TEST": "Test.",
             "CRITIQUE": {"performance_score": 9, "stability_score": 9, "security_score": 9, "elegance_score": 9, "weaknesses": []},
             "IMPROVE": "Improve.",
             "VERSION": "Old format test",
-            "SUMMARY": "Old format summary."
+            "SUMMARY": "Old format summary.",
         }
         self.mock_model.respond.return_value = json.dumps(model_response)
 
         fake_loop = MagicMock()
         fake_loop.current_score = 9.0
-        fake_loop.run.return_value = json.dumps({
-            **model_response,
-            "FINAL_STATUS": "Optimization converged at 9.0 with Robust Confirmation."
-        })
-        with patch('aura_cli.cli_main._ensure_legacy_loop', return_value=fake_loop):
+        fake_loop.run.return_value = json.dumps({**model_response, "FINAL_STATUS": "Optimization converged at 9.0 with Robust Confirmation."})
+        with patch("aura_cli.cli_main._ensure_legacy_loop", return_value=fake_loop):
             # Simulate CLI commands
             self._simulate_cli_commands(["add Test old format", "run", "exit"])
-            sys.argv = ['main.py'] # Reset argv for main_cli call
+            sys.argv = ["main.py"]  # Reset argv for main_cli call
             from main import main as main_cli
+
             main_cli(project_root_override=self.test_dir)
-        
+
         # Verify policy-aware apply helper was called once with correct arguments.
         mock_apply_change.assert_called_once_with(
             self.test_dir,
@@ -141,15 +136,15 @@ class TestMultiEditWorkflow(unittest.TestCase):
             "updated content 1",
             overwrite_file=False,
         )
-        
+
         logs = self._get_captured_logs()
         self.assertTrue(any(e.get("event") == "applying_code_change" and e.get("details", {}).get("file") == "file1.txt" for e in logs))
         self.assertTrue(any(e.get("event") == "goal_completed" for e in logs))
 
-    @patch('core.task_handler.apply_change_with_explicit_overwrite_policy')
-    @patch('aura_cli.cli_main.GitTools')
+    @patch("core.task_handler.apply_change_with_explicit_overwrite_policy")
+    @patch("aura_cli.cli_main.GitTools")
     def test_new_implement_format_works(self, mock_main_GitTools, mock_apply_change):
-        mock_apply_change.return_value = None # Assume success
+        mock_apply_change.return_value = None  # Assume success
 
         # Mock methods of the GitTools instance that main.py initializes
         mock_git_instance = MagicMock()
@@ -157,41 +152,34 @@ class TestMultiEditWorkflow(unittest.TestCase):
         mock_git_instance.commit_all.return_value = None
         mock_git_instance.rollback_last_commit.return_value = None
         mock_git_instance.stash_pop.return_value = None
-        mock_main_GitTools.return_value = mock_git_instance # Ensure GitTools returns our mock
+        mock_main_GitTools.return_value = mock_git_instance  # Ensure GitTools returns our mock
 
         model_response = {
             "DEFINE": "Test new format.",
             "PLAN": "Plan.",
-            "IMPLEMENT": {
-                "changes": [
-                    {"file_path": "file1.txt", "old_code": "initial content 1", "new_code": "new content for 1"},
-                    {"file_path": "file2.txt", "old_code": "initial content 2", "new_code": "new content for 2", "overwrite_file": True}
-                ]
-            },
+            "IMPLEMENT": {"changes": [{"file_path": "file1.txt", "old_code": "initial content 1", "new_code": "new content for 1"}, {"file_path": "file2.txt", "old_code": "initial content 2", "new_code": "new content for 2", "overwrite_file": True}]},
             "TEST": "Test.",
             "CRITIQUE": {"performance_score": 9, "stability_score": 9, "security_score": 9, "elegance_score": 9, "weaknesses": []},
             "IMPROVE": "Improve.",
             "VERSION": "New format test",
-            "SUMMARY": "New format summary."
+            "SUMMARY": "New format summary.",
         }
         self.mock_model.respond.return_value = json.dumps(model_response)
 
         fake_loop = MagicMock()
         fake_loop.current_score = 9.0
-        fake_loop.run.return_value = json.dumps({
-            **model_response,
-            "FINAL_STATUS": "Optimization converged at 9.0 with Robust Confirmation."
-        })
-        with patch('aura_cli.cli_main._ensure_legacy_loop', return_value=fake_loop):
+        fake_loop.run.return_value = json.dumps({**model_response, "FINAL_STATUS": "Optimization converged at 9.0 with Robust Confirmation."})
+        with patch("aura_cli.cli_main._ensure_legacy_loop", return_value=fake_loop):
             self._simulate_cli_commands(["add Test new format", "run", "exit"])
-            sys.argv = ['main.py']
+            sys.argv = ["main.py"]
             from main import main as main_cli
+
             main_cli(project_root_override=self.test_dir)
-        
+
         # Verify policy-aware apply helper was called twice with correct arguments.
         calls = mock_apply_change.call_args_list
         self.assertEqual(len(calls), 2)
-        
+
         self.assertEqual(calls[0].args, (self.test_dir, "file1.txt", "initial content 1", "new content for 1"))
         self.assertEqual(calls[0].kwargs, {"overwrite_file": False})
 
@@ -203,8 +191,8 @@ class TestMultiEditWorkflow(unittest.TestCase):
         self.assertTrue(any(e.get("event") == "applying_code_change" and e.get("details", {}).get("file") == "file2.txt" for e in logs))
         self.assertTrue(any(e.get("event") == "goal_completed" for e in logs))
 
-    @patch('core.task_handler.apply_change_with_explicit_overwrite_policy')
-    @patch('aura_cli.cli_main.GitTools')
+    @patch("core.task_handler.apply_change_with_explicit_overwrite_policy")
+    @patch("aura_cli.cli_main.GitTools")
     def test_multi_change_failure_aborts_and_logs_regression(self, mock_main_GitTools, mock_apply_change):
         # Mock methods of the GitTools instance that main.py initializes
         mock_git_instance = MagicMock()
@@ -212,11 +200,11 @@ class TestMultiEditWorkflow(unittest.TestCase):
         mock_git_instance.commit_all.return_value = None
         mock_git_instance.rollback_last_commit.return_value = None
         mock_git_instance.stash_pop.return_value = None
-        mock_main_GitTools.return_value = mock_git_instance # Ensure GitTools returns our mock
+        mock_main_GitTools.return_value = mock_git_instance  # Ensure GitTools returns our mock
         # First call succeeds, second call fails
         mock_apply_change.side_effect = [
-            None, # First call succeeds
-            OldCodeNotFoundError("Simulated old code not found") # Second call fails
+            None,  # First call succeeds
+            OldCodeNotFoundError("Simulated old code not found"),  # Second call fails
         ]
 
         model_response = {
@@ -226,33 +214,31 @@ class TestMultiEditWorkflow(unittest.TestCase):
                 "changes": [
                     {"file_path": "file1.txt", "old_code": "initial content 1", "new_code": "first change ok"},
                     {"file_path": "file2.txt", "old_code": "non-existent", "new_code": "second change fails"},
-                    {"file_path": "file3.txt", "old_code": "initial content 3", "new_code": "third change never applied"}
+                    {"file_path": "file3.txt", "old_code": "initial content 3", "new_code": "third change never applied"},
                 ]
             },
             "TEST": "Test.",
             "CRITIQUE": {"performance_score": 5, "stability_score": 5, "security_score": 5, "elegance_score": 5, "weaknesses": ["Simulated failure"]},
             "IMPROVE": "Improve.",
             "VERSION": "Multi-change failure test",
-            "SUMMARY": "Multi-change failure summary."
+            "SUMMARY": "Multi-change failure summary.",
         }
         self.mock_model.respond.return_value = json.dumps(model_response)
 
         fake_loop = MagicMock()
         fake_loop.current_score = 5.0
-        fake_loop.run.return_value = json.dumps({
-            **model_response,
-            "STATUS": "Continuing evolution (Score: 5.0, Stable Convergence Count: 0)"
-        })
-        with patch('aura_cli.cli_main._ensure_legacy_loop', return_value=fake_loop):
+        fake_loop.run.return_value = json.dumps({**model_response, "STATUS": "Continuing evolution (Score: 5.0, Stable Convergence Count: 0)"})
+        with patch("aura_cli.cli_main._ensure_legacy_loop", return_value=fake_loop):
             self._simulate_cli_commands(["add Test multi-change failure", "run", "exit"])
-            sys.argv = ['main.py']
+            sys.argv = ["main.py"]
             from main import main as main_cli
+
             main_cli(project_root_override=self.test_dir)
-        
+
         # Verify apply helper was called only for the first two changes (first succeeds, second fails).
         calls = mock_apply_change.call_args_list
         self.assertEqual(len(calls), 2)
-        
+
         self.assertEqual(calls[0].args, (self.test_dir, "file1.txt", "initial content 1", "first change ok"))
         self.assertEqual(calls[1].args, (self.test_dir, "file2.txt", "non-existent", "second change fails"))
 
@@ -264,5 +250,6 @@ class TestMultiEditWorkflow(unittest.TestCase):
         # Verify that the third change was NOT attempted
         self.assertFalse(any(e.get("details", {}).get("file") == "file3.txt" for e in logs))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

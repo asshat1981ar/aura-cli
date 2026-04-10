@@ -3,6 +3,7 @@
 Fixtures defined here are automatically available to all tests under
 ``tests/`` without explicit import.
 """
+
 from __future__ import annotations
 
 from unittest.mock import patch

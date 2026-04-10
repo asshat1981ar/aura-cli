@@ -41,9 +41,7 @@ class TestResolveAgent:
             mock_agent_class.return_value = mock_instance
             result = applicator_module._resolve_agent(context)
 
-            mock_agent_class.assert_called_once_with(
-                brain=mock_brain, backup_dir=".aura/backups"
-            )
+            mock_agent_class.assert_called_once_with(brain=mock_brain, backup_dir=".aura/backups")
             assert result is mock_instance
 
     def test_constructs_with_custom_backup_dir(self):
@@ -54,9 +52,7 @@ class TestResolveAgent:
         with patch("agents.applicator.ApplicatorAgent") as mock_agent_class:
             applicator_module._resolve_agent(context)
 
-            mock_agent_class.assert_called_once_with(
-                brain=mock_brain, backup_dir="/custom/backups"
-            )
+            mock_agent_class.assert_called_once_with(brain=mock_brain, backup_dir="/custom/backups")
 
     def test_raises_on_missing_context(self):
         """Should raise ValueError if neither agent nor brain in context."""
@@ -119,9 +115,7 @@ class TestHandleApply:
 
         applicator_module._handle_apply(mock_agent, task)
 
-        mock_agent.apply.assert_called_once_with(
-            llm_output="code", target_path=None, allow_overwrite=True
-        )
+        mock_agent.apply.assert_called_once_with(llm_output="code", target_path=None, allow_overwrite=True)
 
 
 class TestHandleRollback:

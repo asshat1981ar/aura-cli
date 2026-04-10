@@ -17,7 +17,7 @@ class TechnicalDebtAgent:
         # - Historical flake count
         # - Critical user journey dependency
         # - Coverage gaps
-        ranked_hotspots = sorted(heatmap_data, key=lambda x: (x['failures'], x['impact']), reverse=True)
+        ranked_hotspots = sorted(heatmap_data, key=lambda x: (x["failures"], x["impact"]), reverse=True)
         self.hotspots = ranked_hotspots[:10]  # Top 10
         return self.hotspots
 
@@ -45,17 +45,14 @@ class TechnicalDebtAgent:
 
     def track_debt_metrics(self, flake_count: int, generic_exceptions: int) -> dict:
         """Track KPIs for debt reduction over time."""
-        kpis = {
-            "flake_reduction": flake_count,
-            "generic_exception_reduction": generic_exceptions
-        }
+        kpis = {"flake_reduction": flake_count, "generic_exception_reduction": generic_exceptions}
         return kpis
 
     def visualize_hotspots(self, data: list[dict]) -> None:
         """Output a simple text-based heatmap view for prioritization."""
         _logger.warning("--- TECHNICAL DEBT HEATMAP ---")
         for hs in data:
-            _logger.warning("%s | Failures: %s | Risk: %s", hs['file'], hs['failures'], 'HIGH' if hs['impact'] > 0.7 else 'MEDIUM')
+            _logger.warning("%s | Failures: %s | Risk: %s", hs["file"], hs["failures"], "HIGH" if hs["impact"] > 0.7 else "MEDIUM")
         _logger.warning("-----------------------------")
 
     def run(self, input_data: dict) -> dict:
@@ -67,9 +64,4 @@ class TechnicalDebtAgent:
         exceptions = self.audit_exceptions(logs) if logs else []
         secured = self.harden_test_env()
 
-        return {
-            "status": "success",
-            "hotspots": hotspots,
-            "exceptions": exceptions,
-            "secured": secured
-        }
+        return {"status": "success", "hotspots": hotspots, "exceptions": exceptions, "secured": secured}

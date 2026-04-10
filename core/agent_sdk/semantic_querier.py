@@ -1,4 +1,5 @@
 """Query interface for the semantic codebase index."""
+
 from __future__ import annotations
 
 import logging
@@ -230,13 +231,6 @@ class SemanticQuerier:
     ) -> str:
         """Produce a compact overview string."""
         n_clusters = len(clusters)
-        cluster_parts = ", ".join(
-            f"{name} ({count} {'file' if count == 1 else 'files'})"
-            for name, count in sorted(clusters.items(), key=lambda kv: -kv[1])
-        )
+        cluster_parts = ", ".join(f"{name} ({count} {'file' if count == 1 else 'files'})" for name, count in sorted(clusters.items(), key=lambda kv: -kv[1]))
         hub_paths = ", ".join(item["path"] for item in top_coupled[:2]) if top_coupled else "none"
-        return (
-            f"{total} {'file' if total == 1 else 'files'} in {n_clusters} "
-            f"{'cluster' if n_clusters == 1 else 'clusters'}: {cluster_parts}. "
-            f"Key hubs: {hub_paths}."
-        )
+        return f"{total} {'file' if total == 1 else 'files'} in {n_clusters} {'cluster' if n_clusters == 1 else 'clusters'}: {cluster_parts}. Key hubs: {hub_paths}."

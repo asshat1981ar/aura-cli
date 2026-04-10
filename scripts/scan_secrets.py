@@ -10,6 +10,7 @@ Usage:
 
 Exits 1 if any findings are detected, 0 if clean.
 """
+
 from __future__ import annotations
 
 import re
@@ -20,9 +21,7 @@ from pathlib import Path
 # Configuration
 # ---------------------------------------------------------------------------
 
-SCANNED_EXTENSIONS: frozenset[str] = frozenset(
-    {".py", ".json", ".yml", ".yaml", ".toml", ".cfg", ".sh", ".env"}
-)
+SCANNED_EXTENSIONS: frozenset[str] = frozenset({".py", ".json", ".yml", ".yaml", ".toml", ".cfg", ".sh", ".env"})
 
 IGNORED_DIRS: frozenset[str] = frozenset(
     {

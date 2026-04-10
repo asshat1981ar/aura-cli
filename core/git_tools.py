@@ -12,11 +12,8 @@ except ImportError:  # pragma: no cover - exercised via optional-deps tests
 
 def _require_gitpython(repo_path: str | None = None):
     if Repo is None:
-        raise ImportError(
-            "Optional dependency 'gitpython' is required for Git operations. "
-            "Install it with `pip install gitpython`. "
-            f"(repo_path={repo_path})"
-        )
+        raise ImportError(f"Optional dependency 'gitpython' is required for Git operations. Install it with `pip install gitpython`. (repo_path={repo_path})")
+
 
 # R2: Exception classes are now canonical in core/exceptions.py — import from there.
 from core.exceptions import (  # noqa: F401 (re-exported for backward-compat)
@@ -52,10 +49,8 @@ class GitTools:
             raise
         except (InvalidGitRepositoryError, NoSuchPathError) as e:
             log_json("ERROR", "git_repo_init_failed", details={"error": str(e), "repo_path": str(repo_path)})
-            raise GitRepoError(
-                f"Git repository not found. Start AURA inside a repo or pass repo_path. ({e})"
-            )
-    
+            raise GitRepoError(f"Git repository not found. Start AURA inside a repo or pass repo_path. ({e})")
+
     def commit_all(self, message: str):
         """Commits all changes in the repository."""
         try:
@@ -64,10 +59,10 @@ class GitTools:
             if untracked_files:
                 self.repo.git.add(untracked_files)
                 log_json("INFO", "git_add_untracked", details={"untracked_files_count": len(untracked_files)})
-            
+
             # Add all staged changes and commit
-            if self.repo.is_dirty(untracked_files=True): # Check if there are any changes (staged or unstaged)
-                self.repo.git.add(A=True) # Stage all changes
+            if self.repo.is_dirty(untracked_files=True):  # Check if there are any changes (staged or unstaged)
+                self.repo.git.add(A=True)  # Stage all changes
                 self.repo.index.commit(message)
                 log_json("INFO", "git_committed", details={"message": message})
             else:
@@ -80,7 +75,7 @@ class GitTools:
         """Rolls back the last commit."""
         try:
             if self.repo.head.commit.parents:
-                self.repo.git.reset('--hard', 'HEAD~1')
+                self.repo.git.reset("--hard", "HEAD~1")
                 log_json("INFO", "git_rolled_back_last_commit", details={"message": message})
             else:
                 log_json("WARN", "git_rollback_failed_no_parents")
@@ -94,8 +89,8 @@ class GitTools:
         try:
             # Only stash if there are actual changes (staged or unstaged)
             if self.repo.is_dirty(untracked_files=True):
-                stash_message = message if message else 'AURA automated stash'
-                self.repo.git.stash('save', stash_message)
+                stash_message = message if message else "AURA automated stash"
+                self.repo.git.stash("save", stash_message)
                 log_json("INFO", "git_stashed", details={"message": stash_message})
             else:
                 log_json("INFO", "git_no_changes_to_stash")
@@ -106,8 +101,8 @@ class GitTools:
     def stash_pop(self):
         """Applies the last stashed changes and removes the stash entry."""
         try:
-            if self.repo.git.stash('list'):  # Check if there are any stashes
-                self.repo.git.stash('pop')
+            if self.repo.git.stash("list"):  # Check if there are any stashes
+                self.repo.git.stash("pop")
                 log_json("INFO", "git_stash_popped")
             else:
                 log_json("INFO", "git_no_stashes_to_pop")

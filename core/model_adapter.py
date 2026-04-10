@@ -7,6 +7,7 @@ AURA.  Provider-specific call methods live in :mod:`core.model_providers`
 ``respond_for_role``, embedding helpers, and all module-level imports so that
 existing ``patch("core.model_adapter.…")`` targets remain stable.
 """
+
 from __future__ import annotations
 
 import concurrent.futures
@@ -24,14 +25,10 @@ class _MissingPackage:
         self._name = name
 
     def __getattr__(self, attr: str) -> None:
-        raise AttributeError(
-            f"Optional dependency '{self._name}' is required for this operation."
-        )
+        raise AttributeError(f"Optional dependency '{self._name}' is required for this operation.")
 
     def __call__(self, *args: object, **kwargs: object) -> None:
-        raise ImportError(
-            f"Optional dependency '{self._name}' is required for this operation."
-        )
+        raise ImportError(f"Optional dependency '{self._name}' is required for this operation.")
 
 
 try:
@@ -44,8 +41,8 @@ try:
 except ImportError:  # pragma: no cover - exercised via optional-deps tests
     np = _MissingPackage("numpy")  # type: ignore
 
-from core.logging_utils import log_json # Import log_json
-from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
+from core.logging_utils import log_json  # Import log_json
+from core.file_tools import _aura_safe_loads  # Import _aura_safe_loads
 from core.config_manager import config
 from core.runtime_auth import (
     resolve_openai_api_key,
@@ -107,10 +104,7 @@ class ModelAdapter(ProvidersMixin, CacheMixin):
         self._mem_cache: dict = {}
 
         # Define an explicit allowlist for tools
-        self.ALLOWED_TOOLS = {
-            "search", "read_file", "list_directory", "glob",
-            "get_repo", "create_issue", "get_issue_details", "update_file", "get_pull_request_details"
-        }
+        self.ALLOWED_TOOLS = {"search", "read_file", "list_directory", "glob", "get_repo", "create_issue", "get_issue_details", "update_file", "get_pull_request_details"}
 
     # ------------------------------------------------------------------
     # CLI path validation
@@ -118,11 +112,7 @@ class ModelAdapter(ProvidersMixin, CacheMixin):
 
     def _validate_cli_paths(self):
         """Helper to validate external LLM CLI paths."""
-        cli_configs = [
-            ("gemini", self.gemini_cli_path),
-            ("codex", self.codex_cli_path),
-            ("copilot", self.copilot_cli_path)
-        ]
+        cli_configs = [("gemini", self.gemini_cli_path), ("codex", self.codex_cli_path), ("copilot", self.copilot_cli_path)]
 
         for name, path in cli_configs:
             if path:
@@ -234,11 +224,8 @@ class ModelAdapter(ProvidersMixin, CacheMixin):
             try:
                 return future.result(timeout=_timeout)
             except concurrent.futures.TimeoutError:
-                log_json("ERROR", "llm_call_timeout",
-                         details={"fn": fn.__name__, "timeout_s": _timeout})
-                raise TimeoutError(
-                    f"LLM call to {fn.__name__!r} exceeded {_timeout}s timeout"
-                )
+                log_json("ERROR", "llm_call_timeout", details={"fn": fn.__name__, "timeout_s": _timeout})
+                raise TimeoutError(f"LLM call to {fn.__name__!r} exceeded {_timeout}s timeout")
 
     # ------------------------------------------------------------------
     # respond / respond_for_role
@@ -375,18 +362,13 @@ class ModelAdapter(ProvidersMixin, CacheMixin):
             return [np.zeros(self._embedding_dims, dtype=np.float32) for _ in texts]
 
         import random
+
         time.sleep(0.2 + random.uniform(0, 0.1))
 
         url = "https://api.openai.com/v1/embeddings"
-        headers = {
-            "Authorization": f"Bearer {openai_api_key}",
-            "Content-Type": "application/json"
-        }
+        headers = {"Authorization": f"Bearer {openai_api_key}", "Content-Type": "application/json"}
 
-        payload = {
-            "input": texts,
-            "model": self._embedding_model
-        }
+        payload = {"input": texts, "model": self._embedding_model}
 
         try:
             response = self._make_request_with_retries("POST", url, headers, payload)

@@ -1,4 +1,5 @@
 """Unit tests for agents/technical_debt_agent.py — TechnicalDebtAgent."""
+
 from agents.technical_debt_agent import TechnicalDebtAgent
 
 
@@ -127,6 +128,7 @@ class TestVisualizeHotspots:
 
     def test_prints_heatmap_header(self, caplog):
         import logging
+
         agent = TechnicalDebtAgent()
         with caplog.at_level(logging.WARNING, logger="agents.technical_debt_agent"):
             agent.visualize_hotspots([])
@@ -134,6 +136,7 @@ class TestVisualizeHotspots:
 
     def test_prints_high_risk_label(self, caplog):
         import logging
+
         agent = TechnicalDebtAgent()
         data = [{"file": "core/orchestrator.py", "failures": 5, "impact": 0.9}]
         with caplog.at_level(logging.WARNING, logger="agents.technical_debt_agent"):

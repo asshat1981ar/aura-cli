@@ -1,4 +1,5 @@
 """Phase execution methods for the AURA orchestration pipeline."""
+
 from __future__ import annotations
 
 import json
@@ -137,7 +138,8 @@ class PhasesMixin:
         variants and uses critic tournament to select the best one.
         """
         import sys
-        _orch = sys.modules['core.orchestrator']
+
+        _orch = sys.modules["core.orchestrator"]
 
         config = self._load_config_file()
         n_best = config.get("n_best_candidates", 1)
@@ -502,7 +504,8 @@ class PhasesMixin:
     def _run_ingest_phase(self, goal: str, cycle_id: str, phase_outputs: Dict) -> Dict:
         """Section 1: INGEST."""
         import sys
-        _orch = sys.modules['core.orchestrator']
+
+        _orch = sys.modules["core.orchestrator"]
 
         self._notify_ui("on_phase_start", "ingest")
         t0 = time.time()
@@ -527,7 +530,8 @@ class PhasesMixin:
     def _dispatch_skills(self, goal_type: str, pipeline_cfg: Any, phase_outputs: Dict) -> Dict:
         """Section 2: SKILL DISPATCH."""
         import sys
-        _orch = sys.modules['core.orchestrator']
+
+        _orch = sys.modules["core.orchestrator"]
 
         self._notify_ui("on_phase_start", "skill_dispatch")
         t0 = time.time()

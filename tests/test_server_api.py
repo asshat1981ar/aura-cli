@@ -284,7 +284,7 @@ def test_execute_run_persists_audit_entries_and_metrics_reflect_them(server_modu
 def test_execute_run_timeouts_emit_timeout_metadata(server_module, monkeypatch):
     monkeypatch.setenv("AGENT_API_ENABLE_RUN", "1")
     monkeypatch.setattr(server_module, "_clamped_run_tool_timeout_s", lambda: 0.01, raising=False)
-    cmd = f"{sys.executable} -c \"import time; time.sleep(1)\""
+    cmd = f'{sys.executable} -c "import time; time.sleep(1)"'
 
     response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
     payloads = _sse_payloads(_run(_collect_streaming_response(response)))

@@ -1,6 +1,7 @@
 """
 Structural Analyzer Skill — Detects architectural debt and hotspots.
 """
+
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
@@ -12,11 +13,13 @@ from agents.skills.complexity_scorer import ComplexityScorerSkill
 
 from agents.skills.symbol_indexer import SymbolIndexerSkill
 
+
 class StructuralAnalyzerSkill(SkillBase):
     """
     Analyzes the ContextGraph for circular dependencies and bottlenecks,
     combining with complexity data to identify high-risk architectural hotspots.
     """
+
     name = "structural_analyzer"
 
     def __init__(self, brain=None, model=None, context_graph: Optional[ContextGraph] = None):
@@ -34,7 +37,7 @@ class StructuralAnalyzerSkill(SkillBase):
         # 1. Populate graph from symbol indexer if it looks empty or needs refresh
         index_results = self.symbol_indexer.run({"project_root": project_root})
         import_graph = index_results.get("import_graph", {})
-        
+
         # Build mapping from module path to file path
         # core.logging_utils -> core/logging_utils.py
         mod_to_file = {}
@@ -69,30 +72,26 @@ class StructuralAnalyzerSkill(SkillBase):
         for b in bottlenecks:
             fname = b["file"]
             centrality = b["centrality_score"]
-            
+
             # Find max complexity in this file
             funcs = detailed_comp.get(fname, [])
             max_cc = max([f["complexity"] for f in funcs], default=0)
-            
-            if max_cc > 8 and centrality > 0.03: # Heuristic thresholds
-                hotspots.append({
-                    "file": fname,
-                    "centrality": centrality,
-                    "max_complexity": max_cc,
-                    "risk_level": "CRITICAL" if max_cc > 20 else ("HIGH" if max_cc > 12 else "MEDIUM")
-                })
+
+            if max_cc > 8 and centrality > 0.03:  # Heuristic thresholds
+                hotspots.append({"file": fname, "centrality": centrality, "max_complexity": max_cc, "risk_level": "CRITICAL" if max_cc > 20 else ("HIGH" if max_cc > 12 else "MEDIUM")})
 
         # 5. Coverage Analysis (Optional)
         coverage_gaps = []
         if input_data.get("report_coverage"):
             from agents.skills.test_coverage_analyzer import TestCoverageAnalyzerSkill
+
             cov_analyzer = TestCoverageAnalyzerSkill()
             cov_results = cov_analyzer.run({"project_root": project_root})
-            
+
             # Identify high-risk files with low/zero coverage
             # For now, focus on files identified as bottlenecks or hotspots
             monitored_files = set([h["file"] for h in hotspots] + [b["file"] for b in bottlenecks])
-            
+
             # Missing files (0% coverage)
             for f in cov_results.get("missing_files", []):
                 # Clean path if absolute
@@ -102,21 +101,12 @@ class StructuralAnalyzerSkill(SkillBase):
                         rel_f = str(Path(f).relative_to(project_root))
                     except ValueError:
                         pass
-                
-                coverage_gaps.append({
-                    "file": rel_f,
-                    "coverage_pct": 0.0,
-                    "risk_priority": "HIGH" if rel_f in monitored_files else "MEDIUM"
-                })
+
+                coverage_gaps.append({"file": rel_f, "coverage_pct": 0.0, "risk_priority": "HIGH" if rel_f in monitored_files else "MEDIUM"})
 
         summary = f"Detected {len(cycles)} cycles and {len(hotspots)} architectural hotspots."
-        
-        res = {
-            "circular_dependencies": cycles,
-            "bottlenecks": bottlenecks,
-            "hotspots": hotspots,
-            "summary": summary
-        }
+
+        res = {"circular_dependencies": cycles, "bottlenecks": bottlenecks, "hotspots": hotspots, "summary": summary}
 
         if input_data.get("report_coverage"):
             if coverage_gaps:

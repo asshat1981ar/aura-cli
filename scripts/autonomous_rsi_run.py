@@ -3,6 +3,7 @@
 Autonomous RSI Multi-Cycle Run.
 Uses the established EvolutionLoop to drive continuous self-improvement.
 """
+
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
@@ -24,37 +25,29 @@ from memory.brain import Brain
 from core.git_tools import GitTools
 from agents.mutator import MutatorAgent
 
+
 def main():
     max_cycles = 10
     goal = "evolve and improve the AURA system via recursive self-improvement"
-    
+
     print(f">>> Starting {max_cycles} cycles of autonomous evolution...")
-    
+
     brain = Brain()
     model = ModelAdapter()
     agents = default_agents(brain, model)
-    
+
     # Extract raw agents from adapters
     _coder = getattr(agents.get("act"), "agent", agents.get("act"))
     _critic = getattr(agents.get("critique"), "agent", agents.get("critique"))
     _planner = getattr(agents.get("plan"), "agent", agents.get("plan"))
-    
+
     git = GitTools(repo_path=str(project_root))
     mutator = MutatorAgent(project_root)
     vec = VectorStore(model, brain)
     ri_service = RecursiveImprovementService()
-    
-    evo = EvolutionLoop(
-        planner=_planner,
-        coder=_coder,
-        critic=_critic,
-        brain=brain,
-        vector_store=vec,
-        git_tools=git,
-        mutator=mutator,
-        improvement_service=ri_service
-    )
-    
+
+    evo = EvolutionLoop(planner=_planner, coder=_coder, critic=_critic, brain=brain, vector_store=vec, git_tools=git, mutator=mutator, improvement_service=ri_service)
+
     for i in range(1, max_cycles + 1):
         print(f"\n--- Starting Cycle {i}/{max_cycles} ---")
         try:
@@ -65,9 +58,11 @@ def main():
         except Exception as e:
             print(f"!!! Cycle {i} failed: {e}")
             import traceback
+
             traceback.print_exc()
 
     print("\n>>> RSI Evolution run finished.")
+
 
 if __name__ == "__main__":
     main()

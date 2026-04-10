@@ -263,10 +263,4 @@ class AuraStudio:
             print("Run tool audit:")
             print(f"  Tracked: {run_tool_audit.get('count', 0)}")
             print(f"  Last command: {run_tool_audit.get('last_command') or 'n/a'}")
-            print(
-                "  Outcomes: "
-                f"{run_tool_audit.get('success_count', 0)} ok, "
-                f"{run_tool_audit.get('error_count', 0)} err, "
-                f"{run_tool_audit.get('timeout_count', 0)} timeout, "
-                f"{run_tool_audit.get('truncated_count', 0)} trunc"
-            )
+            print(f"  Outcomes: {run_tool_audit.get('success_count', 0)} ok, {run_tool_audit.get('error_count', 0)} err, {run_tool_audit.get('timeout_count', 0)} timeout, {run_tool_audit.get('truncated_count', 0)} trunc")

@@ -3,6 +3,7 @@
 Extends core/health_monitor.py by exposing it as a routable agent and
 adding Prometheus metric push capabilities.
 """
+
 from __future__ import annotations
 
 import socket
@@ -100,13 +101,7 @@ class MonitoringAgentAdapter:
     def _query_metrics(self, metric_name: str, time_range_minutes: int) -> dict:
         """Query stored metric history."""
         cutoff = time.time() - (time_range_minutes * 60)
-        matching = [
-            m for m in self._metric_history
-            if m.get("name") == metric_name and m.get("timestamp", 0) >= cutoff
-        ] if metric_name else [
-            m for m in self._metric_history
-            if m.get("timestamp", 0) >= cutoff
-        ]
+        matching = [m for m in self._metric_history if m.get("name") == metric_name and m.get("timestamp", 0) >= cutoff] if metric_name else [m for m in self._metric_history if m.get("timestamp", 0) >= cutoff]
         return {
             "action": "query",
             "metric_name": metric_name,
@@ -126,12 +121,14 @@ class MonitoringAgentAdapter:
                 for name, threshold in self._alert_thresholds.items():
                     value = metrics.get(name)
                     if value is not None and value > threshold:
-                        alerts.append({
-                            "metric": name,
-                            "value": value,
-                            "threshold": threshold,
-                            "severity": "warning" if value < threshold * 1.5 else "critical",
-                        })
+                        alerts.append(
+                            {
+                                "metric": name,
+                                "value": value,
+                                "threshold": threshold,
+                                "severity": "warning" if value < threshold * 1.5 else "critical",
+                            }
+                        )
             except (OSError, IOError, ValueError):
                 pass
 
@@ -175,11 +172,13 @@ class MonitoringAgentAdapter:
 
     def record_metric(self, name: str, value: float, labels: Optional[Dict] = None) -> None:
         """Record a metric for history tracking."""
-        self._metric_history.append({
-            "name": name,
-            "value": value,
-            "labels": labels or {},
-            "timestamp": time.time(),
-        })
+        self._metric_history.append(
+            {
+                "name": name,
+                "value": value,
+                "labels": labels or {},
+                "timestamp": time.time(),
+            }
+        )
         if len(self._metric_history) > self._max_history:
-            self._metric_history = self._metric_history[-self._max_history:]
+            self._metric_history = self._metric_history[-self._max_history :]

@@ -4,6 +4,7 @@
 Each tool bridges a Claude Agent SDK tool call to an existing AURA
 subsystem (agents, skills, MCP servers, memory, workflows).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -25,6 +26,7 @@ class AuraTool:
 # ---------------------------------------------------------------------------
 # Tool Handlers
 # ---------------------------------------------------------------------------
+
 
 def _handle_analyze_goal(
     args: Dict[str, Any],
@@ -232,12 +234,12 @@ def _handle_verify_changes(
         # VerifierAgent.run() expects change_set with nested changes list,
         # not a flat changed_files key
         changed_files = args.get("changed_files", [])
-        result = agent.run({
-            "project_root": str(project_root or "."),
-            "change_set": {
-                "changes": [{"file_path": f} for f in changed_files]
-            },
-        })
+        result = agent.run(
+            {
+                "project_root": str(project_root or "."),
+                "change_set": {"changes": [{"file_path": f} for f in changed_files]},
+            }
+        )
         return result if isinstance(result, dict) else {"passed": False, "raw": str(result)}
     except Exception as exc:
         return {"passed": False, "error": str(exc)}
@@ -256,11 +258,13 @@ def _handle_reflect(
         from agents.reflector import ReflectorAgent
 
         agent = ReflectorAgent()
-        result = agent.run({
-            "goal": args["goal"],
-            "verification": args.get("verification", {}),
-            "skill_context": args.get("skill_context", {}),
-        })
+        result = agent.run(
+            {
+                "goal": args["goal"],
+                "verification": args.get("verification", {}),
+                "skill_context": args.get("skill_context", {}),
+            }
+        )
         return result if isinstance(result, dict) else {"summary": str(result)}
     except Exception as exc:
         return {"summary": "", "error": str(exc)}
@@ -330,6 +334,7 @@ def _handle_manage_goals(
     try:
         if goal_queue is None:
             from core.goal_queue import GoalQueue
+
             goal_queue = GoalQueue()
 
         if action == "add":
@@ -360,17 +365,14 @@ def _handle_discover_mcp_tools(
         # Use resilient client if available
         try:
             from core.agent_sdk.resilience import get_health_monitor, ResilientMCPClient
+
             monitor = get_health_monitor()
             client = ResilientMCPClient(health_monitor=monitor)
-            return asyncio.run(client.invoke(
-                "discovery",
-                "search_tools_semantically",
-                {"query": args.get("query", "")},
-                timeout=5.0
-            ))
+            return asyncio.run(client.invoke("discovery", "search_tools_semantically", {"query": args.get("query", "")}, timeout=5.0))
         except ImportError:
             # Fallback to direct request
             import requests
+
             discovery_url = "http://localhost:8025/call"
             resp = requests.post(
                 discovery_url,
@@ -392,24 +394,22 @@ def _handle_invoke_mcp_tool(
 ) -> Dict[str, Any]:
     """Invoke a tool on any MCP server with resilience patterns."""
     import asyncio
-    
+
     server = args["server"]
     tool_name = args["tool_name"]
     tool_args = args.get("tool_args", {})
     timeout = args.get("timeout", 30)
-    
+
     try:
         # Use resilient client for production hardening
         from core.agent_sdk.resilience import get_health_monitor, ResilientMCPClient
-        
+
         monitor = get_health_monitor()
         client = ResilientMCPClient(health_monitor=monitor)
-        
+
         # Run async invocation in sync context
         loop = asyncio.get_event_loop()
-        return loop.run_until_complete(client.invoke(
-            server, tool_name, tool_args, timeout=timeout
-        ))
+        return loop.run_until_complete(client.invoke(server, tool_name, tool_args, timeout=timeout))
     except Exception as exc:
         # Fallback to direct request on resilience failure
         try:
@@ -692,17 +692,13 @@ _TOOL_DEFS: List[Dict[str, Any]] = [
     },
     {
         "name": "query_codebase",
-        "description": "Query the semantic codebase index for deep code understanding. "
-                       "Use this to understand call chains, dependencies, impact of changes, "
-                       "and to find relevant code by description.",
+        "description": "Query the semantic codebase index for deep code understanding. Use this to understand call chains, dependencies, impact of changes, and to find relevant code by description.",
         "input_schema": {
             "type": "object",
             "properties": {
                 "query_type": {
                     "type": "string",
-                    "enum": ["what_calls", "what_depends_on", "what_changes_break",
-                             "summarize", "find_similar", "architecture_overview",
-                             "recent_changes"],
+                    "enum": ["what_calls", "what_depends_on", "what_changes_break", "summarize", "find_similar", "architecture_overview", "recent_changes"],
                 },
                 "target": {"type": "string", "description": "File path, symbol name, or description"},
                 "depth": {"type": "integer", "default": 2, "description": "Recursion depth for transitive queries"},
@@ -741,12 +737,15 @@ def create_aura_tools(
         def make_bound(h: Callable, d: Dict) -> Callable:
             def bound(args: Dict[str, Any]) -> Any:
                 return h(args, **d)
+
             return bound
 
-        tools.append(AuraTool(
-            name=defn["name"],
-            description=defn["description"],
-            input_schema=defn["input_schema"],
-            handler=make_bound(raw_handler, deps),
-        ))
+        tools.append(
+            AuraTool(
+                name=defn["name"],
+                description=defn["description"],
+                input_schema=defn["input_schema"],
+                handler=make_bound(raw_handler, deps),
+            )
+        )
     return tools

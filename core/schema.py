@@ -1,4 +1,5 @@
 """Schema validation, typed LLM parsing, and routing primitives for AURA."""
+
 from __future__ import annotations
 
 import json
@@ -64,7 +65,7 @@ class RoutingDecision(str, Enum):
     that compares against plain strings (``route == "act"`` still works).
     """
 
-    ACT = "act"    # Recoverable code-level error — retry the act phase
+    ACT = "act"  # Recoverable code-level error — retry the act phase
     PLAN = "plan"  # Structural / design error — re-plan from scratch
     SKIP = "skip"  # External / environment issue — cannot be self-healed
 

@@ -8,6 +8,7 @@ Implements the "team lead" pattern where one AURA instance:
 
 Inspired by Anthropic's Agent Teams (Feb 2026).
 """
+
 import asyncio
 import json
 import re
@@ -32,6 +33,7 @@ class WorkerStatus(str, Enum):
 @dataclass
 class SubGoal:
     """A decomposed sub-goal assigned to a worker."""
+
     id: str = field(default_factory=lambda: uuid.uuid4().hex[:8])
     description: str = ""
     parent_goal: str = ""
@@ -47,6 +49,7 @@ class SubGoal:
 @dataclass
 class TeamResult:
     """Result from a team execution."""
+
     goal: str
     sub_goals: list[SubGoal] = field(default_factory=list)
     success_count: int = 0
@@ -58,8 +61,7 @@ class TeamResult:
 class TeamCoordinator:
     """Coordinates a team of AURA agents working on decomposed sub-goals."""
 
-    def __init__(self, model=None, orchestrator_factory: Callable | None = None,
-                 max_workers: int = 3, a2a_client=None):
+    def __init__(self, model=None, orchestrator_factory: Callable | None = None, max_workers: int = 3, a2a_client=None):
         self.model = model
         self.orchestrator_factory = orchestrator_factory  # Creates new orchestrator instances
         self.max_workers = max_workers
@@ -98,16 +100,14 @@ Rules:
             log_json("WARN", "team_decompose_failed", details={"error": str(exc)})
             return [SubGoal(description=goal, parent_goal=goal)]
 
-    def execute_team(self, goal: str, sub_goals: list[SubGoal],
-                     dry_run: bool = False) -> TeamResult:
+    def execute_team(self, goal: str, sub_goals: list[SubGoal], dry_run: bool = False) -> TeamResult:
         """Execute sub-goals across worker agents."""
         team_id = uuid.uuid4().hex[:8]
         t0 = time.time()
         result = TeamResult(goal=goal, sub_goals=sub_goals)
         self.active_teams[team_id] = result
 
-        log_json("INFO", "team_execution_started",
-                 details={"team_id": team_id, "sub_goals": len(sub_goals)})
+        log_json("INFO", "team_execution_started", details={"team_id": team_id, "sub_goals": len(sub_goals)})
 
         # Sort by dependencies (topological-ish: no-dep first, then dependent)
         independent = [sg for sg in sub_goals if not sg.dependencies]
@@ -118,11 +118,7 @@ Rules:
 
         # Phase 2: Run dependent sub-goals (sequentially for now)
         for sg in dependent:
-            deps_met = all(
-                any(done.id == dep_id and done.status == WorkerStatus.COMPLETED
-                    for done in sub_goals)
-                for dep_id in sg.dependencies
-            )
+            deps_met = all(any(done.id == dep_id and done.status == WorkerStatus.COMPLETED for done in sub_goals) for dep_id in sg.dependencies)
             if deps_met:
                 self._run_single(sg, dry_run)
             else:
@@ -133,10 +129,7 @@ Rules:
         result.failure_count = sum(1 for sg in sub_goals if sg.status == WorkerStatus.FAILED)
         result.total_duration = time.time() - t0
 
-        log_json("INFO", "team_execution_complete",
-                 details={"team_id": team_id, "success": result.success_count,
-                          "failed": result.failure_count,
-                          "duration_s": round(result.total_duration, 1)})
+        log_json("INFO", "team_execution_complete", details={"team_id": team_id, "success": result.success_count, "failed": result.failure_count, "duration_s": round(result.total_duration, 1)})
         return result
 
     def _run_parallel(self, sub_goals: list[SubGoal], dry_run: bool):
@@ -184,10 +177,7 @@ Rules:
             if peer:
                 loop = asyncio.new_event_loop()
                 try:
-                    result = loop.run_until_complete(
-                        self.a2a_client.delegate(
-                            peer.url, "autonomous_goal", sub_goal.description)
-                    )
+                    result = loop.run_until_complete(self.a2a_client.delegate(peer.url, "autonomous_goal", sub_goal.description))
                     return result or {"status": "delegated"}
                 finally:
                     loop.close()
@@ -203,7 +193,7 @@ Rules:
     def _parse_sub_goals(self, response: str, parent_goal: str) -> list[SubGoal]:
         """Parse sub-goals from model response."""
         try:
-            json_match = re.search(r'\[.*\]', response, re.DOTALL)
+            json_match = re.search(r"\[.*\]", response, re.DOTALL)
             if json_match:
                 data = json.loads(json_match.group())
                 sub_goals = []
@@ -213,15 +203,10 @@ Rules:
                             description=item.get("description", str(item)),
                             parent_goal=parent_goal,
                             priority=int(item.get("priority", 0)),
-                            dependencies=[
-                                sub_goals[d].id
-                                for d in item.get("dependencies", [])
-                                if d < len(sub_goals)
-                            ],
+                            dependencies=[sub_goals[d].id for d in item.get("dependencies", []) if d < len(sub_goals)],
                         )
                         sub_goals.append(sg)
-                return sub_goals if sub_goals else [
-                    SubGoal(description=parent_goal, parent_goal=parent_goal)]
+                return sub_goals if sub_goals else [SubGoal(description=parent_goal, parent_goal=parent_goal)]
         except (json.JSONDecodeError, ValueError, TypeError):
             pass
         return [SubGoal(description=parent_goal, parent_goal=parent_goal)]
@@ -233,11 +218,7 @@ Rules:
             return None
         return {
             "goal": result.goal,
-            "sub_goals": [
-                {"id": sg.id, "desc": sg.description[:50],
-                 "status": sg.status.value, "priority": sg.priority}
-                for sg in result.sub_goals
-            ],
+            "sub_goals": [{"id": sg.id, "desc": sg.description[:50], "status": sg.status.value, "priority": sg.priority} for sg in result.sub_goals],
             "success": result.success_count,
             "failed": result.failure_count,
             "duration_s": result.total_duration,

@@ -3,6 +3,7 @@
 Enables AURA to discover other A2A-compatible agents via their Agent Cards
 and delegate tasks to them.
 """
+
 import json
 import time
 import urllib.request
@@ -15,6 +16,7 @@ from core.logging_utils import log_json
 @dataclass
 class PeerAgent:
     """A discovered peer agent."""
+
     card: AgentCard
     url: str = ""
     last_seen: float = 0.0
@@ -39,28 +41,27 @@ class A2AClient:
                 data = json.loads(resp.read())
                 card = AgentCard.from_dict(data)
                 self.peers[url] = PeerAgent(
-                    card=card, url=url, last_seen=time.time(),
+                    card=card,
+                    url=url,
+                    last_seen=time.time(),
                 )
-                log_json("INFO", "a2a_peer_discovered",
-                         details={"name": card.name, "url": url,
-                                  "capabilities": [c.name for c in card.capabilities]})
+                log_json("INFO", "a2a_peer_discovered", details={"name": card.name, "url": url, "capabilities": [c.name for c in card.capabilities]})
                 return card
         except Exception as exc:
-            log_json("WARN", "a2a_discovery_failed",
-                     details={"url": url, "error": str(exc)})
+            log_json("WARN", "a2a_discovery_failed", details={"url": url, "error": str(exc)})
             return None
 
-    async def delegate(self, peer_url: str, capability: str,
-                       message: str,
-                       metadata: dict | None = None) -> dict | None:
+    async def delegate(self, peer_url: str, capability: str, message: str, metadata: dict | None = None) -> dict | None:
         """Delegate a task to a peer agent."""
         try:
             task_url = f"{peer_url.rstrip('/')}/a2a/tasks"
-            payload = json.dumps({
-                "capability": capability,
-                "message": message,
-                "metadata": metadata or {},
-            }).encode()
+            payload = json.dumps(
+                {
+                    "capability": capability,
+                    "message": message,
+                    "metadata": metadata or {},
+                }
+            ).encode()
             req = urllib.request.Request(
                 task_url,
                 data=payload,
@@ -68,13 +69,10 @@ class A2AClient:
             )
             with urllib.request.urlopen(req, timeout=60) as resp:  # nosec B310
                 result = json.loads(resp.read())
-                log_json("INFO", "a2a_task_delegated",
-                         details={"peer": peer_url, "capability": capability,
-                                  "task_id": result.get("id")})
+                log_json("INFO", "a2a_task_delegated", details={"peer": peer_url, "capability": capability, "task_id": result.get("id")})
                 return result
         except Exception as exc:
-            log_json("WARN", "a2a_delegation_failed",
-                     details={"peer": peer_url, "error": str(exc)})
+            log_json("WARN", "a2a_delegation_failed", details={"peer": peer_url, "error": str(exc)})
             return None
 
     def find_capable_peer(self, capability: str) -> PeerAgent | None:

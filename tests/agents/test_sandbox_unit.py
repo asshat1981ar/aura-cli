@@ -107,7 +107,7 @@ class TestWrapCodeWithFsRestrictions:
         """Should add import guard at start of code."""
         code = "print('hello')"
         wrapped = _wrap_code_with_fs_restrictions(code, "/tmp")
-        
+
         assert "import builtins" in wrapped
         assert "import os" in wrapped
         assert "import sys" in wrapped
@@ -116,7 +116,7 @@ class TestWrapCodeWithFsRestrictions:
         """Should add sandbox_open function."""
         code = "print('hello')"
         wrapped = _wrap_code_with_fs_restrictions(code, "/tmp")
-        
+
         assert "def _sandbox_open" in wrapped
         assert "_original_open" in wrapped
 
@@ -124,14 +124,14 @@ class TestWrapCodeWithFsRestrictions:
         """Should preserve original code after guard."""
         code = "x = 1 + 2\nprint(x)"
         wrapped = _wrap_code_with_fs_restrictions(code, "/tmp")
-        
+
         assert code in wrapped
 
     def test_wrap_sets_allowed_prefixes(self):
         """Should set allowed prefixes including cwd."""
         code = "pass"
         wrapped = _wrap_code_with_fs_restrictions(code, "/custom/cwd")
-        
+
         assert "'/custom/cwd'" in wrapped
         assert '"/tmp"' in wrapped
 
@@ -139,7 +139,7 @@ class TestWrapCodeWithFsRestrictions:
         """Should filter sys.path to remove unsafe entries."""
         code = "pass"
         wrapped = _wrap_code_with_fs_restrictions(code, "/tmp")
-        
+
         assert "sys.path = [p for p in sys.path" in wrapped
 
 
@@ -150,7 +150,7 @@ class TestSetResourceLimits:
         """Should set CPU time limit to 30 seconds."""
         # This test can only run on Unix systems with resource module
         pytest.importorskip("resource", reason="resource module only on Unix")
-        
+
         # Just verify the function doesn't crash
         _set_resource_limits()
 
@@ -272,6 +272,7 @@ class TestSandboxAgentInitialization:
         brain = MagicMock()
         agent = SandboxAgent(brain=brain)
         import sys
+
         assert agent.python_exec == sys.executable
 
     def test_custom_python_exec(self):
@@ -288,17 +289,17 @@ class TestSandboxAgentRunCode:
         """Should create temp file with wrapped code."""
         brain = MagicMock()
         agent = SandboxAgent(brain=brain, timeout=10)
-        
-        with patch.object(agent, '_run') as mock_run:
+
+        with patch.object(agent, "_run") as mock_run:
             mock_run.return_value = SandboxResult(
                 success=True,
                 exit_code=0,
                 stdout="hello",
                 stderr="",
             )
-            
+
             result = agent.run_code("print('hello')")
-            
+
             assert result.success is True
             mock_run.assert_called_once()
             # Check that path ends with aura_exec.py
@@ -309,17 +310,17 @@ class TestSandboxAgentRunCode:
         """Should wrap code with filesystem restrictions."""
         brain = MagicMock()
         agent = SandboxAgent(brain=brain, timeout=10)
-        
-        with patch.object(agent, '_run') as mock_run:
+
+        with patch.object(agent, "_run") as mock_run:
             mock_run.return_value = SandboxResult(
                 success=True,
                 exit_code=0,
                 stdout="",
                 stderr="",
             )
-            
+
             agent.run_code("x = 1")
-            
+
             # The temp file should contain wrapped code
             # We can't directly check, but the _run should be called
             mock_run.assert_called_once()
@@ -328,17 +329,17 @@ class TestSandboxAgentRunCode:
         """Should record result to brain memory."""
         brain = MagicMock()
         agent = SandboxAgent(brain=brain, timeout=10)
-        
-        with patch.object(agent, '_run') as mock_run:
+
+        with patch.object(agent, "_run") as mock_run:
             mock_run.return_value = SandboxResult(
                 success=True,
                 exit_code=0,
                 stdout="",
                 stderr="",
             )
-            
+
             agent.run_code("pass")
-            
+
             brain.remember.assert_called_once()
             call_args = brain.remember.call_args[0][0]
             assert "SandboxAgent" in call_args

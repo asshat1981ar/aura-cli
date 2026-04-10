@@ -42,6 +42,7 @@ try:
         generate_latest,
         CONTENT_TYPE_LATEST,
     )
+
     _PROMETHEUS_AVAILABLE = True
 
     def _get_or_create_metric(factory, name: str, documentation: str, labelnames=()):
@@ -143,10 +144,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-ALLOWED_ORIGINS = os.environ.get(
-    "AURA_CORS_ORIGINS",
-    "http://localhost:3000,http://localhost:8080"
-).split(",")
+ALLOWED_ORIGINS = os.environ.get("AURA_CORS_ORIGINS", "http://localhost:3000,http://localhost:8080").split(",")
 
 app.add_middleware(
     CORSMiddleware,
@@ -158,6 +156,7 @@ app.add_middleware(
 )
 
 from aura_cli.middleware.rate_limit import rate_limit_middleware
+
 app.middleware("http")(rate_limit_middleware)
 
 
@@ -166,6 +165,7 @@ app.middleware("http")(rate_limit_middleware)
 # ---------------------------------------------------------------------------
 try:
     from core.correlation import CorrelationManager as _CorrelationManager
+
     _CORRELATION_AVAILABLE = True
 except ImportError:
     _CORRELATION_AVAILABLE = False
@@ -175,11 +175,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     """Propagate or generate an X-Request-ID for every request."""
 
     async def dispatch(self, request: Request, call_next):
-        request_id = (
-            request.headers.get("X-Request-ID")
-            or request.headers.get("X-Correlation-ID")
-            or str(uuid.uuid4())
-        )
+        request_id = request.headers.get("X-Request-ID") or request.headers.get("X-Correlation-ID") or str(uuid.uuid4())
         request.state.request_id = request_id
         if _CORRELATION_AVAILABLE:
             with _CorrelationManager.scope(request_id):
@@ -817,23 +813,23 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
     }
     _webhook_goal_queue[goal_id] = entry
     if _PROMETHEUS_AVAILABLE:
-        goal_queue_depth.set(
-            sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued")
-        )
-    log_json("INFO", "aura_webhook_goal_received", details={
-        "goal_id": goal_id,
-        "goal": req.goal[:200],
-        "pipeline_run_id": req.metadata.get("pipeline_run_id", ""),
-        "complexity": req.metadata.get("complexity", "unknown"),
-    })
+        goal_queue_depth.set(sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued"))
+    log_json(
+        "INFO",
+        "aura_webhook_goal_received",
+        details={
+            "goal_id": goal_id,
+            "goal": req.goal[:200],
+            "pipeline_run_id": req.metadata.get("pipeline_run_id", ""),
+            "complexity": req.metadata.get("complexity", "unknown"),
+        },
+    )
 
     # Fire-and-forget: run the cycle in background so n8n can poll /webhook/status
     async def _run_cycle() -> None:
         if _PROMETHEUS_AVAILABLE:
             active_pipeline_runs.inc()
-            goal_queue_depth.set(
-                sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued")
-            )
+            goal_queue_depth.set(sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued"))
         try:
             _webhook_goal_queue[goal_id]["status"] = "running"
             _webhook_goal_queue[goal_id]["started_at"] = time.time()
@@ -842,19 +838,23 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
                 active_orchestrator.run_cycle,
                 req.goal,
             )
-            _webhook_goal_queue[goal_id].update({
-                "status": "done",
-                "result": result,
-                "completed_at": time.time(),
-            })
+            _webhook_goal_queue[goal_id].update(
+                {
+                    "status": "done",
+                    "result": result,
+                    "completed_at": time.time(),
+                }
+            )
             if _PROMETHEUS_AVAILABLE:
                 pipeline_runs_total.labels(status="success").inc()
         except Exception as exc:
-            _webhook_goal_queue[goal_id].update({
-                "status": "failed",
-                "error": str(exc),
-                "completed_at": time.time(),
-            })
+            _webhook_goal_queue[goal_id].update(
+                {
+                    "status": "failed",
+                    "error": str(exc),
+                    "completed_at": time.time(),
+                }
+            )
             log_json("WARN", "aura_webhook_goal_failed", details={"goal_id": goal_id, "error": str(exc)})
             if _PROMETHEUS_AVAILABLE:
                 pipeline_runs_total.labels(status="failure").inc()
@@ -900,7 +900,7 @@ async def webhook_plan_review(req: WebhookPlanReviewRequest, _: None = Depends(r
     if isinstance(plan_steps, str):
         plan_text = plan_steps
     elif isinstance(plan_steps, list):
-        plan_text = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan_steps))
+        plan_text = "\n".join(f"{i + 1}. {step}" for i, step in enumerate(plan_steps))
     else:
         plan_text = str(plan_steps)
 
@@ -912,11 +912,15 @@ async def webhook_plan_review(req: WebhookPlanReviewRequest, _: None = Depends(r
         "file_targets": req.task_bundle.get("file_targets", []),
         "critique": req.task_bundle.get("critique", ""),
     }
-    log_json("INFO", "aura_webhook_plan_review_requested", details={
-        "goal": req.goal[:200],
-        "pipeline_run_id": req.pipeline_run_id,
-        "plan_steps": len(plan_steps) if isinstance(plan_steps, list) else 1,
-    })
+    log_json(
+        "INFO",
+        "aura_webhook_plan_review_requested",
+        details={
+            "goal": req.goal[:200],
+            "pipeline_run_id": req.pipeline_run_id,
+            "plan_steps": len(plan_steps) if isinstance(plan_steps, list) else 1,
+        },
+    )
     return {"status": "ok", "review_payload": review_payload}
 
 

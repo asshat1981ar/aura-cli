@@ -5,6 +5,7 @@ shared ``_make_request_with_retries`` helper, local-profile infrastructure
 (resolution, cooldowns, fallbacks), and local-embedding helpers that all
 HTTP-based providers use.
 """
+
 from __future__ import annotations
 
 import json
@@ -50,13 +51,17 @@ class ProvidersMixin:
         for attempt in range(retries):
             try:
                 response = requests.request(
-                    method, url, headers=headers, json=json_payload, timeout=timeout,
+                    method,
+                    url,
+                    headers=headers,
+                    json=json_payload,
+                    timeout=timeout,
                 )
                 response.raise_for_status()
                 return response
             except requests.exceptions.RequestException as e:
                 if attempt < retries - 1:
-                    sleep_time = backoff_factor * (2 ** attempt)
+                    sleep_time = backoff_factor * (2**attempt)
                     log_json(
                         "WARN",
                         "request_failed_retrying",
@@ -84,6 +89,7 @@ class ProvidersMixin:
             raise ValueError("OpenRouter-compatible API key not set for OpenRouter call.")
 
         import random
+
         routing = config.get("model_routing", {})
         selected_model = None
         if route_key:
@@ -312,10 +318,7 @@ class ProvidersMixin:
                     prompt,
                     attempted_profiles=attempted_profiles,
                 )
-            raise RuntimeError(
-                f"Local profile '{profile_name}' is cooling down for another {remaining:.1f}s: "
-                f"{self._local_profile_cooldown_reasons.get(profile_name, 'unknown error')}"
-            )
+            raise RuntimeError(f"Local profile '{profile_name}' is cooling down for another {remaining:.1f}s: {self._local_profile_cooldown_reasons.get(profile_name, 'unknown error')}")
 
         try:
             response = self._call_local_profile_provider(profile, prompt)
@@ -503,11 +506,7 @@ class ProvidersMixin:
         raw = config.get("local_model_routing", {}) or {}
         if not isinstance(raw, dict):
             return {}
-        return {
-            name: value
-            for name, value in raw.items()
-            if isinstance(name, str) and (value is None or isinstance(value, str))
-        }
+        return {name: value for name, value in raw.items() if isinstance(name, str) and (value is None or isinstance(value, str))}
 
     def _resolve_local_profile_name(self, route_key: str) -> str | None:
         profile_name = self._get_local_routing().get(route_key)

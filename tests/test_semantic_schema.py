@@ -1,5 +1,6 @@
 # tests/test_semantic_schema.py
 """Tests for the SemanticDB SQLite schema and CRUD helpers."""
+
 import shutil
 import tempfile
 import unittest
@@ -13,6 +14,7 @@ class TestSemanticDB(unittest.TestCase):
         self.tmpdir = tempfile.mkdtemp()
         self.db_path = Path(self.tmpdir) / "test_semantic.db"
         from core.agent_sdk.semantic_schema import SemanticDB
+
         self.db = SemanticDB(self.db_path)
 
     def tearDown(self):

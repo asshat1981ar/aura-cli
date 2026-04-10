@@ -14,6 +14,7 @@ Typical usage::
     )
     result = dispatcher.dispatch("plan", {"goal": "Add retry logic"})
 """
+
 from __future__ import annotations
 
 import uuid
@@ -44,9 +45,7 @@ class PhaseDispatcher:
 
     #: Phases routed to the async canary path when ``enable_new_orchestrator``
     #: is enabled in config (mirrors the M5-002/M5-003 canary wave logic).
-    CANARY_PHASES = frozenset(
-        ["mcp_discovery", "mcp_health", "code_search", "investigation"]
-    )
+    CANARY_PHASES = frozenset(["mcp_discovery", "mcp_health", "code_search", "investigation"])
 
     def __init__(
         self,
@@ -99,9 +98,7 @@ class PhaseDispatcher:
 
         # Pre-phase hooks (guaranteed execution — cannot be bypassed by model)
         if self.hook_engine is not None:
-            should_proceed, input_data = self.hook_engine.run_pre_hooks(
-                phase_name, input_data
-            )
+            should_proceed, input_data = self.hook_engine.run_pre_hooks(phase_name, input_data)
             if not should_proceed:
                 log_json(
                     "WARN",
@@ -111,10 +108,7 @@ class PhaseDispatcher:
                 return {"_blocked_by_hook": True, "phase": phase_name}
 
         # Canary wave routing (M5-002, M5-003)
-        if (
-            phase_name in self.CANARY_PHASES
-            and self._config.get("enable_new_orchestrator")
-        ):
+        if phase_name in self.CANARY_PHASES and self._config.get("enable_new_orchestrator"):
             canary_result = self._try_canary(phase_name, input_data)
             if canary_result is not None:
                 return canary_result
@@ -201,9 +195,7 @@ class PhaseDispatcher:
             )
         try:
             result = await anyio.to_thread.run_sync(agent.run, request.input_data)
-            return TaskResult(
-                task_id=request.task_id, status="success", output=result
-            )
+            return TaskResult(task_id=request.task_id, status="success", output=result)
         except Exception as exc:
             return TaskResult(
                 task_id=request.task_id,

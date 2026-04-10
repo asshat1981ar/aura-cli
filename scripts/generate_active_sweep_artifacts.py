@@ -368,6 +368,7 @@ def _normalize_for_check(text: str) -> str:
     without false-positives caused by the SHA changing on every push.
     """
     import re
+
     # Collapse full 40-char SHAs and short 7-char hex abbreviations
     text = re.sub(r"`[0-9a-f]{40}`", "`<SHA>`", text)
     text = re.sub(r"`[0-9a-f]{7}`", "`<sha>`", text)

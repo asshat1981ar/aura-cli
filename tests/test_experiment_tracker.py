@@ -1,18 +1,22 @@
 """Tests for Karpathy-style experiment tracker."""
+
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from core.experiment_tracker import (
-    ExperimentResult, MetricsCollector, ExperimentTracker,
+    ExperimentResult,
+    MetricsCollector,
+    ExperimentTracker,
 )
 
 
 class TestExperimentResult(unittest.TestCase):
     def test_net_improvement_positive(self):
         r = ExperimentResult(
-            experiment_id="e1", hypothesis="test",
+            experiment_id="e1",
+            hypothesis="test",
             change_description="change",
             improvement={"test_pass_rate": 0.1, "avg_cycle_seconds": -5.0},
         )
@@ -21,7 +25,8 @@ class TestExperimentResult(unittest.TestCase):
 
     def test_net_improvement_empty(self):
         r = ExperimentResult(
-            experiment_id="e2", hypothesis="test",
+            experiment_id="e2",
+            hypothesis="test",
             change_description="change",
         )
         self.assertEqual(r.net_improvement, 0.0)
@@ -71,8 +76,12 @@ class TestExperimentTracker(unittest.TestCase):
             self.assertIsInstance(baseline, dict)
 
             result = tracker.finish_experiment(
-                "exp1", "improve tests", "added retry logic",
-                baseline, cycle_number=1, duration=5.0,
+                "exp1",
+                "improve tests",
+                "added retry logic",
+                baseline,
+                cycle_number=1,
+                duration=5.0,
             )
             self.assertIsInstance(result, ExperimentResult)
             self.assertEqual(result.experiment_id, "exp1")

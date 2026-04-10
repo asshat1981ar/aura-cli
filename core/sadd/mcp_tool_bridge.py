@@ -3,6 +3,7 @@
 Discovers available MCP tools, matches them to workstream goals,
 and builds tool context dicts for injection into sub-agent runners.
 """
+
 from __future__ import annotations
 
 import logging
@@ -102,6 +103,7 @@ class MCPToolBridge:
         if self._registry:
             try:
                 from core.mcp_registry import list_registered_services
+
                 services = list_registered_services()
                 tools = []
                 for svc in services:

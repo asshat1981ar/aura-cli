@@ -94,11 +94,7 @@ class TestAtomicRollback:
         restored_contents = _read_contents(files)
 
         for fname, original in original_contents.items():
-            assert restored_contents[fname] == original, (
-                f"File '{fname}' was not restored to its original content.\n"
-                f"Expected: {original!r}\n"
-                f"Got:      {restored_contents[fname]!r}"
-            )
+            assert restored_contents[fname] == original, f"File '{fname}' was not restored to its original content.\nExpected: {original!r}\nGot:      {restored_contents[fname]!r}"
 
     def test_no_partial_changes_remain(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         """After a failed atomic apply, no modified content must exist on disk."""
@@ -133,9 +129,7 @@ class TestAtomicRollback:
 
         for fp in files:
             content = fp.read_text(encoding="utf-8")
-            assert "SHOULD_NOT_EXIST" not in content, (
-                f"Partial change found in '{fp.name}': {content!r}"
-            )
+            assert "SHOULD_NOT_EXIST" not in content, f"Partial change found in '{fp.name}': {content!r}"
 
     def test_successful_apply_returns_applied_paths(self, tmp_path: Path) -> None:
         """Sanity check: a clean apply returns all file paths and writes new content."""

@@ -1,4 +1,5 @@
 """Tests for creative_memory module."""
+
 import pytest
 from unittest.mock import Mock
 from core.creative_memory import (
@@ -57,9 +58,9 @@ class TestCreativePatternMemory:
             domain="performance",
             technique="SCAMPER",
         )
-        
+
         memory.record(pattern)
-        
+
         mock_brain.remember.assert_called_once()
         call_args = mock_brain.remember.call_args
         assert "Use caching" in call_args.kwargs["text"]
@@ -73,9 +74,9 @@ class TestCreativePatternMemory:
             technique="RPE",
             usage_count=5,
         )
-        
+
         memory.record(pattern, track_usage=True)
-        
+
         assert pattern.usage_count == 6
         assert pattern.last_used is not None
 
@@ -91,13 +92,13 @@ class TestCreativePatternMemory:
                     "success_rate": 0.9,
                     "usage_count": 5,
                     "related_patterns": "[]",
-                }
+                },
             }
         ]
-        
+
         memory = CreativePatternMemory(mock_brain)
         patterns = memory.recall("api_design", "caching", top_k=5)
-        
+
         assert len(patterns) == 1
         assert patterns[0].id == "p001"
         assert patterns[0].success_rate == 0.9
@@ -114,7 +115,7 @@ class TestCreativePatternMemory:
                     "success_rate": 0.3,
                     "usage_count": 1,
                     "related_patterns": "[]",
-                }
+                },
             },
             {
                 "text": "High success",
@@ -126,13 +127,13 @@ class TestCreativePatternMemory:
                     "success_rate": 0.9,
                     "usage_count": 10,
                     "related_patterns": "[]",
-                }
-            }
+                },
+            },
         ]
-        
+
         memory = CreativePatternMemory(mock_brain)
         patterns = memory.recall("test", "query", min_success_rate=0.5)
-        
+
         assert len(patterns) == 1
         assert patterns[0].id == "high"
 
@@ -148,31 +149,33 @@ class TestCreativePatternMemory:
                     "success_rate": 0.8,
                     "usage_count": 5,
                     "related_patterns": "[]",
-                }
+                },
             }
         ]
-        
+
         memory = CreativePatternMemory(mock_brain)
         analogies = memory.cross_pollinate("web", "mobile", top_k=3)
-        
+
         assert len(analogies) > 0
         assert analogies[0]["source_domain"] == "web"
         assert analogies[0]["target_domain"] == "mobile"
 
     def test_update_success_rate(self, mock_brain):
-        mock_brain.get = Mock(return_value={
-            "text": "Pattern",
-            "metadata": {
-                "type": "creative_pattern",
-                "pattern_id": "test",
-                "domain": "test",
-                "technique": "RPE",
-                "success_rate": 0.5,
-                "usage_count": 10,
-                "related_patterns": "[]",
+        mock_brain.get = Mock(
+            return_value={
+                "text": "Pattern",
+                "metadata": {
+                    "type": "creative_pattern",
+                    "pattern_id": "test",
+                    "domain": "test",
+                    "technique": "RPE",
+                    "success_rate": 0.5,
+                    "usage_count": 10,
+                    "related_patterns": "[]",
+                },
             }
-        })
-        
+        )
+
         memory = CreativePatternMemory(mock_brain)
         # Pre-populate cache
         memory._cache["test"] = CreativePattern(
@@ -183,9 +186,9 @@ class TestCreativePatternMemory:
             success_rate=0.5,
             usage_count=10,
         )
-        
+
         memory.update_success_rate("test", success=True)
-        
+
         # Success rate should increase (EMA formula)
         assert memory._cache["test"].success_rate > 0.5
 
@@ -201,7 +204,7 @@ class TestCreativePatternMemory:
                     "success_rate": 0.8,
                     "usage_count": 5,
                     "related_patterns": "[]",
-                }
+                },
             },
             {
                 "text": "Pattern 2",
@@ -213,13 +216,13 @@ class TestCreativePatternMemory:
                     "success_rate": 0.9,
                     "usage_count": 10,
                     "related_patterns": "[]",
-                }
-            }
+                },
+            },
         ]
-        
+
         memory = CreativePatternMemory(mock_brain)
         stats = memory.get_domain_stats("api")
-        
+
         assert stats["pattern_count"] == 2
         assert abs(stats["avg_success_rate"] - 0.85) < 0.001
         assert stats["total_usage"] == 15
@@ -227,18 +230,20 @@ class TestCreativePatternMemory:
     def test_storage_error_handling(self, mock_brain):
         mock_brain.remember = Mock(side_effect=Exception("DB Error"))
         memory = CreativePatternMemory(mock_brain)
-        
+
         with pytest.raises(StorageError):
-            memory.record(CreativePattern(
-                id="fail",
-                content="Test",
-                domain="test",
-                technique="RPE",
-            ))
+            memory.record(
+                CreativePattern(
+                    id="fail",
+                    content="Test",
+                    domain="test",
+                    technique="RPE",
+                )
+            )
 
     def test_recall_error_handling(self, mock_brain):
         mock_brain.recall_with_budget = Mock(side_effect=Exception("Recall Error"))
         memory = CreativePatternMemory(mock_brain)
-        
+
         with pytest.raises(RecallError):
             memory.recall("domain", "query")

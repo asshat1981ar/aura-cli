@@ -1,4 +1,5 @@
 """Tests for A2A protocol implementation."""
+
 import asyncio
 import unittest
 from unittest.mock import MagicMock
@@ -38,6 +39,7 @@ class TestAgentCard(unittest.TestCase):
         card = AgentCard.default()
         j = card.to_json()
         import json
+
         parsed = json.loads(j)
         self.assertEqual(parsed["name"], "AURA CLI")
 

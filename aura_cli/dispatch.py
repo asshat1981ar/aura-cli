@@ -8,10 +8,10 @@ from pathlib import Path
 
 from agents.handlers import HANDLER_MAP, PHASE_MAP  # noqa: F401 — re-exported for callers
 from agents.handlers import (
-    run_planner_phase,    # noqa: F401 — re-exported for callers
-    run_coder_phase,      # noqa: F401 — re-exported for callers
-    run_critic_phase,     # noqa: F401 — re-exported for callers
-    run_debugger_phase,   # noqa: F401 — re-exported for callers
+    run_planner_phase,  # noqa: F401 — re-exported for callers
+    run_coder_phase,  # noqa: F401 — re-exported for callers
+    run_critic_phase,  # noqa: F401 — re-exported for callers
+    run_debugger_phase,  # noqa: F401 — re-exported for callers
     run_reflector_phase,  # noqa: F401 — re-exported for callers
     run_applicator_phase,  # noqa: F401 — re-exported for callers
 )
@@ -41,6 +41,7 @@ from memory.brain import Brain
 anyio_available = False
 try:
     import anyio
+
     anyio_available = True
 except ImportError:
     pass
@@ -48,20 +49,22 @@ except ImportError:
 
 def _run_async_safely(coro):
     """Run an async coroutine safely in any context.
-    
+
     P0 BUG FIX: asyncio.run() crashes when an event loop is already running
     (e.g., in TUI, Jupyter, or nested async contexts).
     """
     if anyio_available:
         return anyio.run(coro)
-    
+
     import asyncio
+
     try:
         return asyncio.run(coro)
     except RuntimeError as e:
         if "already running" in str(e):
             asyncio.get_running_loop()
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 future = pool.submit(asyncio.run, coro)
                 return future.result()
@@ -103,6 +106,7 @@ def _sync_cli_compat() -> None:
 @dataclass
 class RuntimeContext:
     """Typed runtime context for dispatch operations."""
+
     agent: str | None = None
     model: str | None = None
     verbose: bool = False
@@ -253,7 +257,7 @@ def _handle_config_set_dispatch(ctx: DispatchContext) -> int:
 
     try:
         if key.startswith("model."):
-            task_type = key[len("model."):]
+            task_type = key[len("model.") :]
             config.update_config({"model_routing": {task_type: value}})
         else:
             config.update_config({key: value})
@@ -585,12 +589,15 @@ def _resolve_evolve_agents(brain, model, orchestrator):
     # If any agent is missing, lazily construct via handler context resolution.
     if coder_agent is None:
         from agents.handlers import coder as _ch
+
         coder_agent = _ch._resolve_agent(handler_context)
     if critic_agent is None:
         from agents.handlers import critic as _cth
+
         critic_agent = _cth._resolve_agent(handler_context)
     if planner_agent is None:
         from agents.handlers import planner as _ph
+
         planner_agent = _ph._resolve_agent(handler_context)
 
     return planner_agent, coder_agent, critic_agent
@@ -611,11 +618,15 @@ def _handle_evolve_dispatch(ctx: DispatchContext) -> int:
     # no longer directly instantiates per-phase agents.
     log_json("INFO", "evolve_agent_resolve_start", details={"project_root": str(ctx.project_root)})
     _planner, _coder, _critic = _resolve_evolve_agents(_brain, _model, _orchestrator)
-    log_json("INFO", "evolve_agent_resolve_done", details={
-        "planner": type(_planner).__name__,
-        "coder": type(_coder).__name__,
-        "critic": type(_critic).__name__,
-    })
+    log_json(
+        "INFO",
+        "evolve_agent_resolve_done",
+        details={
+            "planner": type(_planner).__name__,
+            "coder": type(_coder).__name__,
+            "critic": type(_critic).__name__,
+        },
+    )
 
     _git = GitTools(repo_path=str(ctx.project_root))
     _mutator = MutatorAgent(ctx.project_root)
@@ -749,6 +760,7 @@ def _handle_goal_once_dispatch(ctx: DispatchContext) -> int:
         return EXIT_CANCELLED
     except Exception as exc:  # noqa: BLE001
         from core.file_tools import OldCodeNotFoundError, MismatchOverwriteBlockedError
+
         if isinstance(exc, (OldCodeNotFoundError, MismatchOverwriteBlockedError)):
             log_json("ERROR", "goal_once_apply_error", details={"error": str(exc)})
             print(f"Apply error: {exc}", file=sys.stderr)
@@ -793,8 +805,7 @@ def _handle_goal_run_dispatch(ctx: DispatchContext) -> int:
             if record:
                 goal_text = record.get("goal", "?")
                 print(
-                    f'⚠  Interrupted goal detected: "{goal_text}"'
-                    " — run 'goal run --resume' to recover",
+                    f"⚠  Interrupted goal detected: \"{goal_text}\" — run 'goal run --resume' to recover",
                     file=sys.stderr,
                 )
 
@@ -817,6 +828,7 @@ def _handle_goal_run_dispatch(ctx: DispatchContext) -> int:
         return EXIT_CANCELLED
     except Exception as exc:  # noqa: BLE001
         from core.file_tools import OldCodeNotFoundError, MismatchOverwriteBlockedError
+
         if isinstance(exc, (OldCodeNotFoundError, MismatchOverwriteBlockedError)):
             log_json("ERROR", "goal_run_apply_error", details={"error": str(exc)})
             print(f"Apply error: {exc}", file=sys.stderr)
@@ -847,6 +859,7 @@ def _handle_goal_add_run_dispatch(ctx: DispatchContext) -> int:
 
 def _handle_interactive_dispatch(ctx: DispatchContext) -> int:
     from aura_cli.cli_main import cli_interaction_loop as _cli_loop
+
     runtime = ctx.runtime
     _cli_loop(ctx.args, runtime)
     return 0
@@ -921,17 +934,21 @@ def _handle_sadd_run_dispatch(ctx: DispatchContext) -> int:
                 fail_fast=getattr(args, "fail_fast", False) or False,
             )
             factory = create_orchestrator_factory(
-                brain=_brain, project_root=ctx.project_root, model_adapter=_model,
+                brain=_brain,
+                project_root=ctx.project_root,
+                model_adapter=_model,
             )
             store = SessionStore()
             try:
                 from core.sadd.mcp_tool_bridge import MCPToolBridge
+
                 mcp_bridge = MCPToolBridge()
             except (ImportError, OSError):
                 mcp_bridge = None
             try:
                 from core.sadd.n8n_pipeline_bridge import N8nPipelineBridge
                 import json as _json
+
                 _config_path = ctx.project_root / "aura.config.json"
                 _file_config = _json.loads(_config_path.read_text()) if _config_path.exists() else {}
                 n8n_bridge = N8nPipelineBridge(_file_config)
@@ -1077,12 +1094,14 @@ def _handle_sadd_resume_dispatch(ctx: DispatchContext) -> int:
 
     try:
         from core.sadd.mcp_tool_bridge import MCPToolBridge
+
         mcp_bridge = MCPToolBridge()
     except (ImportError, OSError):
         mcp_bridge = None
     try:
         from core.sadd.n8n_pipeline_bridge import N8nPipelineBridge
         import json as _json
+
         _config_path = ctx.project_root / "aura.config.json"
         _file_config = _json.loads(_config_path.read_text()) if _config_path.exists() else {}
         n8n_bridge = N8nPipelineBridge(_file_config)
@@ -1120,7 +1139,7 @@ def _handle_goal_resume_dispatch(ctx: DispatchContext) -> int:
     cycle_limit = record.get("cycle_limit", 1)
     phase = record.get("phase", "unknown")
 
-    print(f"Found interrupted goal: \"{goal}\"")
+    print(f'Found interrupted goal: "{goal}"')
     print(f"  Started:    {started_at}")
     print(f"  Last phase: {phase}")
     print(f"  Cycle limit: {cycle_limit}")
@@ -1145,6 +1164,7 @@ def _handle_goal_resume_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_start_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate start command."""
     from aura_cli.commands import _handle_innovate_start
+
     _handle_innovate_start(ctx.args, ctx.runtime)
     return 0
 
@@ -1152,6 +1172,7 @@ def _handle_innovate_start_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_list_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate list command."""
     from aura_cli.commands import _handle_innovate_list
+
     _handle_innovate_list(ctx.args, ctx.runtime)
     return 0
 
@@ -1159,6 +1180,7 @@ def _handle_innovate_list_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_show_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate show command."""
     from aura_cli.commands import _handle_innovate_show
+
     _handle_innovate_show(ctx.args, ctx.runtime)
     return 0
 
@@ -1166,6 +1188,7 @@ def _handle_innovate_show_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_resume_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate resume command."""
     from aura_cli.commands import _handle_innovate_resume
+
     _handle_innovate_resume(ctx.args, ctx.runtime)
     return 0
 
@@ -1173,6 +1196,7 @@ def _handle_innovate_resume_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_export_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate export command."""
     from aura_cli.commands import _handle_innovate_export
+
     _handle_innovate_export(ctx.args, ctx.runtime)
     return 0
 
@@ -1180,6 +1204,7 @@ def _handle_innovate_export_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_techniques_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate techniques command."""
     from aura_cli.commands import _handle_innovate_techniques
+
     _handle_innovate_techniques(ctx.args)
     return 0
 
@@ -1187,6 +1212,7 @@ def _handle_innovate_techniques_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_to_goals_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate to-goals command."""
     from aura_cli.commands import _handle_innovate_to_goals
+
     _handle_innovate_to_goals(ctx.args, ctx.runtime)
     return 0
 
@@ -1194,6 +1220,7 @@ def _handle_innovate_to_goals_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_insights_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate insights command."""
     from aura_cli.commands import _handle_innovate_insights
+
     _handle_innovate_insights(ctx.args, ctx.runtime)
     return 0
 
@@ -1223,11 +1250,11 @@ def _handle_credentials_delete_dispatch(ctx: DispatchContext) -> int:
 def _handle_credentials_status_dispatch(ctx: DispatchContext) -> int:
     """Handle credentials status command."""
     store_info = config.get_credential_store_info()
-    
+
     if getattr(ctx.args, "json", False):
         _print_json_payload(store_info, parsed=ctx.parsed, indent=2)
         return 0
-    
+
     print("\n--- AURA Credential Storage Status ---")
     print(f"Application Name: {store_info['app_name']}")
     print(f"Keyring Available: {'✅ Yes' if store_info['keyring_available'] else '❌ No'}")
@@ -1235,7 +1262,7 @@ def _handle_credentials_status_dispatch(ctx: DispatchContext) -> int:
     print(f"Fallback Path: {store_info['fallback_path']}")
     print(f"Fallback Exists: {'Yes' if store_info['fallback_exists'] else 'No'}")
     print(f"Stored Keys Count: {store_info['stored_keys_count']}")
-    
+
     # Show which API keys are configured
     print("\nConfigured Credentials:")
     secure_keys = ["api_key", "openai_api_key", "anthropic_api_key", "github_token"]
@@ -1243,7 +1270,7 @@ def _handle_credentials_status_dispatch(ctx: DispatchContext) -> int:
         value = config.secure_retrieve_credential(key)
         status = "✅ Configured" if value else "❌ Not set"
         print(f"  {key}: {status}")
-    
+
     print()
     return 0
 
@@ -1296,9 +1323,7 @@ def _handle_mcp_status_dispatch(ctx: DispatchContext) -> int:
             table.add_row(name, url, status_cell, str(heartbeat), latency_cell, str(tool_count))
 
         console.print(table)
-        console.print(
-            f"\n[bold]Summary:[/bold] {summary['healthy_count']}/{summary['total_servers']} healthy"
-        )
+        console.print(f"\n[bold]Summary:[/bold] {summary['healthy_count']}/{summary['total_servers']} healthy")
     except ImportError:
         print("MCP Health Dashboard\n" + "=" * 40)
         for r in results:
@@ -1360,6 +1385,7 @@ def _handle_beads_schemas_dispatch(ctx: DispatchContext) -> int:
     if config_path.exists():
         try:
             import yaml  # type: ignore[import-untyped]
+
             config_data = yaml.safe_load(config_path.read_text()) or {}
         except (ImportError, yaml.YAMLError, OSError, ValueError):
             # P1 FIX: Specific exceptions for YAML parsing failures
@@ -1419,6 +1445,7 @@ def _handle_agent_run_dispatch(ctx: DispatchContext) -> int:
     """Dispatch to Agent SDK meta-controller."""
     import anyio
     from core.agent_sdk.cli_integration import handle_agent_run
+
     return anyio.from_thread.run(handle_agent_run, ctx.args)
 
 
@@ -1477,6 +1504,7 @@ def _handle_cancel_dispatch(ctx: DispatchContext) -> int:
     """
     try:
         from rich.console import Console
+
         _rich_available = True
     except ImportError:  # pragma: no cover
         _rich_available = False

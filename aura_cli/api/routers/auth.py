@@ -14,11 +14,10 @@ Security enforcements (NFR-S3):
 
 from __future__ import annotations
 
-import os
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import APIRouter, HTTPException, status
+from fastapi.security import HTTPBearer
 from pydantic import BaseModel
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -29,6 +28,7 @@ _bearer = HTTPBearer(auto_error=False)
 # ---------------------------------------------------------------------------
 # Request / response models
 # ---------------------------------------------------------------------------
+
 
 class LoginRequest(BaseModel):
     username: str
@@ -53,10 +53,12 @@ class LogoutRequest(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _get_auth():
     """Return the global AuthManager, or raise 503 if not initialised."""
     try:
         from core.auth import get_auth_manager
+
         return get_auth_manager()
     except (RuntimeError, ImportError) as exc:
         raise HTTPException(
@@ -68,6 +70,7 @@ def _get_auth():
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.post("/login", response_model=TokenResponse, summary="Authenticate and obtain tokens")
 async def login(body: LoginRequest) -> Dict[str, Any]:
@@ -93,11 +96,8 @@ async def refresh(body: RefreshRequest) -> Dict[str, Any]:
     """
     auth = _get_auth()
     try:
-        from core.auth import TokenError
         access_token = auth.refresh_access_token(body.refresh_token)
-        new_refresh = auth.create_refresh_token(
-            auth.get_current_user(access_token)
-        )
+        new_refresh = auth.create_refresh_token(auth.get_current_user(access_token))
         return TokenResponse(access_token=access_token, refresh_token=new_refresh)
     except Exception as exc:
         raise HTTPException(

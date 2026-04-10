@@ -5,9 +5,10 @@ from typing import Optional, Callable, Dict, List
 from core.logging_utils import log_json
 
 
-# --------------------------------------------------------------------------- 
+# ---------------------------------------------------------------------------
 # Data structures
-# --------------------------------------------------------------------------- 
+# ---------------------------------------------------------------------------
+
 
 @dataclass
 class ModelStats:
@@ -15,18 +16,18 @@ class ModelStats:
     success_count: int = 0
     failure_count: int = 0
     total_latency: float = 0.0
-    ema_score: float = 0.75           # Start optimistic — no penalty before first call
+    ema_score: float = 0.75  # Start optimistic — no penalty before first call
     consecutive_failures: int = 0
-    cooldown_until: float = 0.0       # Unix timestamp
+    cooldown_until: float = 0.0  # Unix timestamp
 
-    EMA_ALPHA: float = 0.2            # Weight of latest observation in EMA
-    COOLDOWN_SECONDS: float = 10.0    # Backoff window after consecutive failures
+    EMA_ALPHA: float = 0.2  # Weight of latest observation in EMA
+    COOLDOWN_SECONDS: float = 10.0  # Backoff window after consecutive failures
     FAILURE_THRESHOLD: int = 10
-    
+
     # New thresholds for automatic benching
-    MIN_EMA_SCORE: float = 0.3        # Below this, model is benched for LONG_COOLDOWN
-    MAX_LATENCY_SECONDS: float = 90.0 # Above this, model is benched for LONG_COOLDOWN
-    LONG_COOLDOWN_SECONDS: float = 600.0 # 10 minutes
+    MIN_EMA_SCORE: float = 0.3  # Below this, model is benched for LONG_COOLDOWN
+    MAX_LATENCY_SECONDS: float = 90.0  # Above this, model is benched for LONG_COOLDOWN
+    LONG_COOLDOWN_SECONDS: float = 600.0  # 10 minutes
 
     @property
     def is_cooled_down(self) -> bool:
@@ -57,11 +58,10 @@ class ModelStats:
         if self.ema_score < self.MIN_EMA_SCORE:
             self.cooldown_until = max(self.cooldown_until, time.time() + self.LONG_COOLDOWN_SECONDS)
             log_json("WARN", "router_model_low_score_cooldown", details={"model": self.name, "score": f"{self.ema_score:.2f}", "cooldown": self.LONG_COOLDOWN_SECONDS})
-            
+
         if self.avg_latency > self.MAX_LATENCY_SECONDS and (self.success_count + self.failure_count) >= 5:
             self.cooldown_until = max(self.cooldown_until, time.time() + self.LONG_COOLDOWN_SECONDS)
             log_json("WARN", "router_model_high_latency_cooldown", details={"model": self.name, "avg_latency": f"{self.avg_latency:.2f}", "cooldown": self.LONG_COOLDOWN_SECONDS})
-
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -76,16 +76,13 @@ class ModelStats:
 
     def __str__(self):
         status = "COOLDOWN" if not self.is_cooled_down else "active"
-        return (
-            f"[{self.name}] ema={self.ema_score:.3f} "
-            f"ok={self.success_count} fail={self.failure_count} "
-            f"lat={self.avg_latency:.1f}s [{status}]"
-        )
+        return f"[{self.name}] ema={self.ema_score:.3f} ok={self.success_count} fail={self.failure_count} lat={self.avg_latency:.1f}s [{status}]"
 
 
-# --------------------------------------------------------------------------- 
+# ---------------------------------------------------------------------------
 # Router
-# --------------------------------------------------------------------------- 
+# ---------------------------------------------------------------------------
+
 
 class RouterAgent:
     """
@@ -103,18 +100,18 @@ class RouterAgent:
 
     # Map logical name → ModelAdapter method name
     MODEL_REGISTRY = {
-        "openai":     "call_openai",
-        "gemini":     "call_gemini",
-        "anthropic":  "call_anthropic",
+        "openai": "call_openai",
+        "gemini": "call_gemini",
+        "anthropic": "call_anthropic",
         "openrouter": "call_openrouter",
-        "local":      "call_local",
-        "codex":      "call_codex",
-        "copilot":    "call_copilot",
+        "local": "call_local",
+        "codex": "call_codex",
+        "copilot": "call_copilot",
     }
 
     # Short prompts stay local/fast; long prompts need more capable models
-    SHORT_PROMPT_THRESHOLD = 500    # characters
-    LONG_PROMPT_THRESHOLD  = 3000
+    SHORT_PROMPT_THRESHOLD = 500  # characters
+    LONG_PROMPT_THRESHOLD = 3000
 
     def __init__(self, brain, model_adapter, enabled_models: Optional[List[str]] = None):
         self.brain = brain
@@ -150,10 +147,7 @@ class RouterAgent:
                 latency = time.time() - start
                 self.stats[model_name].record(success=True, latency=latency)
                 self._save_stats()
-                self.brain.remember(
-                    f"RouterAgent: routed to {model_name} | "
-                    f"lat={latency:.2f}s | ema={self.stats[model_name].ema_score:.3f}"
-                )
+                self.brain.remember(f"RouterAgent: routed to {model_name} | lat={latency:.2f}s | ema={self.stats[model_name].ema_score:.3f}")
                 return response
 
             except Exception as exc:
@@ -161,23 +155,15 @@ class RouterAgent:
                 self.stats[model_name].record(success=False, latency=latency)
                 self._save_stats()
                 last_error = exc
-                self.brain.remember(
-                    f"RouterAgent: {model_name} FAILED ({exc}) | "
-                    f"ema={self.stats[model_name].ema_score:.3f}"
-                )
+                self.brain.remember(f"RouterAgent: {model_name} FAILED ({exc}) | ema={self.stats[model_name].ema_score:.3f}")
                 # Continue to next candidate
 
-        raise RuntimeError(
-            f"RouterAgent: all candidates exhausted. Last error: {last_error}\n"
-            f"Stats: {self.report()}"
-        )
+        raise RuntimeError(f"RouterAgent: all candidates exhausted. Last error: {last_error}\nStats: {self.report()}")
 
     def report(self) -> str:
         """Human-readable ranking and stats for all tracked models."""
         lines = ["RouterAgent Model Rankings:"]
-        for name, stat in sorted(
-            self.stats.items(), key=lambda x: x[1].ema_score, reverse=True
-        ):
+        for name, stat in sorted(self.stats.items(), key=lambda x: x[1].ema_score, reverse=True):
             lines.append(f"  {stat}")
         return "\n".join(lines)
 
@@ -200,10 +186,7 @@ class RouterAgent:
         2. Apply contextual bias (prompt length hints)
         3. Sort by EMA score, break ties by latency (lower is better)
         """
-        available = [
-            name for name in self.enabled
-            if name in self.stats and self.stats[name].is_cooled_down
-        ]
+        available = [name for name in self.enabled if name in self.stats and self.stats[name].is_cooled_down]
 
         # Contextual bias: long prompts prefer higher-capacity models
         prompt_len = len(prompt)
@@ -218,6 +201,7 @@ class RouterAgent:
             def score(name):
                 return (self.stats[name].ema_score, -self.stats[name].avg_latency * 2)
         else:
+
             def score(name):
                 return (self.stats[name].ema_score, -self.stats[name].avg_latency)
 

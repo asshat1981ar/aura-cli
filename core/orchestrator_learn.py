@@ -1,4 +1,5 @@
 """Reflection, learning, and feedback methods for the orchestrator."""
+
 from __future__ import annotations
 
 import dataclasses
@@ -18,16 +19,20 @@ class LearnMixin:
     def _run_reflection_phase(self, verification: Dict, skill_context: Dict, goal_type: str, cycle_id: str, phase_outputs: Dict) -> Dict:
         """Section 7: REFLECT."""
         import sys
-        _orch = sys.modules['core.orchestrator']
+
+        _orch = sys.modules["core.orchestrator"]
 
         self._notify_ui("on_phase_start", "reflect")
         t0 = time.time()
-        reflection = self._run_phase("reflect", {
-            "verification": verification,
-            "skill_context": skill_context,
-            "goal_type": goal_type,
-            "pipeline_run_id": getattr(self, "_cycle_context", {}).get("pipeline_run_id"),
-        })
+        reflection = self._run_phase(
+            "reflect",
+            {
+                "verification": verification,
+                "skill_context": skill_context,
+                "goal_type": goal_type,
+                "pipeline_run_id": getattr(self, "_cycle_context", {}).get("pipeline_run_id"),
+            },
+        )
         self._notify_ui("on_phase_complete", "reflect", (time.time() - t0) * 1000)
         errors = _orch.validate_phase_output("reflection", reflection)
         if errors:
@@ -107,7 +112,8 @@ class LearnMixin:
         if self.memory_controller.persistent_store:
             self.memory_controller.persistent_store.append_log(entry)
             self.memory_controller.store(
-                MemoryTier.PROJECT, json.dumps(summary),
+                MemoryTier.PROJECT,
+                json.dumps(summary),
                 metadata={"type": "cycle_summary", "goal": goal, "cycle_id": cycle_id},
             )
 
@@ -166,10 +172,15 @@ class LearnMixin:
                 entries = [MemoryEntry(id=str(i), content=m, memory_type="decision") for i, m in enumerate(raw_memories)]
                 if len(entries) > 50:
                     retained, result = consolidator.consolidate(entries)
-                    log_json("INFO", "memory_consolidation_complete", details={
-                        "before": result.memories_before, "after": result.memories_after,
-                        "compression": f"{result.compression_ratio:.1%}",
-                    })
+                    log_json(
+                        "INFO",
+                        "memory_consolidation_complete",
+                        details={
+                            "before": result.memories_before,
+                            "after": result.memories_after,
+                            "compression": f"{result.compression_ratio:.1%}",
+                        },
+                    )
             except Exception as exc:
                 log_json("WARN", "memory_consolidation_error", details={"error": str(exc)})
 
@@ -184,19 +195,25 @@ class LearnMixin:
 
         # Build outcome and entry
         entry, outcome, changed_files, quality = self._build_cycle_outcome(
-            goal, goal_type, started_at, phase_outputs, passed,
+            goal,
+            goal_type,
+            started_at,
+            phase_outputs,
+            passed,
         )
         entry["cycle_id"] = cycle_id
 
         # Quality Trend Analysis
         try:
-            alerts = self.quality_trends.record_from_cycle({
-                "cycle_id": cycle_id,
-                "goal": goal,
-                "completed_at": time.time(),
-                "duration_s": time.time() - started_at,
-                "phase_outputs": phase_outputs,
-            })
+            alerts = self.quality_trends.record_from_cycle(
+                {
+                    "cycle_id": cycle_id,
+                    "goal": goal,
+                    "completed_at": time.time(),
+                    "duration_s": time.time() - started_at,
+                    "phase_outputs": phase_outputs,
+                }
+            )
             if alerts and self.goal_queue:
                 for goal_text in self.quality_trends.get_remediation_goals():
                     self.goal_queue.add(goal_text)
@@ -246,21 +263,22 @@ class LearnMixin:
             import urllib.request
 
             def _post(url: str, body: bytes) -> int:
-                req = urllib.request.Request(
-                    url, data=body,
-                    headers={"Content-Type": "application/json"}, method="POST"
-                )
+                req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"}, method="POST")
                 with urllib.request.urlopen(req, timeout=5) as resp:
                     return resp.status
 
             data = json.dumps(payload).encode()
             status = _post(webhook_url, data)
-            log_json("INFO", "n8n_feedback_sent", details={
-                "cycle_id": cycle_id,
-                "passed": passed,
-                "learnings": len(payload["learnings"]),
-                "status_code": status,
-            })
+            log_json(
+                "INFO",
+                "n8n_feedback_sent",
+                details={
+                    "cycle_id": cycle_id,
+                    "passed": passed,
+                    "learnings": len(payload["learnings"]),
+                    "status_code": status,
+                },
+            )
 
             # Fan-out to P5 Observability Collector (best-effort)
             obs_url = n8n_cfg.get("observability_webhook", "")
@@ -291,23 +309,21 @@ class LearnMixin:
             if not n8n_cfg.get("quality_gate_enabled", False):
                 return task_bundle
 
-            critique = (
-                getattr(self, "_cycle_context", {}).get("quality_gate_critique")
-                or (task_bundle.get("_cycle_context") or {}).get("quality_gate_critique")
-                or task_bundle.get("quality_gate_critique")
-            )
+            critique = getattr(self, "_cycle_context", {}).get("quality_gate_critique") or (task_bundle.get("_cycle_context") or {}).get("quality_gate_critique") or task_bundle.get("quality_gate_critique")
             if not critique:
                 return task_bundle
 
             task_bundle = dict(task_bundle) if isinstance(task_bundle, dict) else {}
             existing = task_bundle.get("critique", "") or ""
-            task_bundle["critique"] = (
-                f"[Dev Suite Quality Gate Review]\n{critique}\n\n{existing}".strip()
+            task_bundle["critique"] = f"[Dev Suite Quality Gate Review]\n{critique}\n\n{existing}".strip()
+            log_json(
+                "INFO",
+                "aura_act_context_enriched",
+                details={
+                    "critique_len": len(critique),
+                    "quality_gate_enabled": True,
+                },
             )
-            log_json("INFO", "aura_act_context_enriched", details={
-                "critique_len": len(critique),
-                "quality_gate_enabled": True,
-            })
         except Exception as exc:
             log_json("WARN", "aura_act_context_enrich_failed", details={"error": str(exc)})
         return task_bundle

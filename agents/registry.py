@@ -40,36 +40,36 @@ if TYPE_CHECKING:
 # class attribute. First entry is the PRIMARY capability used for sort tie-breaking.
 # Agents with a native `capabilities` attribute take precedence over this dict.
 FALLBACK_CAPABILITIES: dict[str, list[str]] = {
-    "ingest":              ["ingest", "context_gathering", "memory_hints"],
-    "plan":                ["planning", "decomposition", "design", "tree_of_thought", "strategy"],
-    "critique":            ["critique", "review", "adversarial", "quality_gate"],
-    "synthesize":          ["synthesis", "merge", "consolidation"],
-    "act":                 ["code_generation", "coding", "implement", "refactor"],
-    "sandbox":             ["sandbox", "execution", "isolated_run"],
-    "verify":              ["testing", "verification", "lint", "quality", "test_runner"],
-    "reflect":             ["reflection", "quality_analysis", "skill_update", "learning"],
-    "python_agent":        ["python", "code_generation", "coding", "pep8"],
-    "typescript_agent":    ["typescript", "javascript", "code_generation", "coding", "npm"],
-    "debugging":           ["debugging", "root_cause", "failure_analysis", "fix"],
-    "self_correction":     ["self_correction", "error_recovery", "retry"],
-    "monitoring":          ["monitoring", "observability", "health_check", "mcp_health"],
-    "notification":        ["notification", "alerting", "slack", "discord"],
-    "telemetry":           ["telemetry", "metrics", "tracing"],
-    "mcp_discovery":       ["mcp_discovery", "tool_discovery", "capability_discovery"],
-    "mcp_health":          ["mcp_health", "monitoring", "mcp_monitoring"],
+    "ingest": ["ingest", "context_gathering", "memory_hints"],
+    "plan": ["planning", "decomposition", "design", "tree_of_thought", "strategy"],
+    "critique": ["critique", "review", "adversarial", "quality_gate"],
+    "synthesize": ["synthesis", "merge", "consolidation"],
+    "act": ["code_generation", "coding", "implement", "refactor"],
+    "sandbox": ["sandbox", "execution", "isolated_run"],
+    "verify": ["testing", "verification", "lint", "quality", "test_runner"],
+    "reflect": ["reflection", "quality_analysis", "skill_update", "learning"],
+    "python_agent": ["python", "code_generation", "coding", "pep8"],
+    "typescript_agent": ["typescript", "javascript", "code_generation", "coding", "npm"],
+    "debugging": ["debugging", "root_cause", "failure_analysis", "fix"],
+    "self_correction": ["self_correction", "error_recovery", "retry"],
+    "monitoring": ["monitoring", "observability", "health_check", "mcp_health"],
+    "notification": ["notification", "alerting", "slack", "discord"],
+    "telemetry": ["telemetry", "metrics", "tracing"],
+    "mcp_discovery": ["mcp_discovery", "tool_discovery", "capability_discovery"],
+    "mcp_health": ["mcp_health", "monitoring", "mcp_monitoring"],
     "root_cause_analysis": ["root_cause", "rca", "failure_analysis", "debugging"],
-    "code_search":         ["code_search", "symbol_lookup", "rag", "retrieval"],
-    "investigation":       ["investigation", "research", "analysis"],
-    "external_llm":        ["routing", "proxy", "llm_proxy", "model_routing", "external_llm"],
-    "documentation":       ["doc_generation", "readme", "inline_docs", "commenting", "documentation"],
-    "innovation_swarm":    ["innovation", "brainstorming", "divergence", "convergence", "creativity", "ideation"],
-    "meta_conductor":      ["innovation", "orchestration", "facilitation", "design_thinking", "session_management"],
-    "debugger":            ["debugging", "error_analysis", "fix_strategy"],
-    "tester":              ["testing", "unit_tests", "evaluation"],
-    "scaffolder":          ["scaffolding", "project_creation", "bootstrap"],
-    "code_refactor":       ["refactoring", "duplicate_code_reduction", "DRY"],
-    "technical_debt":      ["tech_debt", "code_quality", "hotspot_analysis"],
-    "prompt_forge":        ["prompt_engineering", "prompt_assembly", "semantic_analysis"],
+    "code_search": ["code_search", "symbol_lookup", "rag", "retrieval"],
+    "investigation": ["investigation", "research", "analysis"],
+    "external_llm": ["routing", "proxy", "llm_proxy", "model_routing", "external_llm"],
+    "documentation": ["doc_generation", "readme", "inline_docs", "commenting", "documentation"],
+    "innovation_swarm": ["innovation", "brainstorming", "divergence", "convergence", "creativity", "ideation"],
+    "meta_conductor": ["innovation", "orchestration", "facilitation", "design_thinking", "session_management"],
+    "debugger": ["debugging", "error_analysis", "fix_strategy"],
+    "tester": ["testing", "unit_tests", "evaluation"],
+    "scaffolder": ["scaffolding", "project_creation", "bootstrap"],
+    "code_refactor": ["refactoring", "duplicate_code_reduction", "DRY"],
+    "technical_debt": ["tech_debt", "code_quality", "hotspot_analysis"],
+    "prompt_forge": ["prompt_engineering", "prompt_assembly", "semantic_analysis"],
 }
 
 
@@ -90,6 +90,7 @@ def _make_spec(name: str, agent: object) -> "AgentSpec":
         source="local",
     )
 
+
 # ---------------------------------------------------------------------------
 # Lazy import cache — populated on first access, keyed by short agent name.
 # This avoids importing all agent modules at module-load time, keeping the
@@ -100,29 +101,29 @@ _agent_cache: dict[str, object] = {}
 
 # Maps short names to (module_path, class_name) for deferred imports.
 _AGENT_MODULE_MAP: dict[str, tuple[str, str]] = {
-    "ingest":              ("agents.ingest",              "IngestAgent"),
-    "verifier":            ("agents.verifier",            "VerifierAgent"),
-    "synthesizer":         ("agents.synthesizer",         "SynthesizerAgent"),
-    "reflector":           ("agents.reflector",           "ReflectorAgent"),
-    "planner":             ("agents.planner",             "PlannerAgent"),
-    "critic":              ("agents.critic",              "CriticAgent"),
-    "coder":               ("agents.coder",               "CoderAgent"),
-    "sandbox":             ("agents.sandbox",             "SandboxAgent"),
-    "telemetry":           ("agents.telemetry_agent",     "TelemetryAgent"),
-    "self_correction":     ("agents.self_correction_agent", "SelfCorrectionAgent"),
-    "code_search":         ("agents.code_search_agent",   "CodeSearchAgent"),
-    "investigation":       ("agents.investigation_agent", "InvestigationAgent"),
+    "ingest": ("agents.ingest", "IngestAgent"),
+    "verifier": ("agents.verifier", "VerifierAgent"),
+    "synthesizer": ("agents.synthesizer", "SynthesizerAgent"),
+    "reflector": ("agents.reflector", "ReflectorAgent"),
+    "planner": ("agents.planner", "PlannerAgent"),
+    "critic": ("agents.critic", "CriticAgent"),
+    "coder": ("agents.coder", "CoderAgent"),
+    "sandbox": ("agents.sandbox", "SandboxAgent"),
+    "telemetry": ("agents.telemetry_agent", "TelemetryAgent"),
+    "self_correction": ("agents.self_correction_agent", "SelfCorrectionAgent"),
+    "code_search": ("agents.code_search_agent", "CodeSearchAgent"),
+    "investigation": ("agents.investigation_agent", "InvestigationAgent"),
     "root_cause_analysis": ("agents.root_cause_analysis", "RootCauseAnalysisAgent"),
-    "mcp_discovery":       ("agents.mcp_discovery_agent", "MCPDiscoveryAgent"),
-    "mcp_health":          ("agents.mcp_health_agent",    "MCPHealthAgent"),
-    "innovation_swarm":    ("agents.innovation_swarm",    "InnovationSwarm"),
-    "meta_conductor":      ("agents.meta_conductor",      "MetaConductor"),
-    "debugger":            ("agents.debugger",            "DebuggerAgent"),
-    "tester":              ("agents.tester",              "TesterAgent"),
-    "scaffolder":          ("agents.scaffolder",          "ScaffolderAgent"),
-    "code_refactor":       ("agents.code_refactor_agent", "DuplicateCodeReducer"),
-    "technical_debt":      ("agents.technical_debt_agent", "TechnicalDebtAgent"),
-    "prompt_forge":        ("agents.prompt_forge",         "PromptForgeAgent"),
+    "mcp_discovery": ("agents.mcp_discovery_agent", "MCPDiscoveryAgent"),
+    "mcp_health": ("agents.mcp_health_agent", "MCPHealthAgent"),
+    "innovation_swarm": ("agents.innovation_swarm", "InnovationSwarm"),
+    "meta_conductor": ("agents.meta_conductor", "MetaConductor"),
+    "debugger": ("agents.debugger", "DebuggerAgent"),
+    "tester": ("agents.tester", "TesterAgent"),
+    "scaffolder": ("agents.scaffolder", "ScaffolderAgent"),
+    "code_refactor": ("agents.code_refactor_agent", "DuplicateCodeReducer"),
+    "technical_debt": ("agents.technical_debt_agent", "TechnicalDebtAgent"),
+    "prompt_forge": ("agents.prompt_forge", "PromptForgeAgent"),
 }
 
 
@@ -146,6 +147,7 @@ def _lazy_import(agent_name: str) -> object:
 
     module_path, class_name = _AGENT_MODULE_MAP[agent_name]
     import importlib
+
     module = importlib.import_module(module_path)
     cls = getattr(module, class_name)
     _agent_cache[agent_name] = cls
@@ -640,19 +642,20 @@ def default_agents(brain, model, context_manager=None, skills=None, health_monit
 
     PromptForgeAgent = _lazy_import("prompt_forge")
 
-    agent_dict.update({
-        "debugger": DebuggerAgent(brain=brain, model=model),
-        "tester": TesterAgent(brain=brain, model=model, sandbox=sandbox_agent),
-        "scaffolder": ScaffolderAgent(brain=brain, model=model),
-        "code_refactor": DuplicateCodeReducer(base_path=str(getattr(context_manager, "project_root", "."))),
-        "technical_debt": TechnicalDebtAgent(),
-        "prompt_forge": PromptForgeAgent(project_root=str(getattr(context_manager, "project_root", "."))),
-    })
+    agent_dict.update(
+        {
+            "debugger": DebuggerAgent(brain=brain, model=model),
+            "tester": TesterAgent(brain=brain, model=model, sandbox=sandbox_agent),
+            "scaffolder": ScaffolderAgent(brain=brain, model=model),
+            "code_refactor": DuplicateCodeReducer(base_path=str(getattr(context_manager, "project_root", "."))),
+            "technical_debt": TechnicalDebtAgent(),
+            "prompt_forge": PromptForgeAgent(project_root=str(getattr(context_manager, "project_root", "."))),
+        }
+    )
 
     from agents.autogen_agent import AutoGenGroupChatAgent
-    agent_dict["autogen_group_chat"] = AutoGenGroupChatAgent(
-        brain=brain, model=model, config=(config or {}).get("autogen", {})
-    )
+
+    agent_dict["autogen_group_chat"] = AutoGenGroupChatAgent(brain=brain, model=model, config=(config or {}).get("autogen", {}))
 
     # Register in typed registry using rich multi-capability specs
     from core.mcp_agent_registry import agent_registry

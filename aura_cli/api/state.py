@@ -14,6 +14,7 @@ Usage (in a router)::
             raise HTTPException(503, detail="orchestrator not initialised")
         ...
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -50,6 +51,7 @@ async def resolve_runtime_component(name: str) -> Any:
     if not runtime:
         try:
             from aura_cli import server as _server  # type: ignore[attr-defined]
+
             await _server._ensure_runtime_initialized()
         except Exception:
             pass

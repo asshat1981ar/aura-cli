@@ -1,4 +1,5 @@
 """Token-aware context assembly for ASCM v2."""
+
 from __future__ import annotations
 
 import json
@@ -73,11 +74,13 @@ class ContextBudgetManager:
             elif format == "json":
                 items = []
                 for hit, content in selected:
-                    items.append({
-                        "content": content,
-                        "source_ref": hit.record.source_ref,
-                        "score": hit.score,
-                    })
+                    items.append(
+                        {
+                            "content": content,
+                            "source_ref": hit.record.source_ref,
+                            "score": hit.score,
+                        }
+                    )
                 return json.dumps(items)
 
             else:  # plain

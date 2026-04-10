@@ -17,6 +17,7 @@ Phases exercised (in order):
     9.  Verify        → phase_outputs["verification"]
     10. Reflect       → phase_outputs["reflection"]
 """
+
 from __future__ import annotations
 
 import threading
@@ -41,6 +42,7 @@ from tests.fixtures.mock_responses import (
 # ---------------------------------------------------------------------------
 # Helpers: Fake agents (deterministic, no I/O)
 # ---------------------------------------------------------------------------
+
 
 class _FakeAgent:
     """Returns a fixed *output* dict on every ``run()`` call."""
@@ -74,47 +76,63 @@ def _base_agents(**overrides) -> Dict[str, Any]:
     tests pass *overrides* to replace specific phases with custom behaviour.
     """
     agents: Dict[str, Any] = {
-        "ingest": _FakeAgent({
-            "goal": "Add a hello() function to core/utils.py",
-            "snapshot": "core/utils.py",
-            "memory_summary": "",
-            "constraints": {},
-        }),
-        "plan": _FakeAgent({
-            "steps": [
-                {"id": "s1", "title": "Implement hello()", "description": "Add function.", "files": ["core/utils.py"]},
-            ],
-            "risks": [],
-            "estimated_complexity": "low",
-        }),
-        "critique": _FakeAgent({
-            "issues": [],
-            "fixes": [],
-            "blocking": False,
-            "approved": True,
-        }),
-        "synthesize": _FakeAgent({
-            "tasks": [{"id": "t1", "title": "Add hello()", "intent": "add function", "files": ["core/utils.py"], "tests": []}],
-        }),
-        "act": _FakeAgent({
-            "changes": [],
-        }),
-        "sandbox": _FakeAgent({
-            "passed": True,
-            "summary": "ok",
-        }),
-        "verify": _FakeAgent({
-            "status": "pass",
-            "failures": [],
-            "logs": "",
-        }),
-        "reflect": _FakeAgent({
-            "summary": "Cycle completed successfully.",
-            "learnings": ["Pattern-based mocking keeps tests hermetic."],
-            "next_actions": [],
-            "cycle_outcome": "success",
-            "confidence": 0.95,
-        }),
+        "ingest": _FakeAgent(
+            {
+                "goal": "Add a hello() function to core/utils.py",
+                "snapshot": "core/utils.py",
+                "memory_summary": "",
+                "constraints": {},
+            }
+        ),
+        "plan": _FakeAgent(
+            {
+                "steps": [
+                    {"id": "s1", "title": "Implement hello()", "description": "Add function.", "files": ["core/utils.py"]},
+                ],
+                "risks": [],
+                "estimated_complexity": "low",
+            }
+        ),
+        "critique": _FakeAgent(
+            {
+                "issues": [],
+                "fixes": [],
+                "blocking": False,
+                "approved": True,
+            }
+        ),
+        "synthesize": _FakeAgent(
+            {
+                "tasks": [{"id": "t1", "title": "Add hello()", "intent": "add function", "files": ["core/utils.py"], "tests": []}],
+            }
+        ),
+        "act": _FakeAgent(
+            {
+                "changes": [],
+            }
+        ),
+        "sandbox": _FakeAgent(
+            {
+                "passed": True,
+                "summary": "ok",
+            }
+        ),
+        "verify": _FakeAgent(
+            {
+                "status": "pass",
+                "failures": [],
+                "logs": "",
+            }
+        ),
+        "reflect": _FakeAgent(
+            {
+                "summary": "Cycle completed successfully.",
+                "learnings": ["Pattern-based mocking keeps tests hermetic."],
+                "next_actions": [],
+                "cycle_outcome": "success",
+                "confidence": 0.95,
+            }
+        ),
     }
     agents.update(overrides)
     return agents
@@ -162,6 +180,7 @@ def _make_orchestrator(
 # Test 1 — Full 10-phase pipeline with MockModelAdapter
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 def test_full_pipeline_completes_with_mock_adapter(tmp_path: Path) -> None:
     """10-phase pipeline runs to completion without raising and all key phase
@@ -175,23 +194,21 @@ def test_full_pipeline_completes_with_mock_adapter(tmp_path: Path) -> None:
 
     # --- basic shape ---
     assert result["goal"] == goal
-    assert result["stop_reason"] in {"PASS", "MAX_CYCLES"}, (
-        f"Unexpected stop_reason: {result['stop_reason']!r}"
-    )
+    assert result["stop_reason"] in {"PASS", "MAX_CYCLES"}, f"Unexpected stop_reason: {result['stop_reason']!r}"
     assert result["history"], "Expected at least one completed cycle."
 
     phases = result["history"][0]["phase_outputs"]
 
     # --- 10 phases produce their expected output keys ---
     expected_phase_keys = [
-        "context",       # phase 1  – ingest
-        "skill_context", # phase 2  – skill dispatch
-        "plan",          # phase 3  – planner
-        "critique",      # phase 4  – critic
-        "task_bundle",   # phase 5  – synthesize
-        "change_set",    # phase 6  – act
+        "context",  # phase 1  – ingest
+        "skill_context",  # phase 2  – skill dispatch
+        "plan",  # phase 3  – planner
+        "critique",  # phase 4  – critic
+        "task_bundle",  # phase 5  – synthesize
+        "change_set",  # phase 6  – act
         "verification",  # phase 9  – verify
-        "reflection",    # phase 10 – reflect
+        "reflection",  # phase 10 – reflect
     ]
     for key in expected_phase_keys:
         assert key in phases, f"Expected phase_outputs['{key}'] to be set after pipeline run."
@@ -206,9 +223,7 @@ def test_full_pipeline_completes_with_mock_adapter(tmp_path: Path) -> None:
 
     # --- verification passed ---
     verification = phases["verification"]
-    assert verification.get("status") == "pass", (
-        f"Expected verification to pass, got: {verification.get('status')!r}"
-    )
+    assert verification.get("status") == "pass", f"Expected verification to pass, got: {verification.get('status')!r}"
 
     # --- reflection was written ---
     reflection = phases["reflection"]
@@ -223,15 +238,18 @@ def test_full_pipeline_completes_with_mock_adapter(tmp_path: Path) -> None:
 # Test 2 — Sandbox failure triggers act retry
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 def test_sandbox_failure_triggers_retry(tmp_path: Path) -> None:
     """When the sandbox agent fails on the first two calls and passes on the
     third, the pipeline retries the act phase and eventually completes."""
-    responses: Iterator[Dict] = iter([
-        {"passed": False, "summary": "syntax error", "details": {"stderr": "SyntaxError: invalid syntax"}},
-        {"passed": False, "summary": "runtime error", "details": {"stderr": "RuntimeError: boom"}},
-        {"passed": True,  "summary": "all checks green"},
-    ])
+    responses: Iterator[Dict] = iter(
+        [
+            {"passed": False, "summary": "syntax error", "details": {"stderr": "SyntaxError: invalid syntax"}},
+            {"passed": False, "summary": "runtime error", "details": {"stderr": "RuntimeError: boom"}},
+            {"passed": True, "summary": "all checks green"},
+        ]
+    )
 
     sandbox_agent = _CallableAgent(lambda _: next(responses))
 
@@ -253,19 +271,16 @@ def test_sandbox_failure_triggers_retry(tmp_path: Path) -> None:
     assert result["history"], "Expected at least one cycle."
 
     # Sandbox was called multiple times (fail → retry → pass).
-    assert sandbox_agent.call_count >= 2, (
-        f"Sandbox should have been retried; call_count={sandbox_agent.call_count}"
-    )
+    assert sandbox_agent.call_count >= 2, f"Sandbox should have been retried; call_count={sandbox_agent.call_count}"
 
     # Act should have been retried alongside the sandbox.
-    assert len(coder_calls) >= 2, (
-        f"Coder (act) should have been retried; call_count={len(coder_calls)}"
-    )
+    assert len(coder_calls) >= 2, f"Coder (act) should have been retried; call_count={len(coder_calls)}"
 
 
 # ---------------------------------------------------------------------------
 # Test 3 — Cancel mid-run via running_runs API
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.integration
 def test_cancel_run_signals_stop_event(tmp_path: Path) -> None:
@@ -344,9 +359,7 @@ def test_cancel_run_signals_stop_event(tmp_path: Path) -> None:
 
     # Agent observed the cancellation signal.
     assert observed_cancellation, "Ingest agent never executed."
-    assert observed_cancellation[0] is True, (
-        "Ingest agent should have seen stop_event.is_set() == True after cancel_run."
-    )
+    assert observed_cancellation[0] is True, "Ingest agent should have seen stop_event.is_set() == True after cancel_run."
 
     # Cleanup.
     deregister_run(run_id)

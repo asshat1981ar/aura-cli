@@ -1,4 +1,5 @@
 """Structured result of each orchestration cycle for learning/adaptation."""
+
 from __future__ import annotations
 import dataclasses
 import json

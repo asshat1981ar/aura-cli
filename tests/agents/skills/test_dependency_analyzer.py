@@ -1,4 +1,5 @@
 """Unit tests for Dependency Analyzer Skill."""
+
 from __future__ import annotations
 
 import tempfile
@@ -29,13 +30,14 @@ class TestParseRequirements(TestCase):
     def tearDown(self):
         """Clean up test fixtures."""
         import shutil
+
         shutil.rmtree(self.tmpdir)
 
     def test_parse_simple_requirements(self):
         """Test parsing simple requirements."""
         self.req_file.write_text("requests\nflask\ndjango")
         result = _parse_requirements(self.req_file)
-        
+
         self.assertEqual(len(result), 3)
         self.assertEqual(result[0]["name"], "requests")
         self.assertEqual(result[1]["name"], "flask")
@@ -45,12 +47,12 @@ class TestParseRequirements(TestCase):
         """Test parsing pinned requirements."""
         self.req_file.write_text("requests==2.28.0\nflask>=2.0.0")
         result = _parse_requirements(self.req_file)
-        
+
         self.assertEqual(result[0]["name"], "requests")
         self.assertEqual(result[0]["specifier"], "==2.28.0")
         self.assertTrue(result[0]["pinned"])
         self.assertFalse(result[0]["unpinned"])
-        
+
         self.assertEqual(result[1]["name"], "flask")
         self.assertEqual(result[1]["specifier"], ">=2.0.0")
         self.assertFalse(result[1]["pinned"])
@@ -59,7 +61,7 @@ class TestParseRequirements(TestCase):
         """Test parsing unpinned requirements."""
         self.req_file.write_text("requests\nflask ")
         result = _parse_requirements(self.req_file)
-        
+
         self.assertTrue(result[0]["unpinned"])
         self.assertTrue(result[1]["unpinned"])
 
@@ -74,14 +76,14 @@ flask>=2.0.0
 django
 """)
         result = _parse_requirements(self.req_file)
-        
+
         self.assertEqual(len(result), 3)
 
     def test_parse_with_options(self):
         """Test parsing requirements with options."""
         self.req_file.write_text("-r base.txt\n--index-url https://pypi.org\nrequests")
         result = _parse_requirements(self.req_file)
-        
+
         # Options should be skipped
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["name"], "requests")
@@ -90,7 +92,7 @@ django
         """Test parsing requirements with git URLs."""
         self.req_file.write_text("git+https://github.com/user/repo.git\nrequests")
         result = _parse_requirements(self.req_file)
-        
+
         # Git URLs should be skipped
         self.assertEqual(len(result), 1)
 
@@ -98,7 +100,7 @@ django
         """Test that package names are normalized."""
         self.req_file.write_text("some-package\nAnother_Package")
         result = _parse_requirements(self.req_file)
-        
+
         self.assertEqual(result[0]["name"], "some_package")
         self.assertEqual(result[1]["name"], "another_package")
 
@@ -119,6 +121,7 @@ class TestParsePyprojectToml(TestCase):
     def tearDown(self):
         """Clean up test fixtures."""
         import shutil
+
         shutil.rmtree(self.tmpdir)
 
     def test_parse_poetry_dependencies(self):
@@ -130,7 +133,7 @@ requests = "^2.28.0"
 flask = ">=2.0.0"
 """)
         result = _parse_pyproject_toml(self.pyproject_file)
-        
+
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]["name"], "requests")
         self.assertEqual(result[1]["name"], "flask")
@@ -146,7 +149,7 @@ dependencies = [
 ]
 """)
         result = _parse_pyproject_toml(self.pyproject_file)
-        
+
         # Should find dependencies section
         self.assertGreaterEqual(len(result), 0)
 
@@ -158,7 +161,7 @@ python = "^3.9"
 requests = "^2.28.0"
 """)
         result = _parse_pyproject_toml(self.pyproject_file)
-        
+
         for pkg in result:
             self.assertNotEqual(pkg["name"], "python")
 
@@ -171,34 +174,31 @@ requests = "^2.28.0"
 class TestPipList(TestCase):
     """Test cases for _pip_list function."""
 
-    @patch('agents.skills.dependency_analyzer.subprocess.run')
+    @patch("agents.skills.dependency_analyzer.subprocess.run")
     def test_pip_list_success(self, mock_run):
         """Test successful pip list execution."""
-        mock_run.return_value = Mock(
-            returncode=0,
-            stdout="Package    Version\n-------    -------\nrequests   2.28.0\nflask      2.0.0\n"
-        )
+        mock_run.return_value = Mock(returncode=0, stdout="Package    Version\n-------    -------\nrequests   2.28.0\nflask      2.0.0\n")
         result = _pip_list()
-        
+
         self.assertIsNotNone(result)
         self.assertEqual(len(result), 2)
         self.assertEqual(result[0]["name"], "requests")
         self.assertEqual(result[1]["name"], "flask")
 
-    @patch('agents.skills.dependency_analyzer.subprocess.run')
+    @patch("agents.skills.dependency_analyzer.subprocess.run")
     def test_pip_list_failure(self, mock_run):
         """Test pip list failure."""
         mock_run.return_value = Mock(returncode=1, stdout="", stderr="")
         result = _pip_list()
-        
+
         self.assertIsNone(result)
 
-    @patch('agents.skills.dependency_analyzer.subprocess.run')
+    @patch("agents.skills.dependency_analyzer.subprocess.run")
     def test_pip_list_exception(self, mock_run):
         """Test pip list with exception."""
         mock_run.side_effect = OSError("Command not found")
         result = _pip_list()
-        
+
         self.assertIsNone(result)
 
 
@@ -209,7 +209,7 @@ class TestCheckVulns(TestCase):
         """Test detecting vulnerable package."""
         packages = [{"name": "requests", "raw_name": "requests", "specifier": "==2.19.0", "source": "req.txt"}]
         result = _check_vulns(packages)
-        
+
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["package"], "requests")
         self.assertIn("CVE", result[0]["cve"])
@@ -218,7 +218,7 @@ class TestCheckVulns(TestCase):
         """Test non-vulnerable package."""
         packages = [{"name": "nonexistent", "raw_name": "nonexistent", "specifier": "==1.0.0", "source": "req.txt"}]
         result = _check_vulns(packages)
-        
+
         self.assertEqual(len(result), 0)
 
     def test_check_multiple_packages(self):
@@ -229,7 +229,7 @@ class TestCheckVulns(TestCase):
             {"name": "safe-package", "raw_name": "safe-package", "specifier": "==1.0.0", "source": "req.txt"},
         ]
         result = _check_vulns(packages)
-        
+
         self.assertEqual(len(result), 2)
 
 
@@ -243,7 +243,7 @@ class TestCheckConflicts(TestCase):
             {"name": "flask", "specifier": ">=2.0.0", "source": "req2.txt"},
         ]
         result = _check_conflicts(packages)
-        
+
         self.assertEqual(len(result), 0)
 
     def test_duplicate_detected(self):
@@ -253,7 +253,7 @@ class TestCheckConflicts(TestCase):
             {"name": "requests", "specifier": ">=2.0.0", "source": "req2.txt"},
         ]
         result = _check_conflicts(packages)
-        
+
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["package"], "requests")
 
@@ -266,7 +266,7 @@ class TestCheckConflicts(TestCase):
             {"name": "flask", "specifier": ">=1.0.0", "source": "req2.txt"},
         ]
         result = _check_conflicts(packages)
-        
+
         self.assertEqual(len(result), 2)
 
 
@@ -280,7 +280,7 @@ class TestCheckUnpinned(TestCase):
             {"name": "flask", "raw_name": "flask", "unpinned": False},
         ]
         result = _check_unpinned(packages)
-        
+
         self.assertEqual(len(result), 0)
 
     def test_some_unpinned(self):
@@ -290,7 +290,7 @@ class TestCheckUnpinned(TestCase):
             {"name": "flask", "raw_name": "flask", "unpinned": True},
         ]
         result = _check_unpinned(packages)
-        
+
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0], "flask")
 
@@ -310,7 +310,7 @@ class TestDependencyAnalyzerSkill(TestCase):
         """Test running on empty project."""
         with tempfile.TemporaryDirectory() as tmpdir:
             result = self.skill._run({"project_root": tmpdir})
-            
+
             self.assertEqual(result["packages_found"], 0)
             self.assertIn("No requirements files found", result["recommendations"][0])
 
@@ -319,9 +319,9 @@ class TestDependencyAnalyzerSkill(TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             req_file = Path(tmpdir) / "requirements.txt"
             req_file.write_text("requests==2.28.0\nflask>=2.0.0")
-            
+
             result = self.skill._run({"project_root": tmpdir})
-            
+
             self.assertEqual(result["packages_found"], 2)
             self.assertEqual(len(result["req_files_scanned"]), 1)
 
@@ -334,9 +334,9 @@ class TestDependencyAnalyzerSkill(TestCase):
 python = "^3.9"
 requests = "^2.28.0"
 """)
-            
+
             result = self.skill._run({"project_root": tmpdir})
-            
+
             self.assertEqual(result["packages_found"], 1)
 
     def test_run_detects_vulnerabilities(self):
@@ -344,9 +344,9 @@ requests = "^2.28.0"
         with tempfile.TemporaryDirectory() as tmpdir:
             req_file = Path(tmpdir) / "requirements.txt"
             req_file.write_text("requests==2.19.0")  # Known vulnerable version
-            
+
             result = self.skill._run({"project_root": tmpdir})
-            
+
             self.assertGreater(result["vulnerability_count"], 0)
             self.assertIn("Upgrade", result["recommendations"][0])
 
@@ -355,9 +355,9 @@ requests = "^2.28.0"
         with tempfile.TemporaryDirectory() as tmpdir:
             req_file = Path(tmpdir) / "requirements.txt"
             req_file.write_text("requests\nflask")
-            
+
             result = self.skill._run({"project_root": tmpdir})
-            
+
             self.assertEqual(len(result["unpinned_packages"]), 2)
             # "unpinned" may not be the first recommendation when vulnerabilities
             # are also detected; verify it appears somewhere in the list.
@@ -373,9 +373,9 @@ requests = "^2.28.0"
             req1.write_text("requests")
             req2 = Path(tmpdir2) / "requirements.txt"
             req2.write_text("flask")
-            
+
             result = self.skill._run({"paths": [tmpdir1, tmpdir2]})
-            
+
             self.assertEqual(result["packages_found"], 2)
 
     def test_run_with_include_pip(self):
@@ -383,11 +383,11 @@ requests = "^2.28.0"
         with tempfile.TemporaryDirectory() as tmpdir:
             req_file = Path(tmpdir) / "requirements.txt"
             req_file.write_text("requests")
-            
-            with patch('agents.skills.dependency_analyzer._pip_list') as mock_pip:
+
+            with patch("agents.skills.dependency_analyzer._pip_list") as mock_pip:
                 mock_pip.return_value = [{"name": "flask", "raw_name": "flask", "specifier": "==2.0.0", "source": "pip_list", "pinned": True, "unpinned": False}]
                 result = self.skill._run({"project_root": tmpdir, "include_pip": True})
-                
+
                 self.assertEqual(result["packages_found"], 2)
 
     def test_run_skips_git_and_node_modules(self):
@@ -396,16 +396,16 @@ requests = "^2.28.0"
             git_dir = Path(tmpdir) / ".git"
             git_dir.mkdir()
             (git_dir / "requirements.txt").write_text("should-not-be-found")
-            
+
             node_modules = Path(tmpdir) / "node_modules"
             node_modules.mkdir()
             (node_modules / "requirements.txt").write_text("should-not-be-found")
-            
+
             req_file = Path(tmpdir) / "requirements.txt"
             req_file.write_text("requests")
-            
+
             result = self.skill._run({"project_root": tmpdir})
-            
+
             # Should only find the one valid requirements.txt
             self.assertEqual(len(result["req_files_scanned"]), 1)
 
@@ -414,9 +414,9 @@ requests = "^2.28.0"
         with tempfile.TemporaryDirectory() as tmpdir:
             req_file = Path(tmpdir) / "requirements.txt"
             req_file.write_text("\n".join([f"pkg{i}" for i in range(150)]))
-            
+
             result = self.skill._run({"project_root": tmpdir})
-            
+
             self.assertEqual(len(result["packages"]), 100)
 
     def test_known_vulns_database(self):

@@ -6,6 +6,7 @@ Covers the uncovered lines (~186-263 and ~294-350) focusing on:
 - SandboxAgent.run_file (success, failure, internal exception)
 - SandboxAgent.run_tests (pass/fail metadata parsing)
 """
+
 import sys
 import tempfile
 from pathlib import Path
@@ -37,6 +38,7 @@ def _proc_mock(stdout: str = "", stderr: str = "", returncode: int = 0) -> Magic
 # ---------------------------------------------------------------------------
 # SandboxResult dataclass
 # ---------------------------------------------------------------------------
+
 
 class TestSandboxResult:
     def test_passed_property_success_no_timeout(self):
@@ -91,6 +93,7 @@ class TestSandboxResult:
 # SandboxAgent.run_code
 # ---------------------------------------------------------------------------
 
+
 class TestRunCode:
     def test_run_code_success(self):
         agent = _make_agent()
@@ -121,6 +124,7 @@ class TestRunCode:
 
     def test_run_code_timeout(self):
         import subprocess
+
         agent = _make_agent(timeout=1)
         with patch("agents.sandbox.subprocess.Popen") as mock_popen:
             proc = MagicMock()
@@ -165,6 +169,7 @@ class TestRunCode:
 # SandboxAgent.run_file
 # ---------------------------------------------------------------------------
 
+
 class TestRunFile:
     def test_run_file_success(self, tmp_path):
         script = tmp_path / "test_script.py"
@@ -208,15 +213,14 @@ class TestRunFile:
 # SandboxAgent.run_tests (metadata parsing)
 # ---------------------------------------------------------------------------
 
+
 class TestRunTests:
     def test_run_tests_passes_with_metadata(self):
         agent = _make_agent()
         code = "def add(a, b): return a + b"
         tests = "def test_add():\n    assert add(1,2) == 3\n"
         with patch("agents.sandbox.subprocess.Popen") as mock_popen:
-            mock_popen.return_value = _proc_mock(
-                "1 passed in 0.1s", "", 0
-            )
+            mock_popen.return_value = _proc_mock("1 passed in 0.1s", "", 0)
             result = agent.run_tests(code, tests)
         assert result.success is True
         assert result.metadata.get("passed", 0) >= 0  # metadata populated
@@ -224,9 +228,7 @@ class TestRunTests:
     def test_run_tests_failure_counts(self):
         agent = _make_agent()
         with patch("agents.sandbox.subprocess.Popen") as mock_popen:
-            mock_popen.return_value = _proc_mock(
-                "1 passed, 2 failed", "", 1
-            )
+            mock_popen.return_value = _proc_mock("1 passed, 2 failed", "", 1)
             result = agent.run_tests("def f(): pass", "def test_f(): assert False")
         assert result.metadata.get("failed", 0) >= 0
 
@@ -254,6 +256,7 @@ class TestRunTests:
 # ---------------------------------------------------------------------------
 # Integration: run_code with real subprocess
 # ---------------------------------------------------------------------------
+
 
 class TestRunCodeIntegration:
     """Light integration tests using a real subprocess (no mocking)."""

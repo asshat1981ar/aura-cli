@@ -5,6 +5,7 @@ Run with::
 
     AURA_SKIP_CHDIR=1 python3 -m pytest tests/test_agents_sandbox.py -v
 """
+
 import os
 import tempfile
 import unittest
@@ -18,6 +19,7 @@ os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _brain():
     brain = MagicMock()
     brain.recall_all.return_value = []
@@ -29,10 +31,11 @@ def _brain():
 # SandboxAgent
 # ---------------------------------------------------------------------------
 
-class TestSandboxAgentRunCode(unittest.TestCase):
 
+class TestSandboxAgentRunCode(unittest.TestCase):
     def setUp(self):
         from agents.sandbox import SandboxAgent
+
         self.agent = SandboxAgent(_brain(), timeout=10)
 
     def test_run_code_passes_hello(self):
@@ -62,6 +65,7 @@ class TestSandboxAgentRunCode(unittest.TestCase):
 
     def test_run_code_returns_sandbox_result_type(self):
         from agents.sandbox import SandboxResult
+
         result = self.agent.run_code("x = 1")
         self.assertIsInstance(result, SandboxResult)
 
@@ -77,9 +81,9 @@ class TestSandboxAgentRunCode(unittest.TestCase):
 
 
 class TestSandboxAgentRunTests(unittest.TestCase):
-
     def setUp(self):
         from agents.sandbox import SandboxAgent
+
         self.agent = SandboxAgent(_brain(), timeout=15)
 
     def test_passing_tests(self):
@@ -113,10 +117,11 @@ def test_add():
 # ApplicatorAgent
 # ---------------------------------------------------------------------------
 
-class TestApplicatorAgent(unittest.TestCase):
 
+class TestApplicatorAgent(unittest.TestCase):
     def setUp(self):
         from agents.applicator import ApplicatorAgent
+
         self.tmp = tempfile.mkdtemp()
         self.agent = ApplicatorAgent(_brain(), backup_dir=str(Path(self.tmp) / "backups"))
 
@@ -175,11 +180,12 @@ class TestApplicatorAgent(unittest.TestCase):
 # SandboxAdapter (registry wrapper)
 # ---------------------------------------------------------------------------
 
-class TestSandboxAdapter(unittest.TestCase):
 
+class TestSandboxAdapter(unittest.TestCase):
     def setUp(self):
         from agents.sandbox import SandboxAgent
         from agents.registry import SandboxAdapter
+
         self.agent = SandboxAdapter(SandboxAgent(_brain(), timeout=10))
 
     def _act(self, code):
@@ -219,11 +225,12 @@ class TestSandboxAdapter(unittest.TestCase):
 # TesterAgent
 # ---------------------------------------------------------------------------
 
-class TestTesterAgent(unittest.TestCase):
 
+class TestTesterAgent(unittest.TestCase):
     def setUp(self):
         from agents.sandbox import SandboxAgent
         from agents.tester import TesterAgent
+
         brain = _brain()
         model = MagicMock()
         model.respond.return_value = "def test_placeholder(): assert True"

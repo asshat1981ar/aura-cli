@@ -1,4 +1,5 @@
 """Tests for core.correlation — CorrelationManager, TraceContext, CorrelationScope."""
+
 import pytest
 from core.correlation import (
     CorrelationManager,
@@ -10,6 +11,7 @@ from core.correlation import (
 
 
 # ── TraceContext ──────────────────────────────────────────────────────────────
+
 
 def test_trace_context_to_dict():
     ctx = TraceContext(trace_id="abc123", parent_id="par", span_id="sp1", baggage={"k": "v"})
@@ -41,6 +43,7 @@ def test_trace_context_child_inherits_trace_id():
 
 
 # ── CorrelationManager ────────────────────────────────────────────────────────
+
 
 def test_correlation_manager_set_get():
     token = CorrelationManager.set("test-trace-1")
@@ -97,6 +100,7 @@ def test_correlation_manager_get_current_context_with_id():
 
 # ── CorrelationScope ──────────────────────────────────────────────────────────
 
+
 def test_correlation_scope_enter_exit():
     scope = CorrelationScope("manual-trace")
     assert CorrelationManager.get() is None
@@ -107,6 +111,7 @@ def test_correlation_scope_enter_exit():
 
 
 # ── Convenience functions ─────────────────────────────────────────────────────
+
 
 def test_convenience_get_set():
     token = set_correlation_id("conv-trace")

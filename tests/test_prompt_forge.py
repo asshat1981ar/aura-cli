@@ -92,7 +92,6 @@ class TestExtractSemantics(unittest.TestCase):
 
 
 class TestSemanticsToText(unittest.TestCase):
-
     def test_basic_output(self):
         sem = SemanticInfo(name="foo", lines=10, has_async=True, has_loop=True, has_error_handling=False)
         text = semantics_to_text(sem)
@@ -229,11 +228,13 @@ class TestPromptForgeAgent(unittest.TestCase):
 
     def test_run_with_code_context(self):
         agent = PromptForgeAgent(project_root="/nonexistent")
-        result = agent.run({
-            "task": "fix the bug",
-            "template": "bugfix",
-            "code_context": "async def fetch():\n    await get()\n",
-        })
+        result = agent.run(
+            {
+                "task": "fix the bug",
+                "template": "bugfix",
+                "code_context": "async def fetch():\n    await get()\n",
+            }
+        )
         self.assertIsNotNone(result["semantics"])
         self.assertTrue(result["semantics"]["has_async"])
 
@@ -246,6 +247,7 @@ class TestPromptForgeAgent(unittest.TestCase):
         """When project_root exists, auto-scans files."""
         import tempfile
         import os
+
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path := __import__("pathlib").Path)(tmpdir, "main.py").write_text("x=1")
             agent = PromptForgeAgent(project_root=tmpdir)

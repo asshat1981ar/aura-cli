@@ -162,6 +162,7 @@ class LoopOrchestrator(PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin):
         self.lesson_store = None
         try:
             from memory.lesson_store import LessonStore
+
             self.lesson_store = LessonStore()
         except (OSError, ImportError):
             pass
@@ -553,8 +554,14 @@ class LoopOrchestrator(PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin):
     # ── provided by PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin.
 
     def _run_pre_plan_phases(
-        self, goal: str, goal_type: str, cycle_id: str, pipeline_cfg: Dict,
-        phase_outputs: Dict, started_at: float, dry_run: bool,
+        self,
+        goal: str,
+        goal_type: str,
+        cycle_id: str,
+        pipeline_cfg: Dict,
+        phase_outputs: Dict,
+        started_at: float,
+        dry_run: bool,
     ) -> tuple:
         """Run ingest, MCP discovery, skill dispatch, beads gate, and coverage backfill.
 
@@ -572,10 +579,17 @@ class LoopOrchestrator(PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin):
 
         context = self._run_ingest_phase(goal, cycle_id, phase_outputs)
         if self.strict_schema and validate_phase_output("context", context):
-            return context, {}, self._build_early_stop_entry(
-                cycle_id=cycle_id, goal=goal, goal_type=goal_type,
-                phase_outputs=phase_outputs, started_at=started_at,
-                stop_reason="INVALID_OUTPUT",
+            return (
+                context,
+                {},
+                self._build_early_stop_entry(
+                    cycle_id=cycle_id,
+                    goal=goal,
+                    goal_type=goal_type,
+                    phase_outputs=phase_outputs,
+                    started_at=started_at,
+                    stop_reason="INVALID_OUTPUT",
+                ),
             )
 
         # Autonomous MCP capability injection
@@ -606,8 +620,14 @@ class LoopOrchestrator(PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin):
         return context, skill_context, None
 
     def _check_beads_gate(
-        self, goal: str, goal_type: str, context: Dict, skill_context: Dict,
-        cycle_id: str, phase_outputs: Dict, started_at: float,
+        self,
+        goal: str,
+        goal_type: str,
+        context: Dict,
+        skill_context: Dict,
+        cycle_id: str,
+        phase_outputs: Dict,
+        started_at: float,
     ) -> Optional[Dict]:
         """Run beads gate checks and return an early-stop entry if blocked, else None."""
         if not self._beads_gate_applies():
@@ -618,32 +638,47 @@ class LoopOrchestrator(PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin):
 
         if not beads_gate.get("ok") and self.beads_required:
             return self._build_early_stop_entry(
-                cycle_id=cycle_id, goal=goal, goal_type=goal_type,
-                phase_outputs=phase_outputs, started_at=started_at,
-                stop_reason="BEADS_UNAVAILABLE", beads=beads_gate,
+                cycle_id=cycle_id,
+                goal=goal,
+                goal_type=goal_type,
+                phase_outputs=phase_outputs,
+                started_at=started_at,
+                stop_reason="BEADS_UNAVAILABLE",
+                beads=beads_gate,
             )
 
         status = beads_gate.get("status")
         if status == "block":
             return self._build_early_stop_entry(
-                cycle_id=cycle_id, goal=goal, goal_type=goal_type,
-                phase_outputs=phase_outputs, started_at=started_at,
+                cycle_id=cycle_id,
+                goal=goal,
+                goal_type=goal_type,
+                phase_outputs=phase_outputs,
+                started_at=started_at,
                 stop_reason=beads_gate.get("stop_reason") or "BEADS_BLOCKED",
                 beads=beads_gate,
             )
         if status == "revise":
             return self._build_early_stop_entry(
-                cycle_id=cycle_id, goal=goal, goal_type=goal_type,
-                phase_outputs=phase_outputs, started_at=started_at,
+                cycle_id=cycle_id,
+                goal=goal,
+                goal_type=goal_type,
+                phase_outputs=phase_outputs,
+                started_at=started_at,
                 stop_reason=beads_gate.get("stop_reason") or "BEADS_REVISE_REQUIRED",
                 beads=beads_gate,
             )
         return None
 
     def _run_post_verify_phases(
-        self, goal: str, goal_type: str, cycle_id: str,
-        phase_outputs: Dict, started_at: float,
-        verification: Dict, skill_context: Dict,
+        self,
+        goal: str,
+        goal_type: str,
+        cycle_id: str,
+        phase_outputs: Dict,
+        started_at: float,
+        verification: Dict,
+        skill_context: Dict,
     ) -> Optional[Dict]:
         """Run reflection, learning, confidence recording, and outcome persistence.
 
@@ -653,8 +688,11 @@ class LoopOrchestrator(PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin):
         reflection = self._run_reflection_phase(verification, skill_context, goal_type, cycle_id, phase_outputs)
         if self.strict_schema and validate_phase_output("reflection", reflection):
             return self._build_early_stop_entry(
-                cycle_id=cycle_id, goal=goal, goal_type=goal_type,
-                phase_outputs=phase_outputs, started_at=started_at,
+                cycle_id=cycle_id,
+                goal=goal,
+                goal_type=goal_type,
+                phase_outputs=phase_outputs,
+                started_at=started_at,
                 stop_reason="INVALID_OUTPUT",
                 beads=phase_outputs.get("beads_gate"),
             )
@@ -688,24 +726,38 @@ class LoopOrchestrator(PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin):
         goal_type = classify_goal(goal)
         self.current_goal = goal
         self.active_cycle_summary = build_cycle_summary(
-            cycle_id=cycle_id, goal=goal, goal_type=goal_type,
-            phase_outputs=phase_outputs, state="running", started_at=started_at,
+            cycle_id=cycle_id,
+            goal=goal,
+            goal_type=goal_type,
+            phase_outputs=phase_outputs,
+            state="running",
+            started_at=started_at,
         )
         pipeline_cfg = self._configure_pipeline(goal, goal_type, phase_outputs)
         self._handle_capabilities(goal, pipeline_cfg, phase_outputs, dry_run)
 
         # ── Pre-plan phases: ingest, MCP, skills, beads, backfill ──
         context, skill_context, early_return = self._run_pre_plan_phases(
-            goal, goal_type, cycle_id, pipeline_cfg, phase_outputs, started_at, dry_run,
+            goal,
+            goal_type,
+            cycle_id,
+            pipeline_cfg,
+            phase_outputs,
+            started_at,
+            dry_run,
         )
         if early_return is not None:
             return early_return
 
         # ── Plan loop ──
         verification, early_return = self._run_plan_loop(
-            goal=goal, context=context, skill_context=skill_context,
-            pipeline_cfg=pipeline_cfg, cycle_id=cycle_id,
-            phase_outputs=phase_outputs, dry_run=dry_run,
+            goal=goal,
+            context=context,
+            skill_context=skill_context,
+            pipeline_cfg=pipeline_cfg,
+            cycle_id=cycle_id,
+            phase_outputs=phase_outputs,
+            dry_run=dry_run,
         )
         if early_return is not None:
             log_json("INFO", "n8n_early_exit_attempting", details={"cycle_id": cycle_id, "goal": goal[:80]})
@@ -718,7 +770,13 @@ class LoopOrchestrator(PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin):
 
         # ── Post-verify phases: reflection, confidence ──
         early_stop = self._run_post_verify_phases(
-            goal, goal_type, cycle_id, phase_outputs, started_at, verification, skill_context,
+            goal,
+            goal_type,
+            cycle_id,
+            phase_outputs,
+            started_at,
+            verification,
+            skill_context,
         )
         if early_stop is not None:
             return early_stop

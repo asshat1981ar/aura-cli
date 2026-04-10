@@ -20,6 +20,7 @@ Start:
 Auth (optional):
   Set NOTIFICATION_MCP_TOKEN env var
 """
+
 from __future__ import annotations
 
 import os
@@ -56,6 +57,7 @@ _call_errors: Dict[str, int] = {}
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
+
 
 def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
     if not _TOKEN:
@@ -127,6 +129,7 @@ def _build_descriptor(name: str) -> Dict:
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
+
 
 def _slack_send(args: Dict) -> Any:
     channel = args.get("channel", "").strip()
@@ -279,6 +282,7 @@ _TOOL_HANDLERS = {
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @app.get("/health")
 async def health(_: None = Depends(_check_auth)):
     return {
@@ -355,5 +359,6 @@ async def get_metrics(_: None = Depends(_check_auth)) -> Dict:
 if __name__ == "__main__":
     import uvicorn
     from core.config_manager import config as _cfg
+
     port = int(os.getenv("NOTIFICATION_MCP_PORT", _cfg.get_mcp_server_port("notification", default=8015)))
     uvicorn.run("tools.notification_mcp:app", host="0.0.0.0", port=port, reload=False)

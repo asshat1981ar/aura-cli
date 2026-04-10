@@ -1,4 +1,5 @@
 """Skill: Dockerfile static analysis — security, best-practices, and image hygiene."""
+
 from __future__ import annotations
 
 import re
@@ -10,8 +11,14 @@ from core.logging_utils import log_json
 
 # Known slim / distroless base images (lower attack surface)
 _SLIM_BASES = {
-    "alpine", "scratch", "distroless", "slim", "debian:bookworm-slim",
-    "debian:bullseye-slim", "ubuntu:22.04", "ubuntu:20.04",
+    "alpine",
+    "scratch",
+    "distroless",
+    "slim",
+    "debian:bookworm-slim",
+    "debian:bullseye-slim",
+    "ubuntu:22.04",
+    "ubuntu:20.04",
 }
 
 # Known heavy / discouraged base images
@@ -33,11 +40,13 @@ def _parse_dockerfile(content: str) -> List[Dict]:
         # Handle line continuations
         parts = stripped.split(None, 1)
         if parts:
-            instructions.append({
-                "instruction": parts[0].upper(),
-                "args": parts[1] if len(parts) > 1 else "",
-                "line_no": line_no,
-            })
+            instructions.append(
+                {
+                    "instruction": parts[0].upper(),
+                    "args": parts[1] if len(parts) > 1 else "",
+                    "line_no": line_no,
+                }
+            )
     return instructions
 
 
@@ -51,19 +60,23 @@ def _check_base_image(cmd: str, args: str, ln: int, metadata: Dict[str, Any]) ->
     metadata["base_images"].append(base)
 
     if base == "latest" or base.endswith(":latest"):
-        findings.append({
-            "severity": "high",
-            "issue": "pinned_tag_missing",
-            "detail": f"Base image '{base}' uses :latest — pin to a specific version for reproducible builds.",
-            "line": ln,
-        })
+        findings.append(
+            {
+                "severity": "high",
+                "issue": "pinned_tag_missing",
+                "detail": f"Base image '{base}' uses :latest — pin to a specific version for reproducible builds.",
+                "line": ln,
+            }
+        )
     if any(heavy in base for heavy in _HEAVY_BASES):
-        findings.append({
-            "severity": "medium",
-            "issue": "heavy_base_image",
-            "detail": f"'{base}' is a large base image. Consider a slim or distroless variant.",
-            "line": ln,
-        })
+        findings.append(
+            {
+                "severity": "medium",
+                "issue": "heavy_base_image",
+                "detail": f"'{base}' is a large base image. Consider a slim or distroless variant.",
+                "line": ln,
+            }
+        )
     return findings
 
 
@@ -73,31 +86,37 @@ def _check_security_issues(cmd: str, args: str, ln: int, metadata: Dict[str, Any
 
     if cmd in ("ENV", "ARG"):
         if _SECRET_ENV_RE.search(args):
-            findings.append({
-                "severity": "critical",
-                "issue": "secret_in_dockerfile",
-                "detail": f"{cmd} instruction appears to contain a secret: '{args[:80]}'.",
-                "line": ln,
-            })
+            findings.append(
+                {
+                    "severity": "critical",
+                    "issue": "secret_in_dockerfile",
+                    "detail": f"{cmd} instruction appears to contain a secret: '{args[:80]}'.",
+                    "line": ln,
+                }
+            )
 
     elif cmd == "USER":
         metadata["user_set"] = True
         if args.strip() in ("0", "root"):
-            findings.append({
-                "severity": "high",
-                "issue": "running_as_root",
-                "detail": "Container is explicitly set to run as root. Use a non-root user.",
-                "line": ln,
-            })
+            findings.append(
+                {
+                    "severity": "high",
+                    "issue": "running_as_root",
+                    "detail": "Container is explicitly set to run as root. Use a non-root user.",
+                    "line": ln,
+                }
+            )
 
     elif cmd == "RUN":
         if re.search(r"\bcurl\b.*\|\s*(sh|bash)", args):
-            findings.append({
-                "severity": "high",
-                "issue": "curl_pipe_to_shell",
-                "detail": "Piping curl output directly to a shell is a supply-chain risk.",
-                "line": ln,
-            })
+            findings.append(
+                {
+                    "severity": "high",
+                    "issue": "curl_pipe_to_shell",
+                    "detail": "Piping curl output directly to a shell is a supply-chain risk.",
+                    "line": ln,
+                }
+            )
 
     elif cmd == "EXPOSE":
         ports = args.split()
@@ -105,12 +124,14 @@ def _check_security_issues(cmd: str, args: str, ln: int, metadata: Dict[str, Any
         for p in ports:
             port_num = int(p.split("/")[0]) if p.split("/")[0].isdigit() else None
             if port_num and port_num < 1024:
-                findings.append({
-                    "severity": "medium",
-                    "issue": "privileged_port_exposed",
-                    "detail": f"Port {port_num} is a privileged port (<1024); containers typically run as non-root.",
-                    "line": ln,
-                })
+                findings.append(
+                    {
+                        "severity": "medium",
+                        "issue": "privileged_port_exposed",
+                        "detail": f"Port {port_num} is a privileged port (<1024); containers typically run as non-root.",
+                        "line": ln,
+                    }
+                )
 
     return findings
 
@@ -121,35 +142,43 @@ def _check_best_practices(cmd: str, args: str, ln: int, metadata: Dict[str, Any]
 
     if cmd == "RUN":
         if re.search(r"\bsudo\b", args):
-            findings.append({
-                "severity": "medium",
-                "issue": "sudo_in_run",
-                "detail": "Avoid 'sudo' in RUN; use USER or run as root explicitly.",
-                "line": ln,
-            })
+            findings.append(
+                {
+                    "severity": "medium",
+                    "issue": "sudo_in_run",
+                    "detail": "Avoid 'sudo' in RUN; use USER or run as root explicitly.",
+                    "line": ln,
+                }
+            )
         if re.search(r"apt-get install(?!.*-y)", args):
-            findings.append({
-                "severity": "low",
-                "issue": "apt_get_missing_y_flag",
-                "detail": "Use 'apt-get install -y' to prevent interactive prompts.",
-                "line": ln,
-            })
+            findings.append(
+                {
+                    "severity": "low",
+                    "issue": "apt_get_missing_y_flag",
+                    "detail": "Use 'apt-get install -y' to prevent interactive prompts.",
+                    "line": ln,
+                }
+            )
         if re.search(r"&&\s*rm\s+-rf\s+/var/lib/apt", args) is None and "apt-get install" in args:
-            findings.append({
-                "severity": "low",
-                "issue": "apt_cache_not_cleaned",
-                "detail": "Clean apt cache in the same RUN layer: '&& rm -rf /var/lib/apt/lists/*'",
-                "line": ln,
-            })
+            findings.append(
+                {
+                    "severity": "low",
+                    "issue": "apt_cache_not_cleaned",
+                    "detail": "Clean apt cache in the same RUN layer: '&& rm -rf /var/lib/apt/lists/*'",
+                    "line": ln,
+                }
+            )
 
     elif cmd == "ADD":
         if not (re.search(r"https?://", args) or args.endswith(".tar.gz") or args.endswith(".tgz")):
-            findings.append({
-                "severity": "low",
-                "issue": "add_instead_of_copy",
-                "detail": "Prefer COPY over ADD unless you need URL fetching or tar auto-extraction.",
-                "line": ln,
-            })
+            findings.append(
+                {
+                    "severity": "low",
+                    "issue": "add_instead_of_copy",
+                    "detail": "Prefer COPY over ADD unless you need URL fetching or tar auto-extraction.",
+                    "line": ln,
+                }
+            )
 
     elif cmd == "HEALTHCHECK":
         if args.strip().upper() != "NONE":
@@ -162,19 +191,23 @@ def _check_post_scan(metadata: Dict[str, Any]) -> List[Dict]:
     """Run post-scan checks for missing HEALTHCHECK and USER instructions."""
     findings: List[Dict] = []
     if not metadata["has_healthcheck"]:
-        findings.append({
-            "severity": "low",
-            "issue": "no_healthcheck",
-            "detail": "No HEALTHCHECK instruction. Consider adding one for orchestration health monitoring.",
-            "line": None,
-        })
+        findings.append(
+            {
+                "severity": "low",
+                "issue": "no_healthcheck",
+                "detail": "No HEALTHCHECK instruction. Consider adding one for orchestration health monitoring.",
+                "line": None,
+            }
+        )
     if not metadata["user_set"]:
-        findings.append({
-            "severity": "medium",
-            "issue": "no_user_instruction",
-            "detail": "No USER instruction found. Container will run as root by default.",
-            "line": None,
-        })
+        findings.append(
+            {
+                "severity": "medium",
+                "issue": "no_user_instruction",
+                "detail": "No USER instruction found. Container will run as root by default.",
+                "line": None,
+            }
+        )
     return findings
 
 

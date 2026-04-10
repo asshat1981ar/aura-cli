@@ -1,4 +1,5 @@
 """Skill: compute cyclomatic complexity and code complexity metrics per function."""
+
 from __future__ import annotations
 import ast
 from pathlib import Path

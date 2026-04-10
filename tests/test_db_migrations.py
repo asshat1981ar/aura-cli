@@ -1,4 +1,5 @@
 """Tests for the database migration system."""
+
 from __future__ import annotations
 
 import sqlite3
@@ -23,6 +24,7 @@ def tmp_db(tmp_path: Path) -> Path:
 
 # --- AUTH_MIGRATIONS ---
 
+
 def test_auth_migrations_apply_all_three_versions(tmp_db):
     applied = migrate_auth_db(tmp_db)
     assert applied == ["001", "002", "003"]
@@ -45,6 +47,7 @@ def test_auth_migrations_idempotent(tmp_db):
 
 
 # --- BRAIN_MIGRATIONS ---
+
 
 def test_brain_migrations_apply_both_versions(tmp_db):
     applied = migrate_brain_db(tmp_db)
@@ -69,15 +72,14 @@ def test_brain_migrations_idempotent(tmp_db):
 
 # --- Checksum mismatch ---
 
+
 def test_checksum_mismatch_raises_runtime_error(tmp_db):
     runner = MigrationRunner(tmp_db, AUTH_MIGRATIONS)
     runner.run()
 
     # Tamper with stored checksum
     conn = sqlite3.connect(tmp_db)
-    conn.execute(
-        "UPDATE _schema_migrations SET checksum = 'deadbeef00000000' WHERE version = '001'"
-    )
+    conn.execute("UPDATE _schema_migrations SET checksum = 'deadbeef00000000' WHERE version = '001'")
     conn.commit()
     conn.close()
 
@@ -86,6 +88,7 @@ def test_checksum_mismatch_raises_runtime_error(tmp_db):
 
 
 # --- Rollback ---
+
 
 def test_rollback_reversible_migrations(tmp_db):
     runner = MigrationRunner(tmp_db, AUTH_MIGRATIONS)
@@ -97,10 +100,7 @@ def test_rollback_reversible_migrations(tmp_db):
     assert "002" in rolled
 
     conn = sqlite3.connect(tmp_db)
-    remaining = {
-        row[0]
-        for row in conn.execute("SELECT version FROM _schema_migrations")
-    }
+    remaining = {row[0] for row in conn.execute("SELECT version FROM _schema_migrations")}
     conn.close()
     assert remaining == {"001"}
 
@@ -115,12 +115,11 @@ def test_rollback_irreversible_raises(tmp_db):
 
 # --- Schema migrations tracking table ---
 
+
 def test_schema_migrations_table_records_applied(tmp_db):
     migrate_auth_db(tmp_db)
     conn = sqlite3.connect(tmp_db)
-    rows = conn.execute(
-        "SELECT version, checksum FROM _schema_migrations ORDER BY version"
-    ).fetchall()
+    rows = conn.execute("SELECT version, checksum FROM _schema_migrations ORDER BY version").fetchall()
     conn.close()
     versions = [r[0] for r in rows]
     assert versions == ["001", "002", "003"]

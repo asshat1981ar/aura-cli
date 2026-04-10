@@ -766,7 +766,10 @@ class EvolutionLoop:
 
         # 5-6. Propose and validate mutation
         mutation_plan, mutation_str = self._propose_and_validate_mutation(
-            str(evaluation), memory_snapshot, similar_past_problems, known_weaknesses,
+            str(evaluation),
+            memory_snapshot,
+            similar_past_problems,
+            known_weaknesses,
         )
 
         # Persist memories
@@ -774,7 +777,11 @@ class EvolutionLoop:
 
         # 7. Commit and track experiment
         experiment_info = self._commit_and_track_experiment(
-            goal, experiment_id, t0_experiment, hypothesis_str, baseline_metrics,
+            goal,
+            experiment_id,
+            t0_experiment,
+            hypothesis_str,
+            baseline_metrics,
         )
 
         return {

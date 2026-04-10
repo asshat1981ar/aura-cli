@@ -7,6 +7,7 @@ and loop progress.
 
 Port: 8030 (configurable via OBSERVABILITY_MCP_PORT env var)
 """
+
 from __future__ import annotations
 
 import json
@@ -20,7 +21,6 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 logger = logging.getLogger("observability_mcp")
@@ -71,9 +71,7 @@ TOOLS: list[ToolDefinition] = [
         description="Get quality trend data from recent autonomous loop cycles",
         parameters={
             "type": "object",
-            "properties": {
-                "cycles": {"type": "integer", "description": "Number of cycles", "default": 10}
-            },
+            "properties": {"cycles": {"type": "integer", "description": "Number of cycles", "default": 10}},
             "required": [],
         },
     ),
@@ -92,9 +90,7 @@ TOOLS: list[ToolDefinition] = [
         description="Get recent decisions from the JSONL decision log",
         parameters={
             "type": "object",
-            "properties": {
-                "count": {"type": "integer", "description": "Number of entries", "default": 20}
-            },
+            "properties": {"count": {"type": "integer", "description": "Number of entries", "default": 20}},
             "required": [],
         },
     ),
@@ -103,9 +99,7 @@ TOOLS: list[ToolDefinition] = [
         description="Summarize recent errors and warnings from logs",
         parameters={
             "type": "object",
-            "properties": {
-                "minutes": {"type": "integer", "description": "Look back window", "default": 60}
-            },
+            "properties": {"minutes": {"type": "integer", "description": "Look back window", "default": 60}},
             "required": [],
         },
     ),
@@ -174,8 +168,9 @@ def tool_health_summary(**_kwargs: Any) -> ToolResult:
     # Disk space
     try:
         import shutil
+
         usage = shutil.disk_usage(str(REPO_ROOT))
-        free_gb = usage.free / (1024 ** 3)
+        free_gb = usage.free / (1024**3)
         checks["disk"] = {
             "status": ComponentStatus.HEALTHY if free_gb > 1.0 else ComponentStatus.DEGRADED,
             "free_gb": round(free_gb, 2),
@@ -183,20 +178,26 @@ def tool_health_summary(**_kwargs: Any) -> ToolResult:
     except Exception as e:
         checks["disk"] = {"status": ComponentStatus.UNKNOWN, "error": str(e)}
 
-    return _make_result("health_summary", {
-        "overall": overall,
-        "checks": checks,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-    })
+    return _make_result(
+        "health_summary",
+        {
+            "overall": overall,
+            "checks": checks,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+    )
 
 
 def tool_quality_trends(cycles: int = 10, **_kwargs: Any) -> ToolResult:
     decision_log = MEMORY_DIR / "decision_log.jsonl"
     if not decision_log.exists():
-        return _make_result("quality_trends", {
-            "cycles_analyzed": 0,
-            "note": "No decision log found — no cycles recorded yet",
-        })
+        return _make_result(
+            "quality_trends",
+            {
+                "cycles_analyzed": 0,
+                "note": "No decision log found — no cycles recorded yet",
+            },
+        )
 
     entries = []
     try:
@@ -217,12 +218,15 @@ def tool_quality_trends(cycles: int = 10, **_kwargs: Any) -> ToolResult:
         passes = sum(1 for e in verify_events if e.get("passed", False))
         pass_rate = round(passes / len(verify_events) * 100, 1)
 
-    return _make_result("quality_trends", {
-        "total_events": len(entries),
-        "verify_events": len(verify_events),
-        "pass_rate_pct": pass_rate,
-        "note": f"Analyzed {len(entries)} log entries",
-    })
+    return _make_result(
+        "quality_trends",
+        {
+            "total_events": len(entries),
+            "verify_events": len(verify_events),
+            "pass_rate_pct": pass_rate,
+            "note": f"Analyzed {len(entries)} log entries",
+        },
+    )
 
 
 def tool_cache_stats(**_kwargs: Any) -> ToolResult:
@@ -248,6 +252,7 @@ def tool_cache_stats(**_kwargs: Any) -> ToolResult:
     if redis_url:
         try:
             import redis
+
             r = redis.from_url(redis_url, socket_timeout=2)
             info = r.info("memory")
             stats["redis"] = {
@@ -301,9 +306,7 @@ def tool_recent_decisions(count: int = 20, **_kwargs: Any) -> ToolResult:
 def tool_error_summary(minutes: int = 60, **_kwargs: Any) -> ToolResult:
     errors = []
     warnings = []
-    log_patterns = (
-        list(LOGS_DIR.glob("*.jsonl")) if LOGS_DIR.exists() else []
-    ) + list(MEMORY_DIR.glob("*.jsonl"))
+    log_patterns = (list(LOGS_DIR.glob("*.jsonl")) if LOGS_DIR.exists() else []) + list(MEMORY_DIR.glob("*.jsonl"))
 
     for log_file in log_patterns:
         try:
@@ -325,14 +328,17 @@ def tool_error_summary(minutes: int = 60, **_kwargs: Any) -> ToolResult:
         except Exception:
             continue
 
-    return _make_result("error_summary", {
-        "window_minutes": minutes,
-        "error_count": len(errors),
-        "warning_count": len(warnings),
-        "recent_errors": errors[-10:],
-        "recent_warnings": warnings[-5:],
-        "log_files_scanned": len(log_patterns),
-    })
+    return _make_result(
+        "error_summary",
+        {
+            "window_minutes": minutes,
+            "error_count": len(errors),
+            "warning_count": len(warnings),
+            "recent_errors": errors[-10:],
+            "recent_warnings": warnings[-5:],
+            "log_files_scanned": len(log_patterns),
+        },
+    )
 
 
 TOOL_FUNCTIONS = {
@@ -388,6 +394,7 @@ async def discovery() -> dict:
 
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.environ.get("OBSERVABILITY_MCP_PORT", "8030"))
     print(f"🔭 Starting Observability MCP Server on port {port}")
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")

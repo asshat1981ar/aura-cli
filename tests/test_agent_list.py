@@ -1,4 +1,5 @@
 """Tests for `aura agent list` command (s6-agent-list-command)."""
+
 import subprocess
 import sys
 import os
@@ -31,9 +32,7 @@ class TestAgentList:
         """Output must contain the word 'Registered'."""
         r = run_main("agent", "list")
         combined = r.stdout + r.stderr
-        assert "Registered" in combined or "agent" in combined.lower(), (
-            f"Expected 'Registered' or 'agent' in output.\nstdout={r.stdout}\nstderr={r.stderr}"
-        )
+        assert "Registered" in combined or "agent" in combined.lower(), f"Expected 'Registered' or 'agent' in output.\nstdout={r.stdout}\nstderr={r.stderr}"
 
     def test_agent_list_output_non_empty(self):
         """Output must not be empty."""
@@ -43,18 +42,17 @@ class TestAgentList:
     def test_agent_list_handler_importable(self):
         """Handler must be importable from dispatch module."""
         from aura_cli.dispatch import _handle_agent_list_dispatch
+
         assert callable(_handle_agent_list_dispatch)
 
     def test_agent_list_registered_in_dispatch(self):
         """agent_list must appear in COMMAND_DISPATCH_REGISTRY."""
         from aura_cli.dispatch import COMMAND_DISPATCH_REGISTRY
-        assert "agent_list" in COMMAND_DISPATCH_REGISTRY, (
-            "agent_list not found in COMMAND_DISPATCH_REGISTRY"
-        )
+
+        assert "agent_list" in COMMAND_DISPATCH_REGISTRY, "agent_list not found in COMMAND_DISPATCH_REGISTRY"
 
     def test_agent_list_in_cli_action_specs(self):
         """agent_list must be declared in CLI_ACTION_SPECS."""
         from aura_cli.options import CLI_ACTION_SPECS_BY_ACTION
-        assert "agent_list" in CLI_ACTION_SPECS_BY_ACTION, (
-            "agent_list not found in CLI_ACTION_SPECS"
-        )
+
+        assert "agent_list" in CLI_ACTION_SPECS_BY_ACTION, "agent_list not found in CLI_ACTION_SPECS"

@@ -18,6 +18,7 @@ from typing import Any, Optional
 # Data classes
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class SemanticInfo:
     """Semantic analysis of a code snippet."""
@@ -48,6 +49,7 @@ class ProjectContext:
 # Semantic extraction
 # ---------------------------------------------------------------------------
 
+
 def extract_semantics(code: str, language: str = "python") -> Optional[SemanticInfo]:
     """Analyse code snippet for semantic properties.
 
@@ -65,31 +67,22 @@ def extract_semantics(code: str, language: str = "python") -> Optional[SemanticI
 
     # Detect function/class name
     name_match = re.search(
-        r'(?:export\s+)?(?:async\s+)?(?:def|function|class|fn|func|pub\s+fn)\s+(\w+)',
+        r"(?:export\s+)?(?:async\s+)?(?:def|function|class|fn|func|pub\s+fn)\s+(\w+)",
         code,
     )
     name = name_match.group(1) if name_match else "unknown"
 
-    has_async = bool(re.search(r'\b(async|await|asyncio|aiohttp|Promise|Future)\b', code))
-    has_recursion = bool(
-        name != "unknown"
-        and re.search(rf'\b{re.escape(name)}\s*\(', "\n".join(lines[1:]))
-    )
-    has_loop = bool(re.search(r'\b(for|while|\.map\(|\.filter\(|\.reduce\(|comprehension)\b', code))
-    has_error = bool(re.search(r'\b(try|except|catch|raise|throw|Result|Error|Exception)\b', code))
-    has_network = bool(
-        re.search(r'\b(requests|httpx|aiohttp|fetch|urllib|curl|axios|http\.client)\b', code)
-    )
-    has_state = bool(re.search(r'\b(useState|setState|reactive|ref\(|signal|self\.\w+\s*=)\b', code))
+    has_async = bool(re.search(r"\b(async|await|asyncio|aiohttp|Promise|Future)\b", code))
+    has_recursion = bool(name != "unknown" and re.search(rf"\b{re.escape(name)}\s*\(", "\n".join(lines[1:])))
+    has_loop = bool(re.search(r"\b(for|while|\.map\(|\.filter\(|\.reduce\(|comprehension)\b", code))
+    has_error = bool(re.search(r"\b(try|except|catch|raise|throw|Result|Error|Exception)\b", code))
+    has_network = bool(re.search(r"\b(requests|httpx|aiohttp|fetch|urllib|curl|axios|http\.client)\b", code))
+    has_state = bool(re.search(r"\b(useState|setState|reactive|ref\(|signal|self\.\w+\s*=)\b", code))
 
     # Extract imports
-    imports = [m.group(1) for m in re.finditer(r'(?:import|from)\s+([^\s;]+)', code)]
+    imports = [m.group(1) for m in re.finditer(r"(?:import|from)\s+([^\s;]+)", code)]
     # Extract exports / public names
-    exports = [
-        m.group(1)
-        for m in re.finditer(r'(?:^def|^class|^async\s+def)\s+(\w+)', code, re.MULTILINE)
-        if not m.group(1).startswith("_")
-    ]
+    exports = [m.group(1) for m in re.finditer(r"(?:^def|^class|^async\s+def)\s+(\w+)", code, re.MULTILINE) if not m.group(1).startswith("_")]
 
     return SemanticInfo(
         name=name,
@@ -124,10 +117,7 @@ def semantics_to_text(sem: SemanticInfo) -> str:
     else:
         traits.append("includes error handling")
 
-    parts = [
-        f"The function `{sem.name}` spans {sem.lines} lines of {sem.language}. "
-        f"It {'; '.join(traits)}."
-    ]
+    parts = [f"The function `{sem.name}` spans {sem.lines} lines of {sem.language}. It {'; '.join(traits)}."]
     if sem.imports:
         parts.append(f"Dependencies: {', '.join(sem.imports)}.")
     if sem.exports:
@@ -186,15 +176,12 @@ def parse_file_tree(tree: str) -> ProjectContext:
 
     ext_counts: dict[str, int] = {}
     for line in tree.splitlines():
-        m = re.search(r'\.(\w+)$', line.strip())
+        m = re.search(r"\.(\w+)$", line.strip())
         if m:
             ext = m.group(1)
             ext_counts[ext] = ext_counts.get(ext, 0) + 1
 
-    languages = [
-        _LANG_MAP.get(ext, ext)
-        for ext, _ in sorted(ext_counts.items(), key=lambda x: -x[1])[:5]
-    ]
+    languages = [_LANG_MAP.get(ext, ext) for ext, _ in sorted(ext_counts.items(), key=lambda x: -x[1])[:5]]
     frameworks = [fw for sig, fw in _FW_SIGNALS.items() if sig in tree]
 
     return ProjectContext(languages=languages, frameworks=frameworks, structure=tree.strip())
@@ -260,33 +247,14 @@ def _build_strategy_block(
 
     if chain_of_thought:
         parts.append(
-            "## Reasoning Strategy: Chain-of-Thought\n"
-            "Think step-by-step before writing code:\n"
-            "1. Identify the core problem and edge cases.\n"
-            "2. Outline your approach and data structures.\n"
-            "3. Consider error handling and performance.\n"
-            "4. Write the implementation.\n"
-            "5. Verify correctness mentally."
+            "## Reasoning Strategy: Chain-of-Thought\nThink step-by-step before writing code:\n1. Identify the core problem and edge cases.\n2. Outline your approach and data structures.\n3. Consider error handling and performance.\n4. Write the implementation.\n5. Verify correctness mentally."
         )
 
     if multi_candidate:
-        parts.append(
-            "## Multi-Candidate Strategy\n"
-            "Generate 2-3 distinct solution approaches. For each:\n"
-            "- Describe the approach in one sentence.\n"
-            "- List pros and cons.\n"
-            "- Provide the implementation.\n"
-            "Then recommend the best approach with justification."
-        )
+        parts.append("## Multi-Candidate Strategy\nGenerate 2-3 distinct solution approaches. For each:\n- Describe the approach in one sentence.\n- List pros and cons.\n- Provide the implementation.\nThen recommend the best approach with justification.")
 
     if iterative_refine:
-        parts.append(
-            "## Iterative Refinement\n"
-            "After your initial implementation:\n"
-            "1. Review for correctness, readability, and performance.\n"
-            "2. Identify at least one improvement.\n"
-            "3. Apply the improvement and present the final version."
-        )
+        parts.append("## Iterative Refinement\nAfter your initial implementation:\n1. Review for correctness, readability, and performance.\n2. Identify at least one improvement.\n3. Apply the improvement and present the final version.")
 
     return "\n\n".join(parts)
 
@@ -326,7 +294,12 @@ def assemble_prompt(
         A fully assembled prompt string ready to send to an LLM.
     """
     context_block = _build_context_block(
-        language, environment, code_context, file_tree, constraints, test_cases,
+        language,
+        environment,
+        code_context,
+        file_tree,
+        constraints,
+        test_cases,
     )
     strategy_block = _build_strategy_block(chain_of_thought, multi_candidate, iterative_refine)
 
@@ -422,14 +395,7 @@ def assemble_prompt(
 
     else:
         # Generic / unknown template fallback
-        header = (
-            f"# Task\n\n"
-            f"> {task}\n\n"
-            f"## Requirements\n"
-            f"- Write clean, well-documented code.\n"
-            f"- Handle edge cases and errors.\n"
-            f"- Follow best practices for the target language."
-        )
+        header = f"# Task\n\n> {task}\n\n## Requirements\n- Write clean, well-documented code.\n- Handle edge cases and errors.\n- Follow best practices for the target language."
 
     # ---- Assemble final prompt ----
     blocks = [header]

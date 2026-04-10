@@ -1,4 +1,5 @@
 """Unit tests for agents/technical_debt_analyzer.py."""
+
 from __future__ import annotations
 
 import json

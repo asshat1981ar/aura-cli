@@ -60,16 +60,12 @@ def test_analyze_capability_needs_adds_skills_server_and_github_bridge_actions()
 def test_build_missing_skill_goals_uses_goal_text():
     goals = build_missing_skill_goals(["dockerfile_analyzer"], "Harden Docker workflows")
 
-    assert goals == [
-        "Add AURA skill 'dockerfile_analyzer' so AURA can better handle goal: Harden Docker workflows"
-    ]
+    assert goals == ["Add AURA skill 'dockerfile_analyzer' so AURA can better handle goal: Harden Docker workflows"]
 
 
 def test_queue_missing_capability_goals_prioritizes_and_dedupes():
     queue = MagicMock()
-    queue.queue = [
-        "Add AURA skill 'dockerfile_analyzer' so AURA can better handle goal: Harden Docker workflows"
-    ]
+    queue.queue = ["Add AURA skill 'dockerfile_analyzer' so AURA can better handle goal: Harden Docker workflows"]
 
     result = queue_missing_capability_goals(
         goal_queue=queue,
@@ -79,12 +75,8 @@ def test_queue_missing_capability_goals_prioritizes_and_dedupes():
         dry_run=False,
     )
 
-    queue.prepend_batch.assert_called_once_with([
-        "Add AURA skill 'observability_checker' so AURA can better handle goal: Harden Docker workflows"
-    ])
-    assert result["queued"] == [
-        "Add AURA skill 'observability_checker' so AURA can better handle goal: Harden Docker workflows"
-    ]
+    queue.prepend_batch.assert_called_once_with(["Add AURA skill 'observability_checker' so AURA can better handle goal: Harden Docker workflows"])
+    assert result["queued"] == ["Add AURA skill 'observability_checker' so AURA can better handle goal: Harden Docker workflows"]
     assert result["queue_strategy"] == "prepend"
     assert result["skipped"] == [
         {
@@ -110,9 +102,7 @@ def test_queue_missing_capability_goals_skips_in_dry_run():
 
 def test_recorded_capability_status_reports_pending_and_running_actions(tmp_path: Path):
     queue = MagicMock()
-    queue.queue = [
-        "Add AURA skill 'dockerfile_analyzer' so AURA can better handle goal: Harden Docker workflows"
-    ]
+    queue.queue = ["Add AURA skill 'dockerfile_analyzer' so AURA can better handle goal: Harden Docker workflows"]
 
     stored = record_capability_status(
         project_root=tmp_path,
@@ -206,8 +196,7 @@ def test_provision_capability_actions_starts_skills_server_when_enabled(tmp_path
     script_path.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
 
     fake_proc = MagicMock(pid=4321)
-    with patch("core.capability_manager._listening", return_value=False), \
-         patch("core.capability_manager.subprocess.Popen", return_value=fake_proc) as mock_popen:
+    with patch("core.capability_manager._listening", return_value=False), patch("core.capability_manager.subprocess.Popen", return_value=fake_proc) as mock_popen:
         result = provision_capability_actions(
             project_root=tmp_path,
             provisioning_actions=[{"action": "start_skills_mcp_server", "capability_id": "skills_mcp_server"}],
@@ -227,8 +216,7 @@ def test_provision_capability_actions_starts_github_bridge_when_enabled(tmp_path
     script_path.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
 
     fake_proc = MagicMock(pid=9876)
-    with patch("core.capability_manager._listening", return_value=False), \
-         patch("core.capability_manager.subprocess.Popen", return_value=fake_proc) as mock_popen:
+    with patch("core.capability_manager._listening", return_value=False), patch("core.capability_manager.subprocess.Popen", return_value=fake_proc) as mock_popen:
         result = provision_capability_actions(
             project_root=tmp_path,
             provisioning_actions=[{"action": "start_github_mcp_bridge", "capability_id": "github_mcp_bridge"}],

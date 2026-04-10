@@ -29,6 +29,7 @@ CONFIG_PATH = os.path.join(PROJECT_ROOT, "aura.config.json")
 API_TOKEN = os.getenv("MCP_API_TOKEN", "default_token")
 DISCOVERY_PORT = int(os.getenv("AURA_DISCOVERY_PORT", "8025"))
 
+
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
@@ -36,9 +37,11 @@ class CallRequest(BaseModel):
     tool_name: str
     args: Dict[str, Any] = Field(default_factory=dict)
 
+
 # ---------------------------------------------------------------------------
 # Core Logic
 # ---------------------------------------------------------------------------
+
 
 def get_mcp_config() -> Dict[str, int]:
     try:
@@ -71,6 +74,7 @@ def _normalize_tool(tool: Dict[str, Any], server_name: str, port: int) -> Dict[s
         "server": tool.get("server", server_name),
         "port": tool.get("port", port),
     }
+
 
 def list_all_tools() -> List[Dict[str, Any]]:
     servers = get_mcp_config()
@@ -107,6 +111,7 @@ def list_all_tools() -> List[Dict[str, Any]]:
 
     return all_tools
 
+
 def score_match(query: str, tool: Dict[str, Any]) -> float:
     """Simple similarity score based on token overlap."""
     query_tokens = set(query.lower().split())
@@ -114,34 +119,30 @@ def score_match(query: str, tool: Dict[str, Any]) -> float:
         return 0.0
     name_tokens = set(tool.get("name", "").lower().replace("_", " ").split())
     desc_tokens = set(tool.get("description", "").lower().split())
-    
+
     # Combined target tokens
     target_tokens = name_tokens.union(desc_tokens)
-    
+
     if not target_tokens:
         return 0.0
-        
+
     intersection = query_tokens.intersection(target_tokens)
     # Jaccard-ish similarity with name weighting
     name_intersection = query_tokens.intersection(name_tokens)
-    
+
     score = (len(intersection) / len(query_tokens.union(target_tokens))) + (0.5 if name_intersection else 0.0)
     return score
+
 
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @app.get("/tools")
 async def tools_list():
-    return {
-        "data": {
-            "tools": [
-                {"name": "list_all_mcp_tools", "description": "Aggregate tool lists from all running MCP servers."},
-                {"name": "search_tools_semantically", "description": "Search for tools matching a purpose or goal description."}
-            ]
-        }
-    }
+    return {"data": {"tools": [{"name": "list_all_mcp_tools", "description": "Aggregate tool lists from all running MCP servers."}, {"name": "search_tools_semantically", "description": "Search for tools matching a purpose or goal description."}]}}
+
 
 @app.post("/call")
 async def call_tool(req: CallRequest):
@@ -170,6 +171,7 @@ async def call_tool(req: CallRequest):
         return {"data": {"results": results, "query": query, "count": len(results)}}
 
     raise HTTPException(status_code=404, detail=f"Unknown tool: {name}")
+
 
 if __name__ == "__main__":
     import uvicorn

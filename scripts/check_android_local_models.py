@@ -127,9 +127,7 @@ def build_checks_from_config(config_data: dict) -> list[tuple[str, str, int]]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Check that the Android local coder, planner, and optional embedding model servers are reachable."
-    )
+    parser = argparse.ArgumentParser(description="Check that the Android local coder, planner, and optional embedding model servers are reachable.")
     parser.add_argument(
         "--config",
         default=None,

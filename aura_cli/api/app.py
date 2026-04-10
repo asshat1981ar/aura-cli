@@ -56,6 +56,7 @@ async def lifespan(app: FastAPI):
     if AUTH_AVAILABLE:
         init_auth(secret_key=os.getenv("AURA_SECRET_KEY", "aura-secret-key-change-in-production"))
         from core.auth import get_auth_manager
+
         auth = get_auth_manager()
         # Create default admin user if none exists
         try:

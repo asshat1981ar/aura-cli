@@ -21,7 +21,7 @@ class DuplicateCodeAnalyzer:
 
     def export_findings(self, output_path: str):
         """Export findings to a JSON file for further processing."""
-        with open(output_path, 'w') as f:
+        with open(output_path, "w") as f:
             json.dump(dict(self.duplicate_patterns), f, indent=2)
 
 

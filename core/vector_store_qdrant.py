@@ -1,6 +1,6 @@
 """Qdrant-based vector store implementation.
 
-Production-grade vector store with metadata filtering, 
+Production-grade vector store with metadata filtering,
 horizontal scaling, and hybrid search capabilities.
 """
 
@@ -21,9 +21,14 @@ qdrant_available = False
 try:
     from qdrant_client import QdrantClient
     from qdrant_client.models import (
-        Distance, VectorParams, PointStruct,
-        Filter, FieldCondition, MatchValue,
+        Distance,
+        VectorParams,
+        PointStruct,
+        Filter,
+        FieldCondition,
+        MatchValue,
     )
+
     qdrant_available = True
 except ImportError:
     pass
@@ -32,7 +37,7 @@ except ImportError:
 @dataclass
 class RebuildOptions:
     """Options for rebuilding the vector store index.
-    
+
     Attributes:
         exclude_source_types: Source types to exclude from indexing
         drop_existing_embeddings: Whether to drop existing embeddings
@@ -41,6 +46,7 @@ class RebuildOptions:
         embedding_model: Model to use for embeddings
         embedding_dims: Dimensionality of embeddings
     """
+
     exclude_source_types: List[str] = field(default_factory=list)
     drop_existing_embeddings: bool = False
     chunk_size: int = 512
@@ -51,23 +57,23 @@ class RebuildOptions:
 
 class QdrantVectorStore:
     """Production-grade vector store using Qdrant.
-    
+
     Features:
     - Metadata filtering (payload filters)
     - Horizontal scaling support
     - Hybrid search (dense + sparse)
     - Persistent storage
     - Collection management
-    
+
     Requires:
         - Qdrant server running (local or cloud)
         - qdrant-client package installed
     """
-    
+
     DEFAULT_COLLECTION = "aura_memory"
     DEFAULT_HOST = "localhost"
     DEFAULT_PORT = 6333
-    
+
     def __init__(
         self,
         model_adapter,
@@ -78,7 +84,7 @@ class QdrantVectorStore:
         prefer_grpc: bool = True,
     ):
         """Initialize Qdrant vector store.
-        
+
         Args:
             model_adapter: Adapter for generating embeddings
             host: Qdrant server host
@@ -88,14 +94,11 @@ class QdrantVectorStore:
             prefer_grpc: Use gRPC protocol (faster)
         """
         if not qdrant_available:
-            raise ImportError(
-                "Qdrant client not installed. "
-                "Install with: pip install qdrant-client"
-            )
-        
+            raise ImportError("Qdrant client not installed. Install with: pip install qdrant-client")
+
         self.model_adapter = model_adapter
         self.collection_name = collection_name
-        
+
         # Initialize client
         if api_key:
             # Cloud deployment
@@ -111,16 +114,20 @@ class QdrantVectorStore:
                 port=port,
                 prefer_grpc=prefer_grpc,
             )
-        
-        log_json("INFO", "qdrant_store_initialized", {
-            "host": host,
-            "port": port,
-            "collection": collection_name,
-        })
-    
+
+        log_json(
+            "INFO",
+            "qdrant_store_initialized",
+            {
+                "host": host,
+                "port": port,
+                "collection": collection_name,
+            },
+        )
+
     def ensure_collection(self, vector_size: int = 768) -> None:
         """Ensure the collection exists with proper configuration.
-        
+
         Args:
             vector_size: Dimensionality of embeddings
         """
@@ -128,7 +135,7 @@ class QdrantVectorStore:
             # Check if collection exists
             collections = self.client.get_collections()
             collection_names = [c.name for c in collections.collections]
-            
+
             if self.collection_name not in collection_names:
                 # Create collection
                 self.client.create_collection(
@@ -138,19 +145,27 @@ class QdrantVectorStore:
                         distance=Distance.COSINE,
                     ),
                 )
-                log_json("INFO", "qdrant_collection_created", {
-                    "collection": self.collection_name,
-                    "vector_size": vector_size,
-                })
+                log_json(
+                    "INFO",
+                    "qdrant_collection_created",
+                    {
+                        "collection": self.collection_name,
+                        "vector_size": vector_size,
+                    },
+                )
             else:
-                log_json("DEBUG", "qdrant_collection_exists", {
-                    "collection": self.collection_name,
-                })
-                
+                log_json(
+                    "DEBUG",
+                    "qdrant_collection_exists",
+                    {
+                        "collection": self.collection_name,
+                    },
+                )
+
         except Exception as e:
             log_json("ERROR", "qdrant_collection_error", {"error": str(e)})
             raise
-    
+
     def add(
         self,
         content: str,
@@ -158,22 +173,22 @@ class QdrantVectorStore:
         embedding: Optional[List[float]] = None,
     ) -> str:
         """Add a document to the vector store.
-        
+
         Args:
             content: Text content to store
             metadata: Optional metadata dict
             embedding: Pre-computed embedding (or None to generate)
-            
+
         Returns:
             Document ID
         """
         # Generate embedding if not provided
         if embedding is None:
             embedding = self._generate_embedding(content)
-        
+
         # Generate unique ID
         doc_id = str(uuid.uuid4())
-        
+
         # Prepare payload
         payload = {
             "content": content,
@@ -181,7 +196,7 @@ class QdrantVectorStore:
         }
         if metadata:
             payload.update(metadata)
-        
+
         # Insert into Qdrant
         self.client.upsert(
             collection_name=self.collection_name,
@@ -193,10 +208,10 @@ class QdrantVectorStore:
                 )
             ],
         )
-        
+
         log_json("DEBUG", "qdrant_document_added", {"id": doc_id[:8]})
         return doc_id
-    
+
     def search(
         self,
         query: str,
@@ -205,22 +220,22 @@ class QdrantVectorStore:
         score_threshold: float = 0.0,
     ) -> List[Dict[str, Any]]:
         """Search for similar documents.
-        
+
         Args:
             query: Search query text
             top_k: Number of results to return
             filters: Metadata filters (e.g., {"source_type": "code"})
             score_threshold: Minimum similarity score
-            
+
         Returns:
             List of search results with content and scores
         """
         # Generate query embedding
         query_embedding = self._generate_embedding(query)
-        
+
         # Build filter if provided
         qdrant_filter = self._build_filter(filters) if filters else None
-        
+
         # Search
         results = self.client.search(
             collection_name=self.collection_name,
@@ -229,7 +244,7 @@ class QdrantVectorStore:
             query_filter=qdrant_filter,
             score_threshold=score_threshold,
         )
-        
+
         # Format results
         return [
             {
@@ -240,13 +255,13 @@ class QdrantVectorStore:
             }
             for point in results
         ]
-    
+
     def delete(self, doc_id: str) -> bool:
         """Delete a document by ID.
-        
+
         Args:
             doc_id: Document ID to delete
-            
+
         Returns:
             True if deleted
         """
@@ -260,13 +275,13 @@ class QdrantVectorStore:
         except Exception as e:
             log_json("ERROR", "qdrant_delete_error", {"error": str(e)})
             return False
-    
+
     def rebuild(self, options: RebuildOptions) -> Dict[str, Any]:
         """Rebuild the vector store index.
-        
+
         Args:
             options: Rebuild configuration options
-            
+
         Returns:
             Statistics about the rebuild
         """
@@ -275,26 +290,30 @@ class QdrantVectorStore:
             "chunks_skipped": 0,
             "errors": [],
         }
-        
+
         if options.drop_existing_embeddings:
             # Delete existing collection
             try:
                 self.client.delete_collection(self.collection_name)
-                log_json("INFO", "qdrant_collection_dropped", {
-                    "collection": self.collection_name,
-                })
+                log_json(
+                    "INFO",
+                    "qdrant_collection_dropped",
+                    {
+                        "collection": self.collection_name,
+                    },
+                )
             except Exception as e:
                 log_json("WARN", "qdrant_drop_failed", {"error": str(e)})
-        
+
         # Ensure collection exists
         self.ensure_collection(vector_size=options.embedding_dims)
-        
+
         log_json("INFO", "qdrant_rebuild_complete", stats)
         return stats
-    
+
     def get_stats(self) -> Dict[str, Any]:
         """Get collection statistics.
-        
+
         Returns:
             Collection info and statistics
         """
@@ -312,13 +331,13 @@ class QdrantVectorStore:
                 "collection": self.collection_name,
                 "error": str(e),
             }
-    
+
     def _generate_embedding(self, text: str) -> List[float]:
         """Generate embedding for text.
-        
+
         Args:
             text: Text to embed
-            
+
         Returns:
             Embedding vector
         """
@@ -333,18 +352,18 @@ class QdrantVectorStore:
             log_json("ERROR", "embedding_generation_failed", {"error": str(e)})
             # Return zero vector as fallback
             return [0.0] * 768
-    
+
     def _build_filter(self, filters: Dict[str, Any]) -> Filter:
         """Build Qdrant filter from dict.
-        
+
         Args:
             filters: Filter conditions
-            
+
         Returns:
             Qdrant Filter object
         """
         conditions = []
-        
+
         for key, value in filters.items():
             conditions.append(
                 FieldCondition(
@@ -352,9 +371,9 @@ class QdrantVectorStore:
                     match=MatchValue(value=value),
                 )
             )
-        
+
         return Filter(must=conditions)
-    
+
     def hybrid_search(
         self,
         query: str,
@@ -362,14 +381,14 @@ class QdrantVectorStore:
         filters: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """Hybrid search using dense + sparse vectors.
-        
+
         Note: This requires Qdrant 1.2+ with sparse vector support.
-        
+
         Args:
             query: Search query
             top_k: Number of results
             filters: Metadata filters
-            
+
         Returns:
             Search results
         """
@@ -380,33 +399,29 @@ class QdrantVectorStore:
 
 class VectorStoreFactory:
     """Factory for creating vector store instances.
-    
+
     Supports both custom VectorStore and QdrantVectorStore
     based on configuration.
     """
-    
+
     @staticmethod
-    def create(
-        model_adapter,
-        use_qdrant: Optional[bool] = None,
-        **kwargs
-    ) -> Union["QdrantVectorStore", "VectorStore"]:
+    def create(model_adapter, use_qdrant: Optional[bool] = None, **kwargs) -> Union["QdrantVectorStore", "VectorStore"]:
         """Create appropriate vector store instance.
-        
+
         Args:
             model_adapter: Model adapter for embeddings
             use_qdrant: Force Qdrant (True), custom (False), or auto (None)
             **kwargs: Additional arguments for store initialization
-            
+
         Returns:
             Vector store instance
         """
         import os
-        
+
         # Determine which store to use
         if use_qdrant is None:
             use_qdrant = os.environ.get("AURA_USE_QDRANT", "false").lower() == "true"
-        
+
         if use_qdrant and qdrant_available:
             log_json("INFO", "using_qdrant_vector_store")
             return QdrantVectorStore(
@@ -419,7 +434,8 @@ class VectorStoreFactory:
             # Fall back to custom VectorStore
             if use_qdrant and not qdrant_available:
                 log_json("WARN", "qdrant_requested_but_not_available")
-            
+
             log_json("INFO", "using_custom_vector_store")
             from core.vector_store import VectorStore
+
             return VectorStore(model_adapter, kwargs.get("brain"))

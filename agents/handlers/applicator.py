@@ -57,6 +57,7 @@ def handle(task: dict, context: dict) -> dict:
 # Action helpers
 # ---------------------------------------------------------------------------
 
+
 def _handle_apply(agent, task: dict) -> dict:
     llm_output = task.get("llm_output", "")
     target_path = task.get("target_path")
@@ -118,6 +119,7 @@ def _handle_rollback(agent, task: dict) -> dict:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _resolve_agent(context: dict):
     """Return an ApplicatorAgent from context, constructing one if needed."""
     agent = context.get("agent")
@@ -126,10 +128,9 @@ def _resolve_agent(context: dict):
 
     brain = context.get("brain")
     if brain is None:
-        raise ValueError(
-            "handlers/applicator: context must contain 'agent' or 'brain'"
-        )
+        raise ValueError("handlers/applicator: context must contain 'agent' or 'brain'")
 
     from agents.applicator import ApplicatorAgent  # deferred import
+
     backup_dir = context.get("backup_dir", ".aura/backups")
     return ApplicatorAgent(brain=brain, backup_dir=backup_dir)

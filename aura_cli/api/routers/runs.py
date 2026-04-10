@@ -21,6 +21,7 @@ from core.running_runs import deregister_run, register_run
 
 try:
     from prometheus_client import Counter, Gauge, REGISTRY
+
     _PROMETHEUS_AVAILABLE = True
 
     def _get_or_create_metric(factory, name, documentation, labelnames=()):
@@ -76,13 +77,12 @@ class WebhookPlanReviewRequest(BaseModel):
 async def _resolve_runtime_component(name: str) -> Any:
     """Resolve a named runtime component via shared state."""
     from aura_cli.api import state as _state
+
     return await _state.resolve_runtime_component(name)
 
 
 @router.post("/run")
-async def run_pipeline(
-    req: RunRequest, _: Dict[str, Any] = Depends(require_auth)
-) -> Dict[str, Any]:
+async def run_pipeline(req: RunRequest, _: Dict[str, Any] = Depends(require_auth)) -> Dict[str, Any]:
     """Trigger a goal-oriented pipeline run via LoopOrchestrator.
 
     Requires the ``AGENT_API_ENABLE_RUN=1`` environment variable to be set.
@@ -98,9 +98,7 @@ async def run_pipeline(
         HTTPException: 403 if run endpoint is disabled.
     """
     if os.getenv("AGENT_API_ENABLE_RUN") != "1":
-        raise HTTPException(
-            status_code=403, detail="Run endpoint disabled; set AGENT_API_ENABLE_RUN=1"
-        )
+        raise HTTPException(status_code=403, detail="Run endpoint disabled; set AGENT_API_ENABLE_RUN=1")
 
     run_id = secrets.token_hex(12)
 
@@ -127,9 +125,7 @@ async def run_pipeline(
 
 
 @router.post("/webhook/goal")
-async def webhook_goal(
-    req: WebhookGoalRequest, _: Dict[str, Any] = Depends(require_auth)
-) -> Dict[str, Any]:
+async def webhook_goal(req: WebhookGoalRequest, _: Dict[str, Any] = Depends(require_auth)) -> Dict[str, Any]:
     """Enqueue a goal submitted by n8n (P1 fast lane or direct trigger).
 
     Args:
@@ -150,9 +146,7 @@ async def webhook_goal(
     }
     _webhook_goal_queue[goal_id] = entry
     if _PROMETHEUS_AVAILABLE:
-        goal_queue_depth.set(
-            sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued")
-        )
+        goal_queue_depth.set(sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued"))
     log_json(
         "INFO",
         "aura_webhook_goal_received",
@@ -168,9 +162,7 @@ async def webhook_goal(
     async def _run_cycle() -> None:
         if _PROMETHEUS_AVAILABLE:
             active_pipeline_runs.inc()
-            goal_queue_depth.set(
-                sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued")
-            )
+            goal_queue_depth.set(sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued"))
         try:
             _webhook_goal_queue[goal_id]["status"] = "running"
             _webhook_goal_queue[goal_id]["started_at"] = time.time()
@@ -179,22 +171,24 @@ async def webhook_goal(
                 active_orchestrator.run_cycle,
                 req.goal,
             )
-            _webhook_goal_queue[goal_id].update({
-                "status": "done",
-                "result": result,
-                "completed_at": time.time(),
-            })
+            _webhook_goal_queue[goal_id].update(
+                {
+                    "status": "done",
+                    "result": result,
+                    "completed_at": time.time(),
+                }
+            )
             if _PROMETHEUS_AVAILABLE:
                 pipeline_runs_total.labels(status="success").inc()
         except Exception as exc:
-            _webhook_goal_queue[goal_id].update({
-                "status": "failed",
-                "error": str(exc),
-                "completed_at": time.time(),
-            })
-            log_json(
-                "WARN", "aura_webhook_goal_failed", details={"goal_id": goal_id, "error": str(exc)}
+            _webhook_goal_queue[goal_id].update(
+                {
+                    "status": "failed",
+                    "error": str(exc),
+                    "completed_at": time.time(),
+                }
             )
+            log_json("WARN", "aura_webhook_goal_failed", details={"goal_id": goal_id, "error": str(exc)})
             if _PROMETHEUS_AVAILABLE:
                 pipeline_runs_total.labels(status="failure").inc()
         finally:
@@ -206,9 +200,7 @@ async def webhook_goal(
 
 
 @router.get("/webhook/status/{goal_id}")
-async def webhook_goal_status(
-    goal_id: str, _: Dict[str, Any] = Depends(require_auth)
-) -> Dict[str, Any]:
+async def webhook_goal_status(goal_id: str, _: Dict[str, Any] = Depends(require_auth)) -> Dict[str, Any]:
     """Poll the status of a webhook-submitted goal (used by n8n P1 fast lane).
 
     Args:
@@ -241,9 +233,7 @@ async def webhook_goal_status(
 
 
 @router.post("/webhook/plan-review")
-async def webhook_plan_review(
-    req: WebhookPlanReviewRequest, _: Dict[str, Any] = Depends(require_auth)
-) -> Dict[str, Any]:
+async def webhook_plan_review(req: WebhookPlanReviewRequest, _: Dict[str, Any] = Depends(require_auth)) -> Dict[str, Any]:
     """Format a task bundle as a plan text for Dev Suite Quality Gate (P2) review.
 
     Called by P3 Pipeline Coordinator before triggering AURA act phase.
@@ -259,7 +249,7 @@ async def webhook_plan_review(
     if isinstance(plan_steps, str):
         plan_text = plan_steps
     elif isinstance(plan_steps, list):
-        plan_text = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan_steps))
+        plan_text = "\n".join(f"{i + 1}. {step}" for i, step in enumerate(plan_steps))
     else:
         plan_text = str(plan_steps)
 

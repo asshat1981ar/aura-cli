@@ -1,4 +1,5 @@
 """Comprehensive health check system for AURA CLI."""
+
 from __future__ import annotations
 
 import asyncio
@@ -14,6 +15,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
 import logging
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["health"])
@@ -88,6 +90,7 @@ async def readiness() -> JSONResponse:
     try:
         from core.auth import _default_auth_db_path  # noqa: PLC0415
     except ImportError:
+
         def _default_auth_db_path():
             return Path(os.environ.get("AURA_AUTH_DB_PATH", "aura_auth.db"))
 
@@ -102,6 +105,7 @@ async def readiness() -> JSONResponse:
     if redis_url:
         try:
             import redis as redis_lib  # noqa: PLC0415
+
             r = redis_lib.from_url(redis_url, socket_connect_timeout=1)
             start = time.perf_counter()
             r.ping()

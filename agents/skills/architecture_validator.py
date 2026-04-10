@@ -1,4 +1,5 @@
 """Skill: validate project architecture – circular imports, coupling, layer violations."""
+
 from __future__ import annotations
 
 import ast
@@ -10,9 +11,20 @@ from agents.skills.base import SkillBase
 from core.logging_utils import log_json
 
 _SKIP_DIRS = {
-    ".git", "__pycache__", "node_modules", ".tox", ".venv", "venv",
-    "dist", "build", "env", ".env", "test-aura-env", "site-packages",
-    "aura_cli.egg-info", "tmp_out",
+    ".git",
+    "__pycache__",
+    "node_modules",
+    ".tox",
+    ".venv",
+    "venv",
+    "dist",
+    "build",
+    "env",
+    ".env",
+    "test-aura-env",
+    "site-packages",
+    "aura_cli.egg-info",
+    "tmp_out",
 }
 
 
@@ -98,11 +110,13 @@ def _check_layer_violations(
             if src_layer in mod:
                 for dep in deps:
                     if tgt_layer in dep:
-                        violations.append({
-                            "module": mod,
-                            "imports": dep,
-                            "rule": f"'{src_layer}' must not import from '{tgt_layer}'",
-                        })
+                        violations.append(
+                            {
+                                "module": mod,
+                                "imports": dep,
+                                "rule": f"'{src_layer}' must not import from '{tgt_layer}'",
+                            }
+                        )
     return violations
 
 
@@ -110,10 +124,7 @@ def _analyse_project(
     root: Path,
     forbidden_patterns: Optional[List[Dict]] = None,
 ) -> Dict[str, Any]:
-    py_files = [
-        f for f in root.rglob("*.py")
-        if not any(part in _SKIP_DIRS for part in f.parts)
-    ]
+    py_files = [f for f in root.rglob("*.py") if not any(part in _SKIP_DIRS for part in f.parts)]
 
     graph: Dict[str, List[str]] = {}
     local_mod_prefixes: Set[str] = set()
@@ -131,14 +142,7 @@ def _analyse_project(
             continue
         imports = _get_imports(src)
         # Keep only intra-project imports
-        local_imports = [
-            i for i in imports
-            if i in local_mod_prefixes
-            and any(
-                _module_name(pf, root).startswith(i)
-                for pf in py_files
-            )
-        ]
+        local_imports = [i for i in imports if i in local_mod_prefixes and any(_module_name(pf, root).startswith(i) for pf in py_files)]
         graph[mod] = local_imports
 
     cycles = _detect_cycles(graph)
@@ -191,10 +195,7 @@ class ArchitectureValidatorSkill(SkillBase):
         """Walk all .py files under project_root, build a directed import graph,
         detect cycles via DFS, and return each cycle as a list of module names."""
         root = Path(project_root)
-        py_files = [
-            f for f in root.rglob("*.py")
-            if not any(part in _SKIP_DIRS for part in f.parts)
-        ]
+        py_files = [f for f in root.rglob("*.py") if not any(part in _SKIP_DIRS for part in f.parts)]
 
         local_mod_prefixes: Set[str] = set()
         for f in py_files:
@@ -208,11 +209,7 @@ class ArchitectureValidatorSkill(SkillBase):
             except OSError:
                 continue
             imports = _get_imports(src)
-            graph[mod] = {
-                i for i in imports
-                if i in local_mod_prefixes
-                and any(_module_name(pf, root).startswith(i) for pf in py_files)
-            }
+            graph[mod] = {i for i in imports if i in local_mod_prefixes and any(_module_name(pf, root).startswith(i) for pf in py_files)}
 
         # Convert sets to lists for _detect_cycles
         list_graph = {k: list(v) for k, v in graph.items()}
@@ -239,9 +236,13 @@ class ArchitectureValidatorSkill(SkillBase):
         root = Path(project_root_str or ".")
         result = _analyse_project(root, forbidden_patterns)
         result["circular_imports"] = self.detect_circular_imports(str(root))
-        log_json("INFO", "architecture_validator_complete", details={
-            "modules": result["module_count"],
-            "cycles": result["cycle_count"],
-            "coupling": result["coupling_score"],
-        })
+        log_json(
+            "INFO",
+            "architecture_validator_complete",
+            details={
+                "modules": result["module_count"],
+                "cycles": result["cycle_count"],
+                "coupling": result["coupling_score"],
+            },
+        )
         return result

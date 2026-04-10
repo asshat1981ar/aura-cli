@@ -15,6 +15,7 @@ Strict drift check (fails if live schema differs from snapshot):
     python3 -m pytest tests/test_openapi_contract.py -v --no-cov -k strict
     or set OPENAPI_STRICT=1 to enable strict mode for the snapshot test.
 """
+
 from __future__ import annotations
 
 import json
@@ -168,12 +169,7 @@ class TestSnapshotRegression:
                 )
             )
             strict = os.getenv("OPENAPI_STRICT", "").strip() == "1"
-            msg = (
-                "OpenAPI schema has drifted from snapshot "
-                "(--strict mode: OPENAPI_STRICT=1).\n\n"
-                if strict
-                else "OpenAPI schema has changed — run with UPDATE_SNAPSHOTS=1 to accept.\n\n"
-            )
+            msg = "OpenAPI schema has drifted from snapshot (--strict mode: OPENAPI_STRICT=1).\n\n" if strict else "OpenAPI schema has changed — run with UPDATE_SNAPSHOTS=1 to accept.\n\n"
             pytest.fail(msg + diff)
 
 
@@ -198,9 +194,7 @@ class TestAllServerEndpointsInSchema:
         import aura_cli.server as server_mod
         from starlette.routing import Route
 
-        schema_paths = set(
-            openapi_client.get("/openapi.json").json().get("paths", {}).keys()
-        )
+        schema_paths = set(openapi_client.get("/openapi.json").json().get("paths", {}).keys())
 
         missing = []
         for route in server_mod.app.routes:
@@ -215,10 +209,7 @@ class TestAllServerEndpointsInSchema:
             if route.path not in schema_paths:
                 missing.append(route.path)
 
-        assert not missing, (
-            f"Routes registered in app.routes but absent from OpenAPI schema: {missing}\n"
-            "If a route is intentionally excluded set include_in_schema=False on it."
-        )
+        assert not missing, f"Routes registered in app.routes but absent from OpenAPI schema: {missing}\nIf a route is intentionally excluded set include_in_schema=False on it."
 
 
 # ---------------------------------------------------------------------------
@@ -235,21 +226,15 @@ class TestHealthResponseSchema:
         assert resp.status_code == 200, f"Expected 200, got {resp.status_code}"
         body = resp.json()
         assert isinstance(body, dict), "Response body must be a JSON object"
-        assert "status" in body, (
-            f"'status' key missing from /health response; got keys: {list(body.keys())}"
-        )
+        assert "status" in body, f"'status' key missing from /health response; got keys: {list(body.keys())}"
 
     def test_health_response_schema_matches_openapi_definition(self, openapi_client):
         """Response schema for /health must be declared as additionalProperties:true object."""
         schema = openapi_client.get("/openapi.json").json()
         health_get = schema["paths"]["/health"]["get"]
-        response_schema = (
-            health_get["responses"]["200"]["content"]["application/json"]["schema"]
-        )
+        response_schema = health_get["responses"]["200"]["content"]["application/json"]["schema"]
         # FastAPI declares open-ended dict endpoints as {type: object, additionalProperties: true}
-        assert response_schema.get("type") == "object", (
-            f"/health 200 response schema should have type 'object', got: {response_schema}"
-        )
+        assert response_schema.get("type") == "object", f"/health 200 response schema should have type 'object', got: {response_schema}"
 
 
 class TestExecuteRequestSchema:
@@ -259,14 +244,9 @@ class TestExecuteRequestSchema:
         """POST /execute with a valid ExecuteRequest body must not return 422."""
         # Load the documented schema to confirm the shape we're testing against
         schema = openapi_client.get("/openapi.json").json()
-        execute_ref = (
-            schema["paths"]["/execute"]["post"]["requestBody"]["content"]
-            ["application/json"]["schema"]
-        )
+        execute_ref = schema["paths"]["/execute"]["post"]["requestBody"]["content"]["application/json"]["schema"]
         # Must reference the ExecuteRequest component (or be inline with tool_name)
-        assert "$ref" in execute_ref or "properties" in execute_ref, (
-            f"/execute requestBody schema missing '$ref' or 'properties': {execute_ref}"
-        )
+        assert "$ref" in execute_ref or "properties" in execute_ref, f"/execute requestBody schema missing '$ref' or 'properties': {execute_ref}"
 
         # Send the minimal documented request body: {"tool_name": "env"}
         resp = openapi_client.post(
@@ -275,13 +255,9 @@ class TestExecuteRequestSchema:
         )
         # Any status other than 422 (Unprocessable Entity) proves the schema is accepted.
         # 200, 500, etc. are all acceptable — we only care that FastAPI parsed the body.
-        assert resp.status_code != 422, (
-            f"POST /execute with valid body returned 422; body: {resp.text}"
-        )
+        assert resp.status_code != 422, f"POST /execute with valid body returned 422; body: {resp.text}"
 
     def test_execute_rejects_missing_tool_name(self, openapi_client):
         """POST /execute without required 'tool_name' must return 422."""
         resp = openapi_client.post("/execute", json={"args": []})
-        assert resp.status_code == 422, (
-            f"Expected 422 for missing tool_name, got {resp.status_code}"
-        )
+        assert resp.status_code == 422, f"Expected 422 for missing tool_name, got {resp.status_code}"

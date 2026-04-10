@@ -4,12 +4,14 @@ from agents.schemas import DebugStrategy
 from core.schema import parse_llm_to_model
 from core.logging_utils import log_json
 
+
 class DebuggerAgent:
     """
     The DebuggerAgent is responsible for analyzing error messages and providing
     a diagnosis and fix strategy. It interacts with the LLM to get insights
     into potential issues and how to resolve them.
     """
+
     def __init__(self, brain, model):
         self.brain = brain
         self.model = model
@@ -92,14 +94,5 @@ Provide your response as a JSON object with the following keys:
         improve_plan = input_data.get("improve_plan", "")
         implement_details = input_data.get("implement_details", {})
 
-        result = self.diagnose(
-            error_message=error_message,
-            current_goal=current_goal,
-            context=context,
-            improve_plan=improve_plan,
-            implement_details=implement_details
-        )
-        return {
-            "status": "success",
-            "diagnosis": result
-        }
+        result = self.diagnose(error_message=error_message, current_goal=current_goal, context=context, improve_plan=improve_plan, implement_details=implement_details)
+        return {"status": "success", "diagnosis": result}

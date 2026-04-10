@@ -21,6 +21,7 @@ from agents.schemas import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_idea(description: str = "Test idea", novelty: float = 0.8) -> Idea:
     return Idea(
         description=description,
@@ -58,6 +59,7 @@ def _make_innovation_output(
 # ---------------------------------------------------------------------------
 # TestMetaConductorInit
 # ---------------------------------------------------------------------------
+
 
 class TestMetaConductorInit(unittest.TestCase):
     """Tests for MetaConductor.__init__."""
@@ -108,6 +110,7 @@ class TestMetaConductorInit(unittest.TestCase):
 # TestStartSession
 # ---------------------------------------------------------------------------
 
+
 class TestStartSession(unittest.TestCase):
     """Tests for MetaConductor.start_session."""
 
@@ -120,6 +123,7 @@ class TestStartSession(unittest.TestCase):
         self.addCleanup(patcher_log.stop)
 
         from agents.meta_conductor import MetaConductor
+
         self.conductor = MetaConductor()
 
     def test_creates_session(self):
@@ -173,6 +177,7 @@ class TestStartSession(unittest.TestCase):
     def test_brain_save_called_when_brain_present(self):
         brain = MagicMock()
         from agents.meta_conductor import MetaConductor
+
         conductor = MetaConductor(brain=brain)
         conductor.start_session("Problem with brain")
         brain.save_innovation_session.assert_called_once()
@@ -181,6 +186,7 @@ class TestStartSession(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # TestResumeSession
 # ---------------------------------------------------------------------------
+
 
 class TestResumeSession(unittest.TestCase):
     """Tests for MetaConductor.resume_session."""
@@ -194,6 +200,7 @@ class TestResumeSession(unittest.TestCase):
         self.addCleanup(patcher_log.stop)
 
         from agents.meta_conductor import MetaConductor
+
         self.conductor = MetaConductor()
 
     def test_resume_existing(self):
@@ -219,6 +226,7 @@ class TestResumeSession(unittest.TestCase):
 # TestExecutePhase
 # ---------------------------------------------------------------------------
 
+
 class TestExecutePhase(unittest.TestCase):
     """Tests for MetaConductor.execute_phase."""
 
@@ -231,6 +239,7 @@ class TestExecutePhase(unittest.TestCase):
         self.addCleanup(patcher_log.stop)
 
         from agents.meta_conductor import MetaConductor
+
         self.conductor = MetaConductor()
 
     def test_execute_immersion(self):
@@ -357,6 +366,7 @@ class TestExecutePhase(unittest.TestCase):
 # TestGetSession
 # ---------------------------------------------------------------------------
 
+
 class TestGetSession(unittest.TestCase):
     """Tests for MetaConductor.get_session."""
 
@@ -369,6 +379,7 @@ class TestGetSession(unittest.TestCase):
         self.addCleanup(patcher_log.stop)
 
         from agents.meta_conductor import MetaConductor
+
         self.conductor = MetaConductor()
 
     def test_get_existing(self):
@@ -384,6 +395,7 @@ class TestGetSession(unittest.TestCase):
         brain = MagicMock()
         brain.get_innovation_session.return_value = None
         from agents.meta_conductor import MetaConductor
+
         conductor = MetaConductor(brain=brain)
 
         result = conductor.get_session("missing-id")
@@ -395,6 +407,7 @@ class TestGetSession(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # TestListSessions
 # ---------------------------------------------------------------------------
+
 
 class TestListSessions(unittest.TestCase):
     """Tests for MetaConductor.list_sessions."""
@@ -408,6 +421,7 @@ class TestListSessions(unittest.TestCase):
         self.addCleanup(patcher_log.stop)
 
         from agents.meta_conductor import MetaConductor
+
         self.conductor = MetaConductor()
 
     def test_list_all(self):
@@ -454,22 +468,24 @@ class TestListSessions(unittest.TestCase):
         self.assertIn("active", statuses)
         self.assertIn("completed", statuses)
 
-
     def test_list_from_brain_hydrates_output_scores(self):
         brain = MagicMock()
-        brain.list_innovation_sessions.return_value = [{
-            "session_id": "persist01",
-            "problem_statement": "Persisted problem",
-            "status": "completed",
-            "current_phase": InnovationPhase.TRANSFORMATION.value,
-            "phases_completed": [InnovationPhase.DIVERGENCE.value, InnovationPhase.CONVERGENCE.value],
-            "techniques": ["SCAMPER"],
-            "constraints": {"selection_ratio": 0.2},
-            "ideas_generated": 5,
-            "ideas_selected": 2,
-            "output_data": _make_innovation_output(session_id="persist01").model_dump(),
-        }]
+        brain.list_innovation_sessions.return_value = [
+            {
+                "session_id": "persist01",
+                "problem_statement": "Persisted problem",
+                "status": "completed",
+                "current_phase": InnovationPhase.TRANSFORMATION.value,
+                "phases_completed": [InnovationPhase.DIVERGENCE.value, InnovationPhase.CONVERGENCE.value],
+                "techniques": ["SCAMPER"],
+                "constraints": {"selection_ratio": 0.2},
+                "ideas_generated": 5,
+                "ideas_selected": 2,
+                "output_data": _make_innovation_output(session_id="persist01").model_dump(),
+            }
+        ]
         from agents.meta_conductor import MetaConductor
+
         conductor = MetaConductor(brain=brain)
 
         sessions = conductor.list_sessions()
@@ -484,6 +500,7 @@ class TestListSessions(unittest.TestCase):
 # TestRun
 # ---------------------------------------------------------------------------
 
+
 class TestRun(unittest.TestCase):
     """Tests for MetaConductor.run (standard agent interface)."""
 
@@ -496,6 +513,7 @@ class TestRun(unittest.TestCase):
         self.addCleanup(patcher_log.stop)
 
         from agents.meta_conductor import MetaConductor
+
         self.conductor = MetaConductor()
 
     def test_run_starts_new_session(self):
@@ -518,20 +536,24 @@ class TestRun(unittest.TestCase):
         initial_count = len(self.conductor.active_sessions)
 
         # Run with the existing session_id
-        result = self.conductor.run({
-            "problem": "Existing problem",
-            "session_id": session.session_id,
-        })
+        result = self.conductor.run(
+            {
+                "problem": "Existing problem",
+                "session_id": session.session_id,
+            }
+        )
 
         self.assertIsInstance(result, dict)
         # No new session should have been created
         self.assertEqual(len(self.conductor.active_sessions), initial_count)
 
     def test_run_with_unknown_session_id_creates_new(self):
-        result = self.conductor.run({
-            "problem": "New problem",
-            "session_id": "unknown-session-id",
-        })
+        result = self.conductor.run(
+            {
+                "problem": "New problem",
+                "session_id": "unknown-session-id",
+            }
+        )
         self.assertIsInstance(result, dict)
         # A new session should be created since the session_id isn't found
         self.assertEqual(len(self.conductor.active_sessions), 1)
@@ -550,16 +572,19 @@ class TestRun(unittest.TestCase):
 # TestCapabilitiesAndDescription
 # ---------------------------------------------------------------------------
 
+
 class TestCapabilitiesAndDescription(unittest.TestCase):
     """Tests for MetaConductor class-level attributes."""
 
     def test_capabilities_is_list(self):
         from agents.meta_conductor import MetaConductor
+
         self.assertIsInstance(MetaConductor.capabilities, list)
         self.assertGreater(len(MetaConductor.capabilities), 0)
 
     def test_description_is_non_empty_string(self):
         from agents.meta_conductor import MetaConductor
+
         self.assertIsInstance(MetaConductor.description, str)
         self.assertTrue(len(MetaConductor.description) > 0)
 

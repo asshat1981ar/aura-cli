@@ -19,8 +19,7 @@ def test_verifier_prefers_targeted_tests_for_repo_wide_default(tmp_path: Path):
         stderr="",
     )
 
-    with patch("agents.verifier.subprocess.run", return_value=completed) as mock_run, \
-         patch.dict("os.environ", {}, clear=True):
+    with patch("agents.verifier.subprocess.run", return_value=completed) as mock_run, patch.dict("os.environ", {}, clear=True):
         result = agent.run(
             {
                 "project_root": str(project_root),

@@ -201,14 +201,14 @@ class WorkstreamGraph:
 
     def get_all_nodes(self) -> list[WorkstreamNode]:
         """Return all workstream nodes (for iteration).
-        
+
         This is a public accessor to avoid private attribute access violations.
         """
         return list(self._nodes.values())
 
     def iter_nodes(self):
         """Iterate over (workstream_id, node) pairs.
-        
+
         This is a public accessor to avoid private attribute access violations.
         Replaces direct iteration over graph._nodes.items().
         """

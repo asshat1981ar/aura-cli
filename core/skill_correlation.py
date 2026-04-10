@@ -4,6 +4,7 @@ Tracks which skills succeed together across cycles, builds a correlation matrix,
 and suggests optimal skill pairings for future dispatches. This enables AURA
 to discover emergent skill clusters without manual configuration.
 """
+
 import json
 import time
 from collections import defaultdict
@@ -11,14 +12,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from core.logging_utils import log_json
 
+
 @dataclass
 class SkillOutcome:
     """Outcome of a skill execution in a cycle."""
+
     skill_name: str
     goal_type: str
     success: bool
     latency_ms: float = 0.0
     timestamp: float = field(default_factory=time.time)
+
 
 class SkillCorrelationMatrix:
     """Tracks skill co-success patterns and suggests optimal pairings."""

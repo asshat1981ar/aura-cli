@@ -3,6 +3,7 @@ from collections import deque
 from pathlib import Path
 from core.logging_utils import log_json
 
+
 class TaskQueue:
     """
     Manages a persistent queue of tasks. Tasks are stored in a JSON file and
@@ -61,7 +62,7 @@ class TaskQueue:
         Ensures the parent directory exists before writing.
         """
         self.queue_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.queue_path, 'w') as f:
+        with open(self.queue_path, "w") as f:
             json.dump(list(self.queue), f, indent=4)
         log_json("INFO", "task_queue_saved", details={"path": str(self.queue_path), "queue_size": len(self.queue)})
 
@@ -74,7 +75,7 @@ class TaskQueue:
             collections.deque: The loaded task queue.
         """
         if self.queue_path.exists():
-            with open(self.queue_path, 'r') as f:
+            with open(self.queue_path, "r") as f:
                 try:
                     loaded_queue = deque(json.load(f))
                     log_json("INFO", "task_queue_loaded", details={"path": str(self.queue_path), "queue_size": len(loaded_queue)})

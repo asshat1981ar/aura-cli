@@ -1,4 +1,5 @@
 """Unit tests for core/mcp_architecture.py."""
+
 from __future__ import annotations
 
 import pytest

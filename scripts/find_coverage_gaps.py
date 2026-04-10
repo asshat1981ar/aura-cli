@@ -8,6 +8,7 @@ a prioritized list of modules needing test coverage.
 Usage:
     python3 scripts/find_coverage_gaps.py [--coverage-xml coverage.xml] [--top 25]
 """
+
 import argparse
 import ast
 import os
@@ -54,9 +55,7 @@ def parse_coverage_xml(coverage_path: str) -> Dict[str, float]:
     return coverage_map
 
 
-def get_git_change_frequency(
-    directories: List[str], since: str = "6 months ago"
-) -> Dict[str, int]:
+def get_git_change_frequency(directories: List[str], since: str = "6 months ago") -> Dict[str, int]:
     freq_map: Dict[str, int] = {}
     for directory in directories:
         if not os.path.isdir(directory):
@@ -65,7 +64,9 @@ def get_git_change_frequency(
             try:
                 result = subprocess.run(
                     ["git", "log", "--oneline", f"--since={since}", "--", str(py_file)],
-                    capture_output=True, text=True, timeout=10,
+                    capture_output=True,
+                    text=True,
+                    timeout=10,
                 )
                 freq_map[str(py_file)] = len(result.stdout.strip().splitlines())
             except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -106,9 +107,7 @@ def count_lines(filepath: str) -> int:
         return 0
 
 
-def analyze_modules(
-    directories: List[str], coverage_map: Dict[str, float]
-) -> List[ModuleRisk]:
+def analyze_modules(directories: List[str], coverage_map: Dict[str, float]) -> List[ModuleRisk]:
     change_freq = get_git_change_frequency(directories)
     results = []
 
@@ -133,14 +132,16 @@ def analyze_modules(
             complexity_weight = max(min(complexity / 2, 3.0), 0.5)
             risk_score = round(coverage_risk * change_weight * complexity_weight * 100, 1)
 
-            results.append(ModuleRisk(
-                path=filepath,
-                coverage_pct=coverage,
-                change_frequency=changes,
-                complexity_score=complexity,
-                risk_score=risk_score,
-                lines_of_code=loc,
-            ))
+            results.append(
+                ModuleRisk(
+                    path=filepath,
+                    coverage_pct=coverage,
+                    change_frequency=changes,
+                    complexity_score=complexity,
+                    risk_score=risk_score,
+                    lines_of_code=loc,
+                )
+            )
 
     results.sort(key=lambda r: r.risk_score, reverse=True)
     return results
@@ -166,22 +167,18 @@ def main():
     print(header)
     print("-" * len(header))
 
-    for r in results[:args.top]:
-        print(
-            f"{r.priority_label:<14} {r.path:<50} {r.coverage_pct:>5.1f} "
-            f"{r.change_frequency:>4} {r.complexity_score:>6.1f} "
-            f"{r.lines_of_code:>5} {r.risk_score:>6.1f}"
-        )
+    for r in results[: args.top]:
+        print(f"{r.priority_label:<14} {r.path:<50} {r.coverage_pct:>5.1f} {r.change_frequency:>4} {r.complexity_score:>6.1f} {r.lines_of_code:>5} {r.risk_score:>6.1f}")
 
     total_loc = sum(r.lines_of_code for r in results)
     covered_loc = sum(r.lines_of_code * r.coverage_pct / 100 for r in results)
     critical = len([r for r in results if r.risk_score > 70])
     high = len([r for r in results if 40 < r.risk_score <= 70])
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"Total modules analyzed:    {len(results)}")
     print(f"Total LOC:                 {total_loc:,}")
-    print(f"Estimated covered LOC:     {covered_loc:,.0f} ({covered_loc/max(total_loc,1)*100:.1f}%)")
+    print(f"Estimated covered LOC:     {covered_loc:,.0f} ({covered_loc / max(total_loc, 1) * 100:.1f}%)")
     print(f"Critical priority modules: {critical}")
     print(f"High priority modules:     {high}")
     print(f"\n💡 Focus on the top {min(5, len(results))} modules for maximum impact.")

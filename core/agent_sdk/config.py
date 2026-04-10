@@ -1,4 +1,5 @@
 """Configuration for the Agent SDK meta-controller."""
+
 from __future__ import annotations
 
 import os
@@ -21,7 +22,13 @@ _DEFAULT_MCP_PORTS: Dict[str, int] = {
 
 # Built-in tools from Agent SDK that we always allow
 _DEFAULT_ALLOWED_TOOLS: List[str] = [
-    "Read", "Write", "Edit", "Bash", "Glob", "Grep", "Agent",
+    "Read",
+    "Write",
+    "Edit",
+    "Bash",
+    "Glob",
+    "Grep",
+    "Agent",
 ]
 
 
@@ -57,9 +64,16 @@ class AgentSDKConfig:
     semantic_index_path: Path = field(default_factory=lambda: Path("memory/semantic_index.db"))
     scan_llm_budget_usd: float = 0.50
     scan_llm_model: str = "claude-haiku-4-5"
-    scan_exclude_patterns: List[str] = field(default_factory=lambda: [
-        ".git", "__pycache__", "node_modules", ".venv", "venv", "*.egg-info",
-    ])
+    scan_exclude_patterns: List[str] = field(
+        default_factory=lambda: [
+            ".git",
+            "__pycache__",
+            "node_modules",
+            ".venv",
+            "venv",
+            "*.egg-info",
+        ]
+    )
     scan_min_function_lines: int = 10
     scan_min_file_lines: int = 5
     scan_batch_size: int = 10
@@ -94,9 +108,17 @@ class AgentSDKConfig:
             semantic_index_path=Path(sdk_section.get("semantic_index_path", "memory/semantic_index.db")),
             scan_llm_budget_usd=sdk_section.get("scan_llm_budget_usd", 0.50),
             scan_llm_model=sdk_section.get("scan_llm_model", "claude-haiku-4-5"),
-            scan_exclude_patterns=sdk_section.get("scan_exclude_patterns", [
-                ".git", "__pycache__", "node_modules", ".venv", "venv", "*.egg-info",
-            ]),
+            scan_exclude_patterns=sdk_section.get(
+                "scan_exclude_patterns",
+                [
+                    ".git",
+                    "__pycache__",
+                    "node_modules",
+                    ".venv",
+                    "venv",
+                    "*.egg-info",
+                ],
+            ),
             scan_min_function_lines=sdk_section.get("scan_min_function_lines", 10),
             scan_min_file_lines=sdk_section.get("scan_min_file_lines", 5),
             scan_batch_size=sdk_section.get("scan_batch_size", 10),
@@ -116,10 +138,7 @@ class AgentSDKConfig:
     @property
     def mcp_server_endpoints(self) -> Dict[str, str]:
         """Return {name: url} for all configured MCP servers."""
-        return {
-            name: f"http://localhost:{port}"
-            for name, port in self.mcp_ports.items()
-        }
+        return {name: f"http://localhost:{port}" for name, port in self.mcp_ports.items()}
 
     @property
     def thinking_config(self) -> Optional[Dict[str, str]]:

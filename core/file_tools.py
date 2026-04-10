@@ -18,28 +18,34 @@ Custom exceptions:
 * :exc:`FileToolsError`      — base class for all module errors.
 * :exc:`OldCodeNotFoundError`— raised when the target snippet is absent.
 """
+
 import os
 import tempfile
 import difflib
 import subprocess
 from pathlib import Path
 from typing import Optional
-import re # Added for _aura_clean_json
-import json # Added for _aura_safe_loads
+import re  # Added for _aura_clean_json
+import json  # Added for _aura_safe_loads
 from core.logging_utils import log_json
+
 
 # Custom Exception for FileTools
 class FileToolsError(Exception):
     """Base exception for FileTools operations."""
+
     pass
+
 
 class OldCodeNotFoundError(FileToolsError):
     """Exception raised when old_code is not found in the file."""
+
     pass
 
 
 class MismatchOverwriteBlockedError(OldCodeNotFoundError):
     """Raised when mismatch-overwrite fallback is disabled by caller policy."""
+
     pass
 
 
@@ -83,6 +89,7 @@ def mismatch_overwrite_block_log_details(error: object, file_path: str) -> dict:
         "policy": MISMATCH_OVERWRITE_BLOCK_POLICY,
     }
 
+
 def _validate_file_path(file_path: str, project_root: Optional[Path] = None) -> None:
     """Validate a file path for security issues."""
     if "\x00" in file_path:
@@ -117,7 +124,10 @@ def find_historical_match(old_code: str, file_path: str, project_root: Path) -> 
     try:
         log_result = subprocess.run(
             ["git", "log", "--oneline", "-10", "--", file_path],
-            cwd=str(project_root), capture_output=True, text=True, timeout=15,
+            cwd=str(project_root),
+            capture_output=True,
+            text=True,
+            timeout=15,
         )
         if log_result.returncode != 0 or not log_result.stdout.strip():
             return None
@@ -129,7 +139,10 @@ def find_historical_match(old_code: str, file_path: str, project_root: Path) -> 
         for sha in commits:
             show = subprocess.run(
                 ["git", "show", f"{sha}:{file_path}"],
-                cwd=str(project_root), capture_output=True, text=True, timeout=15,
+                cwd=str(project_root),
+                capture_output=True,
+                text=True,
+                timeout=15,
             )
             if show.returncode != 0:
                 continue
@@ -163,6 +176,7 @@ def replace_code(file_path: str, old_code: str, new_code: str, dry_run: bool = F
     """
     _validate_file_path(file_path, project_root)
     from core.sanitizer import sanitize_path
+
     path = Path(file_path)
     if project_root:
         path = sanitize_path(file_path, project_root)
@@ -193,7 +207,7 @@ def replace_code(file_path: str, old_code: str, new_code: str, dry_run: bool = F
                 return
             # If overwrite_file is True, and old_code is empty, new_content is already new_code.
             # The next block will handle the atomic write.
-        else: # Normal replacement logic
+        else:  # Normal replacement logic
             if old_code not in current_content:
                 raise OldCodeNotFoundError(f"'{old_code}' not found in '{file_path}'.")
             new_content = current_content.replace(old_code, new_code)
@@ -209,24 +223,24 @@ def replace_code(file_path: str, old_code: str, new_code: str, dry_run: bool = F
             # Atomic write: write to temp file, then rename/replace
             # Using tempfile.NamedTemporaryFile for safety and automatic cleanup (on close/delete)
             # Use os.replace for atomic replacement on POSIX systems.
-            with tempfile.NamedTemporaryFile(mode='w', delete=False, dir=path.parent, encoding='utf-8') as tmp_file:
+            with tempfile.NamedTemporaryFile(mode="w", delete=False, dir=path.parent, encoding="utf-8") as tmp_file:
                 tmp_file.write(new_content)
-            
+
             try:
                 # Atomically replace the original file
                 os.replace(tmp_file.name, path)
             except OSError as e:
                 # If os.replace fails with "File exists" (Errno 17), try explicit removal then rename.
-                if e.errno == 17: # errno 17 is EEXIST (File exists)
+                if e.errno == 17:  # errno 17 is EEXIST (File exists)
                     log_json("WARN", "replace_code_initial_replace_failed_errno_17", details={"file": str(path), "error": str(e)})
                     try:
                         log_json("INFO", "replace_code_attempting_remove", details={"file": str(path)})
-                        os.remove(path) # Remove the old file
+                        os.remove(path)  # Remove the old file
                         log_json("INFO", "replace_code_old_file_removed", details={"file": str(path)})
                         log_json("INFO", "replace_code_attempting_rename", details={"temp_file": tmp_file.name, "target_file": str(path)})
-                        os.rename(tmp_file.name, path) # Then rename the new file
+                        os.rename(tmp_file.name, path)  # Then rename the new file
                         log_json("INFO", "replace_code_new_file_renamed", details={"file": str(path)})
-                    except OSError as remove_rename_e: # Catch OSError specifically here for more details
+                    except OSError as remove_rename_e:  # Catch OSError specifically here for more details
                         log_json("ERROR", "replace_code_remove_rename_os_error", details={"file": str(path), "error": str(remove_rename_e), "errno": remove_rename_e.errno})
                         raise FileToolsError(f"Failed to replace file '{file_path}' during remove/rename fallback: {remove_rename_e}")
                     except Exception as remove_rename_e:
@@ -234,19 +248,20 @@ def replace_code(file_path: str, old_code: str, new_code: str, dry_run: bool = F
                         raise FileToolsError(f"Unexpected error during remove/rename fallback for '{file_path}': {remove_rename_e}")
                 else:
                     log_json("ERROR", "replace_code_os_error", details={"file": str(path), "error": str(e), "errno": e.errno})
-                    raise # Re-raise other OSErrors
+                    raise  # Re-raise other OSErrors
 
             print(f"Successfully replaced code in '{file_path}'")
 
     except FileToolsError as e:
         print(f"Error in FileTools: {e}")
         raise
-    except OSError as e: # Catch OSError specifically during os.replace
+    except OSError as e:  # Catch OSError specifically during os.replace
         print(f"File system error during atomic replacement: {e}")
         raise FileToolsError(f"File system error during atomic replacement: {e}")
     except Exception as e:
         print(f"An unexpected error occurred during code replacement: {e}")
         raise
+
 
 def _aura_clean_json(raw: str) -> str:
     """Strip markdown code-fence wrappers from an LLM JSON response.
@@ -269,6 +284,7 @@ def _aura_clean_json(raw: str) -> str:
     text = re.sub(r"^\s*```[a-zA-Z]*\s*\n?", "", raw.strip())
     text = re.sub(r"\n?```\s*$", "", text)
     return text.strip()
+
 
 def _aura_safe_loads(raw: str, ctx: str = "unknown"):
     """Parse *raw* as JSON with resilient pre-processing for common LLM quirks.
@@ -297,7 +313,7 @@ def _aura_safe_loads(raw: str, ctx: str = "unknown"):
     try:
         # Attempt to clean up potential encoding issues or hidden characters by re-encoding
         # and then decoding. This can sometimes fix subtle parsing problems.
-        cleaned_for_encoding = raw.encode('utf-8', 'ignore').decode('utf-8')
+        cleaned_for_encoding = raw.encode("utf-8", "ignore").decode("utf-8")
         return json.loads(cleaned_for_encoding)
     except json.JSONDecodeError:
         # If direct load fails, try with markdown fence cleaning (if not already done implicitly)
@@ -305,6 +321,7 @@ def _aura_safe_loads(raw: str, ctx: str = "unknown"):
         # But this path is for when initial json.loads(cleaned_for_encoding) fails.
         cleaned = _aura_clean_json(cleaned_for_encoding)
         return json.loads(cleaned)
+
 
 def _safe_apply_change(
     project_root: Path,
@@ -347,9 +364,9 @@ def _safe_apply_change(
             fallback exists).
     """
     from core.sanitizer import sanitize_path
+
     path_obj = sanitize_path(file_path, project_root)
     path_obj.parent.mkdir(parents=True, exist_ok=True)
-
 
     if not path_obj.exists():
         path_obj.write_text(new_code or "", encoding="utf-8")
@@ -379,20 +396,26 @@ def _safe_apply_change(
 
         if new_code:
             if allow_mismatch_overwrite:
-                log_json("WARN", "file_tools_old_code_mismatch_overwrite", details={
-                    "file": str(path_obj),
-                    "old_code_preview": old_code[:120],
-                })
+                log_json(
+                    "WARN",
+                    "file_tools_old_code_mismatch_overwrite",
+                    details={
+                        "file": str(path_obj),
+                        "old_code_preview": old_code[:120],
+                    },
+                )
                 overwrite_file = True
                 old_code = ""  # trigger full-overwrite path in replace_code
             else:
-                log_json("WARN", "file_tools_old_code_mismatch_blocked", details={
-                    "file": str(path_obj),
-                    "old_code_preview": old_code[:120],
-                })
-                raise MismatchOverwriteBlockedError(
-                    f"'{old_code}' not found in '{path_obj}' and mismatch overwrite fallback is disabled."
+                log_json(
+                    "WARN",
+                    "file_tools_old_code_mismatch_blocked",
+                    details={
+                        "file": str(path_obj),
+                        "old_code_preview": old_code[:120],
+                    },
                 )
+                raise MismatchOverwriteBlockedError(f"'{old_code}' not found in '{path_obj}' and mismatch overwrite fallback is disabled.")
         else:
             # No new_code and no match → truly invalid
             raise OldCodeNotFoundError(f"'{old_code}' not found in '{path_obj}' and no new_code for overwrite.")
@@ -432,6 +455,7 @@ class AtomicChangeSet:
 
         for change in self.changes:
             from core.sanitizer import sanitize_path
+
             file_path = change["file_path"]
             old_code = change.get("old_code", "")
             new_code = change.get("new_code", "")
@@ -456,9 +480,14 @@ class AtomicChangeSet:
             except Exception as exc:
                 if isinstance(exc, MismatchOverwriteBlockedError):
                     log_json("ERROR", MISMATCH_OVERWRITE_BLOCK_EVENT, details=mismatch_overwrite_block_log_details(exc, file_path))
-                log_json("ERROR", "atomic_change_set_failure", details={
-                    "file": file_path, "error": str(exc),
-                })
+                log_json(
+                    "ERROR",
+                    "atomic_change_set_failure",
+                    details={
+                        "file": file_path,
+                        "error": str(exc),
+                    },
+                )
                 # Restore all modified files
                 for restore_key, original in backups.items():
                     try:
@@ -469,9 +498,14 @@ class AtomicChangeSet:
                         else:
                             restore_path.write_text(original, encoding="utf-8")
                     except Exception as restore_exc:  # pragma: no cover
-                        log_json("ERROR", "atomic_change_set_restore_failed", details={
-                            "file": restore_key, "error": str(restore_exc),
-                        })
+                        log_json(
+                            "ERROR",
+                            "atomic_change_set_restore_failed",
+                            details={
+                                "file": restore_key,
+                                "error": str(restore_exc),
+                            },
+                        )
                 raise
         return applied
 

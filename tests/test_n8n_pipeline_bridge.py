@@ -31,7 +31,6 @@ def _make_bridge(**overrides):
 
 
 class TestInit(unittest.TestCase):
-
     def test_defaults_from_config(self):
         bridge = _make_bridge()
         self.assertTrue(bridge.enabled)
@@ -49,7 +48,6 @@ class TestInit(unittest.TestCase):
 
 
 class TestPost(unittest.TestCase):
-
     @patch("core.sadd.n8n_pipeline_bridge.urllib.request.urlopen")
     def test_successful_post(self, mock_urlopen):
         bridge = _make_bridge()
@@ -96,7 +94,6 @@ class TestPost(unittest.TestCase):
 
 
 class TestRouteGoal(unittest.TestCase):
-
     def test_successful_route(self):
         bridge = _make_bridge()
         bridge._post = MagicMock(return_value={"complexity": "complex", "lane": "dual", "route": "p3"})
@@ -129,7 +126,6 @@ class TestRouteGoal(unittest.TestCase):
 
 
 class TestQualityGate(unittest.TestCase):
-
     def test_disabled_returns_pass_skipped(self):
         bridge = _make_bridge(quality_gate_enabled=False)
         result = bridge.quality_gate("ws-1", {"steps": []}, "goal")
@@ -151,7 +147,6 @@ class TestQualityGate(unittest.TestCase):
 
 
 class TestCoordinatePipeline(unittest.TestCase):
-
     def test_disabled_returns_none(self):
         bridge = _make_bridge(route_complex_through_p3=False)
         result = bridge.coordinate_pipeline("ws-1", "goal", {})
@@ -167,7 +162,6 @@ class TestCoordinatePipeline(unittest.TestCase):
 
 
 class TestSendFeedback(unittest.TestCase):
-
     def test_sends_feedback(self):
         bridge = _make_bridge()
         bridge._post = MagicMock(return_value=None)
@@ -193,7 +187,6 @@ class TestSendFeedback(unittest.TestCase):
 
 
 class TestTrace(unittest.TestCase):
-
     def test_trace_enabled(self):
         bridge = _make_bridge(trace_enabled=True)
         bridge._post = MagicMock(return_value=None)
@@ -211,7 +204,6 @@ class TestTrace(unittest.TestCase):
 
 
 class TestNotifySession(unittest.TestCase):
-
     def test_sends_session_event(self):
         bridge = _make_bridge()
         bridge._post = MagicMock(return_value=None)
@@ -223,7 +215,6 @@ class TestNotifySession(unittest.TestCase):
 
 
 class TestNotifyWorkstream(unittest.TestCase):
-
     def test_sends_workstream_event(self):
         bridge = _make_bridge()
         bridge._post = MagicMock(return_value=None)

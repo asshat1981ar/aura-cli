@@ -1,4 +1,5 @@
 """Skill: static security analysis – secrets, injection patterns, unsafe calls."""
+
 from __future__ import annotations
 import ast
 import re
@@ -11,9 +12,9 @@ from core.logging_utils import log_json
 _SECRET_PATTERNS = [
     (re.compile(r'(?i)(api_key|apikey|secret_key|access_token|auth_token)\s*=\s*["\'][^"\']{8,}["\']'), "hardcoded_secret", "critical"),
     (re.compile(r'(?i)(password|passwd|pwd)\s*=\s*["\'][^"\']{4,}["\']'), "hardcoded_password", "critical"),
-    (re.compile(r'Bearer\s+[A-Za-z0-9\-_\.]{20,}'), "bearer_token_in_code", "high"),
+    (re.compile(r"Bearer\s+[A-Za-z0-9\-_\.]{20,}"), "bearer_token_in_code", "high"),
     (re.compile(r'(?i)private[_\s]?key\s*=\s*["\'][^"\']{10,}'), "hardcoded_private_key", "critical"),
-    (re.compile(r'(?:AKIA|ASIA)[A-Z0-9]{16}'), "aws_access_key", "critical"),
+    (re.compile(r"(?:AKIA|ASIA)[A-Z0-9]{16}"), "aws_access_key", "critical"),
 ]
 
 _SQL_PATTERNS = [

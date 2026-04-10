@@ -1,4 +1,5 @@
 """Skill: database query analyzer — detect N+1 queries, missing indexes, slow patterns."""
+
 from __future__ import annotations
 
 import ast
@@ -88,9 +89,7 @@ _ORM_N1_PATTERNS = [
 ]
 
 # Missing index hints — columns frequently filtered but rarely indexed
-_MISSING_INDEX_COLS = re.compile(
-    r"WHERE\s+(?P<col>\w+)\s*=\s*[%?:]", re.IGNORECASE
-)
+_MISSING_INDEX_COLS = re.compile(r"WHERE\s+(?P<col>\w+)\s*=\s*[%?:]", re.IGNORECASE)
 
 # Parameterized query check — dangerous string formatting in queries
 _STRING_FORMAT_IN_QUERY = re.compile(
@@ -107,6 +106,7 @@ _INJECTION_RISK = re.compile(
 # ---------------------------------------------------------------------------
 # AST-based analysis
 # ---------------------------------------------------------------------------
+
 
 def _extract_string_values(node: ast.expr) -> List[str]:
     """Recursively extract string literal values from an AST node."""
@@ -162,16 +162,14 @@ def _detect_n1_in_loops(tree: ast.AST, source_lines: List[str]) -> List[Dict]:
             # Look for chained attribute access: a.b.c
             if isinstance(child, ast.Attribute):
                 if isinstance(child.value, ast.Attribute):
-                    findings.append({
-                        "issue": "possible_n1_query",
-                        "severity": "high",
-                        "line": loop_line,
-                        "detail": (
-                            f"Chained attribute access inside loop at line {loop_line} "
-                            "may trigger N+1 queries. Use eager loading (select_related, "
-                            "prefetch_related, joinedload)."
-                        ),
-                    })
+                    findings.append(
+                        {
+                            "issue": "possible_n1_query",
+                            "severity": "high",
+                            "line": loop_line,
+                            "detail": (f"Chained attribute access inside loop at line {loop_line} may trigger N+1 queries. Use eager loading (select_related, prefetch_related, joinedload)."),
+                        }
+                    )
                     break
         if findings and findings[-1]["line"] == loop_line:
             continue  # already recorded for this loop
@@ -194,24 +192,28 @@ def _analyse_source(source: str, file_path: str) -> Dict[str, Any]:
     for i, line in enumerate(source.splitlines(), 1):
         for pattern, issue_id, severity, detail in _SQL_ANTIPATTERNS:
             if pattern.search(line):
-                findings.append({
-                    "issue": issue_id,
-                    "severity": severity,
-                    "file": file_path,
-                    "line": i,
-                    "detail": detail,
-                    "snippet": line.strip()[:120],
-                })
+                findings.append(
+                    {
+                        "issue": issue_id,
+                        "severity": severity,
+                        "file": file_path,
+                        "line": i,
+                        "detail": detail,
+                        "snippet": line.strip()[:120],
+                    }
+                )
         # Injection risk: f-string / format in execute()
         if _INJECTION_RISK.search(line):
-            findings.append({
-                "issue": "sql_injection_risk",
-                "severity": "critical",
-                "file": file_path,
-                "line": i,
-                "detail": "Dynamic SQL built with f-string/format — use parameterized queries.",
-                "snippet": line.strip()[:120],
-            })
+            findings.append(
+                {
+                    "issue": "sql_injection_risk",
+                    "severity": "critical",
+                    "file": file_path,
+                    "line": i,
+                    "detail": "Dynamic SQL built with f-string/format — use parameterized queries.",
+                    "snippet": line.strip()[:120],
+                }
+            )
 
     # ---- AST-level scan ----
     try:
@@ -232,14 +234,16 @@ def _analyse_source(source: str, file_path: str) -> Dict[str, Any]:
         sql = hit["sql"]
         for pattern, issue_id, severity, detail in _SQL_ANTIPATTERNS:
             if pattern.search(sql):
-                findings.append({
-                    "issue": issue_id,
-                    "severity": severity,
-                    "file": file_path,
-                    "line": hit["line"],
-                    "detail": detail,
-                    "snippet": sql[:120],
-                })
+                findings.append(
+                    {
+                        "issue": issue_id,
+                        "severity": severity,
+                        "file": file_path,
+                        "line": hit["line"],
+                        "detail": detail,
+                        "snippet": sql[:120],
+                    }
+                )
 
     # N+1 detection
     n1_findings = _detect_n1_in_loops(tree, source.splitlines())
@@ -271,6 +275,7 @@ def _analyse_source(source: str, file_path: str) -> Dict[str, Any]:
 # Skill class
 # ---------------------------------------------------------------------------
 
+
 class DatabaseQueryAnalyzerSkill(SkillBase):
     """
     Analyse Python source for database query anti-patterns:
@@ -292,10 +297,7 @@ class DatabaseQueryAnalyzerSkill(SkillBase):
 
         if project_root:
             root = Path(project_root)
-            py_files = [
-                f for f in iter_py_files(root)
-                if "migrations" not in f.parts
-            ]
+            py_files = [f for f in iter_py_files(root) if "migrations" not in f.parts]
             if not py_files:
                 return {"error": f"No Python files found under '{project_root}'.", "files_scanned": 0}
 

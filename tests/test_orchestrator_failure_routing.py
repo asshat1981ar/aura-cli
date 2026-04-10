@@ -1,4 +1,5 @@
 """Tests for orchestrator failure routing and act-loop retry/replan/stash."""
+
 import tempfile
 import unittest
 from pathlib import Path
@@ -12,11 +13,11 @@ def _make_orchestrator(tmpdir="/tmp"):
     agents = {}
     memory = MagicMock(spec=MemoryStore)
     memory.read_log.return_value = []
-    return LoopOrchestrator(agents=agents, memory_store=memory,
-                            project_root=Path(tmpdir))
+    return LoopOrchestrator(agents=agents, memory_store=memory, project_root=Path(tmpdir))
 
 
 # ── _route_failure ─────────────────────────────────────────────────────────────
+
 
 class TestRouteFailure(unittest.TestCase):
     def setUp(self):
@@ -39,10 +40,7 @@ class TestRouteFailure(unittest.TestCase):
                 self.assertEqual(result, "skip")
 
     def test_logs_field_also_inspected(self):
-        result = self.orc._route_failure({
-            "failures": [],
-            "logs": "ModuleNotFoundError: No module named 'requests'"
-        })
+        result = self.orc._route_failure({"failures": [], "logs": "ModuleNotFoundError: No module named 'requests'"})
         self.assertEqual(result, "skip")
 
     def test_empty_verification_returns_act(self):
@@ -51,6 +49,7 @@ class TestRouteFailure(unittest.TestCase):
 
 
 # ── _restore_applied_changes ──────────────────────────────────────────────────
+
 
 class TestRestoreAppliedChanges(unittest.TestCase):
     def setUp(self):
@@ -101,6 +100,7 @@ class TestRestoreAppliedChanges(unittest.TestCase):
 
 # ── _run_act_loop retry backoff ───────────────────────────────────────────────
 
+
 class TestActLoopRetryBackoff(unittest.TestCase):
     def _make_pipeline_cfg(self, max_attempts: int):
         cfg = MagicMock()
@@ -112,9 +112,7 @@ class TestActLoopRetryBackoff(unittest.TestCase):
     def _make_agents_with_verify_fail(self):
         """Agents where act returns a valid change_set but verify always fails."""
         act_agent = MagicMock()
-        act_agent.run.return_value = {
-            "changes": [{"file_path": "f.py", "new_code": "x = 1", "old_code": "", "overwrite_file": True}]
-        }
+        act_agent.run.return_value = {"changes": [{"file_path": "f.py", "new_code": "x = 1", "old_code": "", "overwrite_file": True}]}
         verify_agent = MagicMock()
         verify_agent.run.return_value = {
             "status": "fail",
@@ -129,10 +127,7 @@ class TestActLoopRetryBackoff(unittest.TestCase):
         orc.agents = self._make_agents_with_verify_fail()
         cfg = self._make_pipeline_cfg(max_attempts=3)
 
-        with patch("time.sleep") as mock_sleep, \
-             patch("core.orchestrator.validate_phase_output", return_value=[]), \
-             patch.object(orc, "_run_phase") as mock_phase, \
-             patch.object(orc, "_run_sandbox_loop", return_value=({}, {}, 0)):
+        with patch("time.sleep") as mock_sleep, patch("core.orchestrator.validate_phase_output", return_value=[]), patch.object(orc, "_run_phase") as mock_phase, patch.object(orc, "_run_sandbox_loop", return_value=({}, {}, 0)):
             mock_phase.side_effect = [
                 # Alternating act / verify outputs
                 {"changes": []},
@@ -143,9 +138,16 @@ class TestActLoopRetryBackoff(unittest.TestCase):
                 {"status": "fail", "failures": ["err"], "passed": [], "logs": ""},
             ]
             orc._run_act_loop(
-                goal="test", plan={}, task_bundle={}, pipeline_cfg=cfg,
-                cycle_id="c1", phase_outputs={}, dry_run=True,
-                plan_attempt=0, max_plan_retries=1, skill_context={},
+                goal="test",
+                plan={},
+                task_bundle={},
+                pipeline_cfg=cfg,
+                cycle_id="c1",
+                phase_outputs={},
+                dry_run=True,
+                plan_attempt=0,
+                max_plan_retries=1,
+                skill_context={},
             )
         # sleep should have been called for attempts 2 and 3
         self.assertGreaterEqual(mock_sleep.call_count, 1)
@@ -154,19 +156,22 @@ class TestActLoopRetryBackoff(unittest.TestCase):
         orc = _make_orchestrator()
         cfg = self._make_pipeline_cfg(max_attempts=2)
 
-        with patch("time.sleep"), \
-             patch("core.orchestrator.validate_phase_output", return_value=[]), \
-             patch.object(orc, "_run_phase") as mock_phase, \
-             patch.object(orc, "_run_sandbox_loop", return_value=({}, {}, 0)), \
-             patch.object(orc, "_route_failure", return_value="plan"):
+        with patch("time.sleep"), patch("core.orchestrator.validate_phase_output", return_value=[]), patch.object(orc, "_run_phase") as mock_phase, patch.object(orc, "_run_sandbox_loop", return_value=({}, {}, 0)), patch.object(orc, "_route_failure", return_value="plan"):
             mock_phase.side_effect = [
                 {"changes": []},
                 {"status": "fail", "failures": ["design error"], "passed": [], "logs": ""},
             ]
             _, replan, _ = orc._run_act_loop(
-                goal="test", plan={}, task_bundle={}, pipeline_cfg=cfg,
-                cycle_id="c1", phase_outputs={}, dry_run=True,
-                plan_attempt=0, max_plan_retries=1, skill_context={},
+                goal="test",
+                plan={},
+                task_bundle={},
+                pipeline_cfg=cfg,
+                cycle_id="c1",
+                phase_outputs={},
+                dry_run=True,
+                plan_attempt=0,
+                max_plan_retries=1,
+                skill_context={},
             )
         self.assertTrue(replan)
 
@@ -199,20 +204,23 @@ class TestActLoopRetryBackoff(unittest.TestCase):
         orc.root_cause_analysis_agent = root_cause_agent
         orc.investigation_agent = investigation_agent
 
-        with patch("time.sleep"), \
-             patch("core.orchestrator.validate_phase_output", return_value=[]), \
-             patch.object(orc, "_run_phase") as mock_phase, \
-             patch.object(orc, "_run_sandbox_loop", return_value=({"changes": []}, {}, 0)), \
-             patch.object(orc, "_route_failure", return_value="plan"):
+        with patch("time.sleep"), patch("core.orchestrator.validate_phase_output", return_value=[]), patch.object(orc, "_run_phase") as mock_phase, patch.object(orc, "_run_sandbox_loop", return_value=({"changes": []}, {}, 0)), patch.object(orc, "_route_failure", return_value="plan"):
             mock_phase.side_effect = [
                 {"changes": []},
                 {"status": "fail", "failures": ["SyntaxError: invalid syntax"], "passed": [], "logs": "SyntaxError: invalid syntax"},
             ]
             phase_outputs = {}
             _, replan, _ = orc._run_act_loop(
-                goal="test", plan={}, task_bundle={}, pipeline_cfg=cfg,
-                cycle_id="c1", phase_outputs=phase_outputs, dry_run=True,
-                plan_attempt=0, max_plan_retries=1, skill_context={},
+                goal="test",
+                plan={},
+                task_bundle={},
+                pipeline_cfg=cfg,
+                cycle_id="c1",
+                phase_outputs=phase_outputs,
+                dry_run=True,
+                plan_attempt=0,
+                max_plan_retries=1,
+                skill_context={},
             )
 
         self.assertTrue(replan)

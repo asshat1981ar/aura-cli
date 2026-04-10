@@ -22,11 +22,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 # Bug 1 – GoalArchive._load_archive: dead code removed
 # ---------------------------------------------------------------------------
 
+
 class TestGoalArchiveLoadArchive(unittest.TestCase):
     """Verify _load_archive works correctly after dead-code removal."""
 
     def _make_archive(self, archive_path):
         from core.goal_archive import GoalArchive
+
         return GoalArchive(archive_path=archive_path)
 
     def test_load_returns_empty_when_no_file(self):
@@ -52,6 +54,7 @@ class TestGoalArchiveLoadArchive(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             path_str = str(Path(d) / "goal_archive.json")
             from core.goal_archive import GoalArchive
+
             a = GoalArchive(archive_path=path_str)
             a.record("my goal", 8.5)
             # Reload from disk — verifies persistence works
@@ -65,6 +68,7 @@ class TestGoalArchiveLoadArchive(unittest.TestCase):
 # Bug 2 – aura_cli/cli_main.py: _handle_doctor / _handle_clear available
 # ---------------------------------------------------------------------------
 
+
 class TestCliMainImports(unittest.TestCase):
     """_handle_doctor and _handle_clear must be importable from aura_cli.commands
     and must be available in the aura_cli.cli_main module's namespace."""
@@ -77,6 +81,7 @@ class TestCliMainImports(unittest.TestCase):
 
     def test_cli_main_imports_handle_doctor(self):
         import aura_cli.cli_main as m
+
         self.assertTrue(
             hasattr(m, "_handle_doctor"),
             "_handle_doctor must be imported into aura_cli.cli_main",
@@ -84,6 +89,7 @@ class TestCliMainImports(unittest.TestCase):
 
     def test_cli_main_imports_handle_clear(self):
         import aura_cli.cli_main as m
+
         self.assertTrue(
             hasattr(m, "_handle_clear"),
             "_handle_clear must be imported into aura_cli.cli_main",
@@ -94,6 +100,7 @@ class TestCliMainImports(unittest.TestCase):
 # Bug 3 & 4 – hybrid_loop.py: OldCodeNotFoundError/FileToolsError imports
 #             and correct _safe_apply_change call signature
 # ---------------------------------------------------------------------------
+
 
 class TestHybridLoopImports(unittest.TestCase):
     """OldCodeNotFoundError and FileToolsError must be importable from
@@ -108,6 +115,7 @@ class TestHybridLoopImports(unittest.TestCase):
         # i.e. they were imported correctly and won't cause NameError at runtime.
         from core import hybrid_loop
         from core.file_tools import OldCodeNotFoundError, FileToolsError
+
         self.assertIs(hybrid_loop.OldCodeNotFoundError, OldCodeNotFoundError)
         self.assertIs(hybrid_loop.FileToolsError, FileToolsError)
 
@@ -121,6 +129,7 @@ class TestHybridLoopApplyChangeCallSignature(unittest.TestCase):
         model = MagicMock()
         git = MagicMock()
         from core.hybrid_loop import HybridClosedLoop
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             return HybridClosedLoop(model, brain, git)
@@ -168,11 +177,13 @@ class TestHybridLoopApplyChangeCallSignature(unittest.TestCase):
 
     def test_apply_change_handles_old_code_not_found(self):
         from core.file_tools import OldCodeNotFoundError
+
         brain = MagicMock()
         model = MagicMock()
         model.respond.return_value = '{"summary":"err","diagnosis":"d","fix_strategy":"f","severity":"HIGH"}'
         git = MagicMock()
         from core.hybrid_loop import HybridClosedLoop
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             loop = HybridClosedLoop(model, brain, git)
@@ -194,18 +205,19 @@ class TestHybridLoopApplyChangeCallSignature(unittest.TestCase):
 
     def test_apply_change_handles_mismatch_overwrite_blocked(self):
         from core.file_tools import MismatchOverwriteBlockedError
+
         brain = MagicMock()
         model = MagicMock()
         model.respond.return_value = '{"summary":"err","diagnosis":"d","fix_strategy":"f","severity":"HIGH"}'
         git = MagicMock()
         from core.hybrid_loop import HybridClosedLoop
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             loop = HybridClosedLoop(model, brain, git)
         project_root = Path(tempfile.mkdtemp())
 
-        with patch("core.hybrid_loop.apply_change_with_explicit_overwrite_policy", side_effect=MismatchOverwriteBlockedError("blocked")), \
-             patch.object(loop, "_log_and_diagnose_error", return_value=False) as mock_diag:
+        with patch("core.hybrid_loop.apply_change_with_explicit_overwrite_policy", side_effect=MismatchOverwriteBlockedError("blocked")), patch.object(loop, "_log_and_diagnose_error", return_value=False) as mock_diag:
             result = loop._apply_change_with_debug(
                 project_root=project_root,
                 sanitized_file_path="file.py",
@@ -226,11 +238,13 @@ class TestHybridLoopApplyChangeCallSignature(unittest.TestCase):
 
     def test_apply_change_handles_file_tools_error(self):
         from core.file_tools import FileToolsError
+
         brain = MagicMock()
         model = MagicMock()
         model.respond.return_value = '{"summary":"err","diagnosis":"d","fix_strategy":"f","severity":"HIGH"}'
         git = MagicMock()
         from core.hybrid_loop import HybridClosedLoop
+
         with warnings.catch_warnings():
             warnings.simplefilter("ignore", DeprecationWarning)
             loop = HybridClosedLoop(model, brain, git)

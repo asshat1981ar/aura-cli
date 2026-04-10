@@ -2,12 +2,13 @@
 Database migration system for AURA CLI.
 Ordered, idempotent schema migrations for all SQLite databases.
 """
+
 from __future__ import annotations
 
 import hashlib
 import logging
 import sqlite3
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -151,21 +152,13 @@ CREATE TABLE IF NOT EXISTS _schema_migrations (
             conn.executescript(self._MIGRATIONS_TABLE)
             conn.commit()
 
-            already_applied = {
-                row[0]: row[2]
-                for row in conn.execute(
-                    "SELECT version, description, checksum FROM _schema_migrations"
-                )
-            }
+            already_applied = {row[0]: row[2] for row in conn.execute("SELECT version, description, checksum FROM _schema_migrations")}
 
             for migration in self._migrations:
                 if migration.version in already_applied:
                     stored = already_applied[migration.version]
                     if stored != migration.checksum:
-                        raise RuntimeError(
-                            f"Migration {migration.version} checksum mismatch! "
-                            f"Expected {migration.checksum}, found {stored}."
-                        )
+                        raise RuntimeError(f"Migration {migration.version} checksum mismatch! Expected {migration.checksum}, found {stored}.")
                     continue
 
                 logger.info(
@@ -176,17 +169,14 @@ CREATE TABLE IF NOT EXISTS _schema_migrations (
                 try:
                     conn.executescript(migration.up_sql)
                     conn.execute(
-                        "INSERT INTO _schema_migrations (version, description, checksum) "
-                        "VALUES (?, ?, ?)",
+                        "INSERT INTO _schema_migrations (version, description, checksum) VALUES (?, ?, ?)",
                         (migration.version, migration.description, migration.checksum),
                     )
                     conn.commit()
                     applied.append(migration.version)
                 except Exception as exc:
                     conn.rollback()
-                    raise RuntimeError(
-                        f"Migration {migration.version} failed: {exc}"
-                    ) from exc
+                    raise RuntimeError(f"Migration {migration.version} failed: {exc}") from exc
 
         if applied:
             logger.info("Applied %d migrations: %s", len(applied), ", ".join(applied))
@@ -196,26 +186,17 @@ CREATE TABLE IF NOT EXISTS _schema_migrations (
         """Rollback migrations newer than target_version."""
         rolled_back: list[str] = []
         with sqlite3.connect(self._db_path) as conn:
-            versions = [
-                row[0]
-                for row in conn.execute(
-                    "SELECT version FROM _schema_migrations ORDER BY version DESC"
-                )
-            ]
+            versions = [row[0] for row in conn.execute("SELECT version FROM _schema_migrations ORDER BY version DESC")]
             for version in versions:
                 if version <= target_version:
                     break
-                migration = next(
-                    (m for m in self._migrations if m.version == version), None
-                )
+                migration = next((m for m in self._migrations if m.version == version), None)
                 if not migration:
                     raise RuntimeError(f"Migration {version} not in registry")
                 if not migration.down_sql:
                     raise RuntimeError(f"Migration {version} is irreversible")
                 conn.executescript(migration.down_sql)
-                conn.execute(
-                    "DELETE FROM _schema_migrations WHERE version = ?", (version,)
-                )
+                conn.execute("DELETE FROM _schema_migrations WHERE version = ?", (version,))
                 conn.commit()
                 rolled_back.append(version)
         return rolled_back

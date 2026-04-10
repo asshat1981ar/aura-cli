@@ -1,4 +1,5 @@
 """Filesystem jailing, secure directory creation, and cleanup for environment isolation."""
+
 from __future__ import annotations
 
 import os
@@ -19,10 +20,7 @@ def jail_path(path: Path, workspace_root: Path) -> Path:
     try:
         resolved.relative_to(workspace_root.resolve())
     except ValueError:
-        raise ValueError(
-            f"Path '{path}' escapes workspace root '{workspace_root}'. "
-            "Only paths within the workspace are allowed."
-        )
+        raise ValueError(f"Path '{path}' escapes workspace root '{workspace_root}'. Only paths within the workspace are allowed.")
     return resolved
 
 

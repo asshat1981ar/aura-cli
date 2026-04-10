@@ -62,9 +62,7 @@ class MCPDiscoveryAgent:
         async def _do_register():
             for server in discovered:
                 server_raw = mcp_servers.get(server.get("name", ""), {})
-                port = server_raw.get("port") or (
-                    int(server_raw.get("env", {}).get("PORT", 0)) or None
-                )
+                port = server_raw.get("port") or (int(server_raw.get("env", {}).get("PORT", 0)) or None)
                 if port:
                     cfg = MCPServerConfig(
                         name=server["name"],
@@ -74,8 +72,7 @@ class MCPDiscoveryAgent:
                     try:
                         await agent_registry.register_mcp_agents(cfg)
                     except Exception as e:
-                        log_json("WARN", "mcp_discovery_register_failed",
-                                 details={"server": server["name"], "error": str(e)})
+                        log_json("WARN", "mcp_discovery_register_failed", details={"server": server["name"], "error": str(e)})
 
         try:
             asyncio.get_running_loop()

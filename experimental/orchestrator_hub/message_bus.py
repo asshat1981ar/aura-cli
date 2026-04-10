@@ -4,6 +4,7 @@ Provides pub/sub and request-response patterns. Falls back to an in-process
 queue when Momento Topics is unavailable, following the circuit breaker
 pattern from memory/momento_adapter.py.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -60,7 +61,7 @@ class InProcessBus:
 
         # Trim log
         if len(self._message_log) > self._max_log_size:
-            self._message_log = self._message_log[-self._max_log_size:]
+            self._message_log = self._message_log[-self._max_log_size :]
 
         # Notify subscribers
         for handler in self._subscribers.get(topic, []):
@@ -123,9 +124,7 @@ class MessageBus:
         """Subscribe to a topic."""
         self._local.subscribe(topic, handler)
 
-    def request_response(
-        self, topic: str, payload: Dict, sender: str = "", timeout: float = 30.0
-    ) -> Optional[Dict]:
+    def request_response(self, topic: str, payload: Dict, sender: str = "", timeout: float = 30.0) -> Optional[Dict]:
         """Send a request and wait for a correlated response (sync version).
 
         Uses correlation_id to match request to response.

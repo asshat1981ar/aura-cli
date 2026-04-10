@@ -7,6 +7,7 @@ corrected between attempts (simulating an LLM self-correction loop).
 These tests use the real SandboxAgent with real subprocess execution
 (no mocking) to validate true end-to-end behavior.
 """
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -16,6 +17,7 @@ from agents.sandbox import SandboxAgent, SandboxResult
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_agent(timeout: int = 10) -> SandboxAgent:
     brain = MagicMock()
@@ -41,6 +43,7 @@ def retry_run_code(agent: SandboxAgent, code_versions: list, max_retries: int = 
 # ---------------------------------------------------------------------------
 # Retry scenarios
 # ---------------------------------------------------------------------------
+
 
 class TestSandboxRetryE2E:
     def test_immediate_success_uses_one_attempt(self):
@@ -138,6 +141,7 @@ class TestSandboxRetryE2E:
 # Sandbox rollback scenario
 # ---------------------------------------------------------------------------
 
+
 class TestSandboxRollbackE2E:
     def test_failed_result_does_not_affect_next_execution(self):
         """Each run_code call uses a fresh temp directory — no state leaks."""
@@ -145,12 +149,7 @@ class TestSandboxRollbackE2E:
         # First run writes a file (it's in a sandbox temp dir)
         r1 = agent.run_code("with open('state.txt', 'w') as f: f.write('polluted')")
         # Second run in its own fresh temp dir: state.txt should not exist
-        r2 = agent.run_code(
-            "import os\n"
-            "if os.path.exists('state.txt'):\n"
-            "    raise AssertionError('state leak!')\n"
-            "print('clean')"
-        )
+        r2 = agent.run_code("import os\nif os.path.exists('state.txt'):\n    raise AssertionError('state leak!')\nprint('clean')")
         assert r2.passed is True, f"State leaked between runs: {r2.stderr}"
 
     def test_timeout_does_not_block_subsequent_runs(self):

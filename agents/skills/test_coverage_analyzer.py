@@ -1,4 +1,5 @@
 """Skill: analyse test coverage using coverage.py or a heuristic fallback."""
+
 from __future__ import annotations
 import json
 import re
@@ -22,6 +23,7 @@ def _heuristic_coverage(root: Path) -> Dict[str, Any]:
     src_funcs: Dict[str, List[str]] = {}
     test_funcs: Dict[str, List[str]] = {}
     import ast as _ast
+
     for f in root.rglob("*.py"):
         if ".git" in f.parts or "node_modules" in f.parts or "__pycache__" in f.parts:
             continue
@@ -101,14 +103,10 @@ class TestCoverageAnalyzerSkill(SkillBase):
         if cov_json_path.exists():
             try:
                 data = json.loads(cov_json_path.read_text())
-                files_data = {
-                    f: fd for f, fd in data.get("files", {}).items()
-                    if any(cf.replace("\\", "/") in f.replace("\\", "/") for cf in changed_files)
-                }
+                files_data = {f: fd for f, fd in data.get("files", {}).items() if any(cf.replace("\\", "/") in f.replace("\\", "/") for cf in changed_files)}
                 if files_data:
                     pct = round(
-                        sum(fd.get("summary", {}).get("percent_covered", 0.0) for fd in files_data.values())
-                        / len(files_data),
+                        sum(fd.get("summary", {}).get("percent_covered", 0.0) for fd in files_data.values()) / len(files_data),
                         1,
                     )
                 else:

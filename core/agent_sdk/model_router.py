@@ -4,6 +4,7 @@
 Selects the cheapest model tier that can reliably handle each goal type,
 learning from historical outcomes. Persists stats to JSON file.
 """
+
 from __future__ import annotations
 
 import json
@@ -26,8 +27,10 @@ TIER_TO_MODEL: Dict[str, str] = {t["tier"]: t["model"] for t in MODEL_TIERS}
 TIER_ORDER: List[str] = [t["tier"] for t in MODEL_TIERS]
 
 _EMPTY_TIER_STATS = {
-    "attempts": 0, "successes": 0,
-    "consecutive_failures": 0, "consecutive_successes": 0,
+    "attempts": 0,
+    "successes": 0,
+    "consecutive_failures": 0,
+    "consecutive_successes": 0,
     "ema_score": 0.5,
 }
 
@@ -65,9 +68,7 @@ class AdaptiveModelRouter:
         self._stats_path.parent.mkdir(parents=True, exist_ok=True)
         tmp = None
         try:
-            fd, tmp = tempfile.mkstemp(
-                dir=str(self._stats_path.parent), suffix=".tmp"
-            )
+            fd, tmp = tempfile.mkstemp(dir=str(self._stats_path.parent), suffix=".tmp")
             with open(fd, "w") as f:
                 json.dump(self._stats, f, indent=2)
             Path(tmp).replace(self._stats_path)
@@ -119,9 +120,7 @@ class AdaptiveModelRouter:
         # Fallback: most powerful
         return TIER_TO_MODEL["powerful"]
 
-    def record_outcome(
-        self, goal_type: str, model: str, success: bool
-    ) -> None:
+    def record_outcome(self, goal_type: str, model: str, success: bool) -> None:
         """Record a goal outcome and update EMA + counters."""
         tier = MODEL_TO_TIER.get(model, "standard")
         if goal_type not in self._stats:

@@ -1,4 +1,5 @@
 """Smoke tests for all 20 AURA skill modules."""
+
 import os
 import sys
 from pathlib import Path
@@ -37,7 +38,7 @@ def _private():
     pass
 '''
 
-BAD_CODE = '''
+BAD_CODE = """
 import os
 import unused_module
 
@@ -48,10 +49,11 @@ def foo(a, b, c, d, e, f, g):
         for j in range(10):
             eval(str(i + j))
     return a
-'''
+"""
 
 
 # ── per-skill smoke tests ──────────────────────────────────────────────────────
+
 
 def test_dependency_analyzer_returns_dict(skills, project_root):
     result = skills["dependency_analyzer"].run({"project_root": project_root})
@@ -158,11 +160,7 @@ def test_linter_enforcer_returns_dict(skills, project_root):
 
 
 def test_incremental_differ_basic(skills):
-    result = skills["incremental_differ"].run({
-        "old_code": "def foo():\n    pass\n",
-        "new_code": "def foo():\n    return 1\ndef bar():\n    pass\n",
-        "file_path": "test.py"
-    })
+    result = skills["incremental_differ"].run({"old_code": "def foo():\n    pass\n", "new_code": "def foo():\n    return 1\ndef bar():\n    pass\n", "file_path": "test.py"})
     assert isinstance(result, dict)
     assert "added_symbols" in result or "error" in result
     if "added_symbols" in result:
@@ -182,7 +180,7 @@ def test_tech_debt_quantifier_returns_dict(skills, project_root):
 
 
 def test_api_contract_validator_with_code(skills):
-    code = '''
+    code = """
 from fastapi import FastAPI
 app = FastAPI()
 
@@ -193,7 +191,7 @@ async def list_users():
 @app.post("/users")
 async def create_user(name: str):
     pass
-'''
+"""
     result = skills["api_contract_validator"].run({"code": code, "file_path": "api.py"})
     assert isinstance(result, dict)
     assert "endpoints" in result or "error" in result
@@ -270,15 +268,13 @@ def test_adaptive_strategy_selector_recommendation(skills):
 
 
 def test_adaptive_strategy_selector_record(skills):
-    result = skills["adaptive_strategy_selector"].run({
-        "goal": "fix a bug",
-        "record_result": {"strategy": "sliding_window", "success": True, "cycles": 3, "stop_reason": "CONVERGED"}
-    })
+    result = skills["adaptive_strategy_selector"].run({"goal": "fix a bug", "record_result": {"strategy": "sliding_window", "success": True, "cycles": 3, "stop_reason": "CONVERGED"}})
     assert isinstance(result, dict)
     assert "recommended_strategy" in result or "error" in result
 
 
 # ── registry tests ─────────────────────────────────────────────────────────────
+
 
 def test_registry_returns_all_20_skills(skills):
     assert len(skills) >= 20
@@ -299,19 +295,23 @@ def test_all_skills_handle_empty_input(skills):
 
 # ── Skill #21: web_fetcher ─────────────────────────────────────────────────────
 
+
 class TestWebFetcherSkill:
     def test_name(self):
         from agents.skills.web_fetcher import WebFetcherSkill
+
         assert WebFetcherSkill().name == "web_fetcher"
 
     def test_empty_input(self):
         from agents.skills.web_fetcher import WebFetcherSkill
+
         result = WebFetcherSkill().run({})
         assert isinstance(result, dict)
         assert "error" in result
 
     def test_invalid_url(self):
         from agents.skills.web_fetcher import WebFetcherSkill
+
         result = WebFetcherSkill().run({"url": "not-a-url"})
         assert isinstance(result, dict)
         # should return error or text
@@ -320,18 +320,22 @@ class TestWebFetcherSkill:
 
 # ── Skill #22: symbol_indexer ──────────────────────────────────────────────────
 
+
 class TestSymbolIndexerSkill:
     def test_name(self):
         from agents.skills.symbol_indexer import SymbolIndexerSkill
+
         assert SymbolIndexerSkill().name == "symbol_indexer"
 
     def test_empty_input(self):
         from agents.skills.symbol_indexer import SymbolIndexerSkill
+
         result = SymbolIndexerSkill().run({})
         assert isinstance(result, dict)
 
     def test_indexes_project(self):
         from agents.skills.symbol_indexer import SymbolIndexerSkill
+
         result = SymbolIndexerSkill().run({"project_root": "agents/skills"})
         assert isinstance(result, dict)
         assert isinstance(result, dict)
@@ -341,19 +345,23 @@ class TestSymbolIndexerSkill:
 
 # ── Skill #23: multi_file_editor ───────────────────────────────────────────────
 
+
 class TestMultiFileEditorSkill:
     def test_name(self):
         from agents.skills.multi_file_editor import MultiFileEditorSkill
+
         assert MultiFileEditorSkill().name == "multi_file_editor"
 
     def test_empty_input(self):
         from agents.skills.multi_file_editor import MultiFileEditorSkill
+
         result = MultiFileEditorSkill().run({})
         assert isinstance(result, dict)
         assert "change_plan" in result
 
     def test_with_goal(self):
         from agents.skills.multi_file_editor import MultiFileEditorSkill
+
         result = MultiFileEditorSkill().run({"goal": "refactor model adapter", "project_root": "."})
         assert isinstance(result, dict)
         assert "change_plan" in result
@@ -363,24 +371,29 @@ class TestMultiFileEditorSkill:
 
 # ── updated registry count ─────────────────────────────────────────────────────
 
+
 def test_registry_returns_all_skills(skills):
     assert len(skills) >= 27
 
 
 # ── Skill #24: dockerfile_analyzer ────────────────────────────────────────────
 
+
 class TestDockerfileAnalyzerSkill:
     def test_name(self):
         from agents.skills.dockerfile_analyzer import DockerfileAnalyzerSkill
+
         assert DockerfileAnalyzerSkill().name == "dockerfile_analyzer"
 
     def test_empty_input(self):
         from agents.skills.dockerfile_analyzer import DockerfileAnalyzerSkill
+
         result = DockerfileAnalyzerSkill().run({})
         assert isinstance(result, dict)
 
     def test_with_content(self):
         from agents.skills.dockerfile_analyzer import DockerfileAnalyzerSkill
+
         dockerfile = "FROM ubuntu:latest\nRUN apt-get install -y curl\nUSER root\n"
         result = DockerfileAnalyzerSkill().run({"content": dockerfile, "file_path": "Dockerfile"})
         assert isinstance(result, dict)
@@ -389,18 +402,22 @@ class TestDockerfileAnalyzerSkill:
 
 # ── Skill #25: observability_checker ──────────────────────────────────────────
 
+
 class TestObservabilityCheckerSkill:
     def test_name(self):
         from agents.skills.observability_checker import ObservabilityCheckerSkill
+
         assert ObservabilityCheckerSkill().name == "observability_checker"
 
     def test_empty_input(self):
         from agents.skills.observability_checker import ObservabilityCheckerSkill
+
         result = ObservabilityCheckerSkill().run({})
         assert isinstance(result, dict)
 
     def test_with_code(self):
         from agents.skills.observability_checker import ObservabilityCheckerSkill
+
         code = "def foo():\n    try:\n        pass\n    except Exception:\n        pass\n"
         result = ObservabilityCheckerSkill().run({"code": code, "file_path": "test.py"})
         assert isinstance(result, dict)
@@ -409,18 +426,22 @@ class TestObservabilityCheckerSkill:
 
 # ── Skill #26: changelog_generator ────────────────────────────────────────────
 
+
 class TestChangelogGeneratorSkill:
     def test_name(self):
         from agents.skills.changelog_generator import ChangelogGeneratorSkill
+
         assert ChangelogGeneratorSkill().name == "changelog_generator"
 
     def test_empty_input(self):
         from agents.skills.changelog_generator import ChangelogGeneratorSkill
+
         result = ChangelogGeneratorSkill().run({})
         assert isinstance(result, dict)
 
     def test_with_project_root(self):
         from agents.skills.changelog_generator import ChangelogGeneratorSkill
+
         result = ChangelogGeneratorSkill().run({"project_root": "."})
         assert isinstance(result, dict)
         assert isinstance(result, dict)
@@ -428,18 +449,22 @@ class TestChangelogGeneratorSkill:
 
 # ── Skill #27: database_query_analyzer ────────────────────────────────────────
 
+
 class TestDatabaseQueryAnalyzerSkill:
     def test_name(self):
         from agents.skills.database_query_analyzer import DatabaseQueryAnalyzerSkill
+
         assert DatabaseQueryAnalyzerSkill().name == "database_query_analyzer"
 
     def test_empty_input(self):
         from agents.skills.database_query_analyzer import DatabaseQueryAnalyzerSkill
+
         result = DatabaseQueryAnalyzerSkill().run({})
         assert isinstance(result, dict)
 
     def test_with_query(self):
         from agents.skills.database_query_analyzer import DatabaseQueryAnalyzerSkill
+
         result = DatabaseQueryAnalyzerSkill().run({"query": "SELECT * FROM users WHERE id = 1"})
         assert isinstance(result, dict)
         assert isinstance(result, dict)
@@ -447,33 +472,38 @@ class TestDatabaseQueryAnalyzerSkill:
 
 # ── Skill #28: skill_failure_analyzer ─────────────────────────────────────────
 
+
 class TestSkillFailureAnalyzerSkill:
     def test_name(self):
         from agents.skills.skill_failure_analyzer import SkillFailureAnalyzerSkill
+
         assert SkillFailureAnalyzerSkill().name == "skill_failure_analyzer"
 
     def test_empty_input(self):
         from agents.skills.skill_failure_analyzer import SkillFailureAnalyzerSkill
+
         result = SkillFailureAnalyzerSkill().run({})
         assert isinstance(result, dict)
 
     def test_with_failure_log(self):
         from agents.skills.skill_failure_analyzer import SkillFailureAnalyzerSkill
-        result = SkillFailureAnalyzerSkill().run({
-            "skill_name": "linter_enforcer",
-            "error": "FileNotFoundError: ruff not found",
-            "args": {"project_root": "/nonexistent"},
-        })
+
+        result = SkillFailureAnalyzerSkill().run(
+            {
+                "skill_name": "linter_enforcer",
+                "error": "FileNotFoundError: ruff not found",
+                "args": {"project_root": "/nonexistent"},
+            }
+        )
         assert isinstance(result, dict)
         assert isinstance(result, dict)
 
 
 # ── final registry count (all 28 skills) ──────────────────────────────────────
 
+
 def test_registry_returns_all_28_skills(skills):
-    assert len(skills) >= 28, (
-        f"Expected ≥28 skills in registry, got {len(skills)}: {sorted(skills)}"
-    )
+    assert len(skills) >= 28, f"Expected ≥28 skills in registry, got {len(skills)}: {sorted(skills)}"
 
 
 def test_all_28_skills_have_name_attribute(skills):
@@ -481,4 +511,3 @@ def test_all_28_skills_have_name_attribute(skills):
     for name, skill in skills.items():
         assert hasattr(skill, "name"), f"Skill '{name}' missing .name attribute"
         assert isinstance(skill.name, str), f"Skill '{name}'.name is not a string"
-

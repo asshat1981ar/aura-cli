@@ -3,6 +3,7 @@
 Supports single files, inline code, and full project scans.
 Configurable via: max_line_length, ignore_codes, paths (multi-project).
 """
+
 from __future__ import annotations
 
 import ast
@@ -19,9 +20,22 @@ _PASCAL_RE = re.compile(r"^[A-Z][a-zA-Z0-9]*$")
 _SCREAMING_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
 _SKIP_DIRS = {
-    ".git", "__pycache__", "node_modules", ".tox", ".venv", "venv",
-    "dist", "build", "env", ".env", "test-aura-env", "site-packages",
-    "aura_cli.egg-info", "tmp_out", ".mypy_cache", ".ruff_cache",
+    ".git",
+    "__pycache__",
+    "node_modules",
+    ".tox",
+    ".venv",
+    "venv",
+    "dist",
+    "build",
+    "env",
+    ".env",
+    "test-aura-env",
+    "site-packages",
+    "aura_cli.egg-info",
+    "tmp_out",
+    ".mypy_cache",
+    ".ruff_cache",
     ".pytest_cache",
 }
 
@@ -62,43 +76,44 @@ def _check_naming(source: str, file_path: str) -> List[Dict]:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             name = node.name
             if not _SNAKE_RE.match(name) and not name.startswith("__"):
-                violations.append({
-                    "code": "N802",
-                    "file": file_path,
-                    "line": node.lineno,
-                    "col": 0,
-                    "message": f"Function '{name}' should be snake_case",
-                    "fix_hint": f"Rename to '{_camel_to_snake(name)}'",
-                })
+                violations.append(
+                    {
+                        "code": "N802",
+                        "file": file_path,
+                        "line": node.lineno,
+                        "col": 0,
+                        "message": f"Function '{name}' should be snake_case",
+                        "fix_hint": f"Rename to '{_camel_to_snake(name)}'",
+                    }
+                )
 
         elif isinstance(node, ast.ClassDef):
             name = node.name
             if not _PASCAL_RE.match(name):
-                violations.append({
-                    "code": "N801",
-                    "file": file_path,
-                    "line": node.lineno,
-                    "col": 0,
-                    "message": f"Class '{name}' should be PascalCase",
-                    "fix_hint": f"Rename to '{_snake_to_pascal(name)}'",
-                })
+                violations.append(
+                    {
+                        "code": "N801",
+                        "file": file_path,
+                        "line": node.lineno,
+                        "col": 0,
+                        "message": f"Class '{name}' should be PascalCase",
+                        "fix_hint": f"Rename to '{_snake_to_pascal(name)}'",
+                    }
+                )
 
         elif isinstance(node, ast.Name) and isinstance(getattr(node, "ctx", None), ast.Store):
             name = node.id
-            if (
-                not name.startswith("_")
-                and not _SNAKE_RE.match(name)
-                and not _SCREAMING_RE.match(name)
-                and not _PASCAL_RE.match(name)
-            ):
-                violations.append({
-                    "code": "N806",
-                    "file": file_path,
-                    "line": getattr(node, "lineno", 0),
-                    "col": 0,
-                    "message": f"Variable '{name}' should be snake_case",
-                    "fix_hint": f"Rename to '{name.lower()}'",
-                })
+            if not name.startswith("_") and not _SNAKE_RE.match(name) and not _SCREAMING_RE.match(name) and not _PASCAL_RE.match(name):
+                violations.append(
+                    {
+                        "code": "N806",
+                        "file": file_path,
+                        "line": getattr(node, "lineno", 0),
+                        "col": 0,
+                        "message": f"Variable '{name}' should be snake_case",
+                        "fix_hint": f"Rename to '{name.lower()}'",
+                    }
+                )
 
     return violations
 
@@ -108,7 +123,9 @@ def _flake8_available() -> bool:
     try:
         result = subprocess.run(
             ["python3", "-m", "flake8", "--version"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         return result.returncode == 0
     except (OSError, IOError, ValueError):
@@ -123,7 +140,9 @@ def _run_flake8(
 ) -> Optional[List[Dict]]:
     """Run flake8 on target path. Returns violations list or None if flake8 unavailable."""
     cmd = [
-        "python3", "-m", "flake8",
+        "python3",
+        "-m",
+        "flake8",
         f"--max-line-length={max_line_length}",
         "--format=%(path)s:%(row)d:%(col)d: %(code)s %(text)s",
     ]
@@ -133,21 +152,27 @@ def _run_flake8(
 
     try:
         result = subprocess.run(
-            cmd, cwd=str(cwd), capture_output=True, text=True, timeout=60,
+            cmd,
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            timeout=60,
         )
         violations: List[Dict] = []
         for line in (result.stdout + result.stderr).splitlines():
             m = re.match(r"^(.+?):(\d+):(\d+): ([A-Z]\d+) (.+)$", line)
             if m:
                 code = m.group(4)
-                violations.append({
-                    "code": code,
-                    "file": m.group(1),
-                    "line": int(m.group(2)),
-                    "col": int(m.group(3)),
-                    "message": m.group(5),
-                    "fix_hint": _FIX_HINTS.get(code, ""),
-                })
+                violations.append(
+                    {
+                        "code": code,
+                        "file": m.group(1),
+                        "line": int(m.group(2)),
+                        "col": int(m.group(3)),
+                        "message": m.group(5),
+                        "fix_hint": _FIX_HINTS.get(code, ""),
+                    }
+                )
         return violations
     except FileNotFoundError:
         return None
@@ -226,9 +251,8 @@ class LinterEnforcerSkill(SkillBase):
         if code and file_path:
             import tempfile
             import os
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".py", delete=False, encoding="utf-8"
-            ) as tmp:
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as tmp:
                 tmp.write(code)
                 tmp_path = tmp.name
             try:
@@ -275,9 +299,13 @@ class LinterEnforcerSkill(SkillBase):
         root = Path(project_root_str or ".")
         result = _scan_project(root, max_line_length, ignore_codes)
         result["flake8_available"] = available
-        log_json("INFO", "linter_enforcer_complete", details={
-            "root": str(root),
-            "violations": result["violation_count"],
-            "errors": result["error_count"],
-        })
+        log_json(
+            "INFO",
+            "linter_enforcer_complete",
+            details={
+                "root": str(root),
+                "violations": result["violation_count"],
+                "errors": result["error_count"],
+            },
+        )
         return result

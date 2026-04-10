@@ -16,6 +16,7 @@ Environment variables:
     REDIS_URL   Connection URL passed to ``redis.from_url()``.
                 Defaults to ``redis://localhost:6379/0``.
 """
+
 from __future__ import annotations
 
 import json

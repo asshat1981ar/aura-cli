@@ -21,6 +21,7 @@ from agents.multi_agent_workflow import (
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _clean_results(
     *,
     lint_errors: List[str] | None = None,
@@ -702,30 +703,21 @@ class TestEngageStakeholders:
     def test_high_score_logs_inform_level(self, mock_log):
         engage_stakeholders(self._make_validation_result(score=0.85))
         # Find the stakeholder_engagement_action call
-        action_call = next(
-            call for call in mock_log.call_args_list
-            if call.args[1] == "stakeholder_engagement_action"
-        )
+        action_call = next(call for call in mock_log.call_args_list if call.args[1] == "stakeholder_engagement_action")
         payload = action_call.args[2]
         assert payload["level"] == "inform"
 
     @patch("agents.multi_agent_workflow.log_json")
     def test_medium_score_logs_review_level(self, mock_log):
         engage_stakeholders(self._make_validation_result(score=0.6))
-        action_call = next(
-            call for call in mock_log.call_args_list
-            if call.args[1] == "stakeholder_engagement_action"
-        )
+        action_call = next(call for call in mock_log.call_args_list if call.args[1] == "stakeholder_engagement_action")
         payload = action_call.args[2]
         assert payload["level"] == "review"
 
     @patch("agents.multi_agent_workflow.log_json")
     def test_low_score_logs_block_level(self, mock_log):
         engage_stakeholders(self._make_validation_result(score=0.3))
-        action_call = next(
-            call for call in mock_log.call_args_list
-            if call.args[1] == "stakeholder_engagement_action"
-        )
+        action_call = next(call for call in mock_log.call_args_list if call.args[1] == "stakeholder_engagement_action")
         payload = action_call.args[2]
         assert payload["level"] == "block"
 

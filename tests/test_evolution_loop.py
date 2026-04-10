@@ -27,19 +27,23 @@ def _make_loop(**overrides):
         innovation_goal_limit=2,
     )
     defaults.update(overrides)
-    with patch("core.evolution_loop.ExperimentTracker"), \
-         patch("core.evolution_loop.MetricsCollector"):
+    with patch("core.evolution_loop.ExperimentTracker"), patch("core.evolution_loop.MetricsCollector"):
         return EvolutionLoop(**defaults)
 
 
 class TestInnovationProposal(unittest.TestCase):
-
     def test_as_dict(self):
         p = InnovationProposal(
-            proposal_id="test:1", title="Test", category="skill",
-            goal="test goal", rationale="because", evidence=["ev1"],
-            smallest_surface="foo.py", expected_value="high",
-            risk_level="low", verification_cost="unit tests",
+            proposal_id="test:1",
+            title="Test",
+            category="skill",
+            goal="test goal",
+            rationale="because",
+            evidence=["ev1"],
+            smallest_surface="foo.py",
+            expected_value="high",
+            risk_level="low",
+            verification_cost="unit tests",
             recommended_action="queue",
         )
         d = p.as_dict()
@@ -48,9 +52,16 @@ class TestInnovationProposal(unittest.TestCase):
 
     def test_frozen_dataclass(self):
         p = InnovationProposal(
-            proposal_id="id", title="t", category="c", goal="g",
-            rationale="r", evidence=[], smallest_surface="s",
-            expected_value="v", risk_level="l", verification_cost="v",
+            proposal_id="id",
+            title="t",
+            category="c",
+            goal="g",
+            rationale="r",
+            evidence=[],
+            smallest_surface="s",
+            expected_value="v",
+            risk_level="l",
+            verification_cost="v",
             recommended_action="a",
         )
         with self.assertRaises(AttributeError):
@@ -58,7 +69,6 @@ class TestInnovationProposal(unittest.TestCase):
 
 
 class TestHypothesize(unittest.TestCase):
-
     def test_returns_string_from_list(self):
         loop = _make_loop()
         loop.planner.plan.return_value = ["step1", "step2"]
@@ -73,7 +83,6 @@ class TestHypothesize(unittest.TestCase):
 
 
 class TestDecomposeTasks(unittest.TestCase):
-
     def test_returns_task_list(self):
         loop = _make_loop()
         loop.planner.plan.return_value = ["task1", "task2", "task3"]
@@ -82,7 +91,6 @@ class TestDecomposeTasks(unittest.TestCase):
 
 
 class TestImplementAndCritique(unittest.TestCase):
-
     def test_returns_implementation_and_evaluation(self):
         loop = _make_loop()
         loop.coder.implement.return_value = "code here"
@@ -97,7 +105,6 @@ class TestImplementAndCritique(unittest.TestCase):
 
 
 class TestParseValidationResult(unittest.TestCase):
-
     def test_approved_json(self):
         loop = _make_loop()
         raw = json.dumps({"decision": "APPROVED", "confidence_score": 0.85, "impact_assessment": "positive", "reasoning": "good"})
@@ -133,7 +140,6 @@ class TestParseValidationResult(unittest.TestCase):
 
 
 class TestMutationPlanToDSL(unittest.TestCase):
-
     def test_replace_in_file(self):
         loop = _make_loop()
         plan = {"mutations": [{"file_path": "a.py", "old_content": "old", "new_content": "new"}]}
@@ -162,12 +168,18 @@ class TestMutationPlanToDSL(unittest.TestCase):
 
 
 class TestSelectProposals(unittest.TestCase):
-
     def _make_proposal(self, category, risk="medium", title="Test"):
         return InnovationProposal(
-            proposal_id=f"{category}:test", title=title, category=category,
-            goal="g", rationale="r", evidence=[], smallest_surface="s",
-            expected_value="h", risk_level=risk, verification_cost="v",
+            proposal_id=f"{category}:test",
+            title=title,
+            category=category,
+            goal="g",
+            rationale="r",
+            evidence=[],
+            smallest_surface="s",
+            expected_value="h",
+            risk_level=risk,
+            verification_cost="v",
             recommended_action="queue",
         )
 
@@ -199,15 +211,23 @@ class TestSelectProposals(unittest.TestCase):
 
 
 class TestQueueSelectedGoals(unittest.TestCase):
-
     def test_dry_run(self):
         loop = _make_loop()
-        proposals = [InnovationProposal(
-            proposal_id="t:1", title="T", category="skill", goal="g",
-            rationale="r", evidence=[], smallest_surface="s",
-            expected_value="h", risk_level="l", verification_cost="v",
-            recommended_action="queue",
-        )]
+        proposals = [
+            InnovationProposal(
+                proposal_id="t:1",
+                title="T",
+                category="skill",
+                goal="g",
+                rationale="r",
+                evidence=[],
+                smallest_surface="s",
+                expected_value="h",
+                risk_level="l",
+                verification_cost="v",
+                recommended_action="queue",
+            )
+        ]
         result = loop._queue_selected_goals(proposals, dry_run=True)
         self.assertFalse(result["attempted"])
         self.assertEqual(len(result["skipped"]), 1)
@@ -215,12 +235,21 @@ class TestQueueSelectedGoals(unittest.TestCase):
 
     def test_no_goal_queue(self):
         loop = _make_loop(goal_queue=None)
-        proposals = [InnovationProposal(
-            proposal_id="t:1", title="T", category="skill", goal="g",
-            rationale="r", evidence=[], smallest_surface="s",
-            expected_value="h", risk_level="l", verification_cost="v",
-            recommended_action="queue",
-        )]
+        proposals = [
+            InnovationProposal(
+                proposal_id="t:1",
+                title="T",
+                category="skill",
+                goal="g",
+                rationale="r",
+                evidence=[],
+                smallest_surface="s",
+                expected_value="h",
+                risk_level="l",
+                verification_cost="v",
+                recommended_action="queue",
+            )
+        ]
         result = loop._queue_selected_goals(proposals, dry_run=False)
         self.assertFalse(result["attempted"])
 
@@ -234,19 +263,27 @@ class TestQueueSelectedGoals(unittest.TestCase):
         mock_queue.queue = []
         mock_queue.prepend_batch = MagicMock()
         loop = _make_loop(goal_queue=mock_queue)
-        proposals = [InnovationProposal(
-            proposal_id="t:1", title="T", category="skill", goal="new goal",
-            rationale="r", evidence=[], smallest_surface="s",
-            expected_value="h", risk_level="l", verification_cost="v",
-            recommended_action="queue",
-        )]
+        proposals = [
+            InnovationProposal(
+                proposal_id="t:1",
+                title="T",
+                category="skill",
+                goal="new goal",
+                rationale="r",
+                evidence=[],
+                smallest_surface="s",
+                expected_value="h",
+                risk_level="l",
+                verification_cost="v",
+                recommended_action="queue",
+            )
+        ]
         result = loop._queue_selected_goals(proposals, dry_run=False)
         self.assertTrue(result["attempted"])
         mock_queue.prepend_batch.assert_called_once()
 
 
 class TestExecuteSelectedGoals(unittest.TestCase):
-
     def test_dry_run(self):
         loop = _make_loop()
         result = loop._execute_selected_goals(["goal1"], dry_run=True, execution_limit=1)
@@ -272,7 +309,6 @@ class TestExecuteSelectedGoals(unittest.TestCase):
 
 
 class TestOnCycleComplete(unittest.TestCase):
-
     def test_triggers_after_n_cycles(self):
         loop = _make_loop()
         loop.TRIGGER_EVERY_N = 2
@@ -292,7 +328,6 @@ class TestOnCycleComplete(unittest.TestCase):
 
 
 class TestPersistMemories(unittest.TestCase):
-
     def test_stores_in_brain_and_vector(self):
         loop = _make_loop()
         loop._persist_memories("goal", "hyp", "eval", "mutation")

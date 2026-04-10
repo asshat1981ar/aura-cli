@@ -11,6 +11,7 @@ Usage::
 Environment variables:
     NO_COLOR   When set to any non-empty value, disables ANSI colour output.
 """
+
 from __future__ import annotations
 
 import os
@@ -123,22 +124,12 @@ def main(argv: list[str] | None = None) -> int:  # noqa: ARG001  (reserved for f
 
     print()
     summary_color = _GREEN if all_passed else _RED
-    print(
-        f"{_BOLD}{summary_color}{passed_count}/{total} checks passed{_RESET}"
-    )
+    print(f"{_BOLD}{summary_color}{passed_count}/{total} checks passed{_RESET}")
 
     if not all_passed:
         failed_names = [c.name for c, ok, _ in results if not ok]
-        print(
-            f"\n{_RED}Fix the above failures before merging. "
-            f"Failed: {', '.join(failed_names)}{_RESET}"
-        )
-        print(
-            "\nQuick fix hints:"
-            "\n  • Regen CLI reference : python3 scripts/generate_cli_reference.py"
-            "\n  • Update snapshots    : python3 update_snapshots.py"
-            "\n  • Run sweep artifacts : python3 scripts/generate_active_sweep_artifacts.py"
-        )
+        print(f"\n{_RED}Fix the above failures before merging. Failed: {', '.join(failed_names)}{_RESET}")
+        print("\nQuick fix hints:\n  • Regen CLI reference : python3 scripts/generate_cli_reference.py\n  • Update snapshots    : python3 update_snapshots.py\n  • Run sweep artifacts : python3 scripts/generate_active_sweep_artifacts.py")
         return 1
 
     return 0

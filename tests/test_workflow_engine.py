@@ -1,4 +1,5 @@
 """Tests for core/workflow_engine.py."""
+
 import pytest
 import time
 import uuid
@@ -230,21 +231,21 @@ class TestWorkflowEngine:
     @pytest.fixture
     def engine(self, tmp_path):
         # Use temp path for database
-        with patch('core.workflow_engine._DB_PATH', tmp_path / "workflow.db"):
+        with patch("core.workflow_engine._DB_PATH", tmp_path / "workflow.db"):
             engine = WorkflowEngine()
             yield engine
 
     def test_initialization(self, engine):
         assert engine is not None
-        assert hasattr(engine, '_executions')
-        assert hasattr(engine, '_loops')
+        assert hasattr(engine, "_executions")
+        assert hasattr(engine, "_loops")
 
     def test_define_workflow(self, engine):
         steps = [WorkflowStep(name="step1")]
         definition = WorkflowDefinition(name="test_workflow", steps=steps)
-        
+
         engine.define(definition)
-        
+
         assert "test_workflow" in engine._definitions
         assert engine._definitions["test_workflow"] == definition
 
@@ -257,12 +258,12 @@ class TestWorkflowEngine:
         ]
         definition = WorkflowDefinition(name="test_workflow", steps=steps)
         engine.define(definition)
-        
+
         exec_id = engine.run_workflow("test_workflow", {"input": "value"})
-        
+
         assert exec_id is not None
         assert isinstance(exec_id, str)
-        
+
         # Check execution was stored
         assert exec_id in engine._executions
         execution = engine._executions[exec_id]
@@ -273,10 +274,10 @@ class TestWorkflowEngine:
         steps = [WorkflowStep(name="step1")]
         definition = WorkflowDefinition(name="test_workflow", steps=steps)
         engine.define(definition)
-        
+
         exec_id = engine.run_workflow("test_workflow", {})
         status = engine.execution_status(exec_id)
-        
+
         assert status is not None
         assert "status" in status
 
@@ -289,13 +290,13 @@ class TestWorkflowEngine:
         # For this test, we just verify the method exists and doesn't crash
         def mock_fn(inputs):
             return {"done": True}
-        
+
         steps = [WorkflowStep(name="step1", fn=mock_fn)]
         definition = WorkflowDefinition(name="test_workflow", steps=steps)
         engine.define(definition)
-        
+
         exec_id = engine.run_workflow("test_workflow", {})
-        
+
         # If execution is still running, cancel it
         # If already completed, that's ok too
         execution = engine._executions[exec_id]
@@ -308,11 +309,11 @@ class TestWorkflowEngine:
 
     def test_create_loop(self, engine):
         loop_id = engine.create_loop("Test goal", max_cycles=5)
-        
+
         assert loop_id is not None
         assert isinstance(loop_id, str)
         assert loop_id in engine._loops
-        
+
         loop = engine._loops[loop_id]
         assert loop.goal == "Test goal"
         assert loop.max_cycles == 5
@@ -321,7 +322,7 @@ class TestWorkflowEngine:
     def test_loop_status(self, engine):
         loop_id = engine.create_loop("Test goal")
         status = engine.loop_status(loop_id)
-        
+
         assert status is not None
         assert status["goal"] == "Test goal"
         assert status["status"] == "running"
@@ -329,7 +330,7 @@ class TestWorkflowEngine:
     def test_stop_loop(self, engine):
         loop_id = engine.create_loop("Test goal")
         engine.stop_loop(loop_id, reason="test_complete")
-        
+
         loop = engine._loops[loop_id]
         assert loop.status == "stopped"
         assert loop.stop_reason == "test_complete"
@@ -340,7 +341,7 @@ class TestWorkflowEngineIntegration:
 
     @pytest.fixture
     def engine(self, tmp_path):
-        with patch('core.workflow_engine._DB_PATH', tmp_path / "workflow.db"):
+        with patch("core.workflow_engine._DB_PATH", tmp_path / "workflow.db"):
             yield WorkflowEngine()
 
     def test_full_workflow_execution(self, engine):
@@ -361,9 +362,9 @@ class TestWorkflowEngineIntegration:
         ]
         definition = WorkflowDefinition(name="integration_workflow", steps=steps)
         engine.define(definition)
-        
+
         exec_id = engine.run_workflow("integration_workflow", {"initial": "data"})
-        
+
         # In a real scenario, we would wait for execution
         # For unit tests, we verify the setup is correct
         execution = engine._executions[exec_id]
@@ -387,8 +388,8 @@ class TestWorkflowEngineIntegration:
         ]
         definition = WorkflowDefinition(name="static_test", steps=steps)
         engine.define(definition)
-        
+
         exec_id = engine.run_workflow("static_test", {"dynamic": "input"})
-        
+
         # Verify execution was created
         assert exec_id in engine._executions

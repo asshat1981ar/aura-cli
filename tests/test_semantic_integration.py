@@ -1,5 +1,6 @@
 # tests/test_semantic_integration.py
 """Integration test: full scan → query → context injection."""
+
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,17 +14,12 @@ class TestSemanticEndToEnd(unittest.TestCase):
         self.db_path = Path(self.tmpdir) / "index.db"
 
         # Create a small test project
-        (self.project / "auth.py").write_text(
-            'def authenticate(user, pwd):\n    """Validate credentials."""\n    return True\n\n'
-            'def create_token(user):\n    """Create JWT token."""\n    return "token"\n'
-        )
-        (self.project / "server.py").write_text(
-            'from auth import authenticate\n\n'
-            'def handle(req):\n    auth = authenticate(req.user, req.pwd)\n    return auth\n'
-        )
+        (self.project / "auth.py").write_text('def authenticate(user, pwd):\n    """Validate credentials."""\n    return True\n\ndef create_token(user):\n    """Create JWT token."""\n    return "token"\n')
+        (self.project / "server.py").write_text("from auth import authenticate\n\ndef handle(req):\n    auth = authenticate(req.user, req.pwd)\n    return auth\n")
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_scan_then_query(self):
@@ -31,7 +27,8 @@ class TestSemanticEndToEnd(unittest.TestCase):
         from core.agent_sdk.semantic_querier import SemanticQuerier
 
         scanner = SemanticScanner(
-            project_root=self.project, db_path=self.db_path,
+            project_root=self.project,
+            db_path=self.db_path,
             exclude_patterns=["__pycache__"],
         )
         result = scanner.scan_full()
@@ -58,7 +55,8 @@ class TestSemanticEndToEnd(unittest.TestCase):
         from core.agent_sdk.context_builder import ContextBuilder
 
         scanner = SemanticScanner(
-            project_root=self.project, db_path=self.db_path,
+            project_root=self.project,
+            db_path=self.db_path,
             exclude_patterns=["__pycache__"],
         )
         scanner.scan_full()
@@ -73,7 +71,9 @@ class TestSemanticEndToEnd(unittest.TestCase):
         self.assertIn("relevant_symbols", ctx)
 
         prompt = builder.build_system_prompt(
-            goal="Fix auth bug", goal_type="bug_fix", context=ctx,
+            goal="Fix auth bug",
+            goal_type="bug_fix",
+            context=ctx,
         )
         self.assertIn("Codebase Understanding", prompt)
 

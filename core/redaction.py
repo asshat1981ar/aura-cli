@@ -1,4 +1,5 @@
 """Redaction tools for AURA to mask sensitive info in logs and outputs."""
+
 from __future__ import annotations
 
 import re
@@ -6,10 +7,11 @@ from typing import Any
 
 # Regex for masking secrets (best-effort)
 SECRET_PATTERNS = [
-    re.compile(r"sk-[a-zA-Z0-9]{32,}", re.IGNORECASE), # Generic OpenAI/OpenRouter style
+    re.compile(r"sk-[a-zA-Z0-9]{32,}", re.IGNORECASE),  # Generic OpenAI/OpenRouter style
     re.compile(r"Bearer\s+[a-zA-Z0-9._-]+", re.IGNORECASE),
-    re.compile(r"api[-_]?key", re.IGNORECASE) # Catch key names in dicts
+    re.compile(r"api[-_]?key", re.IGNORECASE),  # Catch key names in dicts
 ]
+
 
 def mask_secrets(data: Any) -> Any:
     """

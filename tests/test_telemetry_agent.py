@@ -12,9 +12,7 @@ def test_telemetry_agent_persists_log_entry(tmp_path):
 
         conn = sqlite3.connect(db_path)
         try:
-            row = conn.execute(
-                "SELECT agent_name, latency, token_count FROM telemetry ORDER BY id DESC LIMIT 1"
-            ).fetchone()
+            row = conn.execute("SELECT agent_name, latency, token_count FROM telemetry ORDER BY id DESC LIMIT 1").fetchone()
         finally:
             conn.close()
     finally:

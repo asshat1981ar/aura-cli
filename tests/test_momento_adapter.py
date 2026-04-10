@@ -11,6 +11,7 @@ so the adapter is always in fallback/no-op mode.  This verifies:
   - SkillWeightAdapter works with momento=None
   - ModelAdapter.enable_cache works with momento=None
 """
+
 import os
 import tempfile
 import unittest
@@ -31,6 +32,7 @@ class TestMomentoAdapterFallback(unittest.TestCase):
     def _make_adapter(self):
         # Re-import to pick up cleared env var
         from memory.momento_adapter import MomentoAdapter
+
         return MomentoAdapter()
 
     def test_is_available_false_without_key(self):
@@ -72,6 +74,7 @@ class TestMomentoBrainFallback(unittest.TestCase):
     def test_remember_and_recall(self):
         from memory.momento_adapter import MomentoAdapter
         from memory.momento_brain import MomentoBrain
+
         adapter = MomentoAdapter()
         brain = MomentoBrain(adapter)
         brain.remember("hello momento")
@@ -81,6 +84,7 @@ class TestMomentoBrainFallback(unittest.TestCase):
     def test_add_and_recall_weakness(self):
         from memory.momento_adapter import MomentoAdapter
         from memory.momento_brain import MomentoBrain
+
         adapter = MomentoAdapter()
         brain = MomentoBrain(adapter)
         brain.add_weakness("test weakness from unit test")
@@ -90,6 +94,7 @@ class TestMomentoBrainFallback(unittest.TestCase):
     def test_remember_dict(self):
         from memory.momento_adapter import MomentoAdapter
         from memory.momento_brain import MomentoBrain
+
         adapter = MomentoAdapter()
         brain = MomentoBrain(adapter)
         brain.remember({"type": "test", "value": 42})
@@ -111,6 +116,7 @@ class TestMomentoMemoryStoreFallback(unittest.TestCase):
     def test_put_and_query(self):
         from memory.momento_adapter import MomentoAdapter
         from memory.momento_memory_store import MomentoMemoryStore
+
         adapter = MomentoAdapter()
         store = MomentoMemoryStore(Path(self._tmpdir.name), adapter)
         store.put("test_tier", {"key": "value", "n": 1})
@@ -121,6 +127,7 @@ class TestMomentoMemoryStoreFallback(unittest.TestCase):
     def test_append_log_and_read_log(self):
         from memory.momento_adapter import MomentoAdapter
         from memory.momento_memory_store import MomentoMemoryStore
+
         adapter = MomentoAdapter()
         store = MomentoMemoryStore(Path(self._tmpdir.name), adapter)
         entry = {"cycle_id": "test123", "goal_type": "test", "phase_outputs": {}}
@@ -132,6 +139,7 @@ class TestMomentoMemoryStoreFallback(unittest.TestCase):
     def test_query_returns_last_n(self):
         from memory.momento_adapter import MomentoAdapter
         from memory.momento_memory_store import MomentoMemoryStore
+
         adapter = MomentoAdapter()
         store = MomentoMemoryStore(Path(self._tmpdir.name), adapter)
         for i in range(10):
@@ -154,6 +162,7 @@ class TestSkillWeightAdapterWithMomento(unittest.TestCase):
 
     def test_load_and_save_without_momento(self):
         from core.skill_weight_adapter import SkillWeightAdapter
+
         adapter = SkillWeightAdapter(memory_root=self._tmpdir.name, momento=None)
         # Simulate a cycle update
         entry = {
@@ -162,7 +171,7 @@ class TestSkillWeightAdapterWithMomento(unittest.TestCase):
                 "skill_context": {
                     "security_scanner": {"findings": ["issue1"], "critical_count": 1},
                 }
-            }
+            },
         }
         adapter.on_cycle_complete(entry)
         weights = adapter.get_weights_summary()
@@ -171,6 +180,7 @@ class TestSkillWeightAdapterWithMomento(unittest.TestCase):
 
     def test_ranked_skills_fallback(self):
         from core.skill_weight_adapter import SkillWeightAdapter
+
         adapter = SkillWeightAdapter(memory_root=self._tmpdir.name, momento=None)
         ranked = adapter.ranked_skills("default")
         self.assertIsInstance(ranked, list)
@@ -183,6 +193,7 @@ class TestModelAdapterCacheWithMomento(unittest.TestCase):
     def test_enable_cache_no_momento(self):
         import sqlite3
         from core.model_adapter import ModelAdapter
+
         adapter = ModelAdapter()
         db = sqlite3.connect(":memory:", check_same_thread=False)
         # Should not raise even with momento=None
@@ -192,6 +203,7 @@ class TestModelAdapterCacheWithMomento(unittest.TestCase):
     def test_get_cached_response_miss(self):
         import sqlite3
         from core.model_adapter import ModelAdapter
+
         adapter = ModelAdapter()
         db = sqlite3.connect(":memory:", check_same_thread=False)
         adapter.enable_cache(db, ttl_seconds=60, momento=None)
@@ -201,6 +213,7 @@ class TestModelAdapterCacheWithMomento(unittest.TestCase):
     def test_save_and_get_cached_response(self):
         import sqlite3
         from core.model_adapter import ModelAdapter
+
         adapter = ModelAdapter()
         db = sqlite3.connect(":memory:", check_same_thread=False)
         adapter.enable_cache(db, ttl_seconds=3600, momento=None)

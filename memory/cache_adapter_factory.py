@@ -24,6 +24,7 @@ This lets code call ``create_cache_adapter()`` once and never worry about
 which backend is active.  Both adapters share the same interface, so
 callers are unaffected by the switch.
 """
+
 from __future__ import annotations
 
 import os
@@ -41,9 +42,11 @@ def create_cache_adapter():
     """
     if os.getenv("MOMENTO_API_KEY"):
         from memory.momento_adapter import MomentoAdapter
+
         return MomentoAdapter()
 
     from memory.local_cache_adapter import LocalCacheAdapter
+
     return LocalCacheAdapter()
 
 
@@ -62,14 +65,14 @@ def get_adapter(adapter_type: str):
     adapter_type = adapter_type.lower()
     if adapter_type == "local":
         from memory.local_cache_adapter import LocalCacheAdapter
+
         return LocalCacheAdapter()
     if adapter_type == "momento":
         from memory.momento_adapter import MomentoAdapter
+
         return MomentoAdapter()
     if adapter_type == "redis":
         from memory.redis_cache_adapter import RedisCacheAdapter
+
         return RedisCacheAdapter()
-    raise ValueError(
-        f"Unknown adapter type {adapter_type!r}. "
-        f"Valid options: {_ADAPTER_TYPES}"
-    )
+    raise ValueError(f"Unknown adapter type {adapter_type!r}. Valid options: {_ADAPTER_TYPES}")

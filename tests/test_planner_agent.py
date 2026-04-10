@@ -11,6 +11,7 @@ Covers:
 - get_cache_stats() both availability states
 - Edge cases: empty goal, model exception, backfill_context variants
 """
+
 from __future__ import annotations
 
 import json
@@ -25,6 +26,7 @@ from tests.fixtures.mock_llm import MockModelAdapter
 # ---------------------------------------------------------------------------
 # Helpers / shared fixtures
 # ---------------------------------------------------------------------------
+
 
 def _make_brain() -> MagicMock:
     brain = MagicMock()
@@ -70,6 +72,7 @@ VALID_LEGACY_LIST: list = ["Step 1: Analyse the codebase", "Step 2: Implement ch
 # __init__
 # ---------------------------------------------------------------------------
 
+
 class TestPlannerAgentInit:
     def test_stores_brain_and_model(self):
         brain = _make_brain()
@@ -96,6 +99,7 @@ class TestPlannerAgentInit:
 # ---------------------------------------------------------------------------
 # _respond()
 # ---------------------------------------------------------------------------
+
 
 class TestPlannerRespond:
     """Tests for the internal _respond() role-dispatch helper."""
@@ -134,6 +138,7 @@ class TestPlannerRespond:
 # ---------------------------------------------------------------------------
 # run()
 # ---------------------------------------------------------------------------
+
 
 class TestPlannerRun:
     """Tests for the public run() method that wraps plan()."""
@@ -184,20 +189,26 @@ class TestPlannerRun:
         captured: dict = {}
 
         def _capture(goal, mem, sim, weak, backfill_context=None):
-            captured.update({
-                "goal": goal, "sim": sim,
-                "weak": weak, "bc": backfill_context,
-            })
+            captured.update(
+                {
+                    "goal": goal,
+                    "sim": sim,
+                    "weak": weak,
+                    "bc": backfill_context,
+                }
+            )
             return []
 
         with patch.object(agent, "plan", side_effect=_capture):
-            agent.run({
-                "goal": "test goal",
-                "memory_snapshot": "mem_text",
-                "similar_past_problems": "sim_text",
-                "known_weaknesses": "weak_text",
-                "backfill_context": [{"file": "f.py", "coverage_pct": 20}],
-            })
+            agent.run(
+                {
+                    "goal": "test goal",
+                    "memory_snapshot": "mem_text",
+                    "similar_past_problems": "sim_text",
+                    "known_weaknesses": "weak_text",
+                    "backfill_context": [{"file": "f.py", "coverage_pct": 20}],
+                }
+            )
         assert captured["goal"] == "test goal"
         assert captured["bc"] == [{"file": "f.py", "coverage_pct": 20}]
 
@@ -205,6 +216,7 @@ class TestPlannerRun:
 # ---------------------------------------------------------------------------
 # plan() → _plan_legacy() path
 # ---------------------------------------------------------------------------
+
 
 class TestPlanLegacy:
     """Tests for the legacy (non-structured) planning path."""
@@ -281,6 +293,7 @@ class TestPlanLegacy:
 # plan() → _plan_structured() path
 # ---------------------------------------------------------------------------
 
+
 class TestPlanStructured:
     """Tests for the structured planning path using PlannerOutput schema."""
 
@@ -352,10 +365,8 @@ class TestPlanStructured:
         agent = self._agent()
         with (
             patch("agents.planner.render_prompt", return_value="p"),
-            patch("agents.planner._aura_safe_loads",
-                  side_effect=json.JSONDecodeError("bad json", "", 0)),
-            patch.object(agent, "_parse_legacy_response",
-                         return_value=["fallback step"]) as mock_legacy,
+            patch("agents.planner._aura_safe_loads", side_effect=json.JSONDecodeError("bad json", "", 0)),
+            patch.object(agent, "_parse_legacy_response", return_value=["fallback step"]) as mock_legacy,
             patch("agents.planner.log_json"),
         ):
             result = agent.plan("goal", "", "", "")
@@ -368,8 +379,7 @@ class TestPlanStructured:
         with (
             patch("agents.planner.render_prompt", return_value="p"),
             patch("agents.planner._aura_safe_loads", return_value={"bad": "data"}),
-            patch.object(agent, "_parse_legacy_response",
-                         return_value=["fallback"]) as mock_legacy,
+            patch.object(agent, "_parse_legacy_response", return_value=["fallback"]) as mock_legacy,
             patch("agents.planner.log_json"),
         ):
             result = agent.plan("goal", "", "", "")
@@ -382,8 +392,7 @@ class TestPlanStructured:
         with (
             patch("agents.planner.render_prompt", return_value="p"),
             patch("agents.planner._aura_safe_loads", side_effect=TypeError("bad type")),
-            patch.object(agent, "_parse_legacy_response",
-                         return_value=["type_fallback"]) as mock_legacy,
+            patch.object(agent, "_parse_legacy_response", return_value=["type_fallback"]) as mock_legacy,
             patch("agents.planner.log_json"),
         ):
             result = agent.plan("goal", "", "", "")
@@ -396,8 +405,7 @@ class TestPlanStructured:
         with (
             patch("agents.planner.render_prompt", return_value="p"),
             patch("agents.planner._aura_safe_loads", side_effect=KeyError("missing")),
-            patch.object(agent, "_parse_legacy_response",
-                         return_value=["key_fallback"]) as mock_legacy,
+            patch.object(agent, "_parse_legacy_response", return_value=["key_fallback"]) as mock_legacy,
             patch("agents.planner.log_json"),
         ):
             result = agent.plan("goal", "", "", "")
@@ -409,8 +417,7 @@ class TestPlanStructured:
         agent = self._agent()
         with (
             patch("agents.planner.render_prompt", return_value="p"),
-            patch("agents.planner._aura_safe_loads",
-                  side_effect=RuntimeError("unexpected boom")),
+            patch("agents.planner._aura_safe_loads", side_effect=RuntimeError("unexpected boom")),
             patch("agents.planner.log_json"),
         ):
             result = agent.plan("goal", "", "", "")
@@ -437,8 +444,7 @@ class TestPlanStructured:
         call_args_captured: dict = {}
 
         def _fake_render(template_name, role, params):
-            call_args_captured.update({"template_name": template_name, "role": role,
-                                       "params": params})
+            call_args_captured.update({"template_name": template_name, "role": role, "params": params})
             return "rendered"
 
         with (
@@ -456,6 +462,7 @@ class TestPlanStructured:
 # ---------------------------------------------------------------------------
 # _update_plan()
 # ---------------------------------------------------------------------------
+
 
 class TestUpdatePlan:
     """Tests for the plan revision method."""
@@ -503,6 +510,7 @@ class TestUpdatePlan:
 # get_cache_stats()
 # ---------------------------------------------------------------------------
 
+
 class TestGetCacheStats:
     def test_returns_stats_dict_when_schemas_available(self):
         brain = _make_brain()
@@ -528,6 +536,7 @@ class TestGetCacheStats:
 # ---------------------------------------------------------------------------
 # Integration-style: run() → plan() end-to-end (legacy path)
 # ---------------------------------------------------------------------------
+
 
 class TestRunPlanIntegration:
     """Light integration tests exercising run() all the way through plan()."""

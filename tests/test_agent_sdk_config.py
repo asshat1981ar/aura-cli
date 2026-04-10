@@ -1,5 +1,6 @@
 # tests/test_agent_sdk_config.py
 """Tests for Agent SDK configuration."""
+
 import unittest
 from unittest.mock import patch
 import os
@@ -73,6 +74,7 @@ class TestAgentSDKConfigV2(unittest.TestCase):
 
     def test_default_config_has_router_fields(self):
         from core.agent_sdk.config import AgentSDKConfig
+
         config = AgentSDKConfig()
         self.assertEqual(config.escalation_threshold, 2)
         self.assertEqual(config.de_escalation_threshold, 5)
@@ -82,12 +84,14 @@ class TestAgentSDKConfigV2(unittest.TestCase):
     def test_default_config_has_session_fields(self):
         from core.agent_sdk.config import AgentSDKConfig
         from pathlib import Path
+
         config = AgentSDKConfig()
         self.assertEqual(config.session_db_path, Path("memory/agent_sdk_sessions.db"))
         self.assertEqual(config.model_stats_path, Path("memory/agent_sdk_model_stats.json"))
 
     def test_default_config_has_skill_weight_fields(self):
         from core.agent_sdk.config import AgentSDKConfig
+
         config = AgentSDKConfig()
         self.assertAlmostEqual(config.skill_weight_success_delta, 0.1)
         self.assertAlmostEqual(config.skill_weight_failure_delta, -0.05)
@@ -96,6 +100,7 @@ class TestAgentSDKConfigV2(unittest.TestCase):
 
     def test_from_aura_config_reads_new_fields(self):
         from core.agent_sdk.config import AgentSDKConfig
+
         aura_config = {
             "agent_sdk": {
                 "escalation_threshold": 3,
@@ -115,6 +120,7 @@ class TestAgentSDKConfigScan(unittest.TestCase):
     def test_default_scan_fields(self):
         from core.agent_sdk.config import AgentSDKConfig
         from pathlib import Path
+
         config = AgentSDKConfig()
         self.assertEqual(config.semantic_index_path, Path("memory/semantic_index.db"))
         self.assertAlmostEqual(config.scan_llm_budget_usd, 0.50)
@@ -126,6 +132,7 @@ class TestAgentSDKConfigScan(unittest.TestCase):
 
     def test_from_aura_config_reads_scan_fields(self):
         from core.agent_sdk.config import AgentSDKConfig
+
         aura_config = {"agent_sdk": {"scan_batch_size": 20, "scan_min_file_lines": 10}}
         config = AgentSDKConfig.from_aura_config(aura_config)
         self.assertEqual(config.scan_batch_size, 20)

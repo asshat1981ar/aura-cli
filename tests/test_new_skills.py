@@ -1,4 +1,5 @@
 """Tests for new skills: dockerfile_analyzer, observability_checker, changelog_generator."""
+
 from __future__ import annotations
 
 import os
@@ -21,6 +22,7 @@ from agents.skills.changelog_generator import ChangelogGeneratorSkill
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _write(tmp_path: Path, name: str, content: str) -> Path:
     p = tmp_path / name
@@ -51,6 +53,7 @@ def _mock_git_run(log_output: str) -> MagicMock:
 # DockerfileAnalyzerSkill
 # ===========================================================================
 
+
 class TestDockerfileAnalyzer:
     def setup_method(self):
         self.skill = DockerfileAnalyzerSkill()
@@ -59,10 +62,14 @@ class TestDockerfileAnalyzer:
         assert self.skill.name == "dockerfile_analyzer"
 
     def test_latest_tag_flagged(self, tmp_path):
-        _write(tmp_path, "Dockerfile", """\
+        _write(
+            tmp_path,
+            "Dockerfile",
+            """\
             FROM python:latest
             RUN pip install flask
-        """)
+        """,
+        )
         result = self.skill.run({"project_root": str(tmp_path)})
         assert "error" not in result
         findings = _all_findings(result)
@@ -70,37 +77,52 @@ class TestDockerfileAnalyzer:
         assert "high" in severities
 
     def test_missing_healthcheck_flagged(self, tmp_path):
-        _write(tmp_path, "Dockerfile", """\
+        _write(
+            tmp_path,
+            "Dockerfile",
+            """\
             FROM python:3.11-slim
             RUN pip install flask
             CMD ["python", "app.py"]
-        """)
+        """,
+        )
         result = self.skill.run({"project_root": str(tmp_path)})
         issues = [f["issue"] for f in _all_findings(result)]
         assert any("healthcheck" in i.lower() or "health" in i.lower() for i in issues)
 
     def test_secret_in_env_flagged(self, tmp_path):
-        _write(tmp_path, "Dockerfile", """\
+        _write(
+            tmp_path,
+            "Dockerfile",
+            """\
             FROM python:3.11-slim
             ENV API_KEY=supersecretvalue
             CMD ["python", "app.py"]
-        """)
+        """,
+        )
         result = self.skill.run({"project_root": str(tmp_path)})
         issues = [f["issue"] for f in _all_findings(result)]
         assert any("secret" in i.lower() for i in issues)
 
     def test_root_user_flagged(self, tmp_path):
-        _write(tmp_path, "Dockerfile", """\
+        _write(
+            tmp_path,
+            "Dockerfile",
+            """\
             FROM python:3.11-slim
             USER root
             CMD ["python", "app.py"]
-        """)
+        """,
+        )
         result = self.skill.run({"project_root": str(tmp_path)})
         issues = [f["issue"] for f in _all_findings(result)]
         assert any("root" in i.lower() or "user" in i.lower() for i in issues)
 
     def test_clean_dockerfile_no_high(self, tmp_path):
-        _write(tmp_path, "Dockerfile", """\
+        _write(
+            tmp_path,
+            "Dockerfile",
+            """\
             FROM python:3.11-slim
             WORKDIR /app
             COPY . .
@@ -108,7 +130,8 @@ class TestDockerfileAnalyzer:
             USER appuser
             HEALTHCHECK CMD curl -f http://localhost/ || exit 1
             CMD ["python", "app.py"]
-        """)
+        """,
+        )
         result = self.skill.run({"project_root": str(tmp_path)})
         findings = _all_findings(result)
         high_or_critical = [f for f in findings if f["severity"] in ("critical", "high")]
@@ -135,6 +158,7 @@ class TestDockerfileAnalyzer:
 # ObservabilityCheckerSkill
 # ===========================================================================
 
+
 class TestObservabilityChecker:
     def setup_method(self):
         self.skill = ObservabilityCheckerSkill()
@@ -143,33 +167,37 @@ class TestObservabilityChecker:
         assert self.skill.name == "observability_checker"
 
     def test_silent_except_detected(self, tmp_path):
-        _write(tmp_path, "bad.py", """\
+        _write(
+            tmp_path,
+            "bad.py",
+            """\
             def fetch():
                 try:
                     return 1
                 except Exception:
                     pass
-        """)
+        """,
+        )
         result = self.skill.run({"project_root": str(tmp_path)})
         assert "error" not in result
         # Issues could be under total_issues or nested in results
         total_issues = result.get("total_issues", 0)
-        nested_issues = sum(
-            len(r.get("issues", [])) for r in result.get("results", [])
-        )
+        nested_issues = sum(len(r.get("issues", [])) for r in result.get("results", []))
         assert total_issues > 0 or nested_issues > 0
 
     def test_bare_print_detected(self, tmp_path):
-        _write(tmp_path, "noisy.py", """\
+        _write(
+            tmp_path,
+            "noisy.py",
+            """\
             def run():
                 print("starting")
                 return 1
-        """)
+        """,
+        )
         result = self.skill.run({"project_root": str(tmp_path)})
         bare_prints = result.get("total_bare_prints", 0)
-        nested_prints = sum(
-            len(r.get("bare_prints", [])) for r in result.get("results", [])
-        )
+        nested_prints = sum(len(r.get("bare_prints", [])) for r in result.get("results", []))
         assert bare_prints > 0 or nested_prints > 0
 
     def test_long_function_without_logging_flagged(self, tmp_path):
@@ -183,14 +211,18 @@ class TestObservabilityChecker:
         assert coverage < 100
 
     def test_well_logged_file_no_bare_prints(self, tmp_path):
-        _write(tmp_path, "good.py", """\
+        _write(
+            tmp_path,
+            "good.py",
+            """\
             import logging
             logger = logging.getLogger(__name__)
 
             def process():
                 logger.info("processing started")
                 return 42
-        """)
+        """,
+        )
         result = self.skill.run({"project_root": str(tmp_path)})
         assert result.get("total_bare_prints", 0) == 0
 
@@ -207,11 +239,7 @@ class TestObservabilityChecker:
     def test_result_has_coverage_field(self, tmp_path):
         _write(tmp_path, "mod.py", "def f():\n    pass\n")
         result = self.skill.run({"project_root": str(tmp_path)})
-        has_coverage = (
-            "overall_logging_coverage_pct" in result
-            or "logging_coverage_pct" in result
-            or "files_scanned" in result
-        )
+        has_coverage = "overall_logging_coverage_pct" in result or "logging_coverage_pct" in result or "files_scanned" in result
         assert has_coverage
 
 
@@ -306,14 +334,8 @@ class TestChangelogGenerator:
         root = _make_git_root(tmp_path)
         with patch("subprocess.run", return_value=_mock_git_run(_SAMPLE_LOG)):
             result = self.skill.run({"project_root": str(root)})
-        has_count = (
-            "commit_count" in result
-            or "total_commits" in result
-            or "markdown" in result
-            or "changelog" in result
-        )
+        has_count = "commit_count" in result or "total_commits" in result or "markdown" in result or "changelog" in result
         assert has_count
-
 
 
 # ===========================================================================

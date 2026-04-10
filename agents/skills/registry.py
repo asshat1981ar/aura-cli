@@ -1,4 +1,5 @@
 """Registry for all AURA skill modules."""
+
 from __future__ import annotations
 from typing import Dict
 

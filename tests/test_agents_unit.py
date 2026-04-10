@@ -2,6 +2,7 @@
 
 Always set AURA_SKIP_CHDIR=1 when running this file.
 """
+
 from __future__ import annotations
 
 import json
@@ -21,6 +22,7 @@ sys.path.insert(0, str(_ROOT))
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_brain():
     brain = MagicMock()
@@ -42,15 +44,18 @@ def _make_model(response="some model response"):
 # CoderAgent
 # ===========================================================================
 
+
 class TestCoderAgent:
     def setup_method(self):
         from agents.coder import CoderAgent
+
         self.brain = _make_brain()
-        self.model = _make_model('```python\n# AURA_TARGET: core/out.py\nx = 1\n```')
+        self.model = _make_model("```python\n# AURA_TARGET: core/out.py\nx = 1\n```")
         self.agent = CoderAgent(self.brain, self.model)
 
     def test_coder_instantiation(self):
         from agents.coder import CoderAgent
+
         a = CoderAgent(_make_brain(), _make_model())
         assert a is not None
 
@@ -71,10 +76,12 @@ class TestCoderAgent:
 
     def test_coder_max_iterations_constant(self):
         from agents.coder import CoderAgent
+
         assert CoderAgent.MAX_ITERATIONS == 3
 
     def test_coder_aura_target_directive(self):
         from agents.coder import CoderAgent
+
         assert "AURA_TARGET" in CoderAgent.AURA_TARGET_DIRECTIVE
 
 
@@ -82,15 +89,18 @@ class TestCoderAgent:
 # PlannerAgent
 # ===========================================================================
 
+
 class TestPlannerAgent:
     def setup_method(self):
         from agents.planner import PlannerAgent
+
         self.brain = _make_brain()
         self.model = _make_model('["step 1", "step 2"]')
         self.agent = PlannerAgent(self.brain, self.model)
 
     def test_planner_instantiation(self):
         from agents.planner import PlannerAgent
+
         a = PlannerAgent(_make_brain(), _make_model())
         assert a is not None
 
@@ -120,15 +130,18 @@ class TestPlannerAgent:
 # CriticAgent
 # ===========================================================================
 
+
 class TestCriticAgent:
     def setup_method(self):
         from agents.critic import CriticAgent
+
         self.brain = _make_brain()
         self.model = _make_model("looks good")
         self.agent = CriticAgent(self.brain, self.model)
 
     def test_critic_instantiation(self):
         from agents.critic import CriticAgent
+
         a = CriticAgent(_make_brain(), _make_model())
         assert a is not None
 
@@ -150,12 +163,14 @@ class TestCriticAgent:
         assert "feedback_text" in result
 
     def test_critic_validate_mutation_returns_dict(self):
-        self.model.respond.return_value = json.dumps({
-            "decision": "APPROVED",
-            "confidence_score": 0.9,
-            "impact_assessment": "good",
-            "reasoning": "looks fine",
-        })
+        self.model.respond.return_value = json.dumps(
+            {
+                "decision": "APPROVED",
+                "confidence_score": 0.9,
+                "impact_assessment": "good",
+                "reasoning": "looks fine",
+            }
+        )
         result = self.agent.validate_mutation("ADD_FILE core/foo.py\nx=1")
         assert isinstance(result, dict)
         assert "decision" in result
@@ -165,13 +180,16 @@ class TestCriticAgent:
 # VerifierAgent
 # ===========================================================================
 
+
 class TestVerifierAgent:
     def setup_method(self):
         from agents.verifier import VerifierAgent
+
         self.agent = VerifierAgent(timeout=10)
 
     def test_verifier_instantiation(self):
         from agents.verifier import VerifierAgent
+
         a = VerifierAgent()
         assert a is not None
 
@@ -195,13 +213,16 @@ class TestVerifierAgent:
 # ReflectorAgent
 # ===========================================================================
 
+
 class TestReflectorAgent:
     def setup_method(self):
         from agents.reflector import ReflectorAgent
+
         self.agent = ReflectorAgent()
 
     def test_reflector_instantiation(self):
         from agents.reflector import ReflectorAgent
+
         a = ReflectorAgent()
         assert a is not None
 
@@ -226,14 +247,17 @@ class TestReflectorAgent:
 # IngestAgent
 # ===========================================================================
 
+
 class TestIngestAgent:
     def setup_method(self):
         from agents.ingest import IngestAgent
+
         self.brain = _make_brain()
         self.agent = IngestAgent(self.brain)
 
     def test_ingest_instantiation(self):
         from agents.ingest import IngestAgent
+
         a = IngestAgent(_make_brain())
         assert a is not None
 
@@ -258,9 +282,11 @@ class TestIngestAgent:
 # RouterAgent
 # ===========================================================================
 
+
 class TestRouterAgent:
     def setup_method(self):
         from agents.router import RouterAgent
+
         self.brain = _make_brain()
         self.model = _make_model()
         self.model.call_openai = MagicMock(return_value="ok")
@@ -270,6 +296,7 @@ class TestRouterAgent:
 
     def test_router_instantiation(self):
         from agents.router import RouterAgent
+
         a = RouterAgent(_make_brain(), _make_model())
         assert a is not None
 
@@ -291,6 +318,7 @@ class TestRouterAgent:
     def test_router_force_cooldown(self):
         self.agent.force_cooldown("openai", seconds=60.0)
         import time
+
         assert self.agent.stats["openai"].cooldown_until > time.time()
 
 
@@ -298,16 +326,19 @@ class TestRouterAgent:
 # MutatorAgent
 # ===========================================================================
 
+
 class TestMutatorAgent:
     def setup_method(self):
         from agents.mutator import MutatorAgent
         import tempfile
+
         self.tmpdir = Path(tempfile.mkdtemp())
         self.agent = MutatorAgent(project_root=self.tmpdir)
 
     def test_mutator_instantiation(self):
         from agents.mutator import MutatorAgent
         import tempfile
+
         tmpdir = Path(tempfile.mkdtemp())
         a = MutatorAgent(project_root=tmpdir)
         assert a is not None
@@ -338,8 +369,7 @@ class TestMutatorAgent:
         resolved_root = agent.project_root_resolved
         validated = resolved_root / "nested.py"
 
-        with patch.object(agent, "_validate_file_path", return_value=validated), \
-             patch("agents.mutator.apply_change_with_explicit_overwrite_policy") as mock_apply:
+        with patch.object(agent, "_validate_file_path", return_value=validated), patch("agents.mutator.apply_change_with_explicit_overwrite_policy") as mock_apply:
             agent._handle_add_file("ADD_FILE nested.py", ["print('ok')"])
 
         assert mock_apply.call_args[0][1] == "nested.py"
@@ -349,15 +379,18 @@ class TestMutatorAgent:
 # ScaffolderAgent
 # ===========================================================================
 
+
 class TestScaffolderAgent:
     def setup_method(self):
         from agents.scaffolder import ScaffolderAgent
+
         self.brain = _make_brain()
         self.model = _make_model('{"README.md": "# Test"}')
         self.agent = ScaffolderAgent(self.brain, self.model)
 
     def test_scaffolder_instantiation(self):
         from agents.scaffolder import ScaffolderAgent
+
         a = ScaffolderAgent(_make_brain(), _make_model())
         assert a is not None
 
@@ -383,9 +416,11 @@ class TestScaffolderAgent:
 # TesterAgent
 # ===========================================================================
 
+
 class TestTesterAgent:
     def setup_method(self):
         from agents.tester import TesterAgent
+
         self.brain = _make_brain()
         self.model = _make_model("def test_foo(): assert 1==1")
         self.sandbox = MagicMock()
@@ -402,6 +437,7 @@ class TestTesterAgent:
 
     def test_tester_instantiation(self):
         from agents.tester import TesterAgent
+
         a = TesterAgent(_make_brain(), _make_model(), MagicMock())
         assert a is not None
 
@@ -430,10 +466,12 @@ class TestTesterAgent:
 # ApplicatorAgent
 # ===========================================================================
 
+
 class TestApplicatorAgent:
     def setup_method(self):
         from agents.applicator import ApplicatorAgent
         import tempfile
+
         self.tmpdir = Path(tempfile.mkdtemp())
         self.brain = _make_brain()
         self.agent = ApplicatorAgent(self.brain, backup_dir=str(self.tmpdir / "backups"))
@@ -441,6 +479,7 @@ class TestApplicatorAgent:
     def test_applicator_instantiation(self):
         from agents.applicator import ApplicatorAgent
         import tempfile
+
         tmpdir = Path(tempfile.mkdtemp())
         a = ApplicatorAgent(_make_brain(), backup_dir=str(tmpdir / "bk"))
         assert a is not None
@@ -459,6 +498,7 @@ class TestApplicatorAgent:
 
     def test_applicator_apply_returns_apply_result(self):
         from agents.applicator import ApplyResult
+
         result = self.agent.apply("no code")
         assert isinstance(result, ApplyResult)
 
@@ -476,14 +516,17 @@ class TestApplicatorAgent:
 # SynthesizerAgent
 # ===========================================================================
 
+
 class TestSynthesizerAgent:
     def test_instantiation(self):
         from agents.synthesizer import SynthesizerAgent
+
         a = SynthesizerAgent()
         assert a.name == "synthesize"
 
     def test_run_minimal(self):
         from agents.synthesizer import SynthesizerAgent
+
         a = SynthesizerAgent()
         out = a.run({"goal": "test goal"})
         assert "tasks" in out
@@ -492,12 +535,9 @@ class TestSynthesizerAgent:
 
     def test_run_with_plan_and_critique(self):
         from agents.synthesizer import SynthesizerAgent
+
         a = SynthesizerAgent()
-        data = {
-            "goal": "g",
-            "plan": {"steps": ["step1"]},
-            "critique": {"issues": ["issue1"]}
-        }
+        data = {"goal": "g", "plan": {"steps": ["step1"]}, "critique": {"issues": ["issue1"]}}
         out = a.run(data)
         intent = out["tasks"][0]["intent"]
         assert "step1" in intent
@@ -505,6 +545,7 @@ class TestSynthesizerAgent:
 
     def test_run_uses_provided_files_and_tests(self):
         from agents.synthesizer import SynthesizerAgent
+
         a = SynthesizerAgent()
         data = {"files": ["a.py"], "tests": ["pytest a.py"]}
         out = a.run(data)
@@ -513,6 +554,7 @@ class TestSynthesizerAgent:
 
     def test_run_empty_input(self):
         from agents.synthesizer import SynthesizerAgent
+
         a = SynthesizerAgent()
         out = a.run({})
         assert "tasks" in out
@@ -524,6 +566,7 @@ class TestSynthesizerAgent:
 # Registry adapters
 # ===========================================================================
 
+
 class TestRegistryAdapters:
     def setup_method(self):
         self.brain = _make_brain()
@@ -532,12 +575,14 @@ class TestRegistryAdapters:
     def test_planner_adapter_instantiation(self):
         from agents.registry import PlannerAdapter
         from agents.planner import PlannerAgent
+
         adapter = PlannerAdapter(PlannerAgent(self.brain, self.model))
         assert adapter.name == "plan"
 
     def test_planner_adapter_run_returns_dict(self):
         from agents.registry import PlannerAdapter
         from agents.planner import PlannerAgent
+
         adapter = PlannerAdapter(PlannerAgent(self.brain, self.model))
         result = adapter.run({"goal": "fix bug", "memory_snapshot": "", "similar_past_problems": "", "known_weaknesses": ""})
         assert isinstance(result, dict)
@@ -546,6 +591,7 @@ class TestRegistryAdapters:
     def test_critic_adapter_instantiation(self):
         from agents.registry import CriticAdapter
         from agents.critic import CriticAgent
+
         self.model.respond.return_value = "feedback"
         adapter = CriticAdapter(CriticAgent(self.brain, self.model))
         assert adapter.name == "critique"
@@ -553,6 +599,7 @@ class TestRegistryAdapters:
     def test_critic_adapter_run_returns_dict(self):
         from agents.registry import CriticAdapter
         from agents.critic import CriticAgent
+
         self.model.respond.return_value = "feedback"
         adapter = CriticAdapter(CriticAgent(self.brain, self.model))
         result = adapter.run({"task": "do something", "plan": ["step1"]})
@@ -562,6 +609,7 @@ class TestRegistryAdapters:
     def test_act_adapter_instantiation(self):
         from agents.registry import ActAdapter
         from agents.coder import CoderAgent
+
         self.model.respond.return_value = "```python\nx=1\n```"
         adapter = ActAdapter(CoderAgent(self.brain, self.model))
         assert adapter.name == "act"
@@ -580,6 +628,7 @@ class TestRegistryAdapters:
 
     def test_default_agents_returns_dict(self):
         from agents.registry import default_agents
+
         agents = default_agents(self.brain, self.model)
         assert isinstance(agents, dict)
         assert "ingest" in agents

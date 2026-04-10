@@ -2,6 +2,7 @@
 Rate limiting middleware for AURA CLI API.
 Implements token bucket algorithm with per-endpoint limits.
 """
+
 from __future__ import annotations
 import time
 import asyncio
@@ -13,6 +14,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 @dataclass
 class RateLimit:
     requests: int
@@ -22,6 +24,7 @@ class RateLimit:
     def __post_init__(self):
         if self.burst == 0:
             self.burst = max(1, self.requests // 5)
+
 
 @dataclass
 class TokenBucket:
@@ -42,6 +45,7 @@ class TokenBucket:
             return True, 0.0
         retry_after = (1.0 - self.tokens) / refill_rate
         return False, retry_after
+
 
 class InMemoryRateLimiter:
     def __init__(self):
@@ -65,6 +69,7 @@ class InMemoryRateLimiter:
             del self._buckets[k]
         self._last_cleanup = time.monotonic()
 
+
 ENDPOINT_LIMITS: dict[str, RateLimit] = {
     "/api/v1/auth/login": RateLimit(requests=5, window_seconds=60),
     "/api/v1/auth/refresh": RateLimit(requests=20, window_seconds=60),
@@ -76,6 +81,7 @@ ENDPOINT_LIMITS: dict[str, RateLimit] = {
 
 _limiter = InMemoryRateLimiter()
 
+
 def get_rate_limit_key(request: Request) -> str:
     user_id = getattr(request.state, "user_id", None)
     if user_id:
@@ -86,6 +92,7 @@ def get_rate_limit_key(request: Request) -> str:
     else:
         ip = request.client.host if request.client else "unknown"
     return f"ip:{ip}"
+
 
 async def rate_limit_middleware(
     request: Request,

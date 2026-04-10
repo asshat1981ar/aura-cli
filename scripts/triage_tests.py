@@ -7,6 +7,7 @@ Usage:
 
 Produces a JSON report and text summaries for CI integration.
 """
+
 import argparse
 import json
 import os
@@ -48,15 +49,11 @@ def discover_test_files(test_dir: str = "tests") -> List[Path]:
     if not test_path.exists():
         print(f"Error: {test_dir} directory not found", file=sys.stderr)
         sys.exit(1)
-    files = sorted(
-        list(test_path.rglob("test_*.py")) + list(test_path.rglob("*_test.py"))
-    )
+    files = sorted(list(test_path.rglob("test_*.py")) + list(test_path.rglob("*_test.py")))
     return list(dict.fromkeys(files))
 
 
-def run_single_test_file(
-    test_file: Path, timeout: int, env_override: dict
-) -> TestFileResult:
+def run_single_test_file(test_file: Path, timeout: int, env_override: dict) -> TestFileResult:
     """Run a single test file with timeout and capture results."""
     import re
 
@@ -66,9 +63,16 @@ def run_single_test_file(
     try:
         proc = subprocess.run(
             [
-                sys.executable, "-m", "pytest", str(test_file),
-                "-v", "--no-cov", "--no-header", f"--timeout={timeout}",
-                "--tb=line", "-q",
+                sys.executable,
+                "-m",
+                "pytest",
+                str(test_file),
+                "-v",
+                "--no-cov",
+                "--no-header",
+                f"--timeout={timeout}",
+                "--tb=line",
+                "-q",
             ],
             capture_output=True,
             text=True,
@@ -104,9 +108,7 @@ def run_single_test_file(
         result.status = "error"
         result.error_message = str(e)
 
-    result.tests_collected = (
-        result.tests_passed + result.tests_failed + result.tests_errors
-    )
+    result.tests_collected = result.tests_passed + result.tests_failed + result.tests_errors
     return result
 
 

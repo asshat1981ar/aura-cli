@@ -1,4 +1,5 @@
 """Tests for memory.redis_cache_adapter and the factory 'redis' type."""
+
 from __future__ import annotations
 
 import sys
@@ -18,6 +19,7 @@ def _fresh_adapter(**kwargs):
     if "memory.redis_cache_adapter" in sys.modules:
         del sys.modules["memory.redis_cache_adapter"]
     from memory.redis_cache_adapter import RedisCacheAdapter  # noqa: PLC0415
+
     return RedisCacheAdapter(**kwargs)
 
 

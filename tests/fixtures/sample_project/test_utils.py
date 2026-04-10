@@ -1,4 +1,5 @@
 """Basic tests for utils.py in sample_project fixture."""
+
 import pytest
 from .utils import format_name, count_words, is_palindrome, clamp
 

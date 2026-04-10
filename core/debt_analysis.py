@@ -3,38 +3,35 @@ import ast
 import pytest
 from dataclasses import dataclass
 
+
 @dataclass
 class DebtMetrics:
     coverage: float
-    complexity: int 
+    complexity: int
     duplication: float
     untested_lines: List[int]
     flaky_rate: float
 
+
 def analyze_test_coverage(test_file: str) -> DebtMetrics:
     """Analyze test file and return debt metrics"""
-    metrics = DebtMetrics(
-        coverage=0.0,
-        complexity=0,
-        duplication=0.0,
-        untested_lines=[],
-        flaky_rate=0.0
-    )
-    
+    metrics = DebtMetrics(coverage=0.0, complexity=0, duplication=0.0, untested_lines=[], flaky_rate=0.0)
+
     try:
         with open(test_file) as f:
             tree = ast.parse(f.read())
-            
+
         # Calculate metrics
         metrics.complexity = count_cyclomatic_complexity(tree)
         metrics.duplication = detect_test_duplication(tree)
         metrics.coverage = calculate_test_coverage(test_file)
         metrics.untested_lines = find_untested_lines(test_file)
         metrics.flaky_rate = analyze_test_flakiness(test_file)
-        
+
         return metrics
     except Exception as e:
         raise ValueError(f"Failed to analyze {test_file}: {str(e)}")
+
 
 def count_cyclomatic_complexity(tree: ast.AST) -> int:
     """Calculate cyclomatic complexity of AST"""
@@ -45,37 +42,42 @@ def count_cyclomatic_complexity(tree: ast.AST) -> int:
             complexity += 1
     return complexity
 
+
 def detect_test_duplication(tree: ast.AST) -> float:
     """Calculate test code duplication percentage"""
     # Simple duplication detection
     lines = set()
     total_lines = 0
-    
+
     for node in ast.walk(tree):
         if isinstance(node, ast.FunctionDef):
-            if node.name.startswith('test_'):
+            if node.name.startswith("test_"):
                 func_lines = ast.unparse(node)
                 lines.add(func_lines)
-                total_lines += len(func_lines.split('\n'))
-                
+                total_lines += len(func_lines.split("\n"))
+
     if total_lines == 0:
         return 0.0
     return 1.0 - (len(lines) / total_lines)
 
+
 def calculate_test_coverage(test_file: str) -> float:
     """Calculate test coverage percentage"""
     # Would integrate with coverage.py
-    return 0.8 # Placeholder
+    return 0.8  # Placeholder
+
 
 def find_untested_lines(test_file: str) -> List[int]:
     """Find lines that lack test coverage"""
     # Would integrate with coverage.py
-    return [42, 43] # Placeholder
+    return [42, 43]  # Placeholder
+
 
 def analyze_test_flakiness(test_file: str) -> float:
     """Analyze test flakiness rate"""
     # Would analyze test run history
-    return 0.05 # Placeholder 
+    return 0.05  # Placeholder
+
 
 @pytest.fixture
 def sample_test_file(tmp_path):
@@ -90,6 +92,7 @@ def test_other():
     p.write_text(test_content)
     return str(p)
 
+
 def test_analyze_coverage(sample_test_file):
     metrics = analyze_test_coverage(sample_test_file)
     assert isinstance(metrics, DebtMetrics)
@@ -98,6 +101,7 @@ def test_analyze_coverage(sample_test_file):
     assert 0 <= metrics.duplication <= 1.0
     assert isinstance(metrics.untested_lines, list)
     assert 0 <= metrics.flaky_rate <= 1.0
+
 
 def test_complexity_calculation():
     code = """
@@ -111,6 +115,7 @@ def test_func():
     tree = ast.parse(code)
     complexity = count_cyclomatic_complexity(tree)
     assert complexity == 4  # Base + if + for + nested if
+
 
 def test_duplication_detection():
     code = """

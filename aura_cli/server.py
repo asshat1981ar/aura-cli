@@ -30,63 +30,65 @@ from core.operator_runtime import build_run_tool_audit_summary
 from core.running_runs import register_run, deregister_run
 
 # ---------------------------------------------------------------------------
-# Prometheus metrics — imported lazily so the server starts even if
-# prometheus_client is not installed in dev environments.
+# Prometheus metrics — prometheus_client is a required dependency.
 # ---------------------------------------------------------------------------
-try:
-    from prometheus_client import (
-        Counter,
-        Gauge,
-        Histogram,
-        REGISTRY,
-        generate_latest,
-        CONTENT_TYPE_LATEST,
-    )
+from prometheus_client import (
+    Counter,
+    Gauge,
+    Histogram,
+    REGISTRY,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+)
 
-    _PROMETHEUS_AVAILABLE = True
 
-    def _get_or_create_metric(factory, name: str, documentation: str, labelnames=()):
-        """Return an existing collector when this module is re-imported in tests."""
-        try:
-            return factory(name, documentation, labelnames)
-        except ValueError:
-            collector = REGISTRY._names_to_collectors.get(name)  # type: ignore[attr-defined]
-            if collector is None and not name.endswith("_total"):
-                collector = REGISTRY._names_to_collectors.get(f"{name}_total")  # type: ignore[attr-defined]
-            if collector is None:
-                raise
-            return collector
+def _get_or_create_metric(factory, name: str, documentation: str, labelnames=()):
+    """Return an existing collector when this module is re-imported in tests."""
+    try:
+        return factory(name, documentation, labelnames)
+    except ValueError:
+        collector = REGISTRY._names_to_collectors.get(name)  # type: ignore[attr-defined]
+        if collector is None and not name.endswith("_total"):
+            collector = REGISTRY._names_to_collectors.get(f"{name}_total")  # type: ignore[attr-defined]
+        if collector is None:
+            raise
+        return collector
 
-    pipeline_runs_total = _get_or_create_metric(
-        Counter,
-        "aura_pipeline_runs",
-        "Total pipeline runs",
-        ["status"],
-    )
-    active_pipeline_runs = _get_or_create_metric(
-        Gauge,
-        "aura_active_pipeline_runs",
-        "Currently executing pipelines",
-    )
-    goal_queue_depth = _get_or_create_metric(
-        Gauge,
-        "aura_goal_queue_depth",
-        "Number of goals waiting in the webhook queue",
-    )
-    sandbox_violations_total = _get_or_create_metric(
-        Counter,
-        "aura_sandbox_violations",
-        "Sandbox violations caught by the run-tool denylist",
-        ["type"],
-    )
-    http_request_duration = _get_or_create_metric(
-        Histogram,
-        "http_request_duration_seconds",
-        "HTTP request latency in seconds",
-        ["endpoint"],
-    )
-except ImportError:  # pragma: no cover
-    _PROMETHEUS_AVAILABLE = False
+
+pipeline_runs_total = _get_or_create_metric(
+    Counter,
+    "aura_pipeline_runs",
+    "Total pipeline runs",
+    ["status"],
+)
+active_pipeline_runs = _get_or_create_metric(
+    Gauge,
+    "aura_active_pipeline_runs",
+    "Currently executing pipelines",
+)
+goal_queue_depth = _get_or_create_metric(
+    Gauge,
+    "aura_goal_queue_depth",
+    "Number of goals waiting in the webhook queue",
+)
+sandbox_violations_total = _get_or_create_metric(
+    Counter,
+    "aura_sandbox_violations",
+    "Sandbox violations caught by the run-tool denylist",
+    ["type"],
+)
+http_request_duration = _get_or_create_metric(
+    Histogram,
+    "http_request_duration_seconds",
+    "HTTP request latency in seconds",
+    ["endpoint"],
+)
+aura_request_latency_seconds = _get_or_create_metric(
+    Histogram,
+    "aura_request_latency_seconds",
+    "AURA API request latency in seconds",
+    ["endpoint"],
+)
 
 # Project root for environment listing
 PROJECT_ROOT = Path.cwd()
@@ -131,8 +133,38 @@ def _beads_runtime_snapshot():
     return {"enabled": False, "required": False, "scope": "none"}
 
 
+def _run_db_migrations() -> None:
+    """Run auth and brain DB migrations idempotently before accepting requests."""
+    try:
+        from core.db_migrations import migrate_auth_db, migrate_brain_db  # noqa: PLC0415
+    except ImportError:  # pragma: no cover
+        log_json("WARN", "aura_db_migrations_unavailable", details={"reason": "core.db_migrations not importable"})
+        return
+
+    try:
+        from core.auth import _default_auth_db_path  # noqa: PLC0415
+    except ImportError:  # pragma: no cover
+        def _default_auth_db_path() -> Path:  # type: ignore[misc]
+            custom = os.environ.get("AURA_AUTH_DB_PATH")
+            if custom:
+                return Path(custom)
+            return Path.home() / ".local" / "share" / "aura" / "auth.db"
+
+    auth_db_path = Path(os.environ["AURA_AUTH_DB_PATH"]) if os.environ.get("AURA_AUTH_DB_PATH") else _default_auth_db_path()
+    brain_db_path = Path(os.environ.get("AURA_BRAIN_DB_PATH", "memory/brain_v2.db"))
+
+    auth_versions = migrate_auth_db(auth_db_path)
+    brain_versions = migrate_brain_db(brain_db_path)
+    log_json(
+        "INFO",
+        "aura_db_migrations_applied",
+        details={"auth_versions": auth_versions, "brain_versions": brain_versions},
+    )
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    await asyncio.to_thread(_run_db_migrations)
     await _ensure_runtime_initialized()
     yield
 
@@ -200,11 +232,11 @@ async def _prometheus_timing_middleware(request: Request, call_next):
     """Record HTTP request duration for every endpoint and add rate-limit headers."""
     start = time.perf_counter()
     response = await call_next(request)
-    if _PROMETHEUS_AVAILABLE:
-        duration = time.perf_counter() - start
-        # Normalise path to avoid high-cardinality labels (strip UUIDs etc.)
-        path = request.url.path
-        http_request_duration.labels(endpoint=path).observe(duration)
+    duration = time.perf_counter() - start
+    # Normalise path to avoid high-cardinality labels (strip UUIDs etc.)
+    path = request.url.path
+    http_request_duration.labels(endpoint=path).observe(duration)
+    aura_request_latency_seconds.labels(endpoint=path).observe(duration)
     response.headers["X-RateLimit-Limit"] = str(_RATE_LIMIT)
     return response
 
@@ -434,8 +466,7 @@ async def _execute_run(req: ExecuteRequest):
         raise HTTPException(status_code=400, detail="Missing command in args")
     blocked_pattern = _is_denylisted_command(command)
     if blocked_pattern is not None:
-        if _PROMETHEUS_AVAILABLE:
-            sandbox_violations_total.labels(type="denylist").inc()
+        sandbox_violations_total.labels(type="denylist").inc()
         raise HTTPException(status_code=403, detail=f"Command blocked by policy: {blocked_pattern}")
 
     async def run_generator():
@@ -688,55 +719,127 @@ async def health() -> Dict:
 
 
 @app.get("/ready")
-async def ready() -> Dict:
-    """Readiness probe: checks SQLite brain DB is readable; optionally pings Redis."""
+async def ready():
+    """Readiness probe: checks all critical and optional subsystems."""
+    import socket
     import sqlite3 as _sqlite3
+    import subprocess
 
-    db_path = Path("memory/brain_v2.db")
+    from fastapi.responses import JSONResponse
+
+    overall_start = time.perf_counter()
+    components: Dict[str, Any] = {}
+    status = "ready"
+
+    # --- brain_db ---
+    brain_db_path = Path(os.environ.get("AURA_BRAIN_DB_PATH", "memory/brain.db"))
+    t0 = time.perf_counter()
     try:
-        conn = _sqlite3.connect(str(db_path), timeout=2.0)
+        conn = _sqlite3.connect(str(brain_db_path), timeout=2.0)
         conn.execute("SELECT 1")
         conn.close()
+        components["brain_db"] = {"status": "ready", "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
     except Exception as exc:
-        from fastapi.responses import JSONResponse
+        components["brain_db"] = {"status": "degraded", "error": str(exc), "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
+        status = "degraded"
 
-        return JSONResponse(
-            status_code=503,
-            content={"status": "not_ready", "reason": f"SQLite unavailable: {exc}"},
-        )
+    # --- auth_db ---
+    try:
+        from core.auth import _default_auth_db_path  # noqa: PLC0415
+    except ImportError:
+        def _default_auth_db_path():
+            return Path(os.environ.get("AURA_AUTH_DB_PATH", "aura_auth.db"))
+    auth_db_path = str(_default_auth_db_path())
+    t0 = time.perf_counter()
+    try:
+        conn = _sqlite3.connect(auth_db_path, timeout=2.0)
+        conn.execute("SELECT 1")
+        conn.close()
+        components["auth_db"] = {"status": "ready", "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
+    except Exception as exc:
+        components["auth_db"] = {"status": "degraded", "error": str(exc), "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
+        if status == "ready":
+            status = "degraded"
 
+    # --- redis (optional) ---
     redis_url = os.getenv("REDIS_URL")
     if redis_url:
+        t0 = time.perf_counter()
         try:
-            import redis as _redis  # optional dependency
-
-            client = _redis.from_url(redis_url, socket_connect_timeout=2, socket_timeout=2)
+            import redis as _redis  # noqa: PLC0415
+            client = _redis.from_url(redis_url, socket_connect_timeout=1, socket_timeout=1)
             client.ping()
-        except Exception as exc:
-            from fastapi.responses import JSONResponse
+            components["redis"] = {"status": "ready", "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
+        except Exception:
+            components["redis"] = {"status": "unavailable", "latency_ms": None}
+            if status == "ready":
+                status = "degraded"
+    else:
+        components["redis"] = {"status": "unavailable", "latency_ms": None}
 
-            return JSONResponse(
-                status_code=503,
-                content={"status": "not_ready", "reason": f"Redis unavailable: {exc}"},
+    # --- mcp_server (optional — unavailable is not a failure) ---
+    t0 = time.perf_counter()
+    try:
+        sock = socket.create_connection(("localhost", 8001), timeout=1.0)
+        sock.close()
+        components["mcp_server"] = {"status": "ready", "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
+    except (OSError, ConnectionRefusedError):
+        components["mcp_server"] = {"status": "unavailable", "latency_ms": None}
+
+    # --- model_config ---
+    config_path = _current_project_root() / "aura.config.json"
+    model_configured = False
+    try:
+        if config_path.exists():
+            with open(config_path) as f:
+                cfg = json.load(f)
+            model_configured = bool(
+                cfg.get("model_name")
+                or cfg.get("api_key")
+                or cfg.get("openai_api_key")
+                or cfg.get("local_model_profiles")
             )
+    except Exception:
+        pass
+    components["model_config"] = {"status": "configured" if model_configured else "unconfigured"}
 
-    return {"status": "ready", "checks": {"sqlite": "ok"}}
+    # --- sandbox ---
+    t0 = time.perf_counter()
+    try:
+        proc = await asyncio.to_thread(
+            subprocess.run,
+            ["python3", "-c", "print('ok')"],
+            capture_output=True,
+            timeout=2.0,
+        )
+        sandbox_ok = proc.returncode == 0 and b"ok" in proc.stdout
+        components["sandbox"] = {
+            "status": "ready" if sandbox_ok else "degraded",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+        }
+        if not sandbox_ok and status == "ready":
+            status = "degraded"
+    except Exception as exc:
+        components["sandbox"] = {
+            "status": "degraded",
+            "error": str(exc),
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+        }
+        if status == "ready":
+            status = "degraded"
+
+    overall_latency_ms = round((time.perf_counter() - overall_start) * 1000, 2)
+    http_status = 200 if status in ("ready", "degraded") else 503
+    return JSONResponse(
+        {"status": status, "components": components, "overall_latency_ms": overall_latency_ms},
+        status_code=http_status,
+    )
 
 
 @app.get("/metrics", include_in_schema=False)
 async def metrics():
-    """Expose Prometheus-format metrics (no auth — scraper must be on private network).
-
-    Falls back to a JSON summary if prometheus_client is not installed.
-    """
-    if _PROMETHEUS_AVAILABLE:
-        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
-    # Graceful fallback when prometheus_client is not installed
-    return {
-        "status": "ok",
-        "skill_metrics": _runtime_metrics_snapshot(),
-        "warning": "prometheus_client not installed; install it for Prometheus format",
-    }
+    """Expose Prometheus-format metrics (no auth — scraper must be on private network)."""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/tools")
@@ -812,8 +915,7 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
         "queued_at": time.time(),
     }
     _webhook_goal_queue[goal_id] = entry
-    if _PROMETHEUS_AVAILABLE:
-        goal_queue_depth.set(sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued"))
+    goal_queue_depth.set(sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued"))
     log_json(
         "INFO",
         "aura_webhook_goal_received",
@@ -827,9 +929,8 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
 
     # Fire-and-forget: run the cycle in background so n8n can poll /webhook/status
     async def _run_cycle() -> None:
-        if _PROMETHEUS_AVAILABLE:
-            active_pipeline_runs.inc()
-            goal_queue_depth.set(sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued"))
+        active_pipeline_runs.inc()
+        goal_queue_depth.set(sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued"))
         try:
             _webhook_goal_queue[goal_id]["status"] = "running"
             _webhook_goal_queue[goal_id]["started_at"] = time.time()
@@ -845,8 +946,7 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
                     "completed_at": time.time(),
                 }
             )
-            if _PROMETHEUS_AVAILABLE:
-                pipeline_runs_total.labels(status="success").inc()
+            pipeline_runs_total.labels(status="success").inc()
         except Exception as exc:
             _webhook_goal_queue[goal_id].update(
                 {
@@ -856,11 +956,9 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
                 }
             )
             log_json("WARN", "aura_webhook_goal_failed", details={"goal_id": goal_id, "error": str(exc)})
-            if _PROMETHEUS_AVAILABLE:
-                pipeline_runs_total.labels(status="failure").inc()
+            pipeline_runs_total.labels(status="failure").inc()
         finally:
-            if _PROMETHEUS_AVAILABLE:
-                active_pipeline_runs.dec()
+            active_pipeline_runs.dec()
 
     asyncio.create_task(_run_cycle())
     return {"status": "queued", "goal_id": goal_id}

@@ -126,3 +126,79 @@ def test_schema_migrations_table_records_applied(tmp_db):
     # checksums are 16-char hex strings
     for _, checksum in rows:
         assert len(checksum) == 16
+
+
+# --- Lifespan / server startup ---
+
+
+def test_run_db_migrations_creates_schemas(tmp_path, monkeypatch):
+    """_run_db_migrations() populates both DBs when called directly."""
+    import aura_cli.server as server_mod
+
+    auth_db = tmp_path / "auth.db"
+    brain_db = tmp_path / "brain.db"
+    monkeypatch.setenv("AURA_AUTH_DB_PATH", str(auth_db))
+    monkeypatch.setenv("AURA_BRAIN_DB_PATH", str(brain_db))
+
+    server_mod._run_db_migrations()
+
+    conn_auth = sqlite3.connect(auth_db)
+    auth_versions = [r[0] for r in conn_auth.execute("SELECT version FROM _schema_migrations ORDER BY version")]
+    conn_auth.close()
+    assert auth_versions == ["001", "002", "003"]
+
+    conn_brain = sqlite3.connect(brain_db)
+    brain_versions = [r[0] for r in conn_brain.execute("SELECT version FROM _schema_migrations ORDER BY version")]
+    conn_brain.close()
+    assert brain_versions == ["001", "002"]
+
+
+def test_run_db_migrations_idempotent(tmp_path, monkeypatch):
+    """Calling _run_db_migrations() twice raises no error and keeps same versions."""
+    import aura_cli.server as server_mod
+
+    auth_db = tmp_path / "auth.db"
+    brain_db = tmp_path / "brain.db"
+    monkeypatch.setenv("AURA_AUTH_DB_PATH", str(auth_db))
+    monkeypatch.setenv("AURA_BRAIN_DB_PATH", str(brain_db))
+
+    server_mod._run_db_migrations()
+    server_mod._run_db_migrations()  # must not raise
+
+    conn = sqlite3.connect(auth_db)
+    versions = [r[0] for r in conn.execute("SELECT version FROM _schema_migrations ORDER BY version")]
+    conn.close()
+    assert versions == ["001", "002", "003"]
+
+
+def test_lifespan_calls_run_db_migrations(tmp_path, monkeypatch):
+    """Server lifespan invokes _run_db_migrations before accepting requests."""
+    from fastapi.testclient import TestClient
+    from unittest.mock import patch as _patch
+
+    import aura_cli.server as server_mod
+
+    auth_db = tmp_path / "auth.db"
+    brain_db = tmp_path / "brain.db"
+    monkeypatch.setenv("AURA_AUTH_DB_PATH", str(auth_db))
+    monkeypatch.setenv("AURA_BRAIN_DB_PATH", str(brain_db))
+
+    called: list[bool] = []
+
+    original = server_mod._run_db_migrations
+
+    def _tracking_migrations():
+        called.append(True)
+        original()
+
+    with _patch.object(server_mod, "_run_db_migrations", side_effect=_tracking_migrations):
+        with _patch.object(server_mod, "_ensure_runtime_initialized", return_value={}):
+            with TestClient(server_mod.app, raise_server_exceptions=True):
+                pass
+
+    assert called, "_run_db_migrations was not called during lifespan startup"
+
+    conn = sqlite3.connect(auth_db)
+    versions = [r[0] for r in conn.execute("SELECT version FROM _schema_migrations ORDER BY version")]
+    conn.close()
+    assert versions == ["001", "002", "003"]

@@ -261,7 +261,7 @@ class ModelAdapter(ProvidersMixin, CacheMixin):
 
         # Route through OpenRouter with task-specific model selection
         routing = config.get("model_routing", {})
-        if route_key in routing and config.get("primary_provider") == "openrouter":
+        if route_key in routing and config.get("primary_provider", "openrouter") == "openrouter":
             cache_key = f"[openrouter-role:{route_key}] {prompt}"
             cached = self._get_cached_response(cache_key)
             if cached:

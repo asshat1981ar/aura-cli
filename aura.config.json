@@ -96,7 +96,7 @@
   },
   "semantic_memory": {
     "top_k": 9,
-    "embedding_model": "local_profile:android_embeddings"
+    "embedding_model": "local_profile:linux_embed"
   },
   "n_best_candidates": 1,
   "n_best_temperature_spread": [

@@ -17,7 +17,7 @@ AURA's `local_model_profiles` and `local_model_routing` infrastructure is fully 
 ### Backend: Ollama
 
 Ollama is selected as the inference backend because:
-- OpenAI-compatible REST API (matches AURA's existing `openai_compatible` provider path)
+- AURA has a dedicated `ollama` provider path (`_call_local_ollama` for chat, `_call_local_ollama_embeddings` for embeddings)
 - Native GGUF support via embedded llama.cpp
 - Automatic model management (`ollama pull`, model swap, context tracking)
 - CPU inference works well on Linux x86-64
@@ -103,16 +103,16 @@ ollama pull nomic-embed-text       # ~274 MB
 curl http://127.0.0.1:11434/api/tags
 
 # Test AURA local routing
-aura run "write a python hello world" --local
+aura run "write a python hello world"
 ```
 
 ---
 
 ## Fallback Behavior
 
-1. `linux_coder_7b` fails → `linux_fast_3b` (configured `fallback_profiles`)
-2. `linux_fast_3b` fails → OpenRouter via `model_routing` key (standard AURA fallback in `respond_for_role`)
-3. OpenRouter fails → `respond()` default chain (OpenAI → Anthropic)
+1. `linux_coder_7b` fails → `linux_fast_3b` (configured via `fallback_profiles`)
+2. `linux_fast_3b` fails + cooldown active → `respond_for_role` checks `model_routing` for the route key and calls OpenRouter (requires `primary_provider` defaults to `"openrouter"` — fixed in `core/model_adapter.py` line 264)
+3. OpenRouter fails → `respond()` default chain (OpenAI → Anthropic → local command)
 
 ---
 
@@ -132,14 +132,14 @@ aura run "write a python hello world" --local
 
 ## Embedding Integration
 
-To use `linux_embed` for AURA's semantic memory, set:
-```json
-"semantic_memory": {
-  "embedding_model": "local_profile:linux_embed"
-}
-```
+Runtime dispatch for embeddings:
+1. `ModelAdapter.embed(texts)` → `_embed_with_local_profile()`
+2. `_embed_with_local_profile()` reads `semantic_memory.embedding_model` = `local_profile:linux_embed`
+3. Loads `linux_embed` profile (provider=`ollama`)
+4. Calls `_call_local_ollama_embeddings()` → tries `POST /api/embed` first, falls back to `POST /api/embeddings`
+5. Returns numpy float32 vectors (768d for nomic-embed-text v1.5)
 
-This routes embedding calls through `_resolve_active_embedding_model_id()` → `call_local_profile("linux_embed", text)` → Ollama `/api/embeddings`.
+The `semantic_memory.embedding_model` config key takes priority over `local_model_routing.embedding`. Both are now set to `linux_embed`.
 
 ---
 
@@ -150,7 +150,7 @@ Existing test coverage in `tests/test_model_adapter_local_profiles.py`:
 - `test_local_profile_failure_uses_configured_fallback_profile` — covers `fallback_profiles`
 - `test_local_profile_cooldown_skips_failed_profile_on_next_call` — covers cooldown
 
-No new test code required; profiles are pure JSON config. Integration testing done via `aura doctor` and `scripts/check_android_local_models.py` (TCP + HTTP health probes).
+**Gap:** no test covers the Ollama embedding path (`linux_embed` / `_call_local_ollama_embeddings` / `/api/embed`). A test should mock `POST /api/embed` and verify `embed(["hello"])` returns the correct numpy vectors when `semantic_memory.embedding_model = "local_profile:linux_embed"` with `provider = "ollama"`.
 
 ---
 

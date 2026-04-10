@@ -263,8 +263,14 @@ if __name__ == "__main__":
 
 def _make_agents_pytest(**overrides):
     phase_names = [
-        "ingest", "plan", "critique", "synthesize", "act",
-        "verify", "reflect", "sandbox",
+        "ingest",
+        "plan",
+        "critique",
+        "synthesize",
+        "act",
+        "verify",
+        "reflect",
+        "sandbox",
     ]
     agents = {}
     for name in phase_names:
@@ -531,9 +537,7 @@ class TestExecutePlanCritiqueSynthesizePhases:
 
     def test_phase_outputs_populated(self):
         orch = _stub_orch_pytest()
-        orch._run_phase = MagicMock(
-            side_effect=lambda n, d: {"steps": ["s"]} if n == "plan" else {}
-        )
+        orch._run_phase = MagicMock(side_effect=lambda n, d: {"steps": ["s"]} if n == "plan" else {})
         orch._load_config_file = MagicMock(return_value={})
         orch.confidence_router = MagicMock()
         orch.confidence_router.should_skip_optional.return_value = False

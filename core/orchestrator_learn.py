@@ -147,9 +147,18 @@ class LearnMixin:
             except Exception as exc:
                 log_json("WARN", "improvement_loop_error", details={"loop": type(loop).__name__, "error": str(exc)})
 
-        # Phase 10: discover()
+        # Phase 10: discover() — drain pending learning backlog into the goal queue
         self._notify_ui("on_phase_start", "discover")
-        self._notify_ui("on_phase_complete", "discover", 0)
+        t0_disc = time.time()
+        if getattr(self, "learning_coordinator", None) is not None and self.goal_queue:
+            try:
+                backlog = self.learning_coordinator.generate_backlog(limit=3)
+                for g in backlog:
+                    self.goal_queue.add(g)
+                    log_json("INFO", "discover_backlog_goal_enqueued", details={"goal": g[:100]})
+            except Exception as exc:
+                log_json("WARN", "discover_backlog_error", details={"error": str(exc)})
+        self._notify_ui("on_phase_complete", "discover", (time.time() - t0_disc) * 1000)
 
         # Phase 11: evolve()
         self._notify_ui("on_phase_start", "evolve")
@@ -220,6 +229,20 @@ class LearnMixin:
                     log_json("INFO", "quality_remediation_goal_enqueued", details={"goal": goal_text[:100]})
         except Exception as exc:
             log_json("WARN", "quality_trend_record_failed", details={"error": str(exc)})
+
+        # Learning Coordinator (PRD-003): convert signals to artifacts + immediate goals
+        if getattr(self, "learning_coordinator", None) is not None:
+            try:
+                reflection = phase_outputs.get("reflection", {})
+                lc_goals = self.learning_coordinator.on_cycle_complete(
+                    entry, reflection, alerts or []
+                )
+                if self.goal_queue:
+                    for g in lc_goals:
+                        self.goal_queue.add(g)
+                        log_json("INFO", "learning_artifact_goal_enqueued", details={"goal": g[:100]})
+            except Exception as exc:
+                log_json("WARN", "learning_coordinator_cycle_failed", details={"error": str(exc)})
 
         # Persist and run post-cycle hooks
         self._persist_cycle_entry(entry, goal, cycle_id, outcome, passed)

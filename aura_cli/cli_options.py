@@ -368,6 +368,10 @@ def _customize_logs(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--follow", action="store_true", help="Follow the file when using --file.")
 
 
+def _customize_history(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--limit", "-n", type=int, default=10, help="Number of recent completed goals to show (default: 10).")
+
+
 def _customize_studio(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(watch=True)
     parser.add_argument("--autonomous", action="store_true", help="Start the goal loop in the background.")
@@ -557,6 +561,7 @@ _PARSER_CUSTOMIZERS.update(
         ("scaffold",): _customize_scaffold,
         ("evolve",): _customize_evolve,
         ("logs",): _customize_logs,
+        ("history",): _customize_history,
         ("queue", "list"): _customize_queue_list,
         ("queue", "clear"): _customize_queue_clear,
         ("memory", "search"): _customize_memory_search,

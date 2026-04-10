@@ -335,6 +335,17 @@ def _handle_logs_dispatch(ctx: DispatchContext) -> int:
     return 0
 
 
+def _handle_history_dispatch(ctx: DispatchContext) -> int:
+    from aura_cli.commands import _handle_history
+
+    _handle_history(
+        ctx.runtime["goal_archive"],
+        limit=getattr(ctx.args, "limit", 10),
+        as_json=getattr(ctx.args, "json", False),
+    )
+    return 0
+
+
 def _handle_watch_dispatch(ctx: DispatchContext) -> int:
     from aura_cli.tui.app import AuraStudio
 
@@ -1528,6 +1539,7 @@ COMMAND_DISPATCH_REGISTRY = {
     "beads_schemas": _dispatch_rule("beads_schemas", _handle_beads_schemas_dispatch),
     "diag": _dispatch_rule("diag", _handle_diag_dispatch),
     "logs": _dispatch_rule("logs", _handle_logs_dispatch),
+    "history": _dispatch_rule("history", _handle_history_dispatch),
     "watch": _dispatch_rule("watch", _handle_watch_dispatch),
     "studio": _dispatch_rule("studio", _handle_watch_dispatch),
     "queue_list": _dispatch_rule("queue_list", _handle_queue_list_dispatch),

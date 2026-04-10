@@ -127,6 +127,44 @@ def _handle_run(args, goal_queue: GoalQueue, goal_archive: GoalArchive, orchestr
     run_goals_loop(args, goal_queue, orchestrator, debugger_instance, planner_instance, goal_archive, project_root, decompose=getattr(args, "decompose", False))
 
 
+def _handle_history(
+    goal_archive: GoalArchive,
+    *,
+    limit: int = 10,
+    as_json: bool = False,
+) -> None:
+    """List the last N completed goals from the goal archive (FR-011)."""
+    completed = list(goal_archive.completed)
+    recent = completed[-limit:] if limit > 0 else completed
+    recent = list(reversed(recent))  # newest first
+
+    if as_json:
+        entries = []
+        for item in recent:
+            if isinstance(item, (list, tuple)) and len(item) >= 2:
+                goal, score = item[0], item[1]
+            else:
+                goal, score = str(item), None
+            entries.append({"goal": goal, "score": score})
+        print(json.dumps({"history": entries, "total": len(completed)}))
+        return
+
+    if not recent:
+        print("No completed goals in the archive.")
+        return
+
+    print(f"\n--- AURA History (last {len(recent)} of {len(completed)}) ---")
+    for i, item in enumerate(recent, 1):
+        if isinstance(item, (list, tuple)) and len(item) >= 2:
+            goal, score = item[0], item[1]
+        else:
+            goal, score = str(item), None
+        score_str = f"  score={score:.2f}" if score is not None else ""
+        print(f"  {i:>3}. {goal}{score_str}")
+    print("---")
+
+
+
 def _handle_status(
     goal_queue: GoalQueue,
     goal_archive: GoalArchive,

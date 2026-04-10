@@ -96,6 +96,16 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         ),
     ),
     CommandSpec(
+        path=("history",),
+        summary="Show completed goal history",
+        description="List the last N completed goals with their scores and timestamps from the goal archive.",
+        examples=(
+            "python3 main.py history",
+            "python3 main.py history --limit 20",
+            "python3 main.py history --json",
+        ),
+    ),
+    CommandSpec(
         path=("watch",),
         summary="[EXPERIMENTAL] Launch TUI monitor",
         description="[EXPERIMENTAL] Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.",
@@ -554,6 +564,7 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("beads_schemas", False, ("beads", "schemas")),
     CLIActionSpec("diag", False, ("diag",), legacy_primary_flags=("diag",)),
     CLIActionSpec("logs", False, ("logs",)),
+    CLIActionSpec("history", True, ("history",)),
     CLIActionSpec("watch", True, ("watch",)),
     CLIActionSpec("studio", True, ("studio",)),
     CLIActionSpec("workflow_run", True, ("workflow", "run"), legacy_primary_flags=("workflow_goal",)),
@@ -687,6 +698,7 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("contract-report",): "contract_report",
     ("diag",): "diag",
     ("logs",): "logs",
+    ("history",): "history",
     ("watch",): "watch",
     ("studio",): "studio",
     ("workflow", "run"): "workflow_run",

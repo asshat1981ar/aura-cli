@@ -178,7 +178,8 @@ def test_tools_returns_non_empty_list(server_module):
         assert expected in names
 
 
-def test_metrics_has_skill_metrics(server_module):
+def test_metrics_has_skill_metrics(server_module, monkeypatch):
+    monkeypatch.setattr(server_module, "_PROMETHEUS_AVAILABLE", False)
     data = _run(server_module.metrics())
     assert data["status"] == "ok"
     assert "skill_metrics" in data
@@ -257,6 +258,7 @@ def test_execute_run_persists_audit_entries_and_metrics_reflect_them(server_modu
 
     server_module.memory_store = store
     monkeypatch.setenv("AGENT_API_ENABLE_RUN", "1")
+    monkeypatch.setattr(server_module, "_PROMETHEUS_AVAILABLE", False)
     cmd = f"{sys.executable} -c \"print('audit-ok')\""
 
     try:

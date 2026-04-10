@@ -89,6 +89,7 @@ class TestRunStepCallableWithTimeout:
         def slow():
             time.sleep(10)
             return {}
+
         with pytest.raises(TimeoutError):
             _run_step_callable_with_timeout(slow, 0.05)
 
@@ -103,6 +104,7 @@ class TestExecuteStepEdgeCases:
     def test_fn_raises_returns_failed(self):
         def boom(inputs):
             raise ValueError("exploded")
+
         step = WorkflowStep(name="boom", fn=boom, retry=RetryPolicy(max_attempts=1), timeout_s=5.0)
         result = _execute_step(step, {}, {})
         assert result.status == "failed"
@@ -110,44 +112,56 @@ class TestExecuteStepEdgeCases:
 
     def test_skip_if_false_single_part_truthy(self):
         step = WorkflowStep(
-            name="conditional", fn=lambda i: {"ran": True},
-            skip_if_false="prev_step", retry=RetryPolicy(max_attempts=1),
+            name="conditional",
+            fn=lambda i: {"ran": True},
+            skip_if_false="prev_step",
+            retry=RetryPolicy(max_attempts=1),
         )
         result = _execute_step(step, {"prev_step": {"some_key": True}}, {})
         assert result.status == "ok"
 
     def test_skip_if_false_single_part_falsy_empty_dict(self):
         step = WorkflowStep(
-            name="conditional", fn=lambda i: {"ran": True},
-            skip_if_false="prev_step", retry=RetryPolicy(max_attempts=1),
+            name="conditional",
+            fn=lambda i: {"ran": True},
+            skip_if_false="prev_step",
+            retry=RetryPolicy(max_attempts=1),
         )
         result = _execute_step(step, {"prev_step": {}}, {})
         assert result.status == "skipped"
 
     def test_skip_if_false_dotted_falsy_key(self):
         step = WorkflowStep(
-            name="conditioned", fn=lambda i: {"done": True},
-            skip_if_false="checker.passed", retry=RetryPolicy(max_attempts=1),
+            name="conditioned",
+            fn=lambda i: {"done": True},
+            skip_if_false="checker.passed",
+            retry=RetryPolicy(max_attempts=1),
         )
         result = _execute_step(step, {"checker": {"passed": False}}, {})
         assert result.status == "skipped"
 
     def test_skip_if_false_missing_source_step(self):
         step = WorkflowStep(
-            name="conditioned", fn=lambda i: {"done": True},
-            skip_if_false="missing_step.key", retry=RetryPolicy(max_attempts=1),
+            name="conditioned",
+            fn=lambda i: {"done": True},
+            skip_if_false="missing_step.key",
+            retry=RetryPolicy(max_attempts=1),
         )
         result = _execute_step(step, {}, {})
         assert result.status == "skipped"
 
     def test_retry_on_error_output(self):
         call_count = {"n": 0}
+
         def error_fn(inputs):
             call_count["n"] += 1
             return {"error": "transient"}
+
         step = WorkflowStep(
-            name="retry_step", fn=error_fn,
-            retry=RetryPolicy(max_attempts=3, backoff_base=0.0), timeout_s=0,
+            name="retry_step",
+            fn=error_fn,
+            retry=RetryPolicy(max_attempts=3, backoff_base=0.0),
+            timeout_s=0,
         )
         result = _execute_step(step, {}, {})
         assert result.status == "failed"
@@ -156,14 +170,18 @@ class TestExecuteStepEdgeCases:
 
     def test_retry_succeeds_on_second_attempt(self):
         attempts = {"n": 0}
+
         def flaky(inputs):
             attempts["n"] += 1
             if attempts["n"] == 1:
                 return {"error": "first attempt"}
             return {"value": "success"}
+
         step = WorkflowStep(
-            name="flaky", fn=flaky,
-            retry=RetryPolicy(max_attempts=3, backoff_base=0.0), timeout_s=0,
+            name="flaky",
+            fn=flaky,
+            retry=RetryPolicy(max_attempts=3, backoff_base=0.0),
+            timeout_s=0,
         )
         result = _execute_step(step, {}, {})
         assert result.status == "ok"
@@ -173,8 +191,12 @@ class TestExecuteStepEdgeCases:
         def slow(inputs):
             time.sleep(10)
             return {"done": True}
+
         step = WorkflowStep(
-            name="slow_step", fn=slow, retry=RetryPolicy(max_attempts=1), timeout_s=0.05,
+            name="slow_step",
+            fn=slow,
+            retry=RetryPolicy(max_attempts=1),
+            timeout_s=0.05,
         )
         result = _execute_step(step, {}, {})
         assert result.status == "timeout"
@@ -184,8 +206,10 @@ class TestExecuteStepEdgeCases:
         mock_skill.run.return_value = {"skill_output": 1}
         with patch("agents.skills.registry.all_skills", return_value={"my_sk": mock_skill}):
             step = WorkflowStep(
-                name="skill_step", skill_name="my_sk",
-                retry=RetryPolicy(max_attempts=1), timeout_s=0,
+                name="skill_step",
+                skill_name="my_sk",
+                retry=RetryPolicy(max_attempts=1),
+                timeout_s=0,
             )
             result = _execute_step(step, {}, {"project_root": "."})
         assert result.status == "ok"
@@ -193,8 +217,10 @@ class TestExecuteStepEdgeCases:
 
     def test_execute_step_elapsed_ms_positive(self):
         step = WorkflowStep(
-            name="timed", fn=lambda i: {"x": 1},
-            retry=RetryPolicy(max_attempts=1), timeout_s=0,
+            name="timed",
+            fn=lambda i: {"x": 1},
+            retry=RetryPolicy(max_attempts=1),
+            timeout_s=0,
         )
         result = _execute_step(step, {}, {})
         assert result.elapsed_ms >= 0.0
@@ -203,7 +229,8 @@ class TestExecuteStepEdgeCases:
 class TestWireInputsExtended:
     def test_wildcard_merges_entire_output(self):
         step = WorkflowStep(
-            name="s", fn=lambda i: i,
+            name="s",
+            fn=lambda i: i,
             inputs_from={"_unused": "prev.*"},
         )
         result = _wire_inputs(step, {"prev": {"a": 1, "b": 2}}, {})
@@ -212,7 +239,8 @@ class TestWireInputsExtended:
 
     def test_inputs_from_missing_key_gives_none(self):
         step = WorkflowStep(
-            name="s", fn=lambda i: i,
+            name="s",
+            fn=lambda i: i,
             inputs_from={"x": "prev_step.no_such_key"},
         )
         result = _wire_inputs(step, {"prev_step": {"other": 99}}, {})
@@ -220,7 +248,8 @@ class TestWireInputsExtended:
 
     def test_static_inputs_override_initial(self):
         step = WorkflowStep(
-            name="s", fn=lambda i: i,
+            name="s",
+            fn=lambda i: i,
             static_inputs={"key": "static_val"},
         )
         result = _wire_inputs(step, {}, {"key": "initial_val"})
@@ -309,39 +338,56 @@ class TestWorkflowEngineStateMachineExtended:
 class TestWorkflowEngineFailurePaths:
     def test_step_failure_sets_execution_failed(self):
         engine = WorkflowEngine()
-        engine.define(WorkflowDefinition(
-            name="fail_wf",
-            steps=[WorkflowStep(
-                name="bad", fn=lambda i: {"error": "always fails"},
-                retry=RetryPolicy(max_attempts=1),
-            )],
-        ))
+        engine.define(
+            WorkflowDefinition(
+                name="fail_wf",
+                steps=[
+                    WorkflowStep(
+                        name="bad",
+                        fn=lambda i: {"error": "always fails"},
+                        retry=RetryPolicy(max_attempts=1),
+                    )
+                ],
+            )
+        )
         exec_id = engine.run_workflow("fail_wf", {})
         status = engine.execution_status(exec_id)
         assert status["status"] == "failed"
 
     def test_total_retry_budget_exhausted(self):
         engine = WorkflowEngine()
-        engine.define(WorkflowDefinition(
-            name="budget_wf", max_retries_total=1,
-            steps=[WorkflowStep(
-                name="fail1", fn=lambda i: {"error": "boom"},
-                retry=RetryPolicy(max_attempts=2, backoff_base=0.0),
-            )],
-        ))
+        engine.define(
+            WorkflowDefinition(
+                name="budget_wf",
+                max_retries_total=1,
+                steps=[
+                    WorkflowStep(
+                        name="fail1",
+                        fn=lambda i: {"error": "boom"},
+                        retry=RetryPolicy(max_attempts=2, backoff_base=0.0),
+                    )
+                ],
+            )
+        )
         exec_id = engine.run_workflow("budget_wf", {})
         status = engine.execution_status(exec_id)
         assert status["status"] == "failed"
 
     def test_step_timeout_marks_execution_failed(self):
         engine = WorkflowEngine()
-        engine.define(WorkflowDefinition(
-            name="timeout_wf",
-            steps=[WorkflowStep(
-                name="slow", fn=lambda i: time.sleep(10) or {},
-                retry=RetryPolicy(max_attempts=1), timeout_s=0.05,
-            )],
-        ))
+        engine.define(
+            WorkflowDefinition(
+                name="timeout_wf",
+                steps=[
+                    WorkflowStep(
+                        name="slow",
+                        fn=lambda i: time.sleep(10) or {},
+                        retry=RetryPolicy(max_attempts=1),
+                        timeout_s=0.05,
+                    )
+                ],
+            )
+        )
         exec_id = engine.run_workflow("timeout_wf", {})
         status = engine.execution_status(exec_id)
         assert status["status"] == "failed"
@@ -349,13 +395,15 @@ class TestWorkflowEngineFailurePaths:
 
     def test_second_step_failure_stops_workflow(self):
         engine = WorkflowEngine()
-        engine.define(WorkflowDefinition(
-            name="two_step",
-            steps=[
-                WorkflowStep("ok_step", fn=lambda i: {"x": 1}, retry=RetryPolicy(max_attempts=1)),
-                WorkflowStep("bad_step", fn=lambda i: {"error": "boom"}, retry=RetryPolicy(max_attempts=1)),
-            ],
-        ))
+        engine.define(
+            WorkflowDefinition(
+                name="two_step",
+                steps=[
+                    WorkflowStep("ok_step", fn=lambda i: {"x": 1}, retry=RetryPolicy(max_attempts=1)),
+                    WorkflowStep("bad_step", fn=lambda i: {"error": "boom"}, retry=RetryPolicy(max_attempts=1)),
+                ],
+            )
+        )
         exec_id = engine.run_workflow("two_step", {})
         status = engine.execution_status(exec_id)
         assert status["status"] == "failed"
@@ -365,16 +413,20 @@ class TestWorkflowEngineFailurePaths:
 class TestWorkflowEngineMultiStep:
     def test_multi_step_workflow_all_ok(self):
         engine = WorkflowEngine()
-        engine.define(WorkflowDefinition(
-            name="multi",
-            steps=[
-                WorkflowStep("step_a", fn=lambda i: {"val": 10}, retry=RetryPolicy(max_attempts=1)),
-                WorkflowStep(
-                    "step_b", fn=lambda i: {"doubled": i.get("val", 0) * 2},
-                    inputs_from={"val": "step_a.val"}, retry=RetryPolicy(max_attempts=1),
-                ),
-            ],
-        ))
+        engine.define(
+            WorkflowDefinition(
+                name="multi",
+                steps=[
+                    WorkflowStep("step_a", fn=lambda i: {"val": 10}, retry=RetryPolicy(max_attempts=1)),
+                    WorkflowStep(
+                        "step_b",
+                        fn=lambda i: {"doubled": i.get("val", 0) * 2},
+                        inputs_from={"val": "step_a.val"},
+                        retry=RetryPolicy(max_attempts=1),
+                    ),
+                ],
+            )
+        )
         exec_id = engine.run_workflow("multi", {})
         status = engine.execution_status(exec_id)
         assert status["status"] == "completed"
@@ -383,16 +435,20 @@ class TestWorkflowEngineMultiStep:
 
     def test_skip_step_propagates(self):
         engine = WorkflowEngine()
-        engine.define(WorkflowDefinition(
-            name="skip_wf",
-            steps=[
-                WorkflowStep("check", fn=lambda i: {"ok": False}, retry=RetryPolicy(max_attempts=1)),
-                WorkflowStep(
-                    "guarded", fn=lambda i: {"ran": True},
-                    skip_if_false="check.ok", retry=RetryPolicy(max_attempts=1),
-                ),
-            ],
-        ))
+        engine.define(
+            WorkflowDefinition(
+                name="skip_wf",
+                steps=[
+                    WorkflowStep("check", fn=lambda i: {"ok": False}, retry=RetryPolicy(max_attempts=1)),
+                    WorkflowStep(
+                        "guarded",
+                        fn=lambda i: {"ran": True},
+                        skip_if_false="check.ok",
+                        retry=RetryPolicy(max_attempts=1),
+                    ),
+                ],
+            )
+        )
         exec_id = engine.run_workflow("skip_wf", {})
         status = engine.execution_status(exec_id)
         assert status["status"] == "completed"
@@ -663,10 +719,13 @@ class TestBuiltinWorkflowDefinitions:
         assert defs["onboarding_analysis"]["step_count"] == 4
 
     def test_define_overwrites_existing(self):
-        self.engine.define(WorkflowDefinition(
-            name="security_audit", description="overwritten",
-            steps=[WorkflowStep("only_step", fn=lambda i: {})],
-        ))
+        self.engine.define(
+            WorkflowDefinition(
+                name="security_audit",
+                description="overwritten",
+                steps=[WorkflowStep("only_step", fn=lambda i: {})],
+            )
+        )
         defs = {d["name"]: d for d in self.engine.list_definitions()}
         assert defs["security_audit"]["step_count"] == 1
 
@@ -695,81 +754,151 @@ class TestGetEngineSingletonExtended:
 class TestIsTerminal:
     def test_execution_is_terminal_completed(self):
         exc = WorkflowExecution(
-            id="x", workflow_name="w", status="completed",
-            current_step_index=0, step_outputs={}, history=[],
-            initial_inputs={}, error=None, started_at=0.0, updated_at=0.0,
+            id="x",
+            workflow_name="w",
+            status="completed",
+            current_step_index=0,
+            step_outputs={},
+            history=[],
+            initial_inputs={},
+            error=None,
+            started_at=0.0,
+            updated_at=0.0,
         )
         assert exc.is_terminal() is True
 
     def test_execution_is_terminal_failed(self):
         exc = WorkflowExecution(
-            id="x", workflow_name="w", status="failed",
-            current_step_index=0, step_outputs={}, history=[],
-            initial_inputs={}, error=None, started_at=0.0, updated_at=0.0,
+            id="x",
+            workflow_name="w",
+            status="failed",
+            current_step_index=0,
+            step_outputs={},
+            history=[],
+            initial_inputs={},
+            error=None,
+            started_at=0.0,
+            updated_at=0.0,
         )
         assert exc.is_terminal() is True
 
     def test_execution_is_terminal_cancelled(self):
         exc = WorkflowExecution(
-            id="x", workflow_name="w", status="cancelled",
-            current_step_index=0, step_outputs={}, history=[],
-            initial_inputs={}, error=None, started_at=0.0, updated_at=0.0,
+            id="x",
+            workflow_name="w",
+            status="cancelled",
+            current_step_index=0,
+            step_outputs={},
+            history=[],
+            initial_inputs={},
+            error=None,
+            started_at=0.0,
+            updated_at=0.0,
         )
         assert exc.is_terminal() is True
 
     def test_execution_not_terminal_running(self):
         exc = WorkflowExecution(
-            id="x", workflow_name="w", status="running",
-            current_step_index=0, step_outputs={}, history=[],
-            initial_inputs={}, error=None, started_at=0.0, updated_at=0.0,
+            id="x",
+            workflow_name="w",
+            status="running",
+            current_step_index=0,
+            step_outputs={},
+            history=[],
+            initial_inputs={},
+            error=None,
+            started_at=0.0,
+            updated_at=0.0,
         )
         assert exc.is_terminal() is False
 
     def test_execution_not_terminal_paused(self):
         exc = WorkflowExecution(
-            id="x", workflow_name="w", status="paused",
-            current_step_index=0, step_outputs={}, history=[],
-            initial_inputs={}, error=None, started_at=0.0, updated_at=0.0,
+            id="x",
+            workflow_name="w",
+            status="paused",
+            current_step_index=0,
+            step_outputs={},
+            history=[],
+            initial_inputs={},
+            error=None,
+            started_at=0.0,
+            updated_at=0.0,
         )
         assert exc.is_terminal() is False
 
     def test_loop_is_terminal_completed(self):
         loop = AgenticLoop(
-            id="l", goal="g", max_cycles=5, current_cycle=5,
-            status="completed", history=[], stop_reason="done",
-            score=0.0, started_at=0.0, updated_at=0.0,
+            id="l",
+            goal="g",
+            max_cycles=5,
+            current_cycle=5,
+            status="completed",
+            history=[],
+            stop_reason="done",
+            score=0.0,
+            started_at=0.0,
+            updated_at=0.0,
         )
         assert loop.is_terminal() is True
 
     def test_loop_is_terminal_failed(self):
         loop = AgenticLoop(
-            id="l", goal="g", max_cycles=5, current_cycle=5,
-            status="failed", history=[], stop_reason="err",
-            score=0.0, started_at=0.0, updated_at=0.0,
+            id="l",
+            goal="g",
+            max_cycles=5,
+            current_cycle=5,
+            status="failed",
+            history=[],
+            stop_reason="err",
+            score=0.0,
+            started_at=0.0,
+            updated_at=0.0,
         )
         assert loop.is_terminal() is True
 
     def test_loop_is_terminal_stopped(self):
         loop = AgenticLoop(
-            id="l", goal="g", max_cycles=5, current_cycle=2,
-            status="stopped", history=[], stop_reason="user",
-            score=0.0, started_at=0.0, updated_at=0.0,
+            id="l",
+            goal="g",
+            max_cycles=5,
+            current_cycle=2,
+            status="stopped",
+            history=[],
+            stop_reason="user",
+            score=0.0,
+            started_at=0.0,
+            updated_at=0.0,
         )
         assert loop.is_terminal() is True
 
     def test_loop_not_terminal_running(self):
         loop = AgenticLoop(
-            id="l", goal="g", max_cycles=5, current_cycle=1,
-            status="running", history=[], stop_reason=None,
-            score=0.0, started_at=0.0, updated_at=0.0,
+            id="l",
+            goal="g",
+            max_cycles=5,
+            current_cycle=1,
+            status="running",
+            history=[],
+            stop_reason=None,
+            score=0.0,
+            started_at=0.0,
+            updated_at=0.0,
         )
         assert loop.is_terminal() is False
 
     def test_loop_not_terminal_paused(self):
         loop = AgenticLoop(
-            id="l", goal="g", max_cycles=5, current_cycle=1,
-            status="paused", history=[], stop_reason=None,
-            score=0.0, started_at=0.0, updated_at=0.0,
+            id="l",
+            goal="g",
+            max_cycles=5,
+            current_cycle=1,
+            status="paused",
+            history=[],
+            stop_reason=None,
+            score=0.0,
+            started_at=0.0,
+            updated_at=0.0,
         )
         assert loop.is_terminal() is False
 
@@ -778,9 +907,16 @@ class TestJournalResilience:
     def test_journal_execution_handles_db_error(self):
         engine = WorkflowEngine()
         exc = WorkflowExecution(
-            id="x", workflow_name="wf", status="running",
-            current_step_index=0, step_outputs={}, history=[],
-            initial_inputs={}, error=None, started_at=0.0, updated_at=0.0,
+            id="x",
+            workflow_name="wf",
+            status="running",
+            current_step_index=0,
+            step_outputs={},
+            history=[],
+            initial_inputs={},
+            error=None,
+            started_at=0.0,
+            updated_at=0.0,
         )
         with patch("core.workflow_engine._open_db", side_effect=Exception("db down")):
             try:
@@ -791,9 +927,16 @@ class TestJournalResilience:
     def test_journal_loop_handles_db_error(self):
         engine = WorkflowEngine()
         loop = AgenticLoop(
-            id="l", goal="g", max_cycles=3, current_cycle=0,
-            status="running", history=[], stop_reason=None,
-            score=0.0, started_at=0.0, updated_at=0.0,
+            id="l",
+            goal="g",
+            max_cycles=3,
+            current_cycle=0,
+            status="running",
+            history=[],
+            stop_reason=None,
+            score=0.0,
+            started_at=0.0,
+            updated_at=0.0,
         )
         with patch("core.workflow_engine._open_db", side_effect=Exception("db down")):
             try:
@@ -836,9 +979,12 @@ class TestRetryPolicyArithmetic:
 class TestDataclasses:
     def test_step_result_with_error(self):
         sr = StepResult(
-            step_name="s", status="failed",
-            output={"error": "boom"}, attempts=2,
-            elapsed_ms=123.4, error="boom",
+            step_name="s",
+            status="failed",
+            output={"error": "boom"},
+            attempts=2,
+            elapsed_ms=123.4,
+            error="boom",
         )
         assert sr.step_name == "s"
         assert sr.status == "failed"
@@ -846,8 +992,10 @@ class TestDataclasses:
 
     def test_loop_cycle_fields(self):
         lc = LoopCycle(
-            cycle_number=3, status="ok",
-            phase_outputs={"plan": ["step1"]}, elapsed_ms=55.5,
+            cycle_number=3,
+            status="ok",
+            phase_outputs={"plan": ["step1"]},
+            elapsed_ms=55.5,
         )
         assert lc.cycle_number == 3
         assert lc.stop_reason is None
@@ -855,10 +1003,16 @@ class TestDataclasses:
 
     def test_workflow_execution_total_retries_default(self):
         exc = WorkflowExecution(
-            id="e1", workflow_name="wf", status="running",
-            current_step_index=0, step_outputs={}, history=[],
-            initial_inputs={}, error=None,
-            started_at=time.time(), updated_at=time.time(),
+            id="e1",
+            workflow_name="wf",
+            status="running",
+            current_step_index=0,
+            step_outputs={},
+            history=[],
+            initial_inputs={},
+            error=None,
+            started_at=time.time(),
+            updated_at=time.time(),
         )
         assert exc.total_retries_used == 0
 

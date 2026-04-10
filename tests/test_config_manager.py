@@ -548,3 +548,489 @@ class TestMCPPortEnvOverrides:
             assert cm.get_mcp_server_port("dev_tools") == 8001
         finally:
             del os.environ["AURA_MCP_SERVERS_DEV_TOOLS_PORT"]
+
+
+# ---------------------------------------------------------------------------
+# Sprint-9 extended coverage (appended)
+# ---------------------------------------------------------------------------
+from unittest.mock import MagicMock, patch
+
+
+class TestIsPydanticAvailable:
+    def test_returns_bool(self):
+        from core.config_manager import is_pydantic_available
+        assert isinstance(is_pydantic_available(), bool)
+
+    def test_returns_true_when_available(self):
+        from core.config_manager import is_pydantic_available
+        try:
+            import pydantic  # noqa: F401
+            assert is_pydantic_available() is True
+        except ImportError:
+            assert is_pydantic_available() is False
+
+
+class TestConfigManagerUpdateConfig:
+    def test_update_config_persist_true(self, tmp_path):
+        config_file = tmp_path / "test.json"
+        config_file.write_text("{}")
+        cm = ConfigManager(config_file=str(config_file))
+        cm.update_config({"model_name": "persisted-model"}, persist=True)
+        data = json.loads(config_file.read_text())
+        assert data["model_name"] == "persisted-model"
+
+    def test_update_config_get_reflects_updated_value(self, tmp_path):
+        config_file = tmp_path / "test.json"
+        config_file.write_text("{}")
+        cm = ConfigManager(config_file=str(config_file))
+        cm.update_config({"model_name": "test-model-upd"}, persist=True)
+        assert cm.get("model_name") == "test-model-upd"
+
+    def test_update_config_deep_merge_beads(self, tmp_path):
+        config_file = tmp_path / "test.json"
+        config_file.write_text("{}")
+        cm = ConfigManager(config_file=str(config_file))
+        original_enabled = cm.get("beads")["enabled"]
+        cm.update_config({"beads": {"timeout_seconds": 99}}, persist=True)
+        beads = cm.get("beads")
+        assert beads["timeout_seconds"] == 99
+        assert beads["enabled"] == original_enabled
+
+    def test_update_config_deep_merge_model_routing(self, tmp_path):
+        config_file = tmp_path / "test.json"
+        config_file.write_text("{}")
+        cm = ConfigManager(config_file=str(config_file))
+        cm.update_config({"model_routing": {"fast": "my-fast-model"}}, persist=True)
+        routing = cm.get("model_routing")
+        assert routing["fast"] == "my-fast-model"
+        assert "planning" in routing
+
+    def test_update_config_deep_merge_semantic_memory(self, tmp_path):
+        config_file = tmp_path / "test.json"
+        config_file.write_text("{}")
+        cm = ConfigManager(config_file=str(config_file))
+        cm.update_config({"semantic_memory": {"top_k": 20}}, persist=True)
+        sm = cm.get("semantic_memory")
+        assert sm["top_k"] == 20
+        assert "enabled" in sm
+
+    def test_update_config_persist_write_error_raises(self, tmp_path):
+        config_file = tmp_path / "readonly.json"
+        config_file.write_text("{}")
+        cm = ConfigManager(config_file=str(config_file))
+        config_file.chmod(0o444)
+        try:
+            with pytest.raises(ConfigurationError):
+                cm.update_config({"model_name": "x"}, persist=True)
+        finally:
+            config_file.chmod(0o644)
+
+
+class TestPersistToFile:
+    def test_persist_to_file_saves_and_refreshes(self, tmp_path):
+        config_file = tmp_path / "cfg.json"
+        config_file.write_text("{}")
+        cm = ConfigManager(config_file=str(config_file))
+        cm.persist_to_file("max_iterations", 42)
+        data = json.loads(config_file.read_text())
+        assert data["max_iterations"] == 42
+        assert cm.get("max_iterations") == 42
+
+    def test_persist_to_file_raises_on_write_error(self, tmp_path):
+        config_file = tmp_path / "locked.json"
+        config_file.write_text("{}")
+        cm = ConfigManager(config_file=str(config_file))
+        config_file.chmod(0o444)
+        try:
+            with pytest.raises(ConfigurationError):
+                cm.persist_to_file("model_name", "x")
+        finally:
+            config_file.chmod(0o644)
+
+
+class TestGetMCPServerApiKey:
+    def test_unknown_server_raises(self):
+        cm = ConfigManager()
+        with pytest.raises(ConfigurationError, match="Unknown MCP server"):
+            cm.get_mcp_server_api_key("no_such_server")
+
+    def test_returns_env_var_value(self, monkeypatch):
+        monkeypatch.setenv("MCP_SKILLS_API_KEY", "env-token-123")
+        cm = ConfigManager()
+        result = cm.get_mcp_server_api_key("skills")
+        assert result == "env-token-123"
+
+    def test_returns_config_value_when_no_env(self, monkeypatch):
+        monkeypatch.delenv("MCP_SKILLS_API_KEY", raising=False)
+        cm = ConfigManager()
+        cm.effective_config["mcp_server_api_keys"] = {"skills": "cfg-key-abc"}
+        result = cm.get_mcp_server_api_key("skills")
+        assert result == "cfg-key-abc"
+
+    def test_legacy_dev_tools_fallback(self, monkeypatch):
+        monkeypatch.setenv("MCP_API_TOKEN", "legacy-token")
+        monkeypatch.delenv("MCP_DEV_TOOLS_API_KEY", raising=False)
+        cm = ConfigManager()
+        cm.effective_config["mcp_server_api_keys"] = {"dev_tools": None}
+        result = cm.get_mcp_server_api_key("dev_tools")
+        assert result == "legacy-token"
+
+    def test_env_var_priority_over_config(self, monkeypatch):
+        monkeypatch.setenv("MCP_CONTROL_API_KEY", "env-wins")
+        cm = ConfigManager()
+        cm.effective_config["mcp_server_api_keys"] = {"control": "config-loses"}
+        result = cm.get_mcp_server_api_key("control")
+        assert result == "env-wins"
+
+    def test_returns_none_when_nothing_configured(self, monkeypatch):
+        monkeypatch.delenv("MCP_SKILLS_API_KEY", raising=False)
+        cm = ConfigManager()
+        cm.effective_config["mcp_server_api_keys"] = {"skills": None}
+        result = cm.get_mcp_server_api_key("skills")
+        assert result is None
+
+
+class TestBootstrap:
+    def test_bootstrap_creates_config_when_absent(self, tmp_path):
+        config_file = tmp_path / "new.json"
+        assert not config_file.exists()
+        cm = ConfigManager(config_file=str(config_file))
+        if config_file.exists():
+            config_file.unlink()
+        cm.config_file = config_file
+        cm.bootstrap()
+        assert config_file.exists()
+        data = json.loads(config_file.read_text())
+        assert "model_name" in data
+
+    def test_bootstrap_skips_when_file_exists(self, tmp_path):
+        config_file = tmp_path / "existing.json"
+        config_file.write_text(json.dumps({"model_name": "keep-me"}))
+        cm = ConfigManager(config_file=str(config_file))
+        cm.bootstrap()
+        data = json.loads(config_file.read_text())
+        assert data["model_name"] == "keep-me"
+
+
+class TestMigrateCredentials:
+    def _make_cm_with_mock_store(self, tmp_path, file_config=None):
+        config_file = tmp_path / "cfg.json"
+        config_file.write_text(json.dumps(file_config or {}))
+        mock_store = MagicMock()
+        mock_store.store.return_value = True
+        mock_store.retrieve.return_value = None
+        mock_store.get_storage_info.return_value = {"backend": "mock"}
+        cm = ConfigManager(config_file=str(config_file), credential_store=mock_store)
+        return cm, mock_store
+
+    def test_dry_run_reports_what_would_migrate(self, tmp_path):
+        cm, store = self._make_cm_with_mock_store(tmp_path, {"api_key": "real-key-xyz"})
+        results = cm.migrate_credentials(dry_run=True)
+        assert "api_key" in results["migrated"]
+        assert results["dry_run"] is True
+        store.store.assert_not_called()
+
+    def test_not_found_when_key_absent(self, tmp_path):
+        cm, _ = self._make_cm_with_mock_store(tmp_path, {})
+        results = cm.migrate_credentials()
+        assert "api_key" in results["not_found"]
+
+    def test_already_secure_skipped(self, tmp_path):
+        cm, _ = self._make_cm_with_mock_store(tmp_path, {"api_key": "***SECURE_STORAGE***"})
+        results = cm.migrate_credentials()
+        assert "api_key" in results["already_secure"]
+
+    def test_placeholder_treated_as_not_found(self, tmp_path):
+        cm, _ = self._make_cm_with_mock_store(tmp_path, {"api_key": "YOUR_API_KEY_HERE"})
+        results = cm.migrate_credentials()
+        assert "api_key" in results["not_found"]
+
+    def test_actual_migration_stores_credential(self, tmp_path):
+        cm, mock_store = self._make_cm_with_mock_store(tmp_path, {"api_key": "real-key-abc"})
+        results = cm.migrate_credentials(dry_run=False)
+        assert "api_key" in results["migrated"]
+        mock_store.store.assert_called()
+
+    def test_migration_error_recorded(self, tmp_path):
+        cm, mock_store = self._make_cm_with_mock_store(tmp_path, {"api_key": "some-key"})
+        mock_store.store.side_effect = RuntimeError("keyring unavailable")
+        results = cm.migrate_credentials(dry_run=False)
+        assert "api_key" in results["errors"]
+
+    def test_store_returns_false_recorded_as_error(self, tmp_path):
+        cm, mock_store = self._make_cm_with_mock_store(tmp_path, {"api_key": "some-key"})
+        mock_store.store.return_value = False
+        results = cm.migrate_credentials(dry_run=False)
+        assert "api_key" in results["errors"]
+
+
+class TestCredentialStoreMethods:
+    def _make_cm(self):
+        mock_store = MagicMock()
+        mock_store.store.return_value = True
+        mock_store.retrieve.return_value = "stored-value"
+        mock_store.delete.return_value = True
+        mock_store.get_storage_info.return_value = {"backend": "mock", "available": True}
+        cm = ConfigManager(credential_store=mock_store)
+        return cm, mock_store
+
+    def test_secure_store_credential_delegates(self):
+        cm, mock = self._make_cm()
+        result = cm.secure_store_credential("api_key", "my-secret")
+        assert result is True
+        mock.store.assert_called_with("api_key", "my-secret")
+
+    def test_secure_retrieve_credential_delegates(self):
+        cm, mock = self._make_cm()
+        result = cm.secure_retrieve_credential("api_key")
+        assert result == "stored-value"
+        mock.retrieve.assert_called_with("api_key")
+
+    def test_secure_delete_credential_delegates(self):
+        cm, mock = self._make_cm()
+        result = cm.secure_delete_credential("api_key")
+        assert result is True
+        mock.delete.assert_called_with("api_key")
+
+    def test_get_credential_store_info_delegates(self):
+        cm, mock = self._make_cm()
+        info = cm.get_credential_store_info()
+        assert info["backend"] == "mock"
+        mock.get_storage_info.assert_called_once()
+
+
+class TestGetSecureKey:
+    def test_runtime_override_has_highest_priority(self):
+        mock_store = MagicMock()
+        mock_store.retrieve.return_value = "from_store"
+        cm = ConfigManager(overrides={"api_key": "from_override"}, credential_store=mock_store)
+        result = cm.get("api_key")
+        assert result == "from_override"
+
+    def test_non_secure_key_skips_credential_store(self):
+        mock_store = MagicMock()
+        mock_store.retrieve.return_value = "should_not_be_used"
+        cm = ConfigManager(credential_store=mock_store)
+        result = cm.get("max_iterations")
+        mock_store.retrieve.assert_not_called()
+        assert result is not None
+
+
+class TestEnvLoadingExtended:
+    def test_model_routing_env_override(self):
+        os.environ["AURA_MODEL_ROUTING_PLANNING"] = "my-plan-model"
+        try:
+            cm = ConfigManager()
+            cm.refresh()
+            routing = cm.get("model_routing")
+            assert routing["planning"] == "my-plan-model"
+        finally:
+            del os.environ["AURA_MODEL_ROUTING_PLANNING"]
+
+    def test_local_model_routing_env_override(self):
+        os.environ["AURA_LOCAL_MODEL_ROUTING_PLANNING"] = "local-plan"
+        try:
+            cm = ConfigManager()
+            cm.refresh()
+            lr = cm.get("local_model_routing")
+            assert lr["planning"] == "local-plan"
+        finally:
+            del os.environ["AURA_LOCAL_MODEL_ROUTING_PLANNING"]
+
+    def test_semantic_memory_bool_env_override(self):
+        os.environ["AURA_SEMANTIC_MEMORY_ENABLED"] = "false"
+        try:
+            cm = ConfigManager()
+            cm.refresh()
+            sm = cm.get("semantic_memory")
+            assert sm["enabled"] is False
+        finally:
+            del os.environ["AURA_SEMANTIC_MEMORY_ENABLED"]
+
+    def test_semantic_memory_int_env_override(self):
+        os.environ["AURA_SEMANTIC_MEMORY_TOP_K"] = "25"
+        try:
+            cm = ConfigManager()
+            cm.refresh()
+            sm = cm.get("semantic_memory")
+            assert sm["top_k"] == 25
+        finally:
+            del os.environ["AURA_SEMANTIC_MEMORY_TOP_K"]
+
+    def test_env_openrouter_api_key_mapping(self):
+        os.environ["OPENROUTER_API_KEY"] = "or-key-test"
+        try:
+            cm = ConfigManager()
+            cm.refresh()
+            assert cm.get("api_key") == "or-key-test"
+        finally:
+            del os.environ["OPENROUTER_API_KEY"]
+
+    def test_env_mcp_server_url_mapping(self):
+        os.environ["MCP_SERVER_URL"] = "http://localhost:9999"
+        try:
+            cm = ConfigManager()
+            cm.refresh()
+            assert cm.get("mcp_server_url") == "http://localhost:9999"
+        finally:
+            del os.environ["MCP_SERVER_URL"]
+
+
+class TestLoadFromFileExtended:
+    def test_settings_json_context_management_key_mapped(self, tmp_path):
+        config_file = tmp_path / "settings.json"
+        config_file.write_text(json.dumps({
+            "aura": {"context_management": {"enabled": False, "top_k": 5}, "model_name": "test"}
+        }))
+        cm = ConfigManager(config_file=str(config_file))
+        sm = cm.get("semantic_memory")
+        assert sm is not None
+        assert sm["top_k"] == 5
+
+    def test_flat_json_loaded_directly(self, tmp_path):
+        config_file = tmp_path / "flat.json"
+        config_file.write_text(json.dumps({"max_cycles": 8}))
+        cm = ConfigManager(config_file=str(config_file))
+        assert cm.get("max_cycles") == 8
+
+    def test_nested_aura_section_loaded(self, tmp_path):
+        config_file = tmp_path / "settings2.json"
+        config_file.write_text(json.dumps({"aura": {"max_iterations": 15}}))
+        cm = ConfigManager(config_file=str(config_file))
+        assert cm.get("max_iterations") == 15
+
+
+class TestFindAvailablePortExtended:
+    def test_returns_none_when_all_excluded(self):
+        cm = ConfigManager()
+        exclude = set(range(18600, 18605))
+        port = cm.find_available_port(start_port=18600, end_port=18604, exclude_ports=exclude)
+        assert port is None
+
+    def test_invalid_port_check_returns_false(self):
+        cm = ConfigManager()
+        assert cm.check_port_available(-1) is False
+        assert cm.check_port_available(70000) is False
+
+    def test_invalid_port_non_int_returns_false(self):
+        cm = ConfigManager()
+        assert cm.check_port_available("not_a_port") is False
+
+
+class TestValidateWithSchema:
+    def test_valid_config_no_errors(self):
+        cm = ConfigManager()
+        try:
+            cm._validate_with_schema({"model_name": "test", "max_iterations": 10})
+        except Exception:
+            pytest.fail("_validate_with_schema should not raise")
+
+    def test_invalid_config_does_not_raise(self):
+        cm = ConfigManager()
+        try:
+            cm._validate_with_schema({"max_iterations": -5})
+        except Exception:
+            pytest.fail("_validate_with_schema should not raise")
+
+
+class TestShowConfigExtended:
+    def test_show_config_has_all_default_keys(self):
+        cm = ConfigManager()
+        config = cm.show_config()
+        for key in DEFAULT_CONFIG:
+            assert key in config, f"Missing key: {key}"
+
+    def test_show_config_reflects_overrides(self):
+        cm = ConfigManager(overrides={"model_name": "override-model"})
+        config = cm.show_config()
+        assert config["model_name"] == "override-model"
+
+
+class TestValidatorEdgeCasesExtended:
+    def test_validate_bool_string_1(self):
+        ok, val, _ = _validate_bool("k", "1")
+        assert ok is True
+        assert val is True
+
+    def test_validate_bool_string_0(self):
+        ok, val, _ = _validate_bool("k", "0")
+        assert ok is True
+        assert val is False
+
+    def test_validate_bool_invalid_returns_false(self):
+        ok, _, reason = _validate_bool("k", "maybe")
+        assert ok is False
+
+    def test_validate_string_none_ok(self):
+        ok, val, _ = _validate_string("k", None)
+        assert ok is True
+        assert val is None
+
+    def test_validate_string_int_fails(self):
+        ok, _, _ = _validate_string("k", 42)
+        assert ok is False
+
+    def test_validate_float_range_below_min(self):
+        ok, _, _ = _validate_float_range("k", -1.0, 0.0, 100.0)
+        assert ok is False
+
+    def test_validate_float_range_above_max(self):
+        ok, _, _ = _validate_float_range("k", 101.0, 0.0, 100.0)
+        assert ok is False
+
+    def test_validate_float_range_non_numeric(self):
+        ok, _, _ = _validate_float_range("k", "not_a_float", 0.0, 100.0)
+        assert ok is False
+
+    def test_validate_float_range_boundary_min(self):
+        ok, val, _ = _validate_float_range("k", 0.0, 0.0, 100.0)
+        assert ok is True
+        assert val == 0.0
+
+    def test_validate_float_range_boundary_max(self):
+        ok, val, _ = _validate_float_range("k", 100.0, 0.0, 100.0)
+        assert ok is True
+        assert val == 100.0
+
+    def test_validate_positive_int_string_coercion(self):
+        ok, val, _ = _validate_positive_int("k", "10")
+        assert ok is True
+        assert val == 10
+
+
+class TestConfigManagerGetWithValidation:
+    def test_get_reliability_threshold_validated(self):
+        cm = ConfigManager()
+        val = cm.get("reliability_threshold")
+        assert isinstance(val, float)
+        assert 0.0 <= val <= 100.0
+
+    def test_get_llm_timeout_is_positive_int(self):
+        cm = ConfigManager()
+        val = cm.get("llm_timeout")
+        assert isinstance(val, int)
+        assert val > 0
+
+    def test_get_dry_run_is_bool(self):
+        cm = ConfigManager()
+        val = cm.get("dry_run")
+        assert isinstance(val, bool)
+
+    def test_get_model_name_is_str_or_none(self):
+        cm = ConfigManager()
+        val = cm.get("model_name")
+        assert val is None or isinstance(val, str)
+
+
+class TestKeyValidatorsRegistry:
+    def test_all_validators_are_callable(self):
+        for key, validator in _KEY_VALIDATORS.items():
+            assert callable(validator)
+
+    def test_validators_return_three_tuple(self):
+        for key, validator in list(_KEY_VALIDATORS.items())[:5]:
+            default = DEFAULT_CONFIG.get(key)
+            if default is None:
+                default = "test"
+            result = validator(key, default)
+            assert len(result) == 3

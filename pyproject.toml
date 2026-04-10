@@ -97,6 +97,7 @@ addopts = [
     # "--cov-fail-under=80",
 ]
 markers = [
+    "unit: marks pure unit tests (no I/O, no external services)",
     "integration: marks tests as integration tests",
     "asyncio: marks tests as async",
     "slow: marks tests as slow (>10s expected)",
@@ -122,7 +123,7 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 15
+fail_under = 20
 show_missing = true
 exclude_lines = [
     "pragma: no cover",

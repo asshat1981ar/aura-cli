@@ -11,6 +11,9 @@ from types import SimpleNamespace
 
 from memory.neo4j_bridge import _CircuitBreaker, Neo4jBridge
 
+# Circuit-breaker reset tests use real time.sleep(0.15) calls; mark slow.
+pytestmark = pytest.mark.slow
+
 
 class TestCircuitBreaker:
     """Tests for _CircuitBreaker class."""

@@ -13,7 +13,14 @@ import threading
 import time
 import unittest
 
+import pytest
+
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
+
+# This module contains tests that deliberately sleep for ~1 second to validate
+# TTL expiry behaviour. Mark the whole module slow so it is excluded from the
+# fast-unit gate.
+pytestmark = pytest.mark.slow
 
 
 def _make_adapter(tmp_dir=None):

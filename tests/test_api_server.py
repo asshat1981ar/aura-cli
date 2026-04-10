@@ -1,4 +1,5 @@
 """Comprehensive unit tests for aura_cli/api_server.py."""
+
 from __future__ import annotations
 
 import asyncio
@@ -304,25 +305,19 @@ class TestGetGoalQueueData:
 
     def test_valid_dict_json(self):
         data = {"queue": ["t1"], "in_flight": {"t2": 1234567890.0}}
-        with patch.object(Path, "exists", return_value=True), patch("builtins.open", mock_open()), patch(
-            "json.load", return_value=data
-        ):
+        with patch.object(Path, "exists", return_value=True), patch("builtins.open", mock_open()), patch("json.load", return_value=data):
             result = get_goal_queue_data()
         assert result == data
 
     def test_list_json_wraps_in_dict(self):
         lst = ["item1", "item2"]
-        with patch.object(Path, "exists", return_value=True), patch("builtins.open", mock_open()), patch(
-            "json.load", return_value=lst
-        ):
+        with patch.object(Path, "exists", return_value=True), patch("builtins.open", mock_open()), patch("json.load", return_value=lst):
             result = get_goal_queue_data()
         assert result["queue"] == lst
         assert result["in_flight"] == {}
 
     def test_json_decode_error_returns_default(self):
-        with patch.object(Path, "exists", return_value=True), patch("builtins.open", mock_open()), patch(
-            "json.load", side_effect=json.JSONDecodeError("err", "", 0)
-        ):
+        with patch.object(Path, "exists", return_value=True), patch("builtins.open", mock_open()), patch("json.load", side_effect=json.JSONDecodeError("err", "", 0)):
             result = get_goal_queue_data()
         assert result == {"queue": [], "in_flight": {}}
 
@@ -376,9 +371,7 @@ class TestGetTelemetryData:
         assert result[0]["latency"] == 1.5
 
     def test_sqlite_error_returns_empty(self):
-        with patch.object(Path, "exists", return_value=True), patch(
-            "sqlite3.connect", side_effect=sqlite3.Error("db error")
-        ):
+        with patch.object(Path, "exists", return_value=True), patch("sqlite3.connect", side_effect=sqlite3.Error("db error")):
             result = get_telemetry_data()
         assert result == []
 
@@ -501,33 +494,25 @@ class TestAuthLoginRoute:
 
 class TestGetGoalsRoute:
     def test_returns_all_goals(self, client):
-        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_SAMPLE_QUEUE), patch(
-            "aura_cli.api_server.get_goal_archive", return_value=[]
-        ):
+        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_SAMPLE_QUEUE), patch("aura_cli.api_server.get_goal_archive", return_value=[]):
             resp = client.get("/api/goals")
         assert resp.status_code == 200
         assert len(resp.json()) == 2
 
     def test_filter_by_status(self, client):
-        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_SAMPLE_QUEUE), patch(
-            "aura_cli.api_server.get_goal_archive", return_value=[]
-        ):
+        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_SAMPLE_QUEUE), patch("aura_cli.api_server.get_goal_archive", return_value=[]):
             resp = client.get("/api/goals?status=pending")
         assert resp.status_code == 200
         assert all(g["status"] == "pending" for g in resp.json())
 
     def test_empty_goals(self, client):
-        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_EMPTY_QUEUE), patch(
-            "aura_cli.api_server.get_goal_archive", return_value=[]
-        ):
+        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_EMPTY_QUEUE), patch("aura_cli.api_server.get_goal_archive", return_value=[]):
             resp = client.get("/api/goals")
         assert resp.status_code == 200
         assert resp.json() == []
 
     def test_filter_running_returns_empty_when_no_inflight(self, client):
-        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_SAMPLE_QUEUE), patch(
-            "aura_cli.api_server.get_goal_archive", return_value=[]
-        ):
+        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_SAMPLE_QUEUE), patch("aura_cli.api_server.get_goal_archive", return_value=[]):
             resp = client.get("/api/goals?status=running")
         assert resp.status_code == 200
         assert resp.json() == []
@@ -569,9 +554,7 @@ class TestCreateGoalRoute:
 
 class TestGetGoalDetailRoute:
     def test_queued_goal_found(self, client):
-        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_SAMPLE_QUEUE), patch(
-            "aura_cli.api_server.get_goal_archive", return_value=[]
-        ):
+        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_SAMPLE_QUEUE), patch("aura_cli.api_server.get_goal_archive", return_value=[]):
             resp = client.get("/api/goals/goal-q-0")
         assert resp.status_code == 200
         data = resp.json()
@@ -584,9 +567,7 @@ class TestGetGoalDetailRoute:
         desc = "running task"
         gid = _goal_id_for_inflight(desc)
         queue_data = {"queue": [], "in_flight": {desc: time.time()}}
-        with patch("aura_cli.api_server.get_goal_queue_data", return_value=queue_data), patch(
-            "aura_cli.api_server.get_goal_archive", return_value=[]
-        ):
+        with patch("aura_cli.api_server.get_goal_queue_data", return_value=queue_data), patch("aura_cli.api_server.get_goal_archive", return_value=[]):
             resp = client.get(f"/api/goals/{gid}")
         assert resp.status_code == 200
         assert resp.json()["status"] == "running"
@@ -594,9 +575,7 @@ class TestGetGoalDetailRoute:
     def test_archived_goal_found_with_history(self, client):
         desc = "improve coverage"
         gid = _goal_id_for_archived(desc)
-        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_EMPTY_QUEUE), patch(
-            "aura_cli.api_server.get_goal_archive", return_value=_SAMPLE_ARCHIVE
-        ):
+        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_EMPTY_QUEUE), patch("aura_cli.api_server.get_goal_archive", return_value=_SAMPLE_ARCHIVE):
             resp = client.get(f"/api/goals/{gid}")
         assert resp.status_code == 200
         data = resp.json()
@@ -604,9 +583,7 @@ class TestGetGoalDetailRoute:
         assert len(data["history"]) == 1
 
     def test_not_found_returns_404(self, client):
-        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_EMPTY_QUEUE), patch(
-            "aura_cli.api_server.get_goal_archive", return_value=[]
-        ):
+        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_EMPTY_QUEUE), patch("aura_cli.api_server.get_goal_archive", return_value=[]):
             resp = client.get("/api/goals/nonexistent-id")
         assert resp.status_code == 404
 
@@ -866,9 +843,7 @@ class TestTelemetryRoutes:
 
 class TestStatsRoute:
     def test_stats_all_empty(self, client):
-        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_EMPTY_QUEUE), patch(
-            "aura_cli.api_server.get_goal_archive", return_value=[]
-        ), patch("aura_cli.api_server.get_telemetry_data", return_value=[]):
+        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_EMPTY_QUEUE), patch("aura_cli.api_server.get_goal_archive", return_value=[]), patch("aura_cli.api_server.get_telemetry_data", return_value=[]):
             resp = client.get("/api/stats")
         assert resp.status_code == 200
         data = resp.json()
@@ -879,9 +854,7 @@ class TestStatsRoute:
 
     def test_stats_with_queue_data(self, client):
         archive = [{"goal": "done", "status": "completed", "timestamp": "2024-01-01"}]
-        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_SAMPLE_QUEUE), patch(
-            "aura_cli.api_server.get_goal_archive", return_value=archive
-        ), patch("aura_cli.api_server.get_telemetry_data", return_value=[]):
+        with patch("aura_cli.api_server.get_goal_queue_data", return_value=_SAMPLE_QUEUE), patch("aura_cli.api_server.get_goal_archive", return_value=archive), patch("aura_cli.api_server.get_telemetry_data", return_value=[]):
             resp = client.get("/api/stats")
         assert resp.status_code == 200
         data = resp.json()
@@ -1093,9 +1066,7 @@ class TestMcpRoutes:
 
     def test_get_servers_with_config(self, client):
         config = {"mcpServers": {"filesystem": {"type": "stdio", "command": "npx", "args": ["-y", "fs"]}}}
-        with patch.object(Path, "exists", return_value=True), patch.object(
-            Path, "read_text", return_value=json.dumps(config)
-        ):
+        with patch.object(Path, "exists", return_value=True), patch.object(Path, "read_text", return_value=json.dumps(config)):
             resp = client.get("/api/mcp/servers")
         assert resp.status_code == 200
         data = resp.json()
@@ -1115,9 +1086,7 @@ class TestMcpRoutes:
         assert resp.json()["tools"] == []
 
     def test_execute_mcp_tool(self, client):
-        resp = client.post(
-            "/api/mcp/servers/filesystem/tools/read_file/execute", json={"path": "test.txt"}
-        )
+        resp = client.post("/api/mcp/servers/filesystem/tools/read_file/execute", json={"path": "test.txt"})
         assert resp.status_code == 200
         data = resp.json()
         assert data["status"] == "success"
@@ -1211,9 +1180,7 @@ class TestGithubRoutes:
         mock_app.handle_webhook.return_value = {"status": "queued"}
         mock_gh_mod = MagicMock()
         mock_gh_mod.get_github_app.return_value = mock_app
-        payload = json.dumps(
-            {"action": "opened", "pull_request": {"number": 1, "title": "PR"}, "repository": {"full_name": "o/r"}, "sender": {"login": "dev"}}
-        ).encode()
+        payload = json.dumps({"action": "opened", "pull_request": {"number": 1, "title": "PR"}, "repository": {"full_name": "o/r"}, "sender": {"login": "dev"}}).encode()
         with patch.dict(sys.modules, {"aura_cli.github_integration": mock_gh_mod}):
             resp = client.post(
                 "/api/github/webhook",
@@ -1323,7 +1290,7 @@ class TestAnalyticsRoutes:
         mock_mod = self._mock_metrics({"get_insights": [{"text": "improve coverage"}]})
         with patch.dict(sys.modules, {"core.metrics": mock_mod}):
             result = asyncio.run(get_analytics_insights(user={"user_id": "dev"}))
-        assert result == [{"text": "improve coverage"}]
+        assert result["insights"] == [{"text": "improve coverage"}]
 
     def test_get_daily_report(self):
         mock_mod = self._mock_metrics({"generate_daily_report": {"date": "2024-01-01"}})

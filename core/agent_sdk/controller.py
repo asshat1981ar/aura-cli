@@ -69,7 +69,7 @@ class AuraController:
             try:
                 from core.agent_sdk.semantic_querier import SemanticQuerier
                 querier = SemanticQuerier(db_path=config.semantic_index_path)
-            except Exception:
+            except (ImportError, OSError, RuntimeError):
                 pass
         self._semantic_querier = querier
         self.context_builder = ContextBuilder(

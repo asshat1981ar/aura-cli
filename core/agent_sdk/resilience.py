@@ -72,7 +72,7 @@ class CircuitBreaker:
             )
             await self._record_success()
             return result
-        except Exception:
+        except Exception:  # Catch-all: record any failure before re-raising
             await self._record_failure()
             raise
     
@@ -270,7 +270,7 @@ class MCPHealthMonitor:
                 await asyncio.sleep(self.check_interval)
             except asyncio.CancelledError:
                 break
-            except Exception as e:
+            except (OSError, ConnectionError, TimeoutError, RuntimeError) as e:
                 logger.error("Health check error: %s", e)
                 await asyncio.sleep(self.check_interval)
     
@@ -310,7 +310,7 @@ class MCPHealthMonitor:
                     if not healthy:
                         logger.warning("MCP server %s unhealthy (status %d)", 
                                      name, resp.status)
-        except Exception as e:
+        except (OSError, ConnectionError, TimeoutError, RuntimeError, ImportError) as e:
             elapsed_ms = (time.time() - start) * 1000
             previous = self._health.get(name)
             consecutive = previous.consecutive_failures + 1 if previous else 1

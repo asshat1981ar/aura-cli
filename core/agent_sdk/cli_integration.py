@@ -24,7 +24,7 @@ def build_controller_from_args(args: Any) -> Any:
             with open(config_path) as f:
                 aura_config = json.load(f)
             config = AgentSDKConfig.from_aura_config(aura_config)
-    except Exception:
+    except (OSError, json.JSONDecodeError, KeyError, TypeError):
         pass  # Fall back to defaults
 
     # Apply CLI overrides
@@ -48,12 +48,12 @@ def build_controller_from_args(args: Any) -> Any:
     try:
         from memory.brain import Brain
         brain = Brain()
-    except Exception:
+    except (ImportError, OSError, RuntimeError):
         pass
     try:
         from core.model_adapter import ModelAdapter
         model_adapter = ModelAdapter()
-    except Exception:
+    except (ImportError, OSError, RuntimeError):
         pass
 
     # Initialize production subsystems
@@ -143,7 +143,7 @@ async def handle_agent_run(args: Any) -> int:
     except RuntimeError as exc:
         print(f"Error: {exc}")
         return 1
-    except Exception as exc:
+    except Exception as exc:  # Catch-all: CLI top-level handler must not crash
         logger.exception("Agent run failed")
         print(f"Error: {exc}")
         return 1

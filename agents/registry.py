@@ -64,6 +64,12 @@ FALLBACK_CAPABILITIES: dict[str, list[str]] = {
     "documentation":       ["doc_generation", "readme", "inline_docs", "commenting", "documentation"],
     "innovation_swarm":    ["innovation", "brainstorming", "divergence", "convergence", "creativity", "ideation"],
     "meta_conductor":      ["innovation", "orchestration", "facilitation", "design_thinking", "session_management"],
+    "debugger":            ["debugging", "error_analysis", "fix_strategy"],
+    "tester":              ["testing", "unit_tests", "evaluation"],
+    "scaffolder":          ["scaffolding", "project_creation", "bootstrap"],
+    "code_refactor":       ["refactoring", "duplicate_code_reduction", "DRY"],
+    "technical_debt":      ["tech_debt", "code_quality", "hotspot_analysis"],
+    "prompt_forge":        ["prompt_engineering", "prompt_assembly", "semantic_analysis"],
 }
 
 
@@ -111,6 +117,12 @@ _AGENT_MODULE_MAP: dict[str, tuple[str, str]] = {
     "mcp_health":          ("agents.mcp_health_agent",    "MCPHealthAgent"),
     "innovation_swarm":    ("agents.innovation_swarm",    "InnovationSwarm"),
     "meta_conductor":      ("agents.meta_conductor",      "MetaConductor"),
+    "debugger":            ("agents.debugger",            "DebuggerAgent"),
+    "tester":              ("agents.tester",              "TesterAgent"),
+    "scaffolder":          ("agents.scaffolder",          "ScaffolderAgent"),
+    "code_refactor":       ("agents.code_refactor_agent", "DuplicateCodeReducer"),
+    "technical_debt":      ("agents.technical_debt_agent", "TechnicalDebtAgent"),
+    "prompt_forge":        ("agents.prompt_forge",         "PromptForgeAgent"),
 }
 
 
@@ -618,6 +630,24 @@ def default_agents(brain, model, context_manager=None, skills=None, health_monit
         "innovation_swarm": InnovationSwarm(brain=brain, model=model),
         "meta_conductor": MetaConductor(brain=brain, model=model),
     }
+
+    # Specialized utility agents
+    DebuggerAgent = _lazy_import("debugger")
+    TesterAgent = _lazy_import("tester")
+    ScaffolderAgent = _lazy_import("scaffolder")
+    DuplicateCodeReducer = _lazy_import("code_refactor")
+    TechnicalDebtAgent = _lazy_import("technical_debt")
+
+    PromptForgeAgent = _lazy_import("prompt_forge")
+
+    agent_dict.update({
+        "debugger": DebuggerAgent(brain=brain, model=model),
+        "tester": TesterAgent(brain=brain, model=model, sandbox=sandbox_agent),
+        "scaffolder": ScaffolderAgent(brain=brain, model=model),
+        "code_refactor": DuplicateCodeReducer(base_path=str(getattr(context_manager, "project_root", "."))),
+        "technical_debt": TechnicalDebtAgent(),
+        "prompt_forge": PromptForgeAgent(project_root=str(getattr(context_manager, "project_root", "."))),
+    })
 
     from agents.autogen_agent import AutoGenGroupChatAgent
     agent_dict["autogen_group_chat"] = AutoGenGroupChatAgent(

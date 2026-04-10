@@ -36,9 +36,11 @@ class MCPDiscoveryAgent:
                     config = json.load(f)
                     mcp_servers = config.get("mcpServers", {})
                     for name, details in mcp_servers.items():
-                        # Basic validation of config format
+                        # Basic validation of config format — support both stdio (command) and HTTP (url) transports
                         if "command" in details:
-                            discovered.append({"name": name, "command": details["command"], "status": "configured"})
+                            discovered.append({"name": name, "command": details["command"], "transport": "stdio", "status": "configured"})
+                        elif "url" in details:
+                            discovered.append({"name": name, "url": details["url"], "transport": "http", "status": "configured"})
                         else:
                             log_json("WARNING", "mcp_discovery_invalid_config", details={"server": name})
             except json.JSONDecodeError as e:

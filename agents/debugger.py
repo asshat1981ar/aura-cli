@@ -83,3 +83,23 @@ Provide your response as a JSON object with the following keys:
                 "fix_strategy": "Manually inspect the error message and context.",
                 "severity": "CRITICAL",
             }
+
+    def run(self, input_data: dict) -> dict:
+        """Uniform execution interface for the orchestrator loop."""
+        error_message = input_data.get("error_message", "")
+        current_goal = input_data.get("current_goal", "")
+        context = input_data.get("context", "")
+        improve_plan = input_data.get("improve_plan", "")
+        implement_details = input_data.get("implement_details", {})
+
+        result = self.diagnose(
+            error_message=error_message,
+            current_goal=current_goal,
+            context=context,
+            improve_plan=improve_plan,
+            implement_details=implement_details
+        )
+        return {
+            "status": "success",
+            "diagnosis": result
+        }

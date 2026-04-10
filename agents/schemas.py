@@ -67,7 +67,10 @@ class CriticIssue(BaseModel):
     severity: Literal["critical", "major", "minor", "suggestion"] = Field(
         description="Severity of the issue"
     )
-    category: Literal["completeness", "clarity", "feasibility", "alignment", "safety", "other"] = Field(
+    category: Literal[
+        "completeness", "clarity", "feasibility", "alignment", "safety",
+        "correctness", "maintainability", "performance", "security", "other"
+    ] = Field(
         description="Category of the issue"
     )
     description: str = Field(description="Detailed description of the issue")

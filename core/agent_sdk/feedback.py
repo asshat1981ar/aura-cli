@@ -114,7 +114,7 @@ class FeedbackCollector:
                     "cost_usd": cost,
                     "verification": verification_result,
                 })
-            except Exception as exc:
+            except (OSError, RuntimeError, TypeError) as exc:
                 logger.warning("Failed to store outcome in brain: %s", exc)
 
         return {
@@ -130,7 +130,7 @@ class FeedbackCollector:
 
         try:
             recent = self._session_store.list_sessions(status="failed", limit=10)
-        except Exception:
+        except (OSError, RuntimeError, KeyError):
             return []
 
         # Filter to this goal_type if possible

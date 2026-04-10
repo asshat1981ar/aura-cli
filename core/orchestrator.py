@@ -1,7 +1,7 @@
 """Core orchestration engine for the AURA autonomous coding loop.
 
 This module implements :class:`LoopOrchestrator`, the central coordinator that
-drives a multi-phase *plan → critique → synthesize → act → sandbox → verify →
+drives a multi-phase *plan -> critique -> synthesize -> act -> sandbox -> verify ->
 reflect* pipeline.  Each phase is handled by a dedicated agent; the orchestrator
 sequences them, routes failures, manages retries, and persists cycle history via
 :class:`~memory.store.MemoryStore`.
@@ -56,6 +56,10 @@ from core.mcp_agent_registry import agent_registry
 from core.mcp_client import MCPAsyncClient
 from memory.controller import memory_controller, MemoryTier
 from core.phase_dispatcher import PhaseDispatcher
+from core.orchestrator_phases import PhasesMixin
+from core.orchestrator_verify import VerifyMixin
+from core.orchestrator_learn import LearnMixin
+from core.orchestrator_capabilities import CapabilitiesMixin
 
 MAX_SANDBOX_RETRIES = 3
 
@@ -81,28 +85,28 @@ class BeadsSyncLoop:
             self._skill.run({"cmd": "dolt", "args": ["push"]})
 
 
-class LoopOrchestrator:
+class LoopOrchestrator(PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin):
     """Coordinates the full AURA autonomous-coding pipeline across one or more cycles.
 
     Each *cycle* executes the following phases in order:
 
-    1. **Ingest** — gather project context and memory hints.
-    2. **Skill dispatch** — run adaptive static-analysis skills.
-    3. **Plan** — generate a step-by-step implementation plan (with retries).
-    4. **Critique** — adversarially review the plan for flaws.
-    5. **Synthesize** — merge plan + critique into an actionable task bundle.
-    6. **Act** — generate code changes (with retries on failure).
-    7. **Sandbox** — execute the generated snippet in an isolated subprocess.
-    8. **Apply** — write file changes to disk atomically.
-    9. **Verify** — run tests / linters against the applied changes.
-    10. **Reflect** — summarise outcomes and update skill weights.
+    1. **Ingest** -- gather project context and memory hints.
+    2. **Skill dispatch** -- run adaptive static-analysis skills.
+    3. **Plan** -- generate a step-by-step implementation plan (with retries).
+    4. **Critique** -- adversarially review the plan for flaws.
+    5. **Synthesize** -- merge plan + critique into an actionable task bundle.
+    6. **Act** -- generate code changes (with retries on failure).
+    7. **Sandbox** -- execute the generated snippet in an isolated subprocess.
+    8. **Apply** -- write file changes to disk atomically.
+    9. **Verify** -- run tests / linters against the applied changes.
+    10. **Reflect** -- summarise outcomes and update skill weights.
 
     Failure routing (:meth:`_route_failure`) decides whether a failed
     verification warrants retrying the *act* phase, escalating to a full
     re-plan, or skipping (when the cause is environmental/external).
 
     Attributes:
-        agents: Mapping of phase-name → agent instance used for each pipeline step.
+        agents: Mapping of phase-name -> agent instance used for each pipeline step.
         memory_controller: Centralized memory authority.
         policy: Stopping-condition evaluator; defaults to :class:`~core.policy.Policy`
             with an empty config.
@@ -112,7 +116,7 @@ class LoopOrchestrator:
             matching the expected JSON schema immediately aborts the cycle.
         debugger: Optional :class:`~agents.debugger.DebuggerAgent` invoked
             when :class:`~agents.coder.CoderAgent` emits an invalid change-set.
-        skills: Dict of skill-name → skill instance, loaded lazily from
+        skills: Dict of skill-name -> skill instance, loaded lazily from
             :mod:`agents.skills.registry`.
     """
 
@@ -207,7 +211,7 @@ class LoopOrchestrator:
         # ── Innovation modules ──
         # Hook engine: guaranteed-execution lifecycle hooks at phase boundaries
         self.hook_engine = HookEngine(self._load_config_file())
-        # Phase dispatcher: thin delegation layer for phase → agent mapping + hooks
+        # Phase dispatcher: thin delegation layer for phase -> agent mapping + hooks
         self._phase_dispatcher = PhaseDispatcher(
             agents=self.agents,
             hook_engine=self.hook_engine,
@@ -226,21 +230,15 @@ class LoopOrchestrator:
         except (OSError, ImportError):
             self.skill_correlation = None
 
-        # Self-improvement loops (all optional — never block the main loop)
+        # Self-improvement loops (all optional -- never block the main loop)
         self._improvement_loops: list = []
 
-        # CASPA-W components — set via attach_caspa() after construction
+        # CASPA-W components -- set via attach_caspa() after construction
         self.adaptive_pipeline = None  # AdaptivePipeline
         self.propagation_engine = None  # PropagationEngine
         self.context_graph = None  # ContextGraph
         self._consecutive_fails: int = 0
         self._ui_callbacks: list = []
-
-    def _get_beads_skill(self):
-        """Return the BEADS skill only when runtime BEADS integration is enabled."""
-        if not self.beads_enabled:
-            return None
-        return self.skills.get("beads_skill")
 
     def attach_ui_callback(self, callback) -> None:
         """Register a UI callback (e.g., AuraStudio) to receive real-time updates."""
@@ -256,82 +254,6 @@ class LoopOrchestrator:
                 except (TypeError, AttributeError):
                     pass
 
-    def _analyze_error(self, error: str, context: Optional[dict] = None) -> Optional[str]:
-        """Optionally use SelfCorrectionAgent to analyze and suggest fixes."""
-        if not self.self_correction_agent:
-            return None
-        try:
-            return self.self_correction_agent.analyze_error(error, context or {})
-        except Exception as exc:
-            log_json("WARN", "self_correction_analysis_failed", details={"error": str(exc)})
-            return None
-
-    def _run_root_cause_analysis(
-        self,
-        failures: List[str],
-        logs: str,
-        context: Optional[dict] = None,
-        *,
-        history: Optional[List[dict]] = None,
-    ) -> Optional[dict]:
-        """Optionally produce a structured RCA report for a failed phase."""
-        if not self.root_cause_analysis_agent:
-            return None
-        try:
-            return self.root_cause_analysis_agent.run(
-                {
-                    "failures": failures,
-                    "logs": logs,
-                    "context": context or {},
-                    "history": history or [],
-                }
-            )
-        except Exception as exc:
-            log_json("WARN", "root_cause_analysis_failed", details={"error": str(exc)})
-            return None
-
-    def _run_investigation(
-        self,
-        *,
-        goal: str,
-        verification: Dict[str, Any],
-        context: Optional[dict] = None,
-        route: str = "act",
-        analysis_suggestion: str | None = None,
-        root_cause_analysis: Optional[dict] = None,
-        previous_test_count: int | None = None,
-        current_test_count: int | None = None,
-    ) -> Optional[dict]:
-        """Optionally produce a structured investigation report for a failed phase."""
-        if not self.investigation_agent:
-            return None
-        try:
-            return self.investigation_agent.run(
-                {
-                    "goal": goal,
-                    "verification": verification,
-                    "context": context or {},
-                    "route": route,
-                    "analysis_suggestion": analysis_suggestion,
-                    "root_cause_analysis": root_cause_analysis or {},
-                    "history": self._failure_history(),
-                    "previous_test_count": previous_test_count,
-                    "current_test_count": current_test_count,
-                }
-            )
-        except Exception as exc:
-            log_json("WARN", "investigation_failed", details={"error": str(exc)})
-            return None
-
-    def _failure_history(self, limit: int = 5) -> List[dict]:
-        """Return recent cycle summaries to help classify repeated failures."""
-        if not self.memory_controller or not self.memory_controller.persistent_store:
-            return []
-        try:
-            return list(self.memory_controller.read_log()[-limit:])
-        except (OSError, AttributeError):
-            return []
-
     def attach_improvement_loops(self, *loops) -> None:
         """Register one or more self-improvement loops to be called after each cycle.
 
@@ -341,7 +263,7 @@ class LoopOrchestrator:
 
         Args:
             *loops: Variadic sequence of improvement-loop instances to append.
-                Multiple calls are additive — loops are never de-duplicated.
+                Multiple calls are additive -- loops are never de-duplicated.
 
         Example::
 
@@ -359,7 +281,7 @@ class LoopOrchestrator:
     ) -> None:
         """Attach CASPA-W components for contextually adaptive self-propagation.
 
-        CASPA-W (Contextually Adaptive Self-Propagating Architecture — Wired)
+        CASPA-W (Contextually Adaptive Self-Propagating Architecture -- Wired)
         extends the base pipeline with dynamic intensity scaling, cross-cycle
         knowledge propagation, and a live context dependency graph.
 
@@ -396,7 +318,7 @@ class LoopOrchestrator:
         """Return the most relevant past cycle summaries for *goal*.
 
         Ranks by a weighted score: keyword overlap (50%), recency (30%),
-        past outcome success (20%) — replacing the old plain substring filter.
+        past outcome success (20%) -- replacing the old plain substring filter.
 
         Args:
             goal: Natural-language description of the current coding goal.
@@ -442,8 +364,8 @@ class LoopOrchestrator:
         if config_path.exists():
             try:
                 return json.loads(config_path.read_text())
-            except (json.JSONDecodeError, OSError):
-                pass
+            except (json.JSONDecodeError, OSError) as exc:
+                log_json("WARN", "config_file_load_failed", details={"path": str(config_path), "error": str(exc)})
         return {}
 
     def _run_phase(self, name: str, input_data: Dict) -> Dict:
@@ -464,7 +386,7 @@ class LoopOrchestrator:
         """
         result = self._phase_dispatcher.dispatch(name, input_data)
 
-        # Shadow mode comparison (M4-005, M5-005) — kept here as it needs
+        # Shadow mode comparison (M4-005, M5-005) -- kept here as it needs
         # access to _dispatch_task which is an orchestrator-level concern.
         if self.config.get("new_orchestrator_shadow_mode") and isinstance(result, dict) and not result.get("_blocked_by_hook"):
             self._run_shadow_check(name, input_data, result)
@@ -555,34 +477,6 @@ class LoopOrchestrator:
             snapshot["mode"] = target.stat().st_mode & 0o777
         return snapshot
 
-    def _restore_applied_changes(self, snapshots: List[Dict]) -> None:
-        """Restore only the files mutated by the current loop attempt.
-
-        This avoids touching unrelated user changes elsewhere in the repo.
-        """
-        restored: list[str] = []
-        failed: list[Dict[str, str]] = []
-
-        for snapshot in reversed(snapshots):
-            target = Path(snapshot["target"])
-            try:
-                if snapshot.get("existed"):
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    target.write_text(snapshot.get("content") or "", encoding="utf-8")
-                    if snapshot.get("mode") is not None:
-                        os.chmod(target, int(snapshot["mode"]))
-                else:
-                    if target.exists():
-                        target.unlink()
-                restored.append(snapshot["file"])
-            except Exception as exc:
-                failed.append({"file": snapshot["file"], "error": str(exc)})
-
-        if restored:
-            log_json("INFO", "verify_fail_restore_ok", details={"files": restored})
-        if failed:
-            log_json("WARN", "verify_fail_restore_failed", details={"failures": failed})
-
     def _apply_change_set(self, change_set: Dict, dry_run: bool) -> Dict[str, List]:
         """Apply each change in *change_set* independently to the filesystem.
 
@@ -608,10 +502,10 @@ class LoopOrchestrator:
         Returns:
             A dict with two keys:
 
-            * ``"applied"`` (``List[str]``) — file paths successfully written.
-            * ``"failed"``  (``List[dict]``) — dicts with ``"file"`` and
+            * ``"applied"`` (``List[str]``) -- file paths successfully written.
+            * ``"failed"``  (``List[dict]``) -- dicts with ``"file"`` and
               ``"error"`` keys for each path that could not be written.
-            * ``"snapshots"`` (``List[dict]``) — pre-apply file snapshots for
+            * ``"snapshots"`` (``List[dict]``) -- pre-apply file snapshots for
               restoring loop-owned writes when verification fails.
         """
         changes: List[Dict] = []
@@ -665,1030 +559,8 @@ class LoopOrchestrator:
 
         return {"applied": applied, "failed": failed, "snapshots": snapshots}
 
-    def _route_failure(self, verification: Dict) -> str:
-        """Classify a verification failure and return the recommended re-entry point.
-
-        Inspects the ``"failures"`` list and ``"logs"`` string in *verification*
-        for well-known signal words to determine how the orchestrator should
-        respond.
-
-        Args:
-            verification: The dict returned by the ``"verify"`` phase.  The
-                keys ``"failures"`` (list) and ``"logs"`` (str) are inspected;
-                all other keys are ignored.
-
-        Returns:
-            A :class:`~core.schema.RoutingDecision` value:
-
-            * :attr:`~core.schema.RoutingDecision.ACT`  — recoverable code-level error; retry the act phase.
-            * :attr:`~core.schema.RoutingDecision.PLAN` — structural or design error; re-plan from scratch.
-            * :attr:`~core.schema.RoutingDecision.SKIP` — external / environment issue that cannot be
-              self-fixed (e.g. missing dependency, network error).
-        """
-        failures = " ".join(str(f) for f in verification.get("failures", []))
-        logs = str(verification.get("logs", ""))
-        combined = (failures + " " + logs).lower()
-
-        structural_signals = [
-            "architecture",
-            "circular",
-            "api_breaking",
-            "breaking_change",
-            "design",
-            "interface",
-            "contract",
-        ]
-        external_signals = [
-            "dependency",
-            "network",
-            "env",
-            "environment",
-            "permission",
-            "not found",
-            "no module",
-            "import error",
-        ]
-
-        if any(s in combined for s in structural_signals):
-            return RoutingDecision.PLAN
-        if any(s in combined for s in external_signals):
-            return RoutingDecision.SKIP
-        return RoutingDecision.ACT  # default: code-level fix is worth retrying
-
-    def _normalize_verification_result(self, verification: Dict) -> Dict:
-        """Accept both legacy ``passed`` and canonical ``status`` verification payloads."""
-        if not isinstance(verification, dict):
-            return {"status": "fail", "failures": ["invalid verification payload"], "logs": str(verification)}
-        if verification.get("status") in ("pass", "fail", "skip"):
-            return verification
-        if "passed" in verification:
-            normalized = dict(verification)
-            normalized["status"] = "pass" if bool(verification.get("passed")) else "fail"
-            normalized.setdefault("failures", [])
-            normalized.setdefault("logs", "")
-            return normalized
-        return verification
-
-    # ── Inner loop helpers ────────────────────────────────────────────────────
-
-    def _run_sandbox_loop(
-        self,
-        goal: str,
-        act: Dict,
-        task_bundle: Dict,
-        dry_run: bool,
-        phase_outputs: Dict,
-    ):
-        """Run the sandbox pre-apply check, retrying up to MAX_SANDBOX_RETRIES.
-
-        On each failure, injects stderr as a fix_hint and re-generates code.
-
-        Returns:
-            Tuple of (final_act_dict, sandbox_passed, act_attempt_delta).
-        """
-        sandbox_passed = False
-        sandbox_result = {}
-        act_attempts_used = 0
-
-        for _sandbox_try in range(MAX_SANDBOX_RETRIES):
-            self._notify_ui("on_phase_start", "sandbox")
-            t0_sandbox = time.time()
-            sandbox_result = (
-                self._run_phase(
-                    "sandbox",
-                    {
-                        "act": act,
-                        "dry_run": dry_run,
-                        "project_root": str(self.project_root),
-                    },
-                )
-                or {}
-            )
-            self._notify_ui("on_phase_complete", "sandbox", (time.time() - t0_sandbox) * 1000)
-
-            phase_outputs["sandbox"] = sandbox_result
-            sandbox_passed = sandbox_result.get("passed", True)
-            if sandbox_passed or dry_run:
-                break
-
-            stderr_hint = (sandbox_result.get("details") or {}).get("stderr", "") or sandbox_result.get("summary", "sandbox_failed")
-            failure_context = {"goal": goal, "phase": "sandbox"}
-            analysis_suggestion = self._analyze_error(stderr_hint, failure_context)
-            root_cause_analysis = self._run_root_cause_analysis(
-                [stderr_hint],
-                stderr_hint,
-                failure_context,
-                history=self._failure_history(),
-            )
-            investigation = self._run_investigation(
-                goal=goal,
-                verification={"failures": [stderr_hint], "logs": stderr_hint},
-                context=failure_context,
-                route=RoutingDecision.ACT.value,
-                analysis_suggestion=analysis_suggestion,
-                root_cause_analysis=root_cause_analysis,
-            )
-            failure_investigation = (investigation or {}).get("verification_investigation", {})
-            remediation_plan = (investigation or {}).get("remediation_plan", {})
-            fix_hints = remediation_plan.get("fix_hints", []) or [stderr_hint]
-            if root_cause_analysis:
-                sandbox_result["root_cause_analysis"] = root_cause_analysis
-            sandbox_result["failure_investigation"] = failure_investigation
-            sandbox_result["remediation_plan"] = remediation_plan
-            if investigation:
-                sandbox_result["investigation"] = investigation
-
-            log_json(
-                "WARN",
-                "sandbox_pre_apply_failed",
-                details={"try": _sandbox_try + 1, "summary": sandbox_result.get("summary", ""), "suggestion": analysis_suggestion, "root_cause_patterns": (root_cause_analysis or {}).get("patterns", []), "investigation_signals": failure_investigation.get("signals", [])},
-            )
-
-            if _sandbox_try < MAX_SANDBOX_RETRIES - 1:
-                phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
-                task_bundle["fix_hints"] = fix_hints
-                act = self._run_phase(
-                    "act",
-                    {
-                        "task": goal,
-                        "task_bundle": task_bundle,
-                        "dry_run": dry_run,
-                        "project_root": str(self.project_root),
-                        "fix_hints": fix_hints,
-                    },
-                )
-                act_attempts_used += 1
-                phase_outputs["change_set"] = act
-            else:
-                log_json("WARN", "sandbox_max_retries_exceeded", details={"max": MAX_SANDBOX_RETRIES, "continuing_with_best_attempt": True})
-
-        if not sandbox_passed and not dry_run:
-            task_bundle["fix_hints"] = [(sandbox_result.get("details") or {}).get("stderr", "") or sandbox_result.get("summary", "sandbox_failed")]
-
-        return act, sandbox_passed, act_attempts_used
-
-    def _select_act_agent(self, goal: str) -> str:
-        """Return the agents-dict key for the best code-generation agent for *goal*.
-
-        Uses resolve_agent_for_goal() when a model_adapter is available and
-        the resolved agent is actually registered in self.agents; falls back
-        to "act" otherwise so existing behaviour is preserved.
-        """
-        try:
-            from core.skill_dispatcher import resolve_agent_for_goal
-
-            model_adapter = getattr(self, "model_adapter", None) or getattr(self, "model", None)
-            spec = resolve_agent_for_goal(goal, model_adapter=model_adapter)
-            if spec and spec.name in self.agents:
-                return spec.name
-        except (AttributeError, KeyError):
-            pass
-        return "act"
-
-    def _notify_n8n_feedback(self, goal: str, cycle_id: str, passed: bool, phase_outputs: Dict) -> None:
-        """POST cycle reflection + skill summary to n8n P4 Feedback Loop webhook.
-
-        Fires non-blocking after the reflect phase completes.  Gated by
-        ``n8n_connector.enabled`` in config.  Failures are swallowed and
-        logged — never allowed to interrupt cycle completion.
-        """
-        try:
-            config = self._load_config_file()
-            n8n_cfg = config.get("n8n_connector", {})
-            if not n8n_cfg.get("enabled", False):
-                return
-
-            webhook_url = n8n_cfg.get("feedback_loop_webhook", "")
-            if not webhook_url:
-                return
-
-            reflection: Dict = phase_outputs.get("reflection", {})
-            payload = {
-                "pipeline_run_id": getattr(self, "_cycle_context", {}).get("pipeline_run_id", cycle_id),
-                "cycle_id": cycle_id,
-                "goal": goal,
-                "passed": passed,
-                "verification_status": phase_outputs.get("verification", {}).get("status", "skip"),
-                "learnings": reflection.get("learnings", []),
-                "summary": reflection.get("summary", ""),
-                "skill_summary": reflection.get("skill_summary", {}),
-                "act_confidence": phase_outputs.get("act_confidence"),
-                "plan_confidence": phase_outputs.get("plan_confidence"),
-                "retry_count": phase_outputs.get("retry_count", 0),
-                "quality": phase_outputs.get("quality", {}),
-            }
-
-            import urllib.request
-
-            def _post(url: str, body: bytes) -> int:
-                req = urllib.request.Request(
-                    url, data=body,
-                    headers={"Content-Type": "application/json"}, method="POST"
-                )
-                with urllib.request.urlopen(req, timeout=5) as resp:
-                    return resp.status
-
-            data = json.dumps(payload).encode()
-            status = _post(webhook_url, data)
-            log_json("INFO", "n8n_feedback_sent", details={
-                "cycle_id": cycle_id,
-                "passed": passed,
-                "learnings": len(payload["learnings"]),
-                "status_code": status,
-            })
-
-            # Fan-out to P5 Observability Collector (best-effort)
-            obs_url = n8n_cfg.get("observability_webhook", "")
-            if obs_url:
-                try:
-                    _post(obs_url, data)
-                except Exception as obs_exc:
-                    log_json("WARN", "n8n_observability_send_failed", details={"error": str(obs_exc)})
-
-        except Exception as exc:
-            log_json("WARN", "n8n_feedback_notify_failed", details={"error": str(exc)})
-
-    def _enrich_act_context(self, task_bundle: Dict) -> Dict:
-        """Inject quality-gate critique from n8n P3 Pipeline Coordinator into task_bundle.
-
-        P3 pre-fetches Dev Suite review results and injects them via
-        WebhookGoalRequest.metadata["quality_gate_critique"] into the cycle
-        context before the act phase.  This method reads from that context
-        field and prepends the critique to the task bundle so the CoderAgent
-        sees it as part of the prompt — no blocking HTTP call.
-
-        If quality_gate is not enabled or no critique is available, returns
-        task_bundle unchanged.
-        """
-        try:
-            config = self._load_config_file()
-            n8n_cfg = config.get("n8n_connector", {})
-            if not n8n_cfg.get("quality_gate_enabled", False):
-                return task_bundle
-
-            critique = (
-                getattr(self, "_cycle_context", {}).get("quality_gate_critique")
-                or (task_bundle.get("_cycle_context") or {}).get("quality_gate_critique")
-                or task_bundle.get("quality_gate_critique")
-            )
-            if not critique:
-                return task_bundle
-
-            task_bundle = dict(task_bundle) if isinstance(task_bundle, dict) else {}
-            existing = task_bundle.get("critique", "") or ""
-            task_bundle["critique"] = (
-                f"[Dev Suite Quality Gate Review]\n{critique}\n\n{existing}".strip()
-            )
-            log_json("INFO", "aura_act_context_enriched", details={
-                "critique_len": len(critique),
-                "quality_gate_enabled": True,
-            })
-        except Exception as exc:
-            log_json("WARN", "aura_act_context_enrich_failed", details={"error": str(exc)})
-        return task_bundle
-
-    def _execute_act_verify_attempt(self, goal: str, plan: Dict, task_bundle: Dict, cycle_id: str, phase_outputs: Dict, dry_run: bool):
-        """Execute one attempt of act -> sandbox -> apply -> verify.
-
-        When ``n_best_candidates`` > 1 in config, generates multiple code
-        variants and uses critic tournament to select the best one.
-        """
-        config = self._load_config_file()
-        n_best = config.get("n_best_candidates", 1)
-
-        self._notify_ui("on_phase_start", "act")
-        t0_act = time.time()
-
-        # RAG: retrieve similar past implementations as context
-        rag_context = None
-        try:
-            from core.code_rag import CodeRAG
-
-            code_rag = CodeRAG(
-                vector_store=getattr(self, "vector_store", None),
-                brain=self.brain,
-            )
-            rag_context = code_rag.retrieve_context(goal, task_bundle)
-            if rag_context and rag_context.examples:
-                task_bundle = dict(task_bundle) if isinstance(task_bundle, dict) else {}
-                task_bundle["rag_examples"] = [e.get("content", "")[:300] for e in rag_context.examples[:3]]
-                task_bundle["rag_anti_patterns"] = rag_context.anti_patterns[:3]
-        except (AttributeError, TypeError):
-            pass
-
-        # Pipeline quality gate: inject critique from P3 Pipeline Coordinator.
-        # P3 pre-fetches Dev Suite review and injects it via WebhookGoalRequest.metadata
-        # into the cycle_context before this phase runs.  No blocking HTTP call here.
-        task_bundle = self._enrich_act_context(task_bundle)
-
-        if n_best > 1 and self.model and not dry_run:
-            # N-Best code generation with critic tournament
-            from core.nbest import NBestEngine
-
-            engine = NBestEngine(
-                n_candidates=n_best,
-                temperature_spread=tuple(config.get("n_best_temperature_spread", [0.2, 0.5, 0.8])),
-            )
-            act_prompt = f"Goal: {goal}\nTask bundle: {json.dumps(task_bundle, default=str)[:3000]}"
-            candidates = engine.generate_candidates(self.model, act_prompt)
-            sandbox_agent = self.agents.get("sandbox")
-            if sandbox_agent:
-                candidates = engine.sandbox_all(sandbox_agent, candidates)
-            try:
-                winner = engine.critic_tournament(self.model, candidates, goal)
-                act = {"changes": winner.changes, "confidence": winner.total_score, "variant_id": winner.variant_id, "n_best": True}
-            except ValueError:
-                # Fallback to single-path if no valid candidates
-                act = self._run_phase(
-                    self._select_act_agent(goal),
-                    {
-                        "task": goal,
-                        "task_bundle": task_bundle,
-                        "dry_run": dry_run,
-                        "project_root": str(self.project_root),
-                        "fix_hints": task_bundle.get("fix_hints", []),
-                    },
-                )
-        else:
-            act = self._run_phase(
-                self._select_act_agent(goal),
-                {
-                    "task": goal,
-                    "task_bundle": task_bundle,
-                    "dry_run": dry_run,
-                    "project_root": str(self.project_root),
-                    "fix_hints": task_bundle.get("fix_hints", []),
-                },
-            )
-
-        self._notify_ui("on_phase_complete", "act", (time.time() - t0_act) * 1000)
-
-        # Record act confidence
-        act_confidence = self._estimate_confidence(act, "act")
-        act_result_pr = PhaseResult(phase="act", output=act, confidence=act_confidence)
-        self.confidence_router.record(act_result_pr)
-        phase_outputs["act_confidence"] = act_confidence
-
-        if validate_phase_output("change_set", act) and self.debugger:
-            debug_hint = self.debugger.diagnose(
-                error_message="CoderAgent produced invalid change_set",
-                current_goal=goal,
-                context=json.dumps(
-                    {"goal": goal, "plan": plan, "task_bundle": task_bundle},
-                    default=str,
-                ),
-            )
-            act = self._run_phase(self._select_act_agent(goal), {"task": goal, "task_bundle": task_bundle, "dry_run": dry_run, "project_root": str(self.project_root), "debug_hint": debug_hint})
-
-        phase_outputs["change_set"] = act
-        act, _passed, extra_uses = self._run_sandbox_loop(goal, act, task_bundle, dry_run, phase_outputs)
-
-        self._notify_ui("on_phase_start", "apply")
-        t0_apply = time.time()
-        apply_result = self._apply_change_set(act, dry_run=dry_run)
-        self._notify_ui("on_phase_complete", "apply", (time.time() - t0_apply) * 1000)
-        phase_outputs["apply_result"] = apply_result
-
-        tests = task_bundle.get("tasks", [{}])[0].get("tests", []) if isinstance(task_bundle, dict) else []
-        self._notify_ui("on_phase_start", "verify")
-        t0_verify = time.time()
-        if apply_result.get("failed"):
-            verification = {
-                "status": "fail",
-                "failures": [f"{item['file']}: {item['error']}" for item in apply_result["failed"]],
-                "logs": "\n".join(str(item.get("error", "")) for item in apply_result["failed"]),
-            }
-        else:
-            verification = self._run_phase("verify", {"change_set": act, "dry_run": dry_run, "project_root": str(self.project_root), "tests": tests})
-        verification = self._normalize_verification_result(verification)
-        self._notify_ui("on_phase_complete", "verify", (time.time() - t0_verify) * 1000, success=(verification.get("status") in ("pass", "skip")))
-
-        phase_outputs["verification"] = verification
-        return act, apply_result, verification, extra_uses
-
-    def _run_act_loop(self, goal: str, plan: Dict, task_bundle: Dict, pipeline_cfg, cycle_id: str, phase_outputs: Dict, dry_run: bool, plan_attempt: int, max_plan_retries: int, skill_context: Dict):
-        max_act_attempts = pipeline_cfg.max_act_attempts
-        act_attempt = 0
-        verification: Dict = {}
-        replan_needed = False
-
-        while act_attempt < max_act_attempts:
-            act_attempt += 1
-            if act_attempt > 1:
-                phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
-                time.sleep(min(2 ** (act_attempt - 2), 16))
-
-            act, apply_result, verification, extra_uses = self._execute_act_verify_attempt(goal, plan, task_bundle, cycle_id, phase_outputs, dry_run)
-            act_attempt += extra_uses
-
-            if verification.get("status") in ("pass", "skip"):
-                blocked, gate_reason = self.human_gate.should_block(verification, skill_context)
-                if blocked:
-                    if not self.human_gate.request_approval(gate_reason, {"cycle_id": cycle_id, "goal": goal, "changes": len(act.get("changes", []))}):
-                        phase_outputs["human_gate"] = {"blocked": True, "reason": gate_reason, "approved": False}
-                        break
-                    phase_outputs["human_gate"] = {"blocked": True, "reason": gate_reason, "approved": True}
-                break
-
-            if apply_result.get("applied") and not dry_run:
-                self._restore_applied_changes(apply_result.get("snapshots", []))
-
-            route = self._route_failure(verification)
-            failure_context = {"goal": goal, "phase": "verify", "route": route}
-            failure_logs = verification.get("logs", "")
-            failure_text = "\n".join(verification.get("failures", []))
-            analysis_suggestion = self._analyze_error(failure_text, failure_context)
-            root_cause_analysis = self._run_root_cause_analysis(
-                verification.get("failures", []),
-                failure_logs,
-                failure_context,
-                history=self._failure_history(),
-            )
-            current_test_count = None
-            previous_test_count = None
-            quality = phase_outputs.get("quality", {}) if isinstance(phase_outputs.get("quality"), dict) else {}
-            if "test_count" in quality:
-                current_test_count = quality.get("test_count")
-            recent_history = self._failure_history(limit=2)
-            if recent_history:
-                latest_quality = recent_history[-1].get("phase_outputs", {}).get("quality", {}) if isinstance(recent_history[-1], dict) else {}
-                if isinstance(latest_quality, dict) and "test_count" in latest_quality:
-                    previous_test_count = latest_quality.get("test_count")
-            investigation = self._run_investigation(
-                goal=goal,
-                verification=verification,
-                context=failure_context,
-                route=route,
-                analysis_suggestion=analysis_suggestion,
-                root_cause_analysis=root_cause_analysis,
-                previous_test_count=previous_test_count,
-                current_test_count=current_test_count,
-            )
-            failure_investigation = (investigation or {}).get("verification_investigation", {})
-            remediation_plan = (investigation or {}).get("remediation_plan", {})
-            fix_hints = remediation_plan.get("fix_hints", []) or verification.get("failures", [])
-            verification["failure_investigation"] = failure_investigation
-            verification["remediation_plan"] = remediation_plan
-            if investigation:
-                verification["investigation"] = investigation
-            if root_cause_analysis:
-                verification["root_cause_analysis"] = root_cause_analysis
-
-            if route == RoutingDecision.PLAN and plan_attempt < max_plan_retries:
-                phase_outputs["retry_count"] = phase_outputs.get("retry_count", 0) + 1
-                phase_outputs["_failure_context"] = {
-                    "failures": verification.get("failures", []),
-                    "logs": verification.get("logs", ""),
-                    "route": RoutingDecision.PLAN.value,
-                    "suggestion": analysis_suggestion,
-                    "failure_investigation": failure_investigation,
-                    "root_cause_analysis": root_cause_analysis,
-                    "remediation_plan": remediation_plan,
-                    "investigation": investigation,
-                }
-                replan_needed = True
-                break
-            elif route == RoutingDecision.SKIP:
-                break
-            task_bundle["fix_hints"] = fix_hints
-
-        return verification, replan_needed, None
-
-    def _execute_plan_critique_synthesize(self, goal: str, context: Dict, skill_context: Dict, pipeline_cfg: Any, phase_outputs: Dict) -> Tuple[Dict, Dict]:
-        """Section 3-5: PLAN -> CRITIQUE -> SYNTHESIZE.
-
-        When tree_of_thought_candidates > 1 in config, generates N plan
-        candidates with varied strategies and selects the best one.
-        """
-        beads_decision = phase_outputs.get("beads_gate", {})
-        config = self._load_config_file()
-        tot_candidates = config.get("tree_of_thought_candidates", 1)
-
-        self._notify_ui("on_phase_start", "plan")
-        t0 = time.time()
-
-        # Tree-of-Thought: generate N plans with varied strategies
-        if tot_candidates > 1 and self.model:
-            try:
-                from core.tree_of_thought import TreeOfThoughtPlanner
-
-                tot = TreeOfThoughtPlanner(n_candidates=tot_candidates)
-                candidates = tot.generate_plans(
-                    self.model,
-                    goal,
-                    {
-                        "memory_snapshot": context.get("memory_summary", ""),
-                        "known_weaknesses": "",
-                        "skill_context": skill_context,
-                    },
-                )
-                winner = tot.score_plans(self.model, candidates, goal)
-                plan = {"steps": winner.steps, "strategy": winner.strategy, "confidence": winner.total_score, "tree_of_thought": True}
-                self._notify_ui("on_phase_complete", "plan", (time.time() - t0) * 1000)
-                phase_outputs["plan"] = plan
-                phase_outputs["tot_strategy"] = winner.strategy
-
-                # Record high confidence — may skip critique
-                plan_confidence = min(winner.total_score, 0.95)
-                plan_result = PhaseResult(phase="plan", output=plan, confidence=plan_confidence)
-                self.confidence_router.record(plan_result)
-                phase_outputs["plan_confidence"] = plan_confidence
-
-                # Synthesize directly (ToT already self-scored)
-                self._notify_ui("on_phase_start", "synthesize")
-                t0 = time.time()
-                task_bundle = self._run_phase(
-                    "synthesize",
-                    {
-                        "goal": goal,
-                        "plan": plan,
-                        "critique": {"status": "skipped", "reason": "tree_of_thought_self_scored"},
-                        "beads_decision": beads_decision,
-                    },
-                )
-                self._notify_ui("on_phase_complete", "synthesize", (time.time() - t0) * 1000)
-                phase_outputs["task_bundle"] = task_bundle
-                return plan, task_bundle
-            except Exception as exc:
-                log_json("WARN", "tree_of_thought_failed_fallback", details={"error": str(exc)})
-                # Fall through to standard planning
-
-        plan = self._run_phase(
-            "plan",
-            {
-                "goal": goal,
-                "memory_snapshot": context.get("memory_summary", ""),
-                "similar_past_problems": context.get("hints_summary", ""),
-                "known_weaknesses": "",
-                "skill_context": skill_context,
-                "failure_context": phase_outputs.get("_failure_context", {}),
-                "extra_context": getattr(pipeline_cfg, "extra_plan_ctx", {}),
-                "backfill_context": context.get("backfill_context", []),
-                "beads_decision": beads_decision,
-                "beads_constraints": beads_decision.get("required_constraints", []),
-                "beads_required_tests": beads_decision.get("required_tests", []),
-                "beads_required_skills": beads_decision.get("required_skills", []),
-            },
-        )
-        self._notify_ui("on_phase_complete", "plan", (time.time() - t0) * 1000)
-        phase_outputs["plan"] = plan
-
-        # Record plan confidence and check routing
-        plan_confidence = self._estimate_confidence(plan, "plan")
-        plan_result = PhaseResult(phase="plan", output=plan, confidence=plan_confidence)
-        self.confidence_router.record(plan_result)
-        phase_outputs["plan_confidence"] = plan_confidence
-
-        # Skip critique if plan confidence is very high
-        if self.confidence_router.should_skip_optional(plan_result, "critique"):
-            log_json("INFO", "critique_skipped_high_confidence", details={"plan_confidence": plan_confidence})
-            critique = {"status": "skipped", "reason": "high_plan_confidence"}
-            phase_outputs["critique"] = critique
-            self._notify_ui("on_phase_start", "synthesize")
-            t0 = time.time()
-            task_bundle = self._run_phase(
-                "synthesize",
-                {
-                    "goal": goal,
-                    "plan": plan,
-                    "critique": critique,
-                    "beads_decision": beads_decision,
-                },
-            )
-            self._notify_ui("on_phase_complete", "synthesize", (time.time() - t0) * 1000)
-            phase_outputs["task_bundle"] = task_bundle
-            return plan, task_bundle
-
-        self._notify_ui("on_phase_start", "critique")
-        t0 = time.time()
-        critique = self._run_phase(
-            "critique",
-            {
-                "task": goal,
-                "plan": plan.get("steps", []),
-            },
-        )
-        self._notify_ui("on_phase_complete", "critique", (time.time() - t0) * 1000)
-        phase_outputs["critique"] = critique
-
-        self._notify_ui("on_phase_start", "synthesize")
-        t0 = time.time()
-        task_bundle = self._run_phase(
-            "synthesize",
-            {
-                "goal": goal,
-                "plan": plan,
-                "critique": critique,
-                "beads_decision": beads_decision,
-            },
-        )
-        self._notify_ui("on_phase_complete", "synthesize", (time.time() - t0) * 1000)
-        phase_outputs["task_bundle"] = task_bundle
-        return plan, task_bundle
-
-    def _run_plan_loop(self, goal: str, context: Dict, skill_context: Dict, pipeline_cfg: Any, cycle_id: str, phase_outputs: Dict, dry_run: bool) -> Tuple[Dict, Optional[Dict]]:
-        max_plan_retries = getattr(pipeline_cfg, "plan_retries", 3)
-        plan_attempt = 0
-        verification: Dict = {}
-
-        while plan_attempt < max_plan_retries:
-            plan_attempt += 1
-            plan, task_bundle = self._execute_plan_critique_synthesize(goal, context, skill_context, pipeline_cfg, phase_outputs)
-
-            verification, replan_needed, early_return = self._run_act_loop(
-                goal=goal, plan=plan, task_bundle=task_bundle, pipeline_cfg=pipeline_cfg, cycle_id=cycle_id, phase_outputs=phase_outputs, dry_run=dry_run, plan_attempt=plan_attempt, max_plan_retries=max_plan_retries, skill_context=skill_context
-            )
-            if early_return:
-                return verification, early_return
-            if not replan_needed:
-                break
-
-        return verification, None
-
-    def _configure_pipeline(self, goal: str, goal_type: str, phase_outputs: Dict) -> Any:
-        """Section 0: ADAPTIVE PIPELINE CONFIG."""
-        if self.adaptive_pipeline:
-            pipeline_cfg = self.adaptive_pipeline.configure(
-                goal,
-                goal_type,
-                consecutive_fails=self._consecutive_fails,
-                past_failures=list(phase_outputs.get("_failure_context", {}).get("failures", [])),
-            )
-        else:
-            from core.adaptive_pipeline import AdaptivePipeline
-
-            pipeline_cfg = AdaptivePipeline()._default_config(goal_type)
-
-        phase_outputs["pipeline_config"] = {
-            "intensity": pipeline_cfg.intensity,
-            "phases": pipeline_cfg.phases,
-            "skills": pipeline_cfg.skill_set,
-        }
-        self._notify_ui("on_pipeline_configured", phase_outputs["pipeline_config"])
-        return pipeline_cfg
-
-    def _handle_capabilities(self, goal: str, pipeline_cfg: Any, phase_outputs: Dict, dry_run: bool):
-        """Section 0.1: CAPABILITY MANAGEMENT."""
-        capability_plan = {"matched_capabilities": [], "recommended_skills": [], "missing_skills": [], "mcp_tools": [], "provisioning_actions": []}
-        capability_goal_queue = {"attempted": False, "queued": [], "skipped": [], "queue_strategy": None}
-        capability_provisioning = {"attempted": False, "results": []}
-
-        if self.auto_add_capabilities:
-            capability_plan = analyze_capability_needs(goal, available_skills=self.skills.keys(), active_skills=pipeline_cfg.skill_set)
-            if capability_plan["recommended_skills"]:
-                pipeline_cfg.skill_set = list(dict.fromkeys(list(pipeline_cfg.skill_set) + list(capability_plan["recommended_skills"])))
-                phase_outputs["pipeline_config"]["skills"] = pipeline_cfg.skill_set
-            phase_outputs["capability_plan"] = capability_plan
-            capability_goal_queue = queue_missing_capability_goals(goal_queue=self.goal_queue, missing_skills=capability_plan["missing_skills"], goal=goal, enabled=self.auto_queue_missing_capabilities, dry_run=dry_run)
-            if capability_goal_queue["queued"] or capability_goal_queue["skipped"]:
-                phase_outputs["capability_goal_queue"] = capability_goal_queue
-            if capability_plan["provisioning_actions"]:
-                capability_provisioning = provision_capability_actions(project_root=self.project_root, provisioning_actions=capability_plan["provisioning_actions"], auto_provision=self.auto_provision_mcp, start_servers=self.auto_start_mcp_servers, dry_run=dry_run)
-                phase_outputs["capability_provisioning"] = capability_provisioning
-
-        self.last_capability_plan = capability_plan
-        self.last_capability_goal_queue = capability_goal_queue
-        self.last_capability_provisioning = capability_provisioning
-        self.last_capability_status = record_capability_status(project_root=self.project_root, goal=goal, capability_plan=capability_plan, capability_goal_queue=capability_goal_queue, capability_provisioning=capability_provisioning, goal_queue=self.goal_queue)
-
-    def _run_ingest_phase(self, goal: str, cycle_id: str, phase_outputs: Dict) -> Dict:
-        """Section 1: INGEST."""
-        self._notify_ui("on_phase_start", "ingest")
-        t0 = time.time()
-        working_memory = self.memory_controller.retrieve(MemoryTier.WORKING)
-        session_memory = self.memory_controller.retrieve(MemoryTier.SESSION)
-        ingest_input = {"goal": goal, "project_root": str(self.project_root), "hints": self._retrieve_hints(goal), "working_memory": working_memory, "session_memory": session_memory}
-        # SADD context injection: merge dependency context from completed workstreams
-        ctx_inject = phase_outputs.get("context_injection")
-        if ctx_inject:
-            ingest_input["dependency_context"] = ctx_inject
-        context = self._run_phase("ingest", ingest_input)
-        self._notify_ui("on_phase_complete", "ingest", (time.time() - t0) * 1000)
-        if "bundle" in context:
-            self._notify_ui("on_context_assembled", context["bundle"])
-
-        errors = validate_phase_output("context", context)
-        if errors:
-            log_json("ERROR", "phase_schema_invalid", details={"phase": "context", "errors": errors})
-        phase_outputs["context"] = context
-        return context
-
-    def _run_mcp_discovery_phase(self, phase_outputs: Dict) -> Dict:
-        """Section 1.5: MCP DISCOVERY."""
-        self._notify_ui("on_phase_start", "mcp_discovery")
-        t0 = time.time()
-        mcp_discovery_output = self._run_phase("mcp_discovery", {"project_root": str(self.project_root)})
-        self._notify_ui("on_phase_complete", "mcp_discovery", (time.time() - t0) * 1000)
-        phase_outputs["mcp_discovery"] = mcp_discovery_output
-        return mcp_discovery_output
-
-    def _dispatch_skills(self, goal_type: str, pipeline_cfg: Any, phase_outputs: Dict) -> Dict:
-        """Section 2: SKILL DISPATCH."""
-        self._notify_ui("on_phase_start", "skill_dispatch")
-        t0 = time.time()
-        skill_context: Dict = {}
-        if self.skills and pipeline_cfg.skill_set:
-            active_skills = {k: self.skills[k] for k in pipeline_cfg.skill_set if k in self.skills}
-            # Check skill correlation for suggested additions
-            if self.skill_correlation:
-                try:
-                    base_skill_names = list(active_skills.keys())
-                    suggestions = self.skill_correlation.suggest_skills(base_skill_names, goal_type)
-                    for suggested_name, corr_score in suggestions:
-                        if suggested_name in self.skills and suggested_name not in active_skills:
-                            active_skills[suggested_name] = self.skills[suggested_name]
-                            log_json("INFO", "skill_correlation_added", details={"skill": suggested_name, "correlation": round(corr_score, 3)})
-                except (TypeError, KeyError):
-                    pass
-
-            skill_context = dispatch_skills(goal_type, active_skills, str(self.project_root))
-        phase_outputs["skill_context"] = skill_context
-        self._notify_ui("on_phase_complete", "skill_dispatch", (time.monotonic() - t0) * 1000)
-        return skill_context
-
-    def _beads_gate_applies(self) -> bool:
-        if not self.beads_enabled or self.beads_bridge is None:
-            return False
-        if self.beads_scope == "all_runtime":
-            return True
-        return self.beads_scope == "goal_run"
-
-    def _run_beads_gate(
-        self,
-        goal: str,
-        goal_type: str,
-        context: Dict,
-        skill_context: Dict,
-    ) -> Dict[str, Any]:
-        active_context = {
-            "context": context,
-            "skill_context": skill_context,
-            "capability_plan": self.last_capability_plan,
-            "capability_goal_queue": self.last_capability_goal_queue,
-            "capability_provisioning": self.last_capability_provisioning,
-        }
-        payload = build_beads_runtime_input(
-            goal=goal,
-            goal_type=goal_type,
-            project_root=self.project_root,
-            runtime_mode=self.runtime_mode,
-            goal_queue=self.goal_queue,
-            goal_archive=self.goal_archive,
-            active_goal=goal,
-            active_context=active_context,
-        )
-        log_json("INFO", "beads_gate_start", details={"goal": goal, "goal_type": goal_type, "scope": self.beads_scope})
-        result = self.beads_bridge.run(payload)
-        decision = result.get("decision") or {}
-        beads_state = {
-            "ok": bool(result.get("ok")),
-            "status": decision.get("status") if decision else ("error" if not result.get("ok") else None),
-            "decision_id": decision.get("decision_id"),
-            "summary": decision.get("summary"),
-            "required_constraints": list(decision.get("required_constraints", [])) if isinstance(decision, dict) else [],
-            "required_skills": list(decision.get("required_skills", [])) if isinstance(decision, dict) else [],
-            "required_tests": list(decision.get("required_tests", [])) if isinstance(decision, dict) else [],
-            "follow_up_goals": list(decision.get("follow_up_goals", [])) if isinstance(decision, dict) else [],
-            "stop_reason": decision.get("stop_reason") if isinstance(decision, dict) else None,
-            "error": result.get("error"),
-            "stderr": result.get("stderr"),
-            "duration_ms": result.get("duration_ms", 0),
-        }
-        log_json(
-            "INFO" if beads_state["ok"] else "WARN",
-            "beads_gate_complete",
-            details={
-                "goal": goal,
-                "ok": beads_state["ok"],
-                "status": beads_state["status"],
-                "decision_id": beads_state["decision_id"],
-                "error": beads_state["error"],
-            },
-        )
-        return beads_state
-
-    def _build_early_stop_entry(
-        self,
-        *,
-        cycle_id: str,
-        goal: str,
-        goal_type: str,
-        phase_outputs: Dict,
-        started_at: float,
-        stop_reason: str,
-        beads: Dict[str, Any] | None = None,
-    ) -> Dict[str, Any]:
-        entry = {
-            "cycle_id": cycle_id,
-            "goal": goal,
-            "goal_type": goal_type,
-            "phase_outputs": phase_outputs,
-            "stop_reason": stop_reason,
-            "started_at": started_at,
-            "completed_at": time.time(),
-        }
-        if beads is not None:
-            entry["beads"] = beads
-        self._refresh_cycle_summary(entry)
-        self.current_goal = None
-        self.active_cycle_summary = None
-        return entry
-
-    def _run_reflection_phase(self, verification: Dict, skill_context: Dict, goal_type: str, cycle_id: str, phase_outputs: Dict) -> Dict:
-        """Section 7: REFLECT."""
-        self._notify_ui("on_phase_start", "reflect")
-        t0 = time.time()
-        reflection = self._run_phase("reflect", {
-            "verification": verification,
-            "skill_context": skill_context,
-            "goal_type": goal_type,
-            "pipeline_run_id": getattr(self, "_cycle_context", {}).get("pipeline_run_id"),
-        })
-        self._notify_ui("on_phase_complete", "reflect", (time.time() - t0) * 1000)
-        errors = validate_phase_output("reflection", reflection)
-        if errors:
-            log_json("ERROR", "phase_schema_invalid", details={"phase": "reflection", "errors": errors})
-        phase_outputs["reflection"] = reflection
-        if reflection.get("summary"):
-            self.memory_controller.store(MemoryTier.SESSION, reflection["summary"], metadata={"cycle_id": cycle_id, "type": "reflection"})
-        return reflection
-
-    def _refresh_cycle_summary(self, entry: Dict, *, state: str = "complete", current_phase: str | None = None) -> Dict:
-        """Rebuild and cache the canonical operator-facing cycle summary."""
-        summary = build_cycle_summary(entry, state=state, current_phase=current_phase)
-        entry["cycle_summary"] = summary
-        if state == "running":
-            self.active_cycle_summary = summary
-        else:
-            self.last_cycle_summary = summary
-        return summary
-
-    def _record_cycle_outcome(self, cycle_id: str, goal: str, goal_type: str, phase_outputs: Dict, started_at: float):
-        """Final persistence and loop notification."""
-        from core.quality_snapshot import run_quality_snapshot
-
-        verify_status = phase_outputs.get("verification", {}).get("status", "skip")
-        passed = verify_status in ("pass", "skip")
-        if passed:
-            self._consecutive_fails = 0
-        elif verify_status == "fail":
-            self._consecutive_fails += 1
-
-        # Phase 8: measure()
-        self._notify_ui("on_phase_start", "measure")
-        t0_measure = time.time()
-        changed_files = phase_outputs.get("apply_result", {}).get("applied", [])
-        quality = run_quality_snapshot(self.project_root, changed_files=changed_files)
-        phase_outputs["quality"] = quality
-        self._notify_ui("on_phase_complete", "measure", (time.time() - t0_measure) * 1000)
-
-        # ── Quality Trend Analysis ──
-        try:
-            alerts = self.quality_trends.record_from_cycle(
-                {
-                    "cycle_id": cycle_id,
-                    "goal": goal,
-                    "completed_at": time.time(),
-                    "duration_s": time.time() - started_at,
-                    "phase_outputs": phase_outputs,
-                }
-            )
-            if alerts and self.goal_queue:
-                for goal_text in self.quality_trends.get_remediation_goals():
-                    self.goal_queue.add(goal_text)
-                    log_json("INFO", "quality_remediation_goal_enqueued", details={"goal": goal_text[:100]})
-        except Exception as exc:
-            log_json("WARN", "quality_trend_record_failed", details={"error": str(exc)})
-
-        # ── Learning Loop: CycleOutcome ──
-        outcome = CycleOutcome(
-            goal=goal,
-            goal_type=goal_type,
-            started_at=started_at,
-            phases_completed=list(phase_outputs.keys()),
-            changes_applied=len(changed_files),
-            tests_after=quality.get("test_count", 0),
-            strategy_used=phase_outputs.get("pipeline_config", {}).get("intensity", "normal"),
-        )
-
-        if self.adaptive_pipeline:
-            try:
-                strategy = outcome.strategy_used
-                self.adaptive_pipeline.record_outcome(goal_type, strategy, passed)
-            except Exception as exc:
-                log_json("WARN", "adaptive_pipeline_outcome_record_failed", details={"error": str(exc)})
-
-        completed_at = time.time()
-        outcome.mark_complete(success=passed)
-        entry = {
-            "cycle_id": cycle_id,
-            "goal": goal,
-            "goal_type": goal_type,
-            "phase_outputs": phase_outputs,
-            "dry_run": bool(phase_outputs.get("dry_run")),
-            "beads": phase_outputs.get("beads_gate"),
-            "stop_reason": None,
-            "started_at": started_at,
-            "completed_at": completed_at,
-            "duration_s": outcome.duration_s(),
-            "outcome": dataclasses.asdict(outcome),
-        }
-
-        # Phase 9: learn()
-        self._notify_ui("on_phase_start", "learn")
-        t0_learn = time.time()
-        summary = self._refresh_cycle_summary(entry)
-        self._notify_ui("on_cycle_complete", summary)
-        self.current_goal = None
-        self.active_cycle_summary = None
-        if self.memory_controller.persistent_store:
-            self.memory_controller.persistent_store.append_log(entry)
-            # Store structured outcome for learning
-            self.memory_controller.store(MemoryTier.PROJECT, json.dumps(summary), metadata={"type": "cycle_summary", "goal": goal, "cycle_id": cycle_id})
-
-        if self.brain:
-            try:
-                self.brain.set(f"outcome:{cycle_id}", outcome.to_json())
-                self.brain.remember(f"Cycle completed: {goal} -> {'SUCCESS' if passed else 'FAILED'}")
-            except Exception as exc:
-                log_json("WARN", "brain_outcome_storage_failed", details={"error": str(exc)})
-
-        self._notify_ui("on_phase_complete", "learn", (time.time() - t0_learn) * 1000)
-
-        # ── P4 Feedback Loop: POST reflection + skill summary to n8n ──
-        try:
-            self._notify_n8n_feedback(goal, cycle_id, passed, phase_outputs)
-        except Exception as exc:
-            log_json("WARN", "n8n_feedback_notify_failed", details={"error": str(exc)})
-
-        if self.context_graph is not None:
-            try:
-                self.context_graph.update_from_cycle(entry)
-            except Exception as exc:
-                log_json("WARN", "context_graph_update_failed", details={"error": str(exc)})
-
-        for loop in self._improvement_loops:
-            try:
-                loop.on_cycle_complete(entry)
-            except Exception as exc:
-                log_json("WARN", "improvement_loop_error", details={"loop": type(loop).__name__, "error": str(exc)})
-
-        # Phase 10: discover()
-        self._notify_ui("on_phase_start", "discover")
-        # Discovery now happens via on_cycle_complete (TRIGGER_EVERY_N=15)
-        self._notify_ui("on_phase_complete", "discover", 0)
-
-        # Phase 11: evolve()
-        self._notify_ui("on_phase_start", "evolve")
-        # Evolution now happens via on_cycle_complete (TRIGGER_EVERY_N=20)
-        self._notify_ui("on_phase_complete", "evolve", 0)
-
-        if self.propagation_engine is not None:
-            try:
-                self.propagation_engine.on_cycle_complete(entry)
-            except Exception as exc:
-                log_json("WARN", "propagation_engine_error", details={"error": str(exc)})
-
-        # ── Memory Consolidation (periodic) ──
-        # Run every 10 cycles to prune, merge, and summarize old memories
-        cycle_num = int(cycle_id.split("_")[-1], 16) if "_" in cycle_id else 0
-        if self.brain and cycle_num % 10 == 0:
-            try:
-                from memory.consolidation import MemoryConsolidator, MemoryEntry
-
-                consolidator = MemoryConsolidator()
-                # Convert brain memories to MemoryEntry format
-                raw_memories = self.brain.recall_with_budget(max_tokens=50000)
-                entries = [MemoryEntry(id=str(i), content=m, memory_type="decision") for i, m in enumerate(raw_memories)]
-                if len(entries) > 50:
-                    retained, result = consolidator.consolidate(entries)
-                    log_json("INFO", "memory_consolidation_complete", details={"before": result.memories_before, "after": result.memories_after, "compression": f"{result.compression_ratio:.1%}"})
-            except Exception as exc:
-                log_json("WARN", "memory_consolidation_error", details={"error": str(exc)})
-
-        return entry
-
-    def _parse_bead_id(self, goal: str) -> Optional[str]:
-        """Extract bead ID from goal string if present (format: 'bead:ID: Title')."""
-        if goal.startswith("bead:"):
-            parts = goal.split(":", 2)
-            if len(parts) >= 2:
-                return parts[1]
-        return None
-
-    def _claim_bead(self, bead_id: str):
-        """Mark a bead as in_progress using BeadsSkill."""
-        beads_skill = self._get_beads_skill()
-        if beads_skill is not None:
-            log_json("INFO", "orchestrator_claiming_bead", details={"bead_id": bead_id})
-            beads_skill.run({"cmd": "update", "id": bead_id, "args": ["--status", "in_progress"]})
-
-    def _close_bead(self, bead_id: str, reason: str):
-        """Close a bead using BeadsSkill."""
-        beads_skill = self._get_beads_skill()
-        if beads_skill is not None:
-            log_json("INFO", "orchestrator_closing_bead", details={"bead_id": bead_id})
-            beads_skill.run({"cmd": "close", "id": bead_id, "args": ["--reason", reason]})
+    # ── Phase execution, verification, learning, and capability methods are
+    # ── provided by PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin.
 
     def run_cycle(self, goal: str, dry_run: bool = False, context_injection: Optional[Dict] = None) -> Dict:
         """Execute a single complete plan-act-verify cycle for *goal*.
@@ -1810,6 +682,13 @@ class LoopOrchestrator:
             dry_run=dry_run,
         )
         if early_return is not None:
+            # Fire n8n feedback even on early exit so P4/P5 see every cycle
+            log_json("INFO", "n8n_early_exit_attempting", details={"cycle_id": cycle_id, "goal": goal[:80]})
+            try:
+                self._notify_n8n_feedback(goal, cycle_id, False, phase_outputs)
+                log_json("INFO", "n8n_early_exit_feedback_ok", details={"cycle_id": cycle_id})
+            except Exception as exc:
+                log_json("WARN", "n8n_early_exit_feedback_failed", details={"error": str(exc), "cycle_id": cycle_id})
             return early_return
 
         reflection = self._run_reflection_phase(verification, skill_context, goal_type, cycle_id, phase_outputs)
@@ -1931,11 +810,11 @@ class LoopOrchestrator:
         Returns:
             A dict with the following keys:
 
-            * ``"goal"`` (str) — the original goal string.
-            * ``"stop_reason"`` (str) — why the loop terminated.  One of the
+            * ``"goal"`` (str) -- the original goal string.
+            * ``"stop_reason"`` (str) -- why the loop terminated.  One of the
               policy-defined reasons, a cycle-level ``"INVALID_OUTPUT"``, or
               ``"MAX_CYCLES"`` when the hard limit was reached.
-            * ``"history"`` (list[dict]) — list of cycle-result dicts in
+            * ``"history"`` (list[dict]) -- list of cycle-result dicts in
               execution order, each as returned by :meth:`run_cycle`.
 
         Example::

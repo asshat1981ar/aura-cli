@@ -56,7 +56,7 @@ def _arg_annotation(arg: ast.arg) -> str:
         return ""
     try:
         return ast.unparse(arg.annotation)
-    except Exception:
+    except (ValueError, TypeError):
         return ""
 
 
@@ -80,7 +80,7 @@ def _build_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
         if di >= 0:
             try:
                 param += f" = {ast.unparse(args.defaults[di])}"
-            except Exception:
+            except (ValueError, TypeError):
                 param += " = ..."
         parts.append(param)
 
@@ -104,7 +104,7 @@ def _build_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     if node.returns:
         try:
             sig += f" -> {ast.unparse(node.returns)}"
-        except Exception:
+        except (ValueError, TypeError):
             pass
     return sig
 
@@ -332,7 +332,7 @@ def generate_module_summary(
         if summary:
             db.update_file_summary(file_id, summary)
         return summary
-    except Exception as exc:
+    except (OSError, RuntimeError, ValueError, ConnectionError, TimeoutError) as exc:
         logger.debug("generate_module_summary failed: %s", exc)
         return None
 
@@ -394,7 +394,7 @@ def generate_function_intents(
                         # fallback: store the raw response for first symbol in batch
                         summary = response.strip()
                     results[db_id] = summary
-        except Exception as exc:
+        except (OSError, RuntimeError, ValueError, ConnectionError, TimeoutError) as exc:
             logger.debug("generate_function_intents batch failed: %s", exc)
             # Fill with empty strings so callers know the IDs were processed
             for sym in batch:
@@ -547,7 +547,7 @@ class SemanticScanner:
             for call in calls:
                 try:
                     db.insert_call_site(sym_id, call["callee_name"], call["line"])
-                except Exception:
+                except (OSError, KeyError, TypeError):
                     pass
 
             sym_copy = dict(sym)
@@ -729,7 +729,7 @@ class SemanticScanner:
                 cwd=str(self.project_root),
                 stderr=subprocess.DEVNULL,
             ).decode().strip()
-        except Exception:
+        except (OSError, subprocess.SubprocessError):
             # git unavailable — do a full scan
             return self.scan_full()
 
@@ -748,7 +748,7 @@ class SemanticScanner:
                 cwd=str(self.project_root),
                 stderr=subprocess.DEVNULL,
             ).decode().strip()
-        except Exception:
+        except (OSError, subprocess.SubprocessError):
             # SHA might be orphaned; do a full scan
             return self.scan_full(git_sha=current_sha)
 

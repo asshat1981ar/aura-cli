@@ -17,6 +17,7 @@ from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.sadd.mcp_tool_bridge import MCPToolBridge
+    from core.sadd.n8n_pipeline_bridge import N8nPipelineBridge
 
 from core.logging_utils import log_json
 from core.sadd.sub_agent_runner import SubAgentRunner
@@ -57,7 +58,10 @@ def create_orchestrator_factory(
             _model = ModelAdapter()
         else:
             _model = model_adapter
-        agents = default_agents(brain, _model)
+        import json as _json
+        _config_path = _root / "aura.config.json"
+        _file_config = _json.loads(_config_path.read_text()) if _config_path.exists() else {}
+        agents = default_agents(brain, _model, config=_file_config)
         return LoopOrchestrator(
             agents=agents,
             brain=brain,
@@ -65,6 +69,9 @@ def create_orchestrator_factory(
             memory_store=_store,
             project_root=_root,
             policy=Policy(max_cycles=10),
+            auto_provision_mcp=True,
+            auto_start_mcp_servers=True,
+            debugger=agents.get("debugger"),
         )
 
     return _factory
@@ -81,6 +88,7 @@ class SessionCoordinator:
         config: SessionConfig = SessionConfig(),
         session_store: Any = None,
         mcp_bridge: Optional["MCPToolBridge"] = None,
+        n8n_bridge: Optional["N8nPipelineBridge"] = None,
     ) -> None:
         self._spec = design_spec
         self._orchestrator_factory = orchestrator_factory
@@ -94,6 +102,39 @@ class SessionCoordinator:
         self._retried: set[str] = set()
         self._store = session_store
         self._mcp_bridge = mcp_bridge
+        self._n8n_bridge = n8n_bridge
+
+    # ------------------------------------------------------------------
+    # n8n webhook integration
+    # ------------------------------------------------------------------
+
+    def _notify_n8n_sadd_event(self, event_type: str, payload: dict) -> None:
+        """POST SADD lifecycle events to n8n webhooks (best-effort)."""
+        try:
+            import json
+            import urllib.request
+
+            config_path = Path("aura.config.json")  # Use project root
+            if not config_path.exists():
+                return
+            config = json.loads(config_path.read_text())
+            n8n_cfg = config.get("n8n_connector", {})
+            if not n8n_cfg.get("enabled", False):
+                return
+
+            # Route to appropriate webhook
+            if event_type.startswith("session."):
+                url = n8n_cfg.get("session_manager_webhook", "")
+            else:
+                url = n8n_cfg.get("workstream_monitor_webhook", "")
+            if not url:
+                return
+
+            data = json.dumps({"event_type": event_type, "session_id": self._session_id, "payload": payload}).encode()
+            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Public API
@@ -111,6 +152,9 @@ class SessionCoordinator:
             self._spec.title,
         )
         print(f"🚀 SADD session {self._session_id} starting — {len(self._spec.workstreams)} workstreams")
+        self._notify_n8n_sadd_event("session.started", {"design_title": self._spec.title, "total_workstreams": len(self._spec.workstreams)})
+        if self._n8n_bridge:
+            self._n8n_bridge.notify_session("session.started", {"session_id": self._session_id, "design_title": self._spec.title, "total_workstreams": len(self._spec.workstreams)})
 
         # Persist session if store is available.
         if self._store:
@@ -145,7 +189,7 @@ class SessionCoordinator:
                     ws_id = futures[future]
                     try:
                         result = future.result()
-                    except Exception as exc:
+                    except Exception as exc:  # Catch-all: future can propagate any exception from worker thread
                         result = WorkstreamResult(
                             ws_id=ws_id,
                             status="failed",
@@ -162,7 +206,7 @@ class SessionCoordinator:
         if hasattr(self._brain, "forget_tagged"):
             try:
                 self._brain.forget_tagged(tag)
-            except Exception:
+            except (OSError, RuntimeError, KeyError):
                 self._logger.debug("Could not clean tagged memories for %s", tag)
 
         report = self._build_report(started_at)
@@ -171,10 +215,13 @@ class SessionCoordinator:
         if self._store:
             try:
                 self._store.save_report(self._session_id, report)
-            except Exception:
+            except (OSError, RuntimeError):
                 self._logger.debug("Could not save session report")
 
         print(f"✅ SADD session complete — {report.completed}/{report.total_workstreams} workstreams succeeded")
+        self._notify_n8n_sadd_event("session.completed", report.to_dict())
+        if self._n8n_bridge:
+            self._n8n_bridge.notify_session("session.completed", {"session_id": self._session_id, **{k: getattr(report, k) for k in ("completed", "failed", "skipped", "elapsed_s")}})
         return report
 
     def resume(
@@ -224,7 +271,7 @@ class SessionCoordinator:
         if self._store:
             try:
                 self._store.update_status(self._session_id, "running")
-            except Exception:
+            except (OSError, RuntimeError):
                 self._logger.debug("Could not update session status for resume")
 
         with concurrent.futures.ThreadPoolExecutor(
@@ -251,7 +298,7 @@ class SessionCoordinator:
                     ws_id = futures[future]
                     try:
                         result = future.result()
-                    except Exception as exc:
+                    except Exception as exc:  # Catch-all: future can propagate any exception from worker thread
                         result = WorkstreamResult(
                             ws_id=ws_id,
                             status="failed",
@@ -268,7 +315,7 @@ class SessionCoordinator:
         if hasattr(self._brain, "forget_tagged"):
             try:
                 self._brain.forget_tagged(tag)
-            except Exception:
+            except (OSError, RuntimeError, KeyError):
                 self._logger.debug("Could not clean tagged memories for %s", tag)
 
         report = self._build_report(started_at)
@@ -276,7 +323,7 @@ class SessionCoordinator:
         if self._store:
             try:
                 self._store.save_report(self._session_id, report)
-            except Exception:
+            except (OSError, RuntimeError):
                 self._logger.debug("Could not save session report")
 
         print(
@@ -355,6 +402,9 @@ class SessionCoordinator:
             result.elapsed_s,
         )
         print(f"✅ [{ws_id}] Done: {self._graph.get_node(ws_id).spec.title} ({result.elapsed_s:.1f}s)")
+        self._notify_n8n_sadd_event("workstream.completed", {"ws_id": ws_id, "cycles_used": result.cycles_used, "elapsed_s": result.elapsed_s, "changed_files": result.changed_files})
+        if self._n8n_bridge:
+            self._n8n_bridge.notify_workstream("workstream.completed", {"session_id": self._session_id, "ws_id": ws_id, "cycles_used": result.cycles_used, "elapsed_s": result.elapsed_s})
         self._checkpoint_and_log(ws_id, "workstream_completed")
 
     def _handle_failure(
@@ -389,6 +439,9 @@ class SessionCoordinator:
             assert self._graph is not None
             self._graph.mark_failed(ws_id, result.error or "unknown error")
         self._logger.error("SADD workstream %s failed permanently: %s", ws_id, result.error)
+        self._notify_n8n_sadd_event("workstream.failed", {"ws_id": ws_id, "error": result.error})
+        if self._n8n_bridge:
+            self._n8n_bridge.notify_workstream("workstream.failed", {"session_id": self._session_id, "ws_id": ws_id, "error": result.error})
         print(f"❌ [{ws_id}] Failed: {result.error or 'unknown error'}")
 
         if self._config.fail_fast:
@@ -416,7 +469,7 @@ class SessionCoordinator:
                 for fp in result.changed_files:
                     self._store.record_artifact(self._session_id, ws_id, fp)
             self._store.log_event(self._session_id, ws_id, event_type, payload)
-        except Exception:
+        except (OSError, RuntimeError, KeyError, TypeError):
             self._logger.debug("Checkpoint/log failed for %s", ws_id)
 
     # ------------------------------------------------------------------

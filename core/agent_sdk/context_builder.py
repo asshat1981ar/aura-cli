@@ -130,7 +130,7 @@ class ContextBuilder:
                 if any(w in m.lower() for w in goal_words)
             ]
             return relevant or memories[:5]
-        except Exception:
+        except (AttributeError, TypeError, KeyError, RuntimeError):
             return []
 
     def _get_available_mcp_categories(self) -> List[str]:
@@ -154,7 +154,7 @@ class ContextBuilder:
                 "relevant_symbols": relevant,
                 "impact_radius": impact,
             }
-        except Exception:
+        except (AttributeError, TypeError, KeyError, RuntimeError):
             return {}
 
     def build(self, goal: str) -> Dict[str, Any]:

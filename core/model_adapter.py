@@ -783,10 +783,15 @@ class ModelAdapter:
             raise ValueError("OpenRouter-compatible API key not set for OpenRouter call.")
 
         # Select model based on task routing from settings.json
+        import random
         routing = config.get("model_routing", {})
         selected_model = None
         if route_key:
-            selected_model = routing.get(route_key)
+            model_or_list = routing.get(route_key)
+            if isinstance(model_or_list, list) and model_or_list:
+                selected_model = random.choice(model_or_list)
+            else:
+                selected_model = model_or_list
         if not selected_model:
             selected_model = routing.get("fast", "google/gemini-2.0-flash-001")
 

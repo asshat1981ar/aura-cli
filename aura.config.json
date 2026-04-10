@@ -189,11 +189,18 @@
     "base_url": "http://localhost:5678",
     "enabled": true,
     "notification_webhook": "http://localhost:5678/webhook/aura-notify",
-    "quality_gate_enabled": false,
+    "quality_gate_enabled": true,
     "quality_gate_webhook": "http://localhost:5678/webhook/plan-review",
     "feedback_loop_webhook": "http://localhost:5678/webhook/aura-reflect",
+    "feedback_loop_enabled": true,
     "pipeline_coordinator_webhook": "http://localhost:5678/webhook/pipeline-coordinate",
     "circuit_breaker_enabled": true,
-    "observability_webhook": "http://localhost:5678/webhook/pipeline-trace"
+    "observability_webhook": "http://localhost:5678/webhook/pipeline-trace",
+    "trace_enabled": true,
+    "goal_route_webhook": "http://localhost:5678/webhook/goal-route",
+    "route_complex_through_p3": true,
+    "timeout_seconds": 10.0,
+    "session_manager_webhook": "http://localhost:5678/webhook/sadd-session",
+    "workstream_monitor_webhook": "http://localhost:5678/webhook/sadd-workstream"
   }
 }

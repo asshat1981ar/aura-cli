@@ -165,3 +165,15 @@ if __name__ == '__main__':
                 log_json("ERROR", "scaffolder_structure_validation_error", details={"error": str(ve), "name": name})
             except Exception as e:
                 log_json("ERROR", "scaffolder_create_from_structure_unexpected_error", details={"error": str(e), "name": name})
+
+    def run(self, input_data: dict) -> dict:
+        """Uniform execution interface for the orchestrator loop."""
+        project_name = input_data.get("project_name", "new_project")
+        description = input_data.get("description", "")
+
+        result = self.scaffold_project(project_name, description)
+
+        return {
+            "status": "success",
+            "result": result
+        }

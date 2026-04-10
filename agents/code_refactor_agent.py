@@ -81,6 +81,20 @@ class DuplicateCodeReducer:
             'rollback_required': False
         }
 
+    def run(self, input_data: dict) -> dict:
+        """Uniform execution interface for the orchestrator loop."""
+        self.analyze_codebase()
+        abstractions = self.propose_abstractions()
+
+        for abstraction in abstractions:
+            self.refactor_for_reuse(abstraction)
+
+        result = self.validate_changes()
+        return {
+            "status": "success" if result['success'] else "failure",
+            "refactoring_result": result
+        }
+
 def main():
     reducer = DuplicateCodeReducer("./")
     reducer.analyze_codebase()

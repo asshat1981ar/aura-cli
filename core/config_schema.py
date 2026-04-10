@@ -6,7 +6,7 @@ preventing AttributeError deep in the call stack.
 
 from __future__ import annotations
 
-from typing import Dict, Any, Optional, Literal
+from typing import Dict, Any, List, Optional, Literal, Union
 
 pydantic_available = False
 try:
@@ -33,14 +33,19 @@ class SemanticMemoryConfig(BaseModel if pydantic_available else object):
 
 
 class ModelRoutingConfig(BaseModel if pydantic_available else object):
-    """Model routing configuration for different task types."""
-    code_generation: str = "google/gemini-2.0-flash-exp:free"
-    planning: str = "google/gemini-2.0-flash-exp:free"
-    analysis: str = "google/gemini-2.0-flash-exp:free"
-    critique: str = "google/gemini-2.0-flash-exp:free"
-    embedding: str = "openai/text-embedding-3-small"
-    fast: str = "google/gemini-2.0-flash-exp:free"
-    quality: str = "anthropic/claude-3.5-sonnet"
+    """Model routing configuration for different task types.
+
+    Each route key accepts either a single model string or a list of model
+    strings.  When a list is provided, the caller selects one at random per
+    invocation (see :meth:`~core.model_adapter.ModelAdapter.call_openrouter`).
+    """
+    code_generation: Union[str, List[str]] = "google/gemini-2.0-flash-exp:free"
+    planning: Union[str, List[str]] = "google/gemini-2.0-flash-exp:free"
+    analysis: Union[str, List[str]] = "google/gemini-2.0-flash-exp:free"
+    critique: Union[str, List[str]] = "google/gemini-2.0-flash-exp:free"
+    embedding: Union[str, List[str]] = "openai/text-embedding-3-small"
+    fast: Union[str, List[str]] = "google/gemini-2.0-flash-exp:free"
+    quality: Union[str, List[str]] = "anthropic/claude-3.5-sonnet"
 
 
 class BeadsConfig(BaseModel if pydantic_available else object):

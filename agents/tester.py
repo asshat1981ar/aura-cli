@@ -104,3 +104,17 @@ class TesterAgent:
                 "metadata": sandbox_result.metadata
             }
         }
+
+    def run(self, input_data: dict) -> dict:
+        """Uniform execution interface for the orchestrator loop."""
+        code = input_data.get("code", "")
+        context = input_data.get("context", "")
+
+        tests = self.generate_tests(code, context)
+        evaluation = self.evaluate_code(code, tests)
+
+        return {
+            "status": "success",
+            "tests_generated": tests,
+            "evaluation": evaluation
+        }

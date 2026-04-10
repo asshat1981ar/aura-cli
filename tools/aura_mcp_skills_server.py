@@ -292,6 +292,23 @@ _SKILL_METADATA_OVERRIDES: Dict[str, Dict[str, Any]] = {
             "project_root": {"type": "string", "description": "Path to project root to analyze", "default": "."},
         },
     },
+    "prompt_forge": {
+        "description": "Semantic-aware prompt generation: analyse code for patterns (async, recursion, loops, error handling, network, state) and assemble optimised prompts using 6 task templates.",
+        "input": {
+            "task": {"type": "string", "description": "Natural-language description of the coding task", "required": True},
+            "template": {"type": "string", "description": "Prompt template: function, bugfix, refactor, feature, architecture, or test", "default": "function"},
+            "language": {"type": "string", "description": "Target programming language"},
+            "code_context": {"type": "string", "description": "Existing code snippet for semantic analysis"},
+            "file_tree": {"type": "string", "description": "Project file-tree listing for context detection"},
+            "constraints": {"type": "string", "description": "Hard constraints the solution must satisfy"},
+            "test_cases": {"type": "string", "description": "Expected test cases or examples"},
+            "environment": {"type": "string", "description": "Runtime environment description"},
+            "chain_of_thought": {"type": "boolean", "description": "Enable step-by-step reasoning", "default": True},
+            "multi_candidate": {"type": "boolean", "description": "Request multiple solution candidates", "default": False},
+            "iterative_refine": {"type": "boolean", "description": "Enable self-review loop", "default": True},
+            "project_root": {"type": "string", "description": "Project root for auto file-tree detection", "default": "."},
+        },
+    },
 }
 
 

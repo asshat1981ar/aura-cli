@@ -95,6 +95,26 @@
       "headers": {
         "Authorization": "Bearer ${MCP_API_TOKEN}"
       }
+    },
+    "aura-control": {
+      "type": "http",
+      "url": "http://127.0.0.1:8003",
+      "headers": {}
+    },
+    "aura-agentic-loop": {
+      "type": "http",
+      "url": "http://127.0.0.1:8006",
+      "headers": {}
+    },
+    "aura-copilot": {
+      "type": "http",
+      "url": "http://127.0.0.1:8007",
+      "headers": {}
+    },
+    "aura-sadd": {
+      "type": "http",
+      "url": "http://127.0.0.1:8020",
+      "headers": {}
     }
   }
 }

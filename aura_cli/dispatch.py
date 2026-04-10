@@ -904,10 +904,10 @@ def _handle_sadd_run_dispatch(ctx: DispatchContext) -> int:
             _model = runtime.get("model_adapter")
 
             config = SessionConfig(
-                max_parallel=getattr(args, "max_parallel", 3),
-                max_cycles_per_workstream=getattr(args, "max_cycles", 5),
+                max_parallel=getattr(args, "max_parallel", None) or 3,
+                max_cycles_per_workstream=getattr(args, "max_cycles", None) or 5,
                 dry_run=False,
-                fail_fast=getattr(args, "fail_fast", False),
+                fail_fast=getattr(args, "fail_fast", False) or False,
             )
             factory = create_orchestrator_factory(
                 brain=_brain, project_root=ctx.project_root, model_adapter=_model,
@@ -918,6 +918,14 @@ def _handle_sadd_run_dispatch(ctx: DispatchContext) -> int:
                 mcp_bridge = MCPToolBridge()
             except (ImportError, OSError):
                 mcp_bridge = None
+            try:
+                from core.sadd.n8n_pipeline_bridge import N8nPipelineBridge
+                import json as _json
+                _config_path = ctx.project_root / "aura.config.json"
+                _file_config = _json.loads(_config_path.read_text()) if _config_path.exists() else {}
+                n8n_bridge = N8nPipelineBridge(_file_config)
+            except (ImportError, OSError):
+                n8n_bridge = None
             coordinator = SessionCoordinator(
                 design_spec=design_spec,
                 orchestrator_factory=factory,
@@ -925,6 +933,7 @@ def _handle_sadd_run_dispatch(ctx: DispatchContext) -> int:
                 config=config,
                 session_store=store,
                 mcp_bridge=mcp_bridge,
+                n8n_bridge=n8n_bridge,
             )
             report = coordinator.run()
             if as_json:
@@ -1060,6 +1069,14 @@ def _handle_sadd_resume_dispatch(ctx: DispatchContext) -> int:
         mcp_bridge = MCPToolBridge()
     except (ImportError, OSError):
         mcp_bridge = None
+    try:
+        from core.sadd.n8n_pipeline_bridge import N8nPipelineBridge
+        import json as _json
+        _config_path = ctx.project_root / "aura.config.json"
+        _file_config = _json.loads(_config_path.read_text()) if _config_path.exists() else {}
+        n8n_bridge = N8nPipelineBridge(_file_config)
+    except (ImportError, OSError):
+        n8n_bridge = None
     coordinator = SessionCoordinator(
         design_spec=spec,
         orchestrator_factory=factory,
@@ -1067,6 +1084,7 @@ def _handle_sadd_resume_dispatch(ctx: DispatchContext) -> int:
         config=config,
         session_store=store,
         mcp_bridge=mcp_bridge,
+        n8n_bridge=n8n_bridge,
     )
     # Restore the original session_id so all persistence uses the right key.
     coordinator._session_id = session_id  # noqa: SLF001

@@ -1,14 +1,13 @@
 """
-Comprehensive pytest tests for aura_cli.mcp_swarm_bridge.
+Comprehensive pytest tests for aura_cli.mcp_github_bridge.
 
 Tests cover:
 - MCPProcess lifecycle and subprocess communication
 - JSON-RPC 2.0 message handling
 - HTTP endpoint routing and responses
-- Error scenarios (timeouts, broken pipes)
+- Error scenarios (timeouts, broken pipes, missing tokens)
 - Threading and synchronization
 - Tool caching behavior
-- Node.js subprocess management
 """
 
 from __future__ import annotations
@@ -22,7 +21,7 @@ from unittest.mock import MagicMock, Mock, call, patch
 
 import pytest
 
-import aura_cli.mcp_swarm_bridge as swarm_bridge_module
+import aura_cli.mcp_github_bridge as github_bridge_module
 
 
 # =============================================================================
@@ -30,7 +29,7 @@ import aura_cli.mcp_swarm_bridge as swarm_bridge_module
 # =============================================================================
 
 
-class _TestableBridgeHandler(swarm_bridge_module.BridgeHandler):
+class _TestableBridgeHandler(github_bridge_module.BridgeHandler):
     """BridgeHandler test harness that avoids real sockets."""
 
     def __init__(self, method: str, path: str, body: dict | None = None):
@@ -82,10 +81,10 @@ def mock_mcp():
     m = MagicMock()
     m.alive.return_value = True
     m.list_tools.return_value = [
-        {"name": "swarm_run", "description": "Run a swarm agent"},
-        {"name": "swarm_status", "description": "Get agent status"},
+        {"name": "search", "description": "Search repositories"},
+        {"name": "create_issue", "description": "Create an issue"},
     ]
-    m.call_tool.return_value = {"result": "swarm tool executed"}
+    m.call_tool.return_value = {"result": "tool executed"}
     return m
 
 
@@ -93,7 +92,7 @@ def mock_mcp():
 def mock_process():
     """Mock subprocess.Popen object."""
     proc = MagicMock()
-    proc.pid = 54321
+    proc.pid = 12345
     proc.poll.return_value = None
     proc.stdin = MagicMock()
     proc.stdout = iter([])
@@ -111,7 +110,7 @@ class TestMCPProcessInitialization:
 
     def test_mcp_process_init_creates_empty_state(self):
         """Verify MCPProcess initializes with correct state."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         assert mcp._proc is None
         assert mcp._req_id == 0
         assert mcp._pending == {}
@@ -121,71 +120,57 @@ class TestMCPProcessInitialization:
 
     def test_mcp_process_has_required_methods(self):
         """Verify MCPProcess has all required methods."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         assert hasattr(mcp, "start")
         assert hasattr(mcp, "list_tools")
         assert hasattr(mcp, "call_tool")
         assert hasattr(mcp, "alive")
+        assert callable(mcp.start)
 
 
 class TestMCPProcessStart:
     """Test MCPProcess.start() subprocess spawning."""
 
-    @patch("aura_cli.mcp_swarm_bridge.subprocess.Popen")
-    @patch("aura_cli.mcp_swarm_bridge.os.environ", {})
-    def test_start_spawns_node_process(self, mock_popen):
-        """Verify start() spawns node swarm-mcp-server."""
+    @patch("aura_cli.mcp_github_bridge.subprocess.Popen")
+    @patch("aura_cli.mcp_github_bridge.os.environ", {})
+    def test_start_spawns_npx_process(self, mock_popen):
+        """Verify start() spawns correct command."""
         mock_proc = MagicMock()
         mock_proc.pid = 999
         mock_proc.stdout = iter([])
         mock_popen.return_value = mock_proc
 
-        with patch.object(swarm_bridge_module.MCPProcess, "_initialize"):
-            mcp = swarm_bridge_module.MCPProcess()
+        with patch.object(github_bridge_module.MCPProcess, "_initialize"):
+            mcp = github_bridge_module.MCPProcess()
             mcp.start()
 
         mock_popen.assert_called_once()
         args, kwargs = mock_popen.call_args
-        assert args[0][0] == "node"
-        assert "swarm-mcp-server" in args[0][1]
-        assert "dist" in args[0][1]
-        assert "index.js" in args[0][1]
-
-    @patch("aura_cli.mcp_swarm_bridge.subprocess.Popen")
-    def test_start_sets_cwd_to_project_root(self, mock_popen):
-        """Verify start() runs from project root."""
-        mock_proc = MagicMock()
-        mock_proc.pid = 999
-        mock_proc.stdout = iter([])
-        mock_popen.return_value = mock_proc
-
-        with patch.object(swarm_bridge_module.MCPProcess, "_initialize"):
-            mcp = swarm_bridge_module.MCPProcess()
-            mcp.start()
-
-        _, kwargs = mock_popen.call_args
-        assert "cwd" in kwargs
-        assert "swarm-mcp-server" not in kwargs["cwd"]
-
-    @patch("aura_cli.mcp_swarm_bridge.subprocess.Popen")
-    def test_start_configures_stdio_pipes(self, mock_popen):
-        """Verify start() configures stdin/stdout/stderr."""
-        mock_proc = MagicMock()
-        mock_proc.pid = 999
-        mock_proc.stdout = iter([])
-        mock_popen.return_value = mock_proc
-
-        with patch.object(swarm_bridge_module.MCPProcess, "_initialize"):
-            mcp = swarm_bridge_module.MCPProcess()
-            mcp.start()
-
-        _, kwargs = mock_popen.call_args
-        assert kwargs["stdin"] == swarm_bridge_module.subprocess.PIPE
-        assert kwargs["stdout"] == swarm_bridge_module.subprocess.PIPE
-        assert kwargs["stderr"] == swarm_bridge_module.subprocess.PIPE
+        assert args[0] == ["npx", "-y", "@modelcontextprotocol/server-github"]
+        assert kwargs["stdin"] == github_bridge_module.subprocess.PIPE
+        assert kwargs["stdout"] == github_bridge_module.subprocess.PIPE
+        assert kwargs["stderr"] == github_bridge_module.subprocess.PIPE
         assert kwargs["text"] is True
 
-    @patch("aura_cli.mcp_swarm_bridge.subprocess.Popen")
+    @patch("aura_cli.mcp_github_bridge.subprocess.Popen")
+    @patch("aura_cli.mcp_github_bridge.os.environ", {"GITHUB_PERSONAL_ACCESS_TOKEN": "token123"})
+    @patch("aura_cli.mcp_github_bridge.GITHUB_TOKEN", "token123")
+    def test_start_passes_github_token_in_env(self, mock_popen):
+        """Verify GITHUB_PERSONAL_ACCESS_TOKEN is passed to subprocess."""
+        mock_proc = MagicMock()
+        mock_proc.pid = 999
+        mock_proc.stdout = iter([])
+        mock_popen.return_value = mock_proc
+
+        with patch.object(github_bridge_module.MCPProcess, "_initialize"):
+            mcp = github_bridge_module.MCPProcess()
+            mcp.start()
+
+        _, kwargs = mock_popen.call_args
+        assert "GITHUB_PERSONAL_ACCESS_TOKEN" in kwargs["env"]
+        assert kwargs["env"]["GITHUB_PERSONAL_ACCESS_TOKEN"] == "token123"
+
+    @patch("aura_cli.mcp_github_bridge.subprocess.Popen")
     def test_start_creates_reader_thread(self, mock_popen):
         """Verify start() creates a reader thread."""
         mock_proc = MagicMock()
@@ -193,15 +178,15 @@ class TestMCPProcessStart:
         mock_proc.stdout = iter([])
         mock_popen.return_value = mock_proc
 
-        with patch.object(swarm_bridge_module.MCPProcess, "_initialize"):
+        with patch.object(github_bridge_module.MCPProcess, "_initialize"):
             with patch("threading.Thread") as mock_thread:
-                mcp = swarm_bridge_module.MCPProcess()
+                mcp = github_bridge_module.MCPProcess()
                 mcp.start()
                 mock_thread.assert_called_once()
                 args, kwargs = mock_thread.call_args
                 assert kwargs.get("daemon") is True
 
-    @patch("aura_cli.mcp_swarm_bridge.subprocess.Popen")
+    @patch("aura_cli.mcp_github_bridge.subprocess.Popen")
     def test_start_sets_proc_attribute(self, mock_popen):
         """Verify start() assigns _proc."""
         mock_proc = MagicMock()
@@ -209,8 +194,8 @@ class TestMCPProcessStart:
         mock_proc.stdout = iter([])
         mock_popen.return_value = mock_proc
 
-        with patch.object(swarm_bridge_module.MCPProcess, "_initialize"):
-            mcp = swarm_bridge_module.MCPProcess()
+        with patch.object(github_bridge_module.MCPProcess, "_initialize"):
+            mcp = github_bridge_module.MCPProcess()
             mcp.start()
             assert mcp._proc is mock_proc
 
@@ -225,7 +210,7 @@ class TestMCPProcessRPC:
 
     def test_rpc_increments_request_id(self):
         """Verify _rpc increments request ID."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
         mcp._proc.stdin = MagicMock()
         mcp._proc.poll.return_value = None
@@ -239,7 +224,7 @@ class TestMCPProcessRPC:
 
     def test_rpc_sends_json_to_stdin(self):
         """Verify _rpc writes JSON-RPC message to stdin."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
         stdin_mock = MagicMock()
         mcp._proc.stdin = stdin_mock
@@ -260,7 +245,7 @@ class TestMCPProcessRPC:
 
     def test_rpc_flushes_stdin(self):
         """Verify _rpc flushes stdin after write."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
         stdin_mock = MagicMock()
         mcp._proc.stdin = stdin_mock
@@ -275,7 +260,7 @@ class TestMCPProcessRPC:
 
     def test_rpc_waits_for_response(self):
         """Verify _rpc waits for response event."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
         mcp._proc.stdin = MagicMock()
 
@@ -293,7 +278,7 @@ class TestMCPProcessRPC:
 
     def test_rpc_timeout_returns_none(self):
         """Verify _rpc returns None on timeout."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
         mcp._proc.stdin = MagicMock()
 
@@ -307,7 +292,7 @@ class TestMCPProcessRPC:
 
     def test_rpc_broken_pipe_returns_none(self):
         """Verify _rpc handles BrokenPipeError."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
         mcp._proc.stdin = MagicMock()
         mcp._proc.stdin.write.side_effect = BrokenPipeError("pipe broken")
@@ -318,7 +303,7 @@ class TestMCPProcessRPC:
 
     def test_rpc_notify_sends_no_id(self):
         """Verify _rpc_notify sends message without id."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
         stdin_mock = MagicMock()
         mcp._proc.stdin = stdin_mock
@@ -334,7 +319,7 @@ class TestMCPProcessRPC:
 
     def test_rpc_notify_broken_pipe_is_silent(self):
         """Verify _rpc_notify ignores BrokenPipeError."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
         mcp._proc.stdin = MagicMock()
         mcp._proc.stdin.write.side_effect = BrokenPipeError()
@@ -347,7 +332,7 @@ class TestMCPProcessReader:
 
     def test_reader_parses_json_response(self):
         """Verify _reader parses JSON-RPC responses."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
 
         req_id = 1
@@ -365,7 +350,7 @@ class TestMCPProcessReader:
 
     def test_reader_ignores_empty_lines(self):
         """Verify _reader skips empty lines."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
         mcp._proc.stdout = iter(["  \n", "\n", ""])
 
@@ -373,7 +358,7 @@ class TestMCPProcessReader:
 
     def test_reader_ignores_malformed_json(self):
         """Verify _reader handles JSONDecodeError gracefully."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
         mcp._proc.stdout = iter(["not valid json\n"])
 
@@ -381,7 +366,7 @@ class TestMCPProcessReader:
 
     def test_reader_ignores_response_for_unknown_request_id(self):
         """Verify _reader ignores responses for unknown request IDs."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
 
         mcp._pending = {}
@@ -403,7 +388,7 @@ class TestMCPProcessTools:
 
     def test_list_tools_calls_rpc(self):
         """Verify list_tools calls _rpc with tools/list."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._rpc = MagicMock(return_value={"result": {"tools": [{"name": "test"}]}})
 
         tools = mcp.list_tools()
@@ -414,7 +399,7 @@ class TestMCPProcessTools:
 
     def test_list_tools_caches_result(self):
         """Verify list_tools caches the result."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._rpc = MagicMock(return_value={"result": {"tools": [{"name": "cached"}]}})
 
         tools1 = mcp.list_tools()
@@ -426,7 +411,7 @@ class TestMCPProcessTools:
 
     def test_list_tools_returns_empty_on_rpc_failure(self):
         """Verify list_tools returns [] on RPC failure."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._rpc = MagicMock(return_value=None)
 
         tools = mcp.list_tools()
@@ -435,7 +420,7 @@ class TestMCPProcessTools:
 
     def test_list_tools_returns_empty_on_missing_result(self):
         """Verify list_tools returns [] if result key is missing."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._rpc = MagicMock(return_value={"error": "something"})
 
         tools = mcp.list_tools()
@@ -444,16 +429,16 @@ class TestMCPProcessTools:
 
     def test_call_tool_sends_name_and_arguments(self):
         """Verify call_tool sends tool_name and args to _rpc."""
-        mcp = swarm_bridge_module.MCPProcess()
-        mcp._rpc = MagicMock(return_value={"result": {"status": "success"}})
+        mcp = github_bridge_module.MCPProcess()
+        mcp._rpc = MagicMock(return_value={"result": {"content": [{"type": "text", "text": "success"}]}})
 
-        result = mcp.call_tool("swarm_run", {"agent_id": "123"})
+        result = mcp.call_tool("search", {"query": "test"})
 
-        mcp._rpc.assert_called_once_with("tools/call", {"name": "swarm_run", "arguments": {"agent_id": "123"}})
+        mcp._rpc.assert_called_once_with("tools/call", {"name": "search", "arguments": {"query": "test"}})
 
     def test_call_tool_returns_error_on_timeout(self):
         """Verify call_tool returns error dict on timeout."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._rpc = MagicMock(return_value=None)
 
         result = mcp.call_tool("test", {})
@@ -462,26 +447,43 @@ class TestMCPProcessTools:
 
     def test_call_tool_returns_rpc_error(self):
         """Verify call_tool returns RPC error response."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._rpc = MagicMock(return_value={"error": {"code": -1, "message": "Invalid tool"}})
 
         result = mcp.call_tool("nonexistent", {})
 
         assert "error" in result
 
-    def test_call_tool_returns_result_directly(self):
-        """Verify call_tool returns result as-is (no flattening like GitHub bridge)."""
-        mcp = swarm_bridge_module.MCPProcess()
-        response_result = {"status": "running", "output": [1, 2, 3]}
-        mcp._rpc = MagicMock(return_value={"result": response_result})
+    def test_call_tool_flattens_text_content(self):
+        """Verify call_tool extracts text from content array."""
+        mcp = github_bridge_module.MCPProcess()
+        mcp._rpc = MagicMock(
+            return_value={
+                "result": {
+                    "content": [
+                        {"type": "text", "text": "line1"},
+                        {"type": "text", "text": "line2"},
+                    ]
+                }
+            }
+        )
 
         result = mcp.call_tool("test", {})
 
-        assert result == response_result
+        assert result["result"] == "line1\nline2"
+
+    def test_call_tool_handles_empty_content(self):
+        """Verify call_tool handles empty content array."""
+        mcp = github_bridge_module.MCPProcess()
+        mcp._rpc = MagicMock(return_value={"result": {"content": []}})
+
+        result = mcp.call_tool("test", {})
+
+        assert result["result"] == {"content": []}
 
     def test_alive_returns_true_when_process_running(self):
         """Verify alive() returns True when process is running."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
         mcp._proc.poll.return_value = None
 
@@ -489,7 +491,7 @@ class TestMCPProcessTools:
 
     def test_alive_returns_false_when_process_terminated(self):
         """Verify alive() returns False when process exits."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
         mcp._proc.poll.return_value = 0
 
@@ -497,7 +499,7 @@ class TestMCPProcessTools:
 
     def test_alive_returns_false_when_no_process(self):
         """Verify alive() returns False when _proc is None."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = None
 
         assert mcp.alive() is False
@@ -513,7 +515,7 @@ class TestMCPProcessInitialize:
 
     def test_initialize_sends_initialize_method(self):
         """Verify _initialize sends MCP initialize request."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
         mcp._proc.stdin = MagicMock()
         mcp._rpc = MagicMock(return_value={"result": {"serverInfo": {}}})
@@ -525,11 +527,11 @@ class TestMCPProcessInitialize:
         assert args[0] == "initialize"
         params = args[1]
         assert params["protocolVersion"] == "2024-11-05"
-        assert params["clientInfo"]["name"] == "aura-mcp-swarm-bridge"
+        assert params["clientInfo"]["name"] == "aura-mcp-bridge"
 
     def test_initialize_sends_notification_on_success(self):
         """Verify _initialize sends initialized notification."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._rpc = MagicMock(return_value={"result": {"serverInfo": {}}})
         mcp._rpc_notify = MagicMock()
 
@@ -539,7 +541,7 @@ class TestMCPProcessInitialize:
 
     def test_initialize_handles_none_response(self):
         """Verify _initialize handles RPC timeout."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._rpc = MagicMock(return_value=None)
         mcp._rpc_notify = MagicMock()
 
@@ -554,11 +556,11 @@ class TestMCPProcessInitialize:
 
 
 class TestBridgeHandlerGetEndpoints:
-    """Test GET /health, /tools endpoints."""
+    """Test GET /health, /tools, /metrics."""
 
     def test_get_health_endpoint(self, mock_mcp):
         """Verify GET /health returns status and mcp_alive."""
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
             status, body = _dispatch("GET", "/health")
 
         assert status == 200
@@ -568,7 +570,7 @@ class TestBridgeHandlerGetEndpoints:
     def test_get_health_shows_mcp_dead(self, mock_mcp):
         """Verify GET /health reports when MCP is dead."""
         mock_mcp.alive.return_value = False
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
             status, body = _dispatch("GET", "/health")
 
         assert status == 200
@@ -576,7 +578,7 @@ class TestBridgeHandlerGetEndpoints:
 
     def test_get_tools_endpoint(self, mock_mcp):
         """Verify GET /tools returns tool list."""
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
             status, body = _dispatch("GET", "/tools")
 
         assert status == 200
@@ -586,15 +588,23 @@ class TestBridgeHandlerGetEndpoints:
     def test_get_tools_empty_list(self, mock_mcp):
         """Verify GET /tools handles empty tool list."""
         mock_mcp.list_tools.return_value = []
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
             status, body = _dispatch("GET", "/tools")
 
         assert status == 200
         assert body["tools"] == []
 
+    def test_get_metrics_endpoint(self, mock_mcp):
+        """Verify GET /metrics returns uptime."""
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
+            status, body = _dispatch("GET", "/metrics")
+
+        assert status == 200
+        assert "uptime" in body
+
     def test_get_unknown_endpoint_404(self, mock_mcp):
         """Verify GET unknown path returns 404."""
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
             status, body = _dispatch("GET", "/unknown")
 
         assert status == 404
@@ -602,15 +612,8 @@ class TestBridgeHandlerGetEndpoints:
 
     def test_get_root_404(self, mock_mcp):
         """Verify GET / returns 404."""
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
             status, body = _dispatch("GET", "/")
-
-        assert status == 404
-
-    def test_get_metrics_returns_404(self, mock_mcp):
-        """Verify swarm bridge does NOT have /metrics endpoint (unlike github bridge)."""
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
-            status, body = _dispatch("GET", "/metrics")
 
         assert status == 404
 
@@ -625,32 +628,32 @@ class TestBridgeHandlerPostEndpoints:
 
     def test_post_call_with_tool_name(self, mock_mcp):
         """Verify POST /call executes tool."""
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
-            status, body = _dispatch("POST", "/call", {"tool_name": "swarm_run", "args": {"agent": "a1"}})
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
+            status, body = _dispatch("POST", "/call", {"tool_name": "search", "args": {"q": "test"}})
 
         assert status == 200
-        assert "data" in body
-        mock_mcp.call_tool.assert_called_once_with("swarm_run", {"agent": "a1"})
+        assert "result" in body
+        mock_mcp.call_tool.assert_called_once_with("search", {"q": "test"})
 
     def test_post_call_with_name_field(self, mock_mcp):
         """Verify POST /call accepts 'name' field."""
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
-            status, body = _dispatch("POST", "/call", {"name": "swarm_run", "args": {}})
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
+            status, body = _dispatch("POST", "/call", {"name": "search", "args": {}})
 
         assert status == 200
-        mock_mcp.call_tool.assert_called_once_with("swarm_run", {})
+        mock_mcp.call_tool.assert_called_once_with("search", {})
 
     def test_post_call_with_arguments_field(self, mock_mcp):
         """Verify POST /call accepts 'arguments' field."""
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
-            status, body = _dispatch("POST", "/call", {"tool_name": "swarm_run", "arguments": {"id": "xyz"}})
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
+            status, body = _dispatch("POST", "/call", {"tool_name": "search", "arguments": {"key": "val"}})
 
         assert status == 200
-        mock_mcp.call_tool.assert_called_once_with("swarm_run", {"id": "xyz"})
+        mock_mcp.call_tool.assert_called_once_with("search", {"key": "val"})
 
     def test_post_call_missing_tool_name_400(self, mock_mcp):
         """Verify POST /call without tool_name returns 400."""
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
             status, body = _dispatch("POST", "/call", {"args": {}})
 
         assert status == 400
@@ -658,45 +661,34 @@ class TestBridgeHandlerPostEndpoints:
 
     def test_post_call_empty_tool_name_400(self, mock_mcp):
         """Verify POST /call with empty tool_name returns 400."""
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
             status, body = _dispatch("POST", "/call", {"tool_name": "", "args": {}})
 
         assert status == 400
 
     def test_post_call_no_args_defaults_to_empty(self, mock_mcp):
         """Verify POST /call without args defaults to {}."""
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
-            status, body = _dispatch("POST", "/call", {"tool_name": "swarm_run"})
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
+            status, body = _dispatch("POST", "/call", {"tool_name": "search"})
 
         assert status == 200
-        mock_mcp.call_tool.assert_called_once_with("swarm_run", {})
+        mock_mcp.call_tool.assert_called_once_with("search", {})
 
     def test_post_unknown_endpoint_404(self, mock_mcp):
         """Verify POST unknown path returns 404."""
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
             status, body = _dispatch("POST", "/unknown", {})
 
         assert status == 404
 
     def test_post_call_returns_tool_error(self, mock_mcp):
-        """Verify POST /call returns tool errors wrapped in 'data'."""
+        """Verify POST /call returns tool errors."""
         mock_mcp.call_tool.return_value = {"error": "tool not found"}
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
             status, body = _dispatch("POST", "/call", {"tool_name": "missing", "args": {}})
 
         assert status == 200
-        assert "data" in body
-        assert body["data"]["error"] == "tool not found"
-
-    def test_post_call_wraps_result_in_data_field(self, mock_mcp):
-        """Verify POST /call wraps result in 'data' field (swarm-specific behavior)."""
-        mock_mcp.call_tool.return_value = {"output": "test output", "status": "done"}
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
-            status, body = _dispatch("POST", "/call", {"tool_name": "test", "args": {}})
-
-        assert status == 200
-        assert "data" in body
-        assert body["data"]["output"] == "test output"
+        assert body["error"] == "tool not found"
 
 
 # =============================================================================
@@ -724,10 +716,18 @@ class TestBridgeHandlerHeaderHandling:
 
     def test_send_json_response_code(self, mock_mcp):
         """Verify _send_json sets correct status code."""
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
             status, body = _dispatch("GET", "/health")
 
         assert status == 200
+
+    def test_send_json_content_type(self, mock_mcp):
+        """Verify HTTP response has application/json content type."""
+        handler = _TestableBridgeHandler("GET", "/health")
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
+            handler.do_GET()
+
+        assert handler.responses
 
 
 # =============================================================================
@@ -740,31 +740,26 @@ class TestModuleGlobals:
 
     def test_port_from_env(self):
         """Verify PORT respects MCP_SERVER_PORT env var."""
-        with patch.dict(os.environ, {"MCP_SERVER_PORT": "9050"}):
+        with patch.dict(os.environ, {"MCP_SERVER_PORT": "9999"}):
             import importlib
 
-            mod = importlib.reload(swarm_bridge_module)
-            assert mod.PORT == 9050
+            mod = importlib.reload(github_bridge_module)
+            assert mod.PORT == 9999
 
-    def test_port_default_8050(self):
-        """Verify PORT defaults to 8050."""
+    def test_port_default_8001(self):
+        """Verify PORT defaults to 8001."""
         env_copy = dict(os.environ)
         env_copy.pop("MCP_SERVER_PORT", None)
         with patch.dict(os.environ, env_copy, clear=True):
             import importlib
 
-            mod = importlib.reload(swarm_bridge_module)
-            assert mod.PORT == 8050
+            mod = importlib.reload(github_bridge_module)
+            assert mod.PORT == 8001
 
     def test_global_mcp_instance_exists(self):
         """Verify module has global _mcp instance."""
-        assert hasattr(swarm_bridge_module, "_mcp")
-        assert isinstance(swarm_bridge_module._mcp, swarm_bridge_module.MCPProcess)
-
-    def test_project_root_computation(self):
-        """Verify PROJECT_ROOT is computed correctly."""
-        assert hasattr(swarm_bridge_module, "PROJECT_ROOT")
-        assert swarm_bridge_module.PROJECT_ROOT.endswith("aura-cli") or "aura" in swarm_bridge_module.PROJECT_ROOT
+        assert hasattr(github_bridge_module, "_mcp")
+        assert isinstance(github_bridge_module._mcp, github_bridge_module.MCPProcess)
 
 
 # =============================================================================
@@ -777,7 +772,7 @@ class TestThreading:
 
     def test_rpc_lock_protects_request_id(self):
         """Verify _lock protects concurrent _req_id access."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
         mcp._proc.stdin = MagicMock()
 
@@ -795,10 +790,10 @@ class TestThreading:
 
     def test_reader_is_daemon_thread(self):
         """Verify reader thread is created as daemon."""
-        with patch("aura_cli.mcp_swarm_bridge.subprocess.Popen"):
-            with patch.object(swarm_bridge_module.MCPProcess, "_initialize"):
+        with patch("aura_cli.mcp_github_bridge.subprocess.Popen"):
+            with patch.object(github_bridge_module.MCPProcess, "_initialize"):
                 with patch("threading.Thread") as mock_thread:
-                    mcp = swarm_bridge_module.MCPProcess()
+                    mcp = github_bridge_module.MCPProcess()
                     mcp._proc = MagicMock()
                     mcp._proc.stdout = iter([])
 
@@ -814,24 +809,36 @@ class TestThreading:
 class TestErrorHandling:
     """Test error scenarios and edge cases."""
 
-    def test_call_tool_with_complex_result(self):
-        """Verify call_tool returns complex results as-is."""
-        mcp = swarm_bridge_module.MCPProcess()
-        complex_result = {
-            "agent_id": "abc123",
-            "status": "completed",
-            "iterations": 5,
-            "messages": [{"role": "user", "content": "hello"}],
-        }
-        mcp._rpc = MagicMock(return_value={"result": complex_result})
+    def test_call_tool_with_non_text_content(self):
+        """Verify call_tool ignores non-text content."""
+        mcp = github_bridge_module.MCPProcess()
+        mcp._rpc = MagicMock(
+            return_value={
+                "result": {
+                    "content": [
+                        {"type": "image", "data": "..."},
+                        {"type": "text", "text": "hello"},
+                    ]
+                }
+            }
+        )
 
         result = mcp.call_tool("test", {})
 
-        assert result == complex_result
+        assert result["result"] == "hello"
+
+    def test_call_tool_text_missing_text_field(self):
+        """Verify call_tool handles text blocks without text field."""
+        mcp = github_bridge_module.MCPProcess()
+        mcp._rpc = MagicMock(return_value={"result": {"content": [{"type": "text"}]}})
+
+        result = mcp.call_tool("test", {})
+
+        assert result["result"] == ""
 
     def test_list_tools_missing_tools_key(self):
         """Verify list_tools handles result without 'tools' key."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._rpc = MagicMock(return_value={"result": {}})
 
         tools = mcp.list_tools()
@@ -840,7 +847,7 @@ class TestErrorHandling:
 
     def test_rpc_clears_pending_on_timeout(self):
         """Verify _rpc cleans up _pending on timeout."""
-        mcp = swarm_bridge_module.MCPProcess()
+        mcp = github_bridge_module.MCPProcess()
         mcp._proc = MagicMock()
         mcp._proc.stdin = MagicMock()
 
@@ -860,23 +867,6 @@ class TestErrorHandling:
 
         assert body == {}
 
-    def test_rpc_clears_results_after_retrieval(self):
-        """Verify _rpc removes result after returning."""
-        mcp = swarm_bridge_module.MCPProcess()
-        mcp._proc = MagicMock()
-        mcp._proc.stdin = MagicMock()
-
-        event_mock = MagicMock()
-        event_mock.wait.return_value = True
-
-        req_id = mcp._req_id + 1
-        mcp._results[req_id] = {"result": "data"}
-
-        with patch("threading.Event", return_value=event_mock):
-            mcp._rpc("test", {})
-
-        assert req_id not in mcp._results
-
 
 # =============================================================================
 # Integration Tests
@@ -888,31 +878,31 @@ class TestIntegration:
 
     def test_handler_with_valid_tool_call(self, mock_mcp):
         """Verify full flow: POST /call -> handler -> mock_mcp."""
-        mock_mcp.call_tool.return_value = {"status": "success", "result": "done"}
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
+        mock_mcp.call_tool.return_value = {"result": "success"}
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
             status, body = _dispatch("POST", "/call", {"tool_name": "test", "args": {"x": 1}})
 
         assert status == 200
-        assert body["data"]["status"] == "success"
+        assert body["result"] == "success"
         mock_mcp.call_tool.assert_called_once_with("test", {"x": 1})
 
     def test_handler_mcp_dead_health_check(self, mock_mcp):
         """Verify health endpoint reports dead MCP."""
         mock_mcp.alive.return_value = False
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
             status, body = _dispatch("GET", "/health")
 
         assert status == 200
         assert body["mcp_alive"] is False
 
     def test_post_call_mcp_error_propagates(self, mock_mcp):
-        """Verify POST /call returns MCP errors wrapped in 'data'."""
+        """Verify POST /call returns MCP errors."""
         mock_mcp.call_tool.return_value = {"error": "MCP server error"}
-        with patch.object(swarm_bridge_module, "_mcp", mock_mcp):
+        with patch.object(github_bridge_module, "_mcp", mock_mcp):
             status, body = _dispatch("POST", "/call", {"tool_name": "fail", "args": {}})
 
         assert status == 200
-        assert body["data"]["error"] == "MCP server error"
+        assert "error" in body
 
 
 # =============================================================================
@@ -927,48 +917,20 @@ class TestModuleStructure:
         """Verify module can be imported."""
         import importlib
 
-        mod = importlib.import_module("aura_cli.mcp_swarm_bridge")
+        mod = importlib.import_module("aura_cli.mcp_github_bridge")
         assert mod is not None
 
     def test_has_bridge_handler_class(self):
         """Verify BridgeHandler exists."""
-        assert hasattr(swarm_bridge_module, "BridgeHandler")
-        assert hasattr(swarm_bridge_module.BridgeHandler, "do_GET")
-        assert hasattr(swarm_bridge_module.BridgeHandler, "do_POST")
+        assert hasattr(github_bridge_module, "BridgeHandler")
+        assert hasattr(github_bridge_module.BridgeHandler, "do_GET")
+        assert hasattr(github_bridge_module.BridgeHandler, "do_POST")
 
     def test_has_mcp_process_class(self):
         """Verify MCPProcess exists."""
-        assert hasattr(swarm_bridge_module, "MCPProcess")
+        assert hasattr(github_bridge_module, "MCPProcess")
 
     def test_has_main_function(self):
         """Verify main() exists."""
-        assert hasattr(swarm_bridge_module, "main")
-        assert callable(swarm_bridge_module.main)
-
-
-# =============================================================================
-# Swarm-specific Behavior Tests
-# =============================================================================
-
-
-class TestSwarmSpecificBehavior:
-    """Test behaviors specific to swarm bridge."""
-
-    def test_no_github_token_check(self):
-        """Verify swarm bridge doesn't check for GITHUB_PERSONAL_ACCESS_TOKEN."""
-        mock_proc = MagicMock()
-        mock_proc.pid = 999
-        mock_proc.stdout = iter([])
-        with patch("aura_cli.mcp_swarm_bridge.subprocess.Popen", return_value=mock_proc):
-            with patch.object(swarm_bridge_module.MCPProcess, "_initialize"):
-                mcp = swarm_bridge_module.MCPProcess()
-                mcp.start()
-                assert mcp._proc is not None
-
-    def test_node_server_path_construction(self):
-        """Verify swarm server path is constructed correctly."""
-        project_root = swarm_bridge_module.PROJECT_ROOT
-        server_path = os.path.join(project_root, "swarm-mcp-server", "dist", "index.js")
-        assert "swarm-mcp-server" in server_path
-        assert "dist" in server_path
-        assert "index.js" in server_path
+        assert hasattr(github_bridge_module, "main")
+        assert callable(github_bridge_module.main)

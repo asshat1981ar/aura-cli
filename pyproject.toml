@@ -76,7 +76,7 @@ Repository = "https://github.com/asshat1981ar/aura-cli"
 Issues = "https://github.com/asshat1981ar/aura-cli/issues"
 
 [tool.setuptools.packages.find]
-include = ["aura_cli*", "core*", "agents*", "memory*", "tools*", "task_queue*"]
+include = ["aura_cli*", "core*", "agents*", "memory*", "tools*", "task_queue*", "maple*"]
 exclude = ["tests*", "scripts*", "archive*", "docs*", "plans*", "conductor*", "projects*"]
 
 [tool.pytest.ini_options]

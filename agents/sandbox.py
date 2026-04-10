@@ -50,6 +50,97 @@ _SANDBOX_NETWORK_ENV: dict = {
     "REQUESTS_CA_BUNDLE": "",
 }
 
+# Filesystem restriction: Environment variables to restrict Python's import
+# and file system access. These are defense-in-depth measures; the primary
+# isolation is the temporary directory + cwd enforcement.
+_SANDBOX_FS_ENV: dict = {
+    # Disable user site-packages to prevent injection via ~/.local
+    "PYTHONNOUSERSITE": "1",
+    # Don't write .pyc files
+    "PYTHONDONTWRITEBYTECODE": "1",
+    # Restrict Python path to system paths only
+    "PYTHONPATH": "",
+}
+
+# Allowed directories for filesystem operations (defense-in-depth)
+_SANDBOX_ALLOWED_PREFIXES: tuple = (
+    "/tmp",
+    "/var/tmp",
+    tempfile.gettempdir(),
+)
+
+
+def _is_path_allowed(path: str, cwd: str) -> bool:
+    """Check if a path is within allowed sandbox directories.
+
+    Args:
+        path: The path to check.
+        cwd: The current working directory (sandbox temp dir).
+
+    Returns:
+        True if the path is allowed, False otherwise.
+    """
+    try:
+        resolved = Path(path).resolve()
+        cwd_resolved = Path(cwd).resolve()
+
+        # Allow paths within the sandbox temp directory
+        if str(resolved).startswith(str(cwd_resolved)):
+            return True
+
+        # Allow paths in system temp directories
+        for prefix in _SANDBOX_ALLOWED_PREFIXES:
+            if str(resolved).startswith(prefix):
+                return True
+
+        return False
+    except (OSError, ValueError):
+        return False
+
+
+def _wrap_code_with_fs_restrictions(code: str, cwd: str) -> str:
+    """Wrap Python code with filesystem access restrictions.
+
+    Injects guards at the start of the code to intercept file open calls
+    and restrict them to the sandbox directory.
+
+    Args:
+        code: The Python code to wrap.
+        cwd: The sandbox working directory.
+
+    Returns:
+        Wrapped code with filesystem restrictions.
+    """
+    guard = f'''
+import builtins
+import os
+import sys
+
+_sandbox_cwd = {cwd!r}
+_allowed_prefixes = ({cwd!r}, "/tmp", "/var/tmp", tempfile.gettempdir() if "tempfile" in sys.modules else "/tmp")
+
+def _sandbox_open(file, *args, **kwargs):
+    """Restricted open() that only allows access to sandbox directories."""
+    if isinstance(file, (str, os.PathLike)):
+        try:
+            resolved = os.path.realpath(file)
+            if not any(resolved.startswith(p) for p in _allowed_prefixes):
+                raise PermissionError(f"Sandbox restriction: Access to {{resolved}} is not allowed")
+        except (OSError, ValueError):
+            pass  # Let the real open() handle invalid paths
+    return builtins._original_open(file, *args, **kwargs)
+
+# Preserve original open
+if not hasattr(builtins, "_original_open"):
+    builtins._original_open = builtins.open
+    builtins.open = _sandbox_open
+
+# Restrict sys.path to prevent importing from outside
+sys.path = [p for p in sys.path if p == "" or p.startswith((_sandbox_cwd, "/tmp", "/usr", "/lib"))]
+
+'''
+    return guard + code
+
 
 def _set_resource_limits() -> None:
     """Apply CPU and memory resource limits to the child process.
@@ -201,6 +292,8 @@ class SandboxAgent:
 
         Writes *code* to ``aura_exec.py`` in a new temp dir, optionally writes
         any *extra_files* alongside it, then runs the script via subprocess.
+        The code is wrapped with filesystem access restrictions to prevent
+        writes outside the temporary directory.
 
         Args:
             code: Python source code to execute.
@@ -215,7 +308,10 @@ class SandboxAgent:
         """
         with tempfile.TemporaryDirectory(prefix="aura_sandbox_") as tmpdir:
             script = Path(tmpdir) / "aura_exec.py"
-            script.write_text(code, encoding="utf-8")
+
+            # Wrap code with filesystem restrictions
+            wrapped_code = _wrap_code_with_fs_restrictions(code, tmpdir)
+            script.write_text(wrapped_code, encoding="utf-8")
 
             if extra_files:
                 for fname, content in extra_files.items():
@@ -290,7 +386,7 @@ class SandboxAgent:
                 stderr=subprocess.PIPE,
                 cwd=cwd,
                 text=True,
-                env={**os.environ, **_SANDBOX_NETWORK_ENV, "PYTHONDONTWRITEBYTECODE": "1"},
+                env={**os.environ, **_SANDBOX_NETWORK_ENV, **_SANDBOX_FS_ENV},
                 preexec_fn=_set_resource_limits,
             )
             try:
@@ -358,8 +454,8 @@ class SandboxAgent:
                 env={
                     **os.environ,
                     **_SANDBOX_NETWORK_ENV,
+                    **_SANDBOX_FS_ENV,
                     "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-                    "PYTHONDONTWRITEBYTECODE": "1",
                 },
                 preexec_fn=_set_resource_limits,
             )

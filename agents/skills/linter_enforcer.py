@@ -11,14 +11,19 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 from core.logging_utils import log_json
 
 _SNAKE_RE = re.compile(r"^[a-z_][a-z0-9_]*$")
 _PASCAL_RE = re.compile(r"^[A-Z][a-zA-Z0-9]*$")
 _SCREAMING_RE = re.compile(r"^[A-Z][A-Z0-9_]*$")
 
-_SKIP_DIRS = {".git", "__pycache__", "node_modules", ".tox", ".venv", "venv", "dist", "build"}
+_SKIP_DIRS = {
+    ".git", "__pycache__", "node_modules", ".tox", ".venv", "venv",
+    "dist", "build", "env", ".env", "test-aura-env", "site-packages",
+    "aura_cli.egg-info", "tmp_out", ".mypy_cache", ".ruff_cache",
+    ".pytest_cache",
+}
 
 # Common flake8 fix hints
 _FIX_HINTS: Dict[str, str] = {

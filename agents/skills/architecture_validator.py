@@ -9,7 +9,11 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 from agents.skills.base import SkillBase
 from core.logging_utils import log_json
 
-_SKIP_DIRS = {".git", "__pycache__", "node_modules", ".tox", ".venv", "venv", "dist", "build"}
+_SKIP_DIRS = {
+    ".git", "__pycache__", "node_modules", ".tox", ".venv", "venv",
+    "dist", "build", "env", ".env", "test-aura-env", "site-packages",
+    "aura_cli.egg-info", "tmp_out",
+}
 
 
 def _module_name(path: Path, root: Path) -> str:

@@ -23,7 +23,7 @@ import hmac
 import os
 from typing import Optional
 
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 

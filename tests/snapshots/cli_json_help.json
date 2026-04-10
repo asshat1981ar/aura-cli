@@ -99,6 +99,27 @@
       "summary": "Show effective config"
     },
     {
+      "action": "config_set",
+      "description": "Persist a configuration key-value pair to aura.config.json.\nUse dotted model paths like 'model.code_generation' to set model routing.",
+      "examples": [
+        "python3 main.py config set model.code_generation google/gemini-2.5-pro",
+        "python3 main.py config set dry_run true"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "config",
+        "set"
+      ],
+      "requires_runtime": false,
+      "summary": "Set a config value"
+    },
+    {
       "action": "contract_report",
       "description": "[EXPERIMENTAL] Print aggregated parser/help/schema/dispatch contract checks as JSON.",
       "examples": [
@@ -957,18 +978,23 @@
       "summary": "Run goal via Agent SDK meta-controller"
     },
     {
-      "action": null,
+      "action": "agent_list",
       "description": "Display all registered AURA agents, their type, and status.",
       "examples": [
         "python3 main.py agent list"
       ],
-      "flags": [],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
       "legacy_flags": [],
       "path": [
         "agent",
         "list"
       ],
-      "requires_runtime": null,
+      "requires_runtime": false,
       "summary": "List registered agents"
     },
     {
@@ -1071,6 +1097,25 @@
       ],
       "requires_runtime": false,
       "summary": "Show credential storage status"
+    },
+    {
+      "action": "cancel",
+      "description": "Send a cancellation signal to a running AURA pipeline and verify that no partial filesystem changes remain on disk.\n\nExit codes:\n  0 \u2014 run cancelled and filesystem restored\n  1 \u2014 run_id not found in the active-run registry\n  2 \u2014 cancellation signal sent but rollback verification failed",
+      "examples": [
+        "python3 main.py cancel <run-id>"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "cancel"
+      ],
+      "requires_runtime": false,
+      "summary": "Cancel an active pipeline run"
     }
   ],
   "deterministic": true,

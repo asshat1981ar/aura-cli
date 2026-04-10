@@ -21,7 +21,6 @@ from pathlib import Path
 from enum import Enum
 
 from core.logging_utils import log_json
-from core.correlation import CorrelationScope
 
 
 class ImprovementStatus(Enum):

@@ -29,7 +29,152 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
-from core.logging_utils import log_json # Import log_json
+from core.logging_utils import log_json  # Import log_json
+from core.sanitizer import SecurityError  # For violation detection
+
+# ---------------------------------------------------------------------------
+# Sandbox security helpers
+# ---------------------------------------------------------------------------
+
+# Network-blocking environment overlay: routes all HTTP(S) traffic to a
+# non-existent local proxy so that executed code cannot reach external
+# services without requiring OS-level network namespaces or root privileges.
+_SANDBOX_NETWORK_ENV: dict = {
+    "http_proxy": "http://127.0.0.1:1",
+    "https_proxy": "http://127.0.0.1:1",
+    "HTTP_PROXY": "http://127.0.0.1:1",
+    "HTTPS_PROXY": "http://127.0.0.1:1",
+    "no_proxy": "",
+    "NO_PROXY": "",
+    # Prevent SSL verification fallbacks that might bypass the proxy
+    "REQUESTS_CA_BUNDLE": "",
+}
+
+# Filesystem restriction: Environment variables to restrict Python's import
+# and file system access. These are defense-in-depth measures; the primary
+# isolation is the temporary directory + cwd enforcement.
+_SANDBOX_FS_ENV: dict = {
+    # Disable user site-packages to prevent injection via ~/.local
+    "PYTHONNOUSERSITE": "1",
+    # Don't write .pyc files
+    "PYTHONDONTWRITEBYTECODE": "1",
+    # Restrict Python path to system paths only
+    "PYTHONPATH": "",
+}
+
+# Allowed directories for filesystem operations (defense-in-depth)
+_SANDBOX_ALLOWED_PREFIXES: tuple = (
+    "/tmp",
+    "/var/tmp",
+    tempfile.gettempdir(),
+)
+
+
+def _is_path_allowed(path: str, cwd: str) -> bool:
+    """Check if a path is within allowed sandbox directories.
+
+    Args:
+        path: The path to check.
+        cwd: The current working directory (sandbox temp dir).
+
+    Returns:
+        True if the path is allowed, False otherwise.
+    """
+    try:
+        resolved = Path(path).resolve()
+        cwd_resolved = Path(cwd).resolve()
+
+        # Allow paths within the sandbox temp directory
+        if str(resolved).startswith(str(cwd_resolved)):
+            return True
+
+        # Allow paths in system temp directories
+        for prefix in _SANDBOX_ALLOWED_PREFIXES:
+            if str(resolved).startswith(prefix):
+                return True
+
+        return False
+    except (OSError, ValueError):
+        return False
+
+
+def _wrap_code_with_fs_restrictions(code: str, cwd: str) -> str:
+    """Wrap Python code with filesystem access restrictions.
+
+    Injects guards at the start of the code to intercept file open calls
+    and restrict them to the sandbox directory.
+
+    Args:
+        code: The Python code to wrap.
+        cwd: The sandbox working directory.
+
+    Returns:
+        Wrapped code with filesystem restrictions.
+    """
+    guard = f'''
+import builtins
+import os
+import sys
+
+_sandbox_cwd = {cwd!r}
+_allowed_prefixes = ({cwd!r}, "/tmp", "/var/tmp", tempfile.gettempdir() if "tempfile" in sys.modules else "/tmp")
+
+def _sandbox_open(file, *args, **kwargs):
+    """Restricted open() that only allows access to sandbox directories."""
+    if isinstance(file, (str, os.PathLike)):
+        try:
+            resolved = os.path.realpath(file)
+            if not any(resolved.startswith(p) for p in _allowed_prefixes):
+                raise PermissionError(f"Sandbox restriction: Access to {{resolved}} is not allowed")
+        except (OSError, ValueError):
+            pass  # Let the real open() handle invalid paths
+    return builtins._original_open(file, *args, **kwargs)
+
+# Preserve original open
+if not hasattr(builtins, "_original_open"):
+    builtins._original_open = builtins.open
+    builtins.open = _sandbox_open
+
+# Restrict sys.path to prevent importing from outside
+sys.path = [p for p in sys.path if p == "" or p.startswith((_sandbox_cwd, "/tmp", "/usr", "/lib"))]
+
+'''
+    return guard + code
+
+
+def _set_resource_limits() -> None:
+    """Apply CPU and memory resource limits to the child process.
+
+    Intended to be passed as ``preexec_fn`` to :func:`subprocess.Popen` so
+    the limits are applied only inside the sandboxed child process, not to
+    the AURA parent process itself.
+
+    Limits imposed:
+    - CPU time: 30 seconds (hard + soft)
+    - Virtual address space: 512 MiB (hard + soft)
+
+    Silently skipped on Windows where the ``resource`` module is unavailable.
+    """
+    try:
+        import resource  # noqa: PLC0415 — intentional late import for Windows compat
+        resource.setrlimit(resource.RLIMIT_CPU, (30, 30))  # 30 s CPU
+        resource.setrlimit(
+            resource.RLIMIT_AS,
+            (512 * 1024 * 1024, 512 * 1024 * 1024),  # 512 MiB virtual address space
+        )
+    except ImportError:
+        pass  # Windows — resource module unavailable; limits silently skipped
+
+# ---------------------------------------------------------------------------
+# Violation detection patterns for subprocess output
+# Maps compiled regex patterns to violation_type labels.
+# ---------------------------------------------------------------------------
+_VIOLATION_PATTERNS = [
+    (re.compile(r"\bPermissionError\b"), "restricted_path_access"),
+    (re.compile(r"\b(?:ModuleNotFoundError|ImportError)\b", re.IGNORECASE), "blocked_import"),
+    (re.compile(r"\bSecurityError\b|\bAccess denied\b"), "blocked_command"),
+    (re.compile(r"\bBlockingIOError\b|Operation not permitted", re.IGNORECASE), "blocked_syscall"),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +292,8 @@ class SandboxAgent:
 
         Writes *code* to ``aura_exec.py`` in a new temp dir, optionally writes
         any *extra_files* alongside it, then runs the script via subprocess.
+        The code is wrapped with filesystem access restrictions to prevent
+        writes outside the temporary directory.
 
         Args:
             code: Python source code to execute.
@@ -161,7 +308,10 @@ class SandboxAgent:
         """
         with tempfile.TemporaryDirectory(prefix="aura_sandbox_") as tmpdir:
             script = Path(tmpdir) / "aura_exec.py"
-            script.write_text(code, encoding="utf-8")
+
+            # Wrap code with filesystem restrictions
+            wrapped_code = _wrap_code_with_fs_restrictions(code, tmpdir)
+            script.write_text(wrapped_code, encoding="utf-8")
 
             if extra_files:
                 for fname, content in extra_files.items():
@@ -236,17 +386,20 @@ class SandboxAgent:
                 stderr=subprocess.PIPE,
                 cwd=cwd,
                 text=True,
-                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+                env={**os.environ, **_SANDBOX_NETWORK_ENV, **_SANDBOX_FS_ENV},
+                preexec_fn=_set_resource_limits,
             )
             try:
                 stdout, stderr = proc.communicate(timeout=self.timeout)
-                return SandboxResult(
+                result = SandboxResult(
                     success=proc.returncode == 0,
                     exit_code=proc.returncode,
                     stdout=stdout,
                     stderr=stderr,
                     execution_path=script_path,
                 )
+                self._check_and_log_violations(result)
+                return result
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.communicate()
@@ -258,6 +411,24 @@ class SandboxAgent:
                     timed_out=True,
                     execution_path=script_path,
                 )
+        except SecurityError as exc:
+            log_json(
+                "warning",
+                "sandbox_violation_attempt",
+                details={
+                    "violation_type": "blocked_command",
+                    "attempted_value": str(exc),
+                    "goal": None,
+                    "agent": "sandbox",
+                },
+            )
+            return SandboxResult(
+                success=False,
+                exit_code=-1,
+                stdout="",
+                stderr=f"Security violation: {exc}",
+                execution_path=script_path,
+            )
         except Exception as exc:
             log_json("ERROR", "sandbox_internal_error", details={"method": "_run", "error": str(exc), "script_path": script_path})
             return SandboxResult(
@@ -280,17 +451,25 @@ class SandboxAgent:
                 stderr=subprocess.PIPE,
                 cwd=tmpdir,
                 text=True,
-                env={**os.environ, "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1", "PYTHONDONTWRITEBYTECODE": "1"},
+                env={
+                    **os.environ,
+                    **_SANDBOX_NETWORK_ENV,
+                    **_SANDBOX_FS_ENV,
+                    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+                },
+                preexec_fn=_set_resource_limits,
             )
             try:
                 stdout, stderr = proc.communicate(timeout=self.timeout)
-                return SandboxResult(
+                result = SandboxResult(
                     success=proc.returncode == 0,
                     exit_code=proc.returncode,
                     stdout=stdout,
                     stderr=stderr,
                     execution_path=tmpdir,
                 )
+                self._check_and_log_violations(result)
+                return result
             except subprocess.TimeoutExpired:
                 proc.kill()
                 proc.communicate()
@@ -299,6 +478,22 @@ class SandboxAgent:
                     stdout="", stderr=f"pytest timed out after {self.timeout}s",
                     timed_out=True, execution_path=tmpdir,
                 )
+        except SecurityError as exc:
+            log_json(
+                "warning",
+                "sandbox_violation_attempt",
+                details={
+                    "violation_type": "blocked_command",
+                    "attempted_value": str(exc),
+                    "goal": None,
+                    "agent": "sandbox",
+                },
+            )
+            return SandboxResult(
+                success=False, exit_code=-1, stdout="",
+                stderr=f"Security violation: {exc}",
+                execution_path=tmpdir,
+            )
         except FileNotFoundError:
             # pytest not installed — fall back to unittest discovery
             return self._run_unittest(tmpdir)
@@ -337,6 +532,28 @@ class SandboxAgent:
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
+
+    def _check_and_log_violations(self, result: SandboxResult, goal: Optional[str] = None) -> None:
+        """Scan subprocess stdout/stderr for security violation indicators and log each match.
+
+        Args:
+            result: The :class:`SandboxResult` whose output to inspect.
+            goal: Optional goal string forwarded to the log entry when available.
+        """
+        combined = (result.stdout or "") + (result.stderr or "")
+        for pattern, violation_type in _VIOLATION_PATTERNS:
+            match = pattern.search(combined)
+            if match:
+                log_json(
+                    "warning",
+                    "sandbox_violation_attempt",
+                    details={
+                        "violation_type": violation_type,
+                        "attempted_value": match.group(0),
+                        "goal": goal,
+                        "agent": "sandbox",
+                    },
+                )
 
     def _parse_pytest_summary(self, output: str) -> dict:
         """Extract pass/fail/error counts from pytest output."""

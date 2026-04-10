@@ -7,7 +7,6 @@ preventing AttributeError deep in the call stack.
 from __future__ import annotations
 
 from typing import Dict, Any, Optional, Literal
-from pathlib import Path
 
 pydantic_available = False
 try:

@@ -7,10 +7,14 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 from core.logging_utils import log_json
 
-_SKIP_DIRS = {".git", "__pycache__", "node_modules", ".venv", "venv"}
+_SKIP_DIRS = {
+    ".git", "__pycache__", "node_modules", ".venv", "venv",
+    "env", ".env", "test-aura-env", "site-packages", "dist", "build",
+    "aura_cli.egg-info", "tmp_out", ".mypy_cache", ".ruff_cache", ".pytest_cache",
+}
 
 
 # ---------------------------------------------------------------------------

@@ -59,6 +59,18 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         examples=("python3 main.py config",),
     ),
     CommandSpec(
+        path=("config", "set"),
+        summary="Set a config value",
+        description=(
+            "Persist a configuration key-value pair to aura.config.json.\n"
+            "Use dotted model paths like 'model.code_generation' to set model routing."
+        ),
+        examples=(
+            "python3 main.py config set model.code_generation google/gemini-2.5-pro",
+            "python3 main.py config set dry_run true",
+        ),
+    ),
+    CommandSpec(
         path=("contract-report",),
         summary="[EXPERIMENTAL] Print CLI contract report",
         description="[EXPERIMENTAL] Print aggregated parser/help/schema/dispatch contract checks as JSON.",
@@ -505,6 +517,22 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
             "python3 main.py credentials status --json",
         ),
     ),
+    # ── Run management ──────────────────────────────────────────────────────────
+    CommandSpec(
+        path=("cancel",),
+        summary="Cancel an active pipeline run",
+        description=(
+            "Send a cancellation signal to a running AURA pipeline and verify "
+            "that no partial filesystem changes remain on disk.\n\n"
+            "Exit codes:\n"
+            "  0 — run cancelled and filesystem restored\n"
+            "  1 — run_id not found in the active-run registry\n"
+            "  2 — cancellation signal sent but rollback verification failed"
+        ),
+        examples=(
+            "python3 main.py cancel <run-id>",
+        ),
+    ),
 )
 
 COMMAND_SPECS_BY_PATH: dict[tuple[str, ...], CommandSpec] = {spec.path: spec for spec in COMMAND_SPECS}
@@ -517,6 +545,7 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("readiness", True, ("readiness",)),
     CLIActionSpec("bootstrap", False, ("bootstrap",), legacy_primary_flags=("bootstrap",)),
     CLIActionSpec("show_config", False, ("config",)),
+    CLIActionSpec("config_set", False, ("config", "set")),
     CLIActionSpec("contract_report", False, ("contract-report",)),
     CLIActionSpec("mcp_tools", False, ("mcp", "tools"), legacy_primary_flags=("mcp_tools",)),
     CLIActionSpec("mcp_call", False, ("mcp", "call"), legacy_primary_flags=("mcp_call",)),
@@ -567,6 +596,8 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("credentials_store", False, ("credentials", "store")),
     CLIActionSpec("credentials_delete", False, ("credentials", "delete")),
     CLIActionSpec("credentials_status", False, ("credentials", "status")),
+    # ── Run management ──────────────────────────────────────────────────────────
+    CLIActionSpec("cancel", False, ("cancel",)),
 )
 
 CLI_ACTION_SPECS_BY_ACTION: dict[str, CLIActionSpec] = {spec.action: spec for spec in CLI_ACTION_SPECS}
@@ -574,6 +605,7 @@ CLI_ACTION_SPECS_BY_ACTION: dict[str, CLIActionSpec] = {spec.action: spec for sp
 _ACTION_SMOKE_OVERRIDES: dict[str, tuple[str, ...]] = {
     "interactive": (),
     "json_help": ("--json-help",),
+    "config_set": ("config", "set", "example.key", "example-value"),
     "goal_add_run": ("goal", "add", "example-goal", "--run"),
     "sadd_run": ("sadd", "run", "--spec", "example-spec.md", "--dry-run"),
     "sadd_resume": ("sadd", "resume", "--session-id", "example-id"),
@@ -595,6 +627,7 @@ _SMOKE_POSITIONAL_ARGS_BY_PATH: dict[tuple[str, ...], tuple[str, ...]] = {
     ("scaffold",): ("demo",),
     ("memory", "search"): ("example-query",),
     ("innovate", "start"): ("example-problem-statement",),
+    ("cancel",): ("example-run-id",),
 }
 
 HELP_SCHEMA_VERSION = 3
@@ -650,6 +683,7 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("readiness",): "readiness",
     ("bootstrap",): "bootstrap",
     ("config",): "show_config",
+    ("config", "set"): "config_set",
     ("contract-report",): "contract_report",
     ("diag",): "diag",
     ("logs",): "logs",
@@ -684,11 +718,14 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("innovate", "to-goals"): "innovate_to_goals",
     ("innovate", "insights"): "innovate_insights",
     ("agent", "run"): "agent_run",
+    ("agent", "list"): "agent_list",
     # Security Issue #427: Credential management paths
     ("credentials", "migrate"): "credentials_migrate",
     ("credentials", "store"): "credentials_store",
     ("credentials", "delete"): "credentials_delete",
     ("credentials", "status"): "credentials_status",
+    # ── Run management ──────────────────────────────────────────────────────────
+    ("cancel",): "cancel",
 }
 
 _LEGACY_PRIMARY_FLAGS: tuple[str, ...] = (

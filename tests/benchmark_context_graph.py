@@ -260,7 +260,7 @@ class TestContextGraphBenchmark(unittest.TestCase):
         
         self.assertEqual(summary1, summary2)
         
-        print(f"\n--- Graph Summary Caching ---")
+        print("\n--- Graph Summary Caching ---")
         print(f"First call: {first_time:.4f}s")
         print(f"Cached call: {second_time:.6f}s")
         

@@ -6,7 +6,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 from core.logging_utils import log_json
 
 # Names that indicate a logging call
@@ -141,10 +141,7 @@ class ObservabilityCheckerSkill(SkillBase):
 
         if project_root:
             root = Path(project_root)
-            py_files = [
-                f for f in root.rglob("*.py")
-                if not any(part.startswith(".") or part in ("__pycache__", "node_modules") for part in f.parts)
-            ]
+            py_files = list(iter_py_files(root))
             if not py_files:
                 return {"error": f"No Python files found under '{project_root}'.", "files_scanned": 0}
 

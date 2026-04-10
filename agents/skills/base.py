@@ -1,8 +1,46 @@
 """Base class for all AURA skill modules."""
 from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from pathlib import Path
+from typing import Any, Dict, Iterator
+
 from core.logging_utils import log_json
+
+# ---------------------------------------------------------------------------
+# Shared filesystem helpers
+# ---------------------------------------------------------------------------
+
+#: Directories that should always be excluded when walking project source trees.
+SKIP_DIRS: frozenset[str] = frozenset({
+    ".git", "__pycache__", "node_modules", ".tox", ".venv", "venv",
+    "dist", "build", "env", ".env", "site-packages", "test-aura-env",
+    "aura_cli.egg-info", "tmp_out", ".mypy_cache", ".ruff_cache",
+    ".pytest_cache",
+})
+
+
+def iter_py_files(root: Path) -> Iterator[Path]:
+    """Yield all ``*.py`` files under *root*, skipping :data:`SKIP_DIRS`.
+
+    Compared to a bare ``root.rglob("*.py")``, this helper avoids scanning
+    large virtual-environment or generated directories that are never part of
+    the project's own source code.
+
+    Args:
+        root: Directory to scan.
+
+    Yields:
+        :class:`~pathlib.Path` objects for every ``.py`` file found.
+    """
+    for f in root.rglob("*.py"):
+        if not any(part in SKIP_DIRS for part in f.parts):
+            yield f
+
+
+# ---------------------------------------------------------------------------
+# Skill base class
+# ---------------------------------------------------------------------------
 
 
 class SkillBase(ABC):

@@ -2,6 +2,9 @@
 import subprocess
 import sys
 import os
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).parent.parent
 
 
 def run_main(*args, env_extra=None):
@@ -13,7 +16,7 @@ def run_main(*args, env_extra=None):
         capture_output=True,
         text=True,
         env=env,
-        cwd="/home/westonaaron675/aura-cli",
+        cwd=str(REPO_ROOT),
     )
     return result
 

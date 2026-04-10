@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 
 
 @dataclass
@@ -53,16 +53,7 @@ class ASTAnalyzerSkill(SkillBase):
             "dead_code": [],
         }
 
-        py_files = list(project_root.rglob("*.py"))
-        # Skip venv, node_modules, __pycache__
-        py_files = [
-            f
-            for f in py_files
-            if not any(
-                skip in str(f)
-                for skip in [".venv", "node_modules", "__pycache__", ".git", "archive"]
-            )
-        ]
+        py_files = list(iter_py_files(project_root))
 
         all_metrics: List[ASTMetrics] = []
         for py_file in py_files[:200]:  # Limit for performance

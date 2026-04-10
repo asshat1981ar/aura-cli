@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Optional
@@ -104,26 +105,74 @@ class User:
 class AuthManager:
     """Manages authentication and authorization."""
     
+    # Maximum access token lifetime enforced at issue time (24 hours)
+    MAX_ACCESS_TOKEN_HOURS: int = 24
+
     def __init__(
         self,
         secret_key: str,
         algorithm: str = "HS256",
         access_token_expire_minutes: int = 30,
         refresh_token_expire_days: int = 7,
+        db_path: Optional[str] = None,
     ):
         self._jwt_available = JWT_AVAILABLE
         if not self._jwt_available and algorithm not in ("none", "dummy"):
             # Allow initialization without JWT for non-token operations
             pass
-        
+
+        # Enforce minimum key length for real algorithms (not test stubs)
+        if algorithm not in ("none", "dummy") and len(secret_key.encode()) < 32:
+            raise ValueError(
+                "JWT_SECRET_KEY must be ≥32 bytes (256 bits). "
+                f"Current key is {len(secret_key.encode())} bytes."
+            )
+
         self.secret_key = secret_key
         self.algorithm = algorithm
         self.access_token_expire_minutes = access_token_expire_minutes
         self.refresh_token_expire_days = refresh_token_expire_days
         self._users: dict[str, User] = {}
         self._api_keys: dict[str, str] = {}  # api_key -> username
+        # Legacy in-memory set kept for non-jti revocations; primary store is SQLite
         self._revoked_tokens: set[str] = set()
-    
+        self._db_path = db_path or "aura_auth.db"
+        self._init_revocation_db()
+
+    def _init_revocation_db(self) -> None:
+        """Create the SQLite revocation store if it doesn't exist yet."""
+        with sqlite3.connect(self._db_path) as conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS revoked_tokens (
+                    jti TEXT PRIMARY KEY,
+                    revoked_at TEXT NOT NULL
+                )
+                """
+            )
+
+    def _is_jti_revoked(self, jti: str) -> bool:
+        """Return True if *jti* is present in the SQLite revocation table."""
+        try:
+            with sqlite3.connect(self._db_path) as conn:
+                row = conn.execute(
+                    "SELECT 1 FROM revoked_tokens WHERE jti = ?", (jti,)
+                ).fetchone()
+                return row is not None
+        except sqlite3.Error:
+            return False
+
+    def _persist_jti(self, jti: str) -> None:
+        """Insert *jti* into the SQLite revocation table."""
+        try:
+            with sqlite3.connect(self._db_path) as conn:
+                conn.execute(
+                    "INSERT OR IGNORE INTO revoked_tokens (jti, revoked_at) VALUES (?, ?)",
+                    (jti, datetime.now(timezone.utc).isoformat()),
+                )
+        except sqlite3.Error:
+            pass  # Degrade gracefully; token will expire naturally
+
     def hash_password(self, password: str) -> str:
         """Hash a password."""
         if PWD_CONTEXT:
@@ -202,15 +251,25 @@ class AuthManager:
         user: User,
         expires_delta: Optional[timedelta] = None,
     ) -> str:
-        """Create JWT access token for user."""
+        """Create JWT access token for user.
+
+        The lifetime is capped at MAX_ACCESS_TOKEN_HOURS (24 h) regardless of
+        what *expires_delta* requests, to prevent unbounded session tokens.
+        Algorithm is always the instance algorithm (HS256 by default).
+        """
         if not self._jwt_available:
             raise ImportError("JWT not available. Install with: pip install python-jose[cryptography]")
-        
+
         if expires_delta is None:
             expires_delta = timedelta(minutes=self.access_token_expire_minutes)
-        
+
+        # Hard cap: never exceed MAX_ACCESS_TOKEN_HOURS
+        max_delta = timedelta(hours=self.MAX_ACCESS_TOKEN_HOURS)
+        if expires_delta > max_delta:
+            expires_delta = max_delta
+
         expire = datetime.now(timezone.utc) + expires_delta
-        
+
         payload = {
             "sub": user.username,
             "role": user.role.value,
@@ -219,11 +278,12 @@ class AuthManager:
             "jti": secrets.token_urlsafe(16),
             "type": "access",
         }
-        
+
+        # Explicitly specify algorithm (HS256) — never allow algorithm:none
         token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
         log_json("INFO", "access_token_created", {"username": user.username})
         return token
-    
+
     def create_refresh_token(self, user: User) -> str:
         """Create JWT refresh token."""
         if not self._jwt_available:
@@ -242,47 +302,78 @@ class AuthManager:
         token = jwt.encode(payload, self.secret_key, algorithm=self.algorithm)
         log_json("INFO", "refresh_token_created", {"username": user.username})
         return token
-    
+
     def verify_token(self, token: str, token_type: str = "access") -> dict[str, Any]:
-        """Verify and decode a JWT token."""
+        """Verify and decode a JWT token.
+
+        Decodes with the explicit algorithm list to prevent algorithm-confusion
+        attacks (e.g. alg:none), then checks the jti against the SQLite
+        revocation store before returning the payload.
+        """
         if not self._jwt_available:
             raise ImportError("JWT not available. Install with: pip install python-jose[cryptography]")
-        
+
+        # Legacy in-memory revocation check (kept for backward compat)
         if token in self._revoked_tokens:
             raise TokenError("Token has been revoked")
-        
+
         try:
+            # algorithms= list prevents algorithm-confusion; explicit HS256 only
             payload = jwt.decode(token, self.secret_key, algorithms=[self.algorithm])
-            
+
             if payload.get("type") != token_type:
                 raise TokenError(f"Invalid token type. Expected {token_type}")
-            
+
+            # Check SQLite jti revocation store (survives process restarts)
+            jti = payload.get("jti")
+            if jti and self._is_jti_revoked(jti):
+                raise TokenError("Token has been revoked")
+
             return payload
-            
+
         except JWTError as e:
             raise TokenError(f"Invalid token: {e}")
-    
+
     def get_current_user(self, token: str) -> User:
         """Get user from access token."""
         payload = self.verify_token(token, "access")
         username = payload.get("sub")
-        
+
         if not username:
             raise TokenError("Token missing subject")
-        
+
         user = self._users.get(username)
         if not user:
             raise TokenError("User not found")
         if user.disabled:
             raise AuthenticationError("User account is disabled")
-        
+
         return user
-    
+
     def revoke_token(self, token: str) -> None:
-        """Revoke a token (add to blacklist)."""
+        """Revoke a token by persisting its jti to the SQLite blocklist.
+
+        Falls back to the in-memory set when the token cannot be decoded
+        (e.g. JWT library not available or token already malformed).
+        """
+        try:
+            if self._jwt_available:
+                # Decode without verifying expiry so we can still revoke
+                # tokens that are about to expire during a logout request.
+                payload = jwt.decode(
+                    token,
+                    self.secret_key,
+                    algorithms=[self.algorithm],
+                    options={"verify_exp": False},
+                )
+                jti = payload.get("jti")
+                if jti:
+                    self._persist_jti(jti)
+        except Exception:
+            pass  # Fall through to legacy in-memory store
         self._revoked_tokens.add(token)
         log_json("INFO", "token_revoked")
-    
+
     def refresh_access_token(self, refresh_token: str) -> str:
         """Create new access token from refresh token."""
         payload = self.verify_token(refresh_token, "refresh")

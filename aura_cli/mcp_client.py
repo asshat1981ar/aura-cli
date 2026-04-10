@@ -4,7 +4,7 @@ import json
 import os
 import urllib.error
 import urllib.request
-from typing import Dict, Optional
+from typing import Optional
 
 
 def _get_mcp_server_api_key(server_name: str = "dev_tools") -> Optional[str]:
@@ -139,32 +139,29 @@ def _mcp_request(
         return 500, {"error": str(exc)}
 
 
-def cmd_mcp_tools(server_name: str = "dev_tools") -> None:
-    """List MCP tools via HTTP client.
-    
+def cmd_mcp_tools(server_name: str = "dev_tools") -> int:
+    """List servers and tools exposed by the repo-local MCP config.
+
     Args:
         server_name: Name of the MCP server to query
     """
-    status, data = _mcp_request("GET", "/tools", server_name=server_name)
-    print(json.dumps({"status": status, "data": data}, indent=2))
+    from aura_cli.mcp_cli import main as mcp_cli_main
+    return mcp_cli_main([])
 
 
-def cmd_mcp_call(tool: str, args_json: str | None, server_name: str = "dev_tools") -> None:
+def cmd_mcp_call(tool: str, args_json: str | None, server_name: str = "dev_tools") -> int:
     """Call an MCP tool by name with JSON args.
-    
+
     Args:
         tool: Name of the tool to call
         args_json: JSON string of arguments
         server_name: Name of the MCP server to call
     """
-    try:
-        args_obj = json.loads(args_json) if args_json else {}
-    except json.JSONDecodeError as exc:
-        print(f"Invalid args JSON: {exc}")
-        return
-    payload = {"tool_name": tool, "args": args_obj}
-    status, data = _mcp_request("POST", "/call", payload, server_name=server_name)
-    print(json.dumps({"status": status, "data": data}, indent=2))
+    from aura_cli.mcp_cli import main as mcp_cli_main
+    argv = [tool]
+    if args_json:
+        argv.append(args_json)
+    return mcp_cli_main(argv)
 
 
 def cmd_diag(server_name: str = "dev_tools") -> None:
@@ -199,7 +196,6 @@ def cmd_mcp_servers_list() -> None:
     from core.config_manager import config as _cfg, DEFAULT_CONFIG
     
     servers = DEFAULT_CONFIG.get("mcp_servers", {})
-    api_keys = DEFAULT_CONFIG.get("mcp_server_api_keys", {})
     
     result = []
     for name, default_port in servers.items():

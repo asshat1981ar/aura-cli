@@ -199,15 +199,24 @@ class ASTAnalyzerSkill(SkillBase):
                 metrics.imports.append(alias.name)
 
     def _max_nesting_depth(self, tree: ast.AST, depth: int = 0) -> int:
-        """Calculate the maximum nesting depth of control-flow structures."""
-        max_depth = depth
-        for node in ast.iter_child_nodes(tree):
-            if isinstance(node, (ast.If, ast.For, ast.While, ast.With, ast.Try)):
-                child_depth = self._max_nesting_depth(node, depth + 1)
-                max_depth = max(max_depth, child_depth)
-            else:
-                child_depth = self._max_nesting_depth(node, depth)
-                max_depth = max(max_depth, child_depth)
+        """Calculate the maximum nesting depth of control-flow structures.
+
+        Iterative BFS/DFS via explicit stack — avoids Python recursion limit
+        and the timeout that occurred with the naive recursive implementation.
+        """
+        _CONTROL_FLOW = (ast.If, ast.For, ast.While, ast.With, ast.Try)
+        max_depth = 0
+        stack: list[tuple[ast.AST, int]] = [(tree, 0)]
+        while stack:
+            node, curr_depth = stack.pop()
+            for child in ast.iter_child_nodes(node):
+                if isinstance(child, _CONTROL_FLOW):
+                    new_depth = curr_depth + 1
+                    if new_depth > max_depth:
+                        max_depth = new_depth
+                    stack.append((child, new_depth))
+                else:
+                    stack.append((child, curr_depth))
         return max_depth
 
     def _type_coverage(self, tree: ast.AST) -> float:

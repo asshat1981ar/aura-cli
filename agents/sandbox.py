@@ -28,7 +28,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import ClassVar, Optional
 from core.logging_utils import log_json  # Import log_json
 from core.sanitizer import SecurityError  # For violation detection
 
@@ -181,33 +181,40 @@ _VIOLATION_PATTERNS = [
 # Data structures
 # ---------------------------------------------------------------------------
 
-@dataclass
+@dataclass(kw_only=True)
 class SandboxResult:
     """Structured outcome of a single sandbox execution.
 
     Attributes:
         success: ``True`` iff the subprocess exited with code 0.
-        exit_code: Raw integer exit code from the subprocess.  ``-1`` signals
-            an internal error or timeout.
         stdout: Full captured standard output from the subprocess.
         stderr: Full captured standard error from the subprocess.
+        exit_code: Raw integer exit code from the subprocess.  ``-1`` signals
+            an internal error or timeout.
+        duration_ms: Wall-clock execution time in milliseconds.
+        metadata: Arbitrary key-value store for extra data (e.g. parsed pytest
+            pass/fail counts populated by :meth:`SandboxAgent.run_tests`).
+        violations: Security violation strings detected in subprocess output.
         timed_out: ``True`` when the subprocess was forcibly killed because it
             exceeded :attr:`SandboxAgent.timeout`.
         execution_path: Absolute path to the temp file or directory that was
             executed.  ``None`` when the execution did not reach the filesystem.
-        metadata: Arbitrary key-value store for extra data (e.g. parsed pytest
-            pass/fail counts populated by :meth:`SandboxAgent.run_tests`).
     """
 
-    success: bool           # True iff exit_code == 0
-    exit_code: int
-    stdout: str
-    stderr: str
+    success: bool
+    stdout: str = ""
+    stderr: str = ""
+    exit_code: int = 0
+    duration_ms: float = 0.0
+    metadata: dict = field(default_factory=dict)
+    violations: list = field(default_factory=list)
     timed_out: bool = False
     execution_path: Optional[str] = None
-    metadata: dict = field(default_factory=dict)
 
-    PYTHONDONTWRITEBYTECODE_ENV = {"PYTHONDONTWRITEBYTECODE": "1"}
+    PYTHONDONTWRITEBYTECODE_ENV: ClassVar[dict] = {"PYTHONDONTWRITEBYTECODE": "1"}
+
+    def __bool__(self) -> bool:
+        return self.success
 
     # Convenience
     @property

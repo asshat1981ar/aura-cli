@@ -83,6 +83,8 @@ exclude = ["tests*", "scripts*", "archive*", "docs*", "plans*", "conductor*", "p
 pythonpath = [".", "experimental"]
 testpaths = ["."]
 asyncio_mode = "auto"
+timeout = 30
+timeout_method = "thread"
 addopts = [
     "--strict-markers",
     "-q",
@@ -97,6 +99,13 @@ addopts = [
 markers = [
     "integration: marks tests as integration tests",
     "asyncio: marks tests as async",
+    "slow: marks tests as slow (>10s expected)",
+    "e2e: marks end-to-end tests (full pipeline)",
+    "security: marks security-focused tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning:jose.*",
+    "ignore::DeprecationWarning:pydantic.*",
 ]
 
 [tool.coverage.run]
@@ -113,14 +122,17 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 8
+fail_under = 15
 show_missing = true
 exclude_lines = [
     "pragma: no cover",
-    "if __name__ == .__main__.",
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
+    "@(abc\\.)?abstractmethod",
+    "if __name__ == .__main__.:",
+    "def __repr__",
     "pass",
+    "except ImportError",
 ]
 
 [tool.bandit]
@@ -129,3 +141,12 @@ skips = ["B101"]  # assert used in tests
 
 [tool.ruff]
 extend = "ruff.toml"
+target-version = "py310"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP"]
+ignore = ["S101", "S603", "S607"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S106"]

@@ -12,6 +12,13 @@ from agents.handlers.applicator import handle
 from agents.handlers import applicator as applicator_module
 
 
+@pytest.fixture(autouse=True)
+def patch_log_json():
+    """Patch log_json to avoid JSON serialization issues with MagicMock."""
+    with patch("agents.handlers.applicator.log_json"):
+        yield
+
+
 class TestResolveAgent:
     """Tests for _resolve_agent helper."""
 
@@ -44,7 +51,7 @@ class TestResolveAgent:
         mock_brain = MagicMock()
         context = {"brain": mock_brain, "backup_dir": "/custom/backups"}
 
-        with patch("agents.handlers.applicator.ApplicatorAgent") as mock_agent_class:
+        with patch("agents.applicator.ApplicatorAgent") as mock_agent_class:
             applicator_module._resolve_agent(context)
 
             mock_agent_class.assert_called_once_with(

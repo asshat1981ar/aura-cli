@@ -76,7 +76,7 @@ Repository = "https://github.com/asshat1981ar/aura-cli"
 Issues = "https://github.com/asshat1981ar/aura-cli/issues"
 
 [tool.setuptools.packages.find]
-include = ["aura_cli*", "core*", "agents*", "memory*", "tools*", "task_queue*"]
+include = ["aura_cli*", "core*", "agents*", "memory*", "tools*", "task_queue*", "maple*", "services*"]
 exclude = ["tests*", "scripts*", "archive*", "docs*", "plans*", "conductor*", "projects*"]
 
 [tool.pytest.ini_options]
@@ -111,7 +111,7 @@ filterwarnings = [
 
 [tool.coverage.run]
 branch = true
-source = ["aura_cli", "core", "agents", "memory"]
+source = ["aura_cli", "core", "agents", "memory", "services"]
 omit = [
     "tests/*",
     "*/migrations/*",
@@ -123,7 +123,7 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 21
+fail_under = 25
 show_missing = true
 exclude_lines = [
     "pragma: no cover",

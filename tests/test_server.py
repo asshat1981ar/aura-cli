@@ -408,9 +408,7 @@ class TestWebhookStatusEndpoint:
 
     def test_webhook_status_failed_entry_has_error(self, client):
         goal_id = client.post("/webhook/goal", json={"goal": "test"}).json()["goal_id"]
-        server_mod._webhook_goal_queue[goal_id].update(
-            {"status": "failed", "error": "something went wrong", "completed_at": 3000.0}
-        )
+        server_mod._webhook_goal_queue[goal_id].update({"status": "failed", "error": "something went wrong", "completed_at": 3000.0})
         resp = client.get(f"/webhook/status/{goal_id}")
         assert resp.json()["error"] == "something went wrong"
 

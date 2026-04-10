@@ -150,7 +150,7 @@ class SessionCoordinator:
             len(self._spec.workstreams),
             self._spec.title,
         )
-        print(f"🚀 SADD session {self._session_id} starting — {len(self._spec.workstreams)} workstreams")
+        self._logger.info("SADD session %s starting UI — %d workstreams", self._session_id[:8], len(self._spec.workstreams))
         self._notify_n8n_sadd_event("session.started", {"design_title": self._spec.title, "total_workstreams": len(self._spec.workstreams)})
         if self._n8n_bridge:
             self._n8n_bridge.notify_session("session.started", {"session_id": self._session_id, "design_title": self._spec.title, "total_workstreams": len(self._spec.workstreams)})
@@ -217,7 +217,7 @@ class SessionCoordinator:
             except (OSError, RuntimeError):
                 self._logger.debug("Could not save session report")
 
-        print(f"✅ SADD session complete — {report.completed}/{report.total_workstreams} workstreams succeeded")
+        self._logger.info("SADD session complete — %d/%d workstreams succeeded", report.completed, report.total_workstreams)
         self._notify_n8n_sadd_event("session.completed", report.to_dict())
         if self._n8n_bridge:
             self._n8n_bridge.notify_session("session.completed", {"session_id": self._session_id, **{k: getattr(report, k) for k in ("completed", "failed", "skipped", "elapsed_s")}})
@@ -261,10 +261,7 @@ class SessionCoordinator:
             len(completed_results),
             len(remaining),
         )
-        print(
-            f"▶️  SADD session {self._session_id[:8]}... resuming — "
-            f"{len(completed_results)} done, {len(remaining)} remaining"
-        )
+        self._logger.info("SADD session %s resuming — %d done, %d remaining", self._session_id[:8], len(completed_results), len(remaining))
 
         # Mark session as running again if store is available (session already exists).
         if self._store:
@@ -325,9 +322,7 @@ class SessionCoordinator:
             except (OSError, RuntimeError):
                 self._logger.debug("Could not save session report")
 
-        print(
-            f"✅ SADD resume complete — {report.completed}/{report.total_workstreams} workstreams succeeded"
-        )
+        self._logger.info("SADD resume complete — %d/%d workstreams succeeded", report.completed, report.total_workstreams)
         return report
 
     def status(self) -> Dict[str, Any]:
@@ -377,7 +372,7 @@ class SessionCoordinator:
             context_from_dependencies=context_from_dependencies,
             mcp_bridge=self._mcp_bridge,
         )
-        print(f"⏳ [{ws_id}] Starting: {node.spec.title}")
+        self._logger.info("SADD workstream %s starting: %s", ws_id, node.spec.title)
 
         return runner.run(
             max_cycles=self._config.max_cycles_per_workstream,
@@ -400,7 +395,7 @@ class SessionCoordinator:
             result.cycles_used,
             result.elapsed_s,
         )
-        print(f"✅ [{ws_id}] Done: {self._graph.get_node(ws_id).spec.title} ({result.elapsed_s:.1f}s)")
+        self._logger.info("SADD workstream %s done: %s (%.1fs)", ws_id, self._graph.get_node(ws_id).spec.title, result.elapsed_s)
         self._notify_n8n_sadd_event("workstream.completed", {"ws_id": ws_id, "cycles_used": result.cycles_used, "elapsed_s": result.elapsed_s, "changed_files": result.changed_files})
         if self._n8n_bridge:
             self._n8n_bridge.notify_workstream("workstream.completed", {"session_id": self._session_id, "ws_id": ws_id, "cycles_used": result.cycles_used, "elapsed_s": result.elapsed_s})
@@ -441,7 +436,7 @@ class SessionCoordinator:
         self._notify_n8n_sadd_event("workstream.failed", {"ws_id": ws_id, "error": result.error})
         if self._n8n_bridge:
             self._n8n_bridge.notify_workstream("workstream.failed", {"session_id": self._session_id, "ws_id": ws_id, "error": result.error})
-        print(f"❌ [{ws_id}] Failed: {result.error or 'unknown error'}")
+        self._logger.error("SADD workstream %s failed: %s", ws_id, result.error or "unknown error")
 
         if self._config.fail_fast:
             # Cancel all pending futures that haven't started yet.

@@ -1,6 +1,9 @@
+import logging
 import sqlite3
 import time
 import threading
+
+_logger = logging.getLogger(__name__)
 
 class TelemetryAgent:
     """
@@ -33,7 +36,7 @@ class TelemetryAgent:
             cursor.execute(create_table_sql)
             conn.commit()
         except sqlite3.Error as e:
-            print(f'Error creating table: {e}')
+            _logger.error("Error creating table: %s", e)
 
     def log(self, agent_name, latency, token_count):
         timestamp = time.strftime('%Y-%m-%d %H:%M:%S')
@@ -44,7 +47,7 @@ class TelemetryAgent:
             cursor.execute(insert_sql, (timestamp, agent_name, latency, token_count))
             conn.commit()
         except sqlite3.Error as e:
-            print(f'Error logging telemetry data: {e}')
+            _logger.error("Error logging telemetry data: %s", e)
 
     def close(self):
         if hasattr(self._local, 'conn'):
@@ -61,4 +64,4 @@ if __name__ == '__main__':
     threads = [threading.Thread(target=worker) for _ in range(5)]
     for t in threads: t.start()
     for t in threads: t.join()
-    print("Multi-threaded logging test complete.")
+    _logger.info("Multi-threaded logging test complete.")

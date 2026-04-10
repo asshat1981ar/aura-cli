@@ -1,9 +1,12 @@
 import json
+import logging
 import os
 from typing import Dict, Any, List
 from openapi_spec_validator import validate_spec
 from openapi_spec_validator.readers import read_from_filename
 from jsonschema import validate, ValidationError
+
+_logger = logging.getLogger(__name__)
 
 class ContractValidator:
     def __init__(self, old_spec_path: str, new_spec_path: str):
@@ -47,7 +50,7 @@ class ContractValidator:
             validate(instance=payload, schema=schema)
             return True
         except ValidationError as e:
-            print(f"Payload validation error: {e.message}")
+            _logger.warning("Payload validation error: %s", e.message)
             return False
 
     def validate_schema_integrity(self, schema: Dict[str, Any]) -> bool:
@@ -55,7 +58,7 @@ class ContractValidator:
             validate_spec(schema)
             return True
         except Exception as e:
-            print(f"Schema validation error: {str(e)}")
+            _logger.warning("Schema validation error: %s", str(e))
             return False
 
     def validate_parameter_compatibility(self, old_params: List[Dict], new_params: List[Dict]) -> bool:
@@ -66,13 +69,13 @@ class ContractValidator:
             if name in new_param_map:
                 new_param = new_param_map[name]
                 if old_param.get('required', False) and not new_param.get('required', False):
-                    print(f"Parameter {name} changed from required to optional")
+                    _logger.warning("Parameter %s changed from required to optional", name)
                     return False
                 if old_param.get('type') and new_param.get('type') and old_param.get('type') != new_param.get('type'):
-                    print(f"Parameter {name} type changed from {old_param.get('type')} to {new_param.get('type')}")
+                    _logger.warning("Parameter %s type changed from %s to %s", name, old_param.get('type'), new_param.get('type'))
                     return False
             elif old_param.get('required', False):
-                print(f"Required parameter {name} removed")
+                _logger.warning("Required parameter %s removed", name)
                 return False
 
         return True
@@ -81,15 +84,15 @@ def main():
     try:
         validator = ContractValidator('openapi_old.yaml', 'openapi_new.yaml')
     except FileNotFoundError as e:
-        print(str(e))
+        _logger.error("%s", e)
         return
     
     # Validate schema integrity
     if not validator.validate_schema_integrity(validator.old_spec):
-        print("Old spec validation failed")
+        _logger.error("Old spec validation failed")
         return
     if not validator.validate_schema_integrity(validator.new_spec):
-        print("New spec validation failed")
+        _logger.error("New spec validation failed")
         return
 
     comparison = validator.compare_specs()

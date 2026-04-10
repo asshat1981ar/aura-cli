@@ -20,11 +20,21 @@ from core.logging_utils import log_json
 from core.running_runs import deregister_run, register_run
 
 try:
-    from prometheus_client import Counter, Gauge
+    from prometheus_client import Counter, Gauge, REGISTRY
     _PROMETHEUS_AVAILABLE = True
-    pipeline_runs_total = Counter("aura_pipeline_runs", "Total pipeline runs", ["status"])
-    active_pipeline_runs = Gauge("aura_active_pipeline_runs", "Currently executing pipelines")
-    goal_queue_depth = Gauge("aura_goal_queue_depth", "Number of goals waiting in the webhook queue")
+
+    def _get_or_create_metric(factory, name, documentation, labelnames=()):
+        try:
+            return factory(name, documentation, labelnames)
+        except ValueError:
+            c = REGISTRY._names_to_collectors.get(name)  # type: ignore[attr-defined]
+            if c is None and not name.endswith("_total"):
+                c = REGISTRY._names_to_collectors.get(f"{name}_total")  # type: ignore[attr-defined]
+            return c
+
+    pipeline_runs_total = _get_or_create_metric(Counter, "aura_pipeline_runs", "Total pipeline runs", ["status"])
+    active_pipeline_runs = _get_or_create_metric(Gauge, "aura_active_pipeline_runs", "Currently executing pipelines")
+    goal_queue_depth = _get_or_create_metric(Gauge, "aura_goal_queue_depth", "Number of goals waiting in the webhook queue")
 except ImportError:
     _PROMETHEUS_AVAILABLE = False
 
@@ -64,10 +74,9 @@ class WebhookPlanReviewRequest(BaseModel):
 
 
 async def _resolve_runtime_component(name: str) -> Any:
-    """Resolve a runtime component (orchestrator, etc.)."""
-    # Import here to avoid circular dependencies
-    from aura_cli.server import _resolve_runtime_component as _resolve
-    return await _resolve(name)
+    """Resolve a named runtime component via shared state."""
+    from aura_cli.api import state as _state
+    return await _state.resolve_runtime_component(name)
 
 
 @router.post("/run")

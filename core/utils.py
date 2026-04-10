@@ -1,6 +1,9 @@
 import json
+import logging
 from pathlib import Path
 from typing import Dict, Any
+
+_logger = logging.getLogger(__name__)
 
 class FileUtils:
     @staticmethod
@@ -40,16 +43,16 @@ class ErrorHandler:
     @staticmethod
     def handle_file_error(operation: str, file_path: str, error: Exception) -> None:
         """Standardized error handling for file operations"""
-        print(f"Error during {operation} on {file_path}: {str(error)}")
+        _logger.error("Error during %s on %s: %s", operation, file_path, str(error))
         raise
 
 class Logger:
     @staticmethod
     def log_info(message: str) -> None:
         """Log informational message"""
-        print(f"[INFO] {message}")
+        _logger.info("%s", message)
     
     @staticmethod
     def log_error(message: str) -> None:
         """Log error message"""
-        print(f"[ERROR] {message}")
+        _logger.error("%s", message)

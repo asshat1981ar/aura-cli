@@ -1,6 +1,9 @@
 import json
+import logging
 from pathlib import Path
 from typing import Dict, List
+
+_logger = logging.getLogger(__name__)
 
 class TechnicalDebtAnalyzer:
     def __init__(self, project_root: str):
@@ -59,4 +62,4 @@ if __name__ == "__main__":
     hotspots = analyzer.identify_hotspots()
     plan = analyzer.generate_improvement_plan(hotspots)
     analyzer.save_plan(plan, "debt_improvement_plan.json")
-    print("Generated technical debt improvement plan saved to debt_improvement_plan.json")
+    _logger.info("Generated technical debt improvement plan saved to debt_improvement_plan.json")

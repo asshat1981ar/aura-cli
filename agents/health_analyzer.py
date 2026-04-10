@@ -2,6 +2,8 @@ import json
 import logging
 from typing import Dict, Any
 
+_logger = logging.getLogger(__name__)
+
 class HealthAnalyzer:
     def __init__(self, log_file: str = "test_framework.log"):
         self.log_file = log_file
@@ -91,11 +93,11 @@ def main():
     
     # Step 1: Analyze test drop
     drop_analysis = analyzer.analyze_test_drop()
-    print("Test Drop Analysis:", json.dumps(drop_analysis, indent=2))
+    _logger.info("Test Drop Analysis: %s", json.dumps(drop_analysis, indent=2))
     
     # Step 2: Generate improvement plan
     improvement_plan = analyzer.generate_improvement_plan()
-    print("\nImprovement Plan:", json.dumps(improvement_plan, indent=2))
+    _logger.info("Improvement Plan: %s", json.dumps(improvement_plan, indent=2))
 
 if __name__ == "__main__":
     main()

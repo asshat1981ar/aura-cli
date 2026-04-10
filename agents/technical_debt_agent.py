@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import logging
+
+_logger = logging.getLogger(__name__)
+
 
 class TechnicalDebtAgent:
     def __init__(self) -> None:
@@ -49,10 +53,10 @@ class TechnicalDebtAgent:
 
     def visualize_hotspots(self, data: list[dict]) -> None:
         """Output a simple text-based heatmap view for prioritization."""
-        print("--- TECHNICAL DEBT HEATMAP ---")
+        _logger.warning("--- TECHNICAL DEBT HEATMAP ---")
         for hs in data:
-            print(f"{hs['file']} | Failures: {hs['failures']} | Risk: {'HIGH' if hs['impact'] > 0.7 else 'MEDIUM'}")
-        print("-----------------------------")
+            _logger.warning("%s | Failures: %s | Risk: %s", hs['file'], hs['failures'], 'HIGH' if hs['impact'] > 0.7 else 'MEDIUM')
+        _logger.warning("-----------------------------")
 
     def run(self, input_data: dict) -> dict:
         """Uniform execution interface for the orchestrator loop."""

@@ -1,6 +1,9 @@
 import ast
+import logging
 import os
 from typing import List, Dict, Set
+
+_logger = logging.getLogger(__name__)
 
 class DuplicateCodeReducer:
     def __init__(self, base_path: str = "."):
@@ -70,7 +73,7 @@ class DuplicateCodeReducer:
             self.refactored_files.update(abstraction_plan['files'])
             return True
         except Exception as e:
-            print(f"Refactoring failed: {e}")
+            _logger.error("Refactoring failed: %s", e)
             return False
     
     def validate_changes(self) -> Dict:
@@ -104,9 +107,9 @@ def main():
         if reducer.refactor_for_reuse(abstraction):
             result = reducer.validate_changes()
             if result['rollback_required']:
-                print("Rollback needed - potential issue detected")
+                _logger.warning("Rollback needed — potential issue detected")
             else:
-                print(f"Successfully refactored {len(result['refactored_files'])} files")
+                _logger.info("Successfully refactored %d files", len(result['refactored_files']))
 
 if __name__ == "__main__":
     main()

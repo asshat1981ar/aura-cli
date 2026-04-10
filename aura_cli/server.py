@@ -13,6 +13,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel
 
+from aura_cli.api import state as _state
 from core.logging_utils import log_json
 from core.mcp_contracts import (
     build_discovery_payload,
@@ -188,6 +189,11 @@ def _apply_runtime_state(runtime_state: Dict[str, Any]) -> None:
     orchestrator = runtime_state.get("orchestrator")
     model_adapter = runtime_state.get("model_adapter")
     memory_store = runtime_state.get("memory_store")
+    # Sync to shared state module so routers always see the latest values.
+    _state.runtime = runtime
+    _state.orchestrator = orchestrator
+    _state.model_adapter = model_adapter
+    _state.memory_store = memory_store
 
 
 async def _ensure_runtime_initialized() -> Dict[str, Any]:
@@ -876,3 +882,20 @@ async def run_pipeline(req: RunRequest, _: None = Depends(require_auth)) -> Dict
 
     asyncio.create_task(_background_run())
     return {"run_id": run_id, "status": "accepted"}
+
+
+# ---------------------------------------------------------------------------
+# Router registration — extracted sub-modules wired in at startup.
+# Routes in runs_router and health_router are mounted under /api to avoid
+# conflicts with the existing endpoints defined above.
+# ---------------------------------------------------------------------------
+try:
+    from aura_cli.api.routers.ws import router as _ws_router
+    from aura_cli.api.routers.health import router as _health_router
+    from aura_cli.api.routers.runs import router as _runs_router
+
+    app.include_router(_ws_router)
+    app.include_router(_health_router, prefix="/api")
+    app.include_router(_runs_router, prefix="/api")
+except Exception as _router_import_err:  # pragma: no cover
+    log_json("WARN", "aura_server_router_registration_failed", details={"error": str(_router_import_err)})

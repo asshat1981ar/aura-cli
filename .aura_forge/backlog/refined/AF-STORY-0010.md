@@ -10,9 +10,9 @@ The `MCPToolBridge` currently uses a hardcoded `_GOAL_TOOL_MAP`. We will replace
 - Implement `tools/mcp_discovery_server.py`.
 - This server will provide tools to:
   - `list_all_mcp_tools`: Aggregate tool lists from all registered MCP servers.
-  - `search_tools_semantically`: Perform a similarity search on tool descriptions using `SentenceTransformer` (or a lightweight equivalent if already in repo).
+  - `search_tools_semantically`: Perform a heuristic semantic search on tool descriptions using token overlap and ranking. A future revision may replace this with embeddings if the dependency/runtime cost is justified.
 - Acceptance:
-  - [ ] Server starts on port 8030.
+  - [x] Server starts on port 8025.
   - [ ] `list_all_mcp_tools` returns a unified JSON list.
   - [ ] `search_tools_semantically` returns top-K matching tools for a given query.
 

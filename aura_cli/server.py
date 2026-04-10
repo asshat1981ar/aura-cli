@@ -893,9 +893,11 @@ try:
     from aura_cli.api.routers.ws import router as _ws_router
     from aura_cli.api.routers.health import router as _health_router
     from aura_cli.api.routers.runs import router as _runs_router
+    from aura_cli.api.routers.auth import router as _auth_router
 
     app.include_router(_ws_router)
     app.include_router(_health_router, prefix="/api")
     app.include_router(_runs_router, prefix="/api")
+    app.include_router(_auth_router)
 except Exception as _router_import_err:  # pragma: no cover
     log_json("WARN", "aura_server_router_registration_failed", details={"error": str(_router_import_err)})

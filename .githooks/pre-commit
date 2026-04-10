@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Pre-commit guard: block commits that modify production source files on coverage branches.
+# Coverage sprint branches (feat/sprint-*-coverage) should ONLY add tests/
+
+BRANCH=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+if [[ "$BRANCH" != feat/sprint-*-coverage ]]; then
+  exit 0
+fi
+
+# Files staged that are NOT under tests/ or allowed config files
+BLOCKED=$(git diff --cached --name-only | grep -v '^tests/' | grep -v '^pyproject\.toml$' | grep -Ev '^(\.github/|CHANGELOG|README|\.githooks/)')
+
+if [[ -n "$BLOCKED" ]]; then
+  echo ""
+  echo "❌ Pre-commit guard: coverage sprint branches may only commit test files."
+  echo "   Blocked staged paths:"
+  echo "$BLOCKED" | sed 's/^/   - /'
+  echo ""
+  echo "   If this is intentional, run: git commit --no-verify"
+  exit 1
+fi
+
+exit 0

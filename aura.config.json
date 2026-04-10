@@ -22,16 +22,44 @@
       "base_url": "http://127.0.0.1:8082/v1",
       "embedding_model": "bge-small-en-v1.5-q8_0",
       "embedding_dims": 384
+    },
+    "linux_coder_7b": {
+      "provider": "ollama",
+      "model": "qwen2.5-coder:7b",
+      "base_url": "http://127.0.0.1:11434",
+      "temperature": 0.2,
+      "max_tokens": 4096,
+      "request_timeout_seconds": 120,
+      "cooldown_seconds": 60,
+      "fallback_profiles": [
+        "linux_fast_3b"
+      ]
+    },
+    "linux_fast_3b": {
+      "provider": "ollama",
+      "model": "phi4-mini",
+      "base_url": "http://127.0.0.1:11434",
+      "temperature": 0.3,
+      "max_tokens": 2048,
+      "request_timeout_seconds": 60,
+      "cooldown_seconds": 30
+    },
+    "linux_embed": {
+      "provider": "ollama",
+      "model": "nomic-embed-text",
+      "base_url": "http://127.0.0.1:11434",
+      "embedding_model": "nomic-embed-text",
+      "embedding_dims": 768
     }
   },
   "local_model_routing": {
-    "planning": "android_planner",
-    "analysis": "android_planner",
-    "critique": "android_planner",
-    "code_generation": "android_coder",
-    "embedding": "android_embeddings",
-    "quality": "android_planner",
-    "fast": "android_coder"
+    "code_generation": "linux_coder_7b",
+    "planning": "linux_fast_3b",
+    "analysis": "linux_fast_3b",
+    "critique": "linux_fast_3b",
+    "quality": "linux_coder_7b",
+    "fast": "linux_fast_3b",
+    "embedding": "linux_embed"
   },
   "model_routing": {
     "code_generation": "anthropic/claude-3.5-sonnet",

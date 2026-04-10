@@ -33,6 +33,48 @@ from core.logging_utils import log_json  # Import log_json
 from core.sanitizer import SecurityError  # For violation detection
 
 # ---------------------------------------------------------------------------
+# Sandbox security helpers
+# ---------------------------------------------------------------------------
+
+# Network-blocking environment overlay: routes all HTTP(S) traffic to a
+# non-existent local proxy so that executed code cannot reach external
+# services without requiring OS-level network namespaces or root privileges.
+_SANDBOX_NETWORK_ENV: dict = {
+    "http_proxy": "http://127.0.0.1:1",
+    "https_proxy": "http://127.0.0.1:1",
+    "HTTP_PROXY": "http://127.0.0.1:1",
+    "HTTPS_PROXY": "http://127.0.0.1:1",
+    "no_proxy": "",
+    "NO_PROXY": "",
+    # Prevent SSL verification fallbacks that might bypass the proxy
+    "REQUESTS_CA_BUNDLE": "",
+}
+
+
+def _set_resource_limits() -> None:
+    """Apply CPU and memory resource limits to the child process.
+
+    Intended to be passed as ``preexec_fn`` to :func:`subprocess.Popen` so
+    the limits are applied only inside the sandboxed child process, not to
+    the AURA parent process itself.
+
+    Limits imposed:
+    - CPU time: 30 seconds (hard + soft)
+    - Virtual address space: 512 MiB (hard + soft)
+
+    Silently skipped on Windows where the ``resource`` module is unavailable.
+    """
+    try:
+        import resource  # noqa: PLC0415 — intentional late import for Windows compat
+        resource.setrlimit(resource.RLIMIT_CPU, (30, 30))  # 30 s CPU
+        resource.setrlimit(
+            resource.RLIMIT_AS,
+            (512 * 1024 * 1024, 512 * 1024 * 1024),  # 512 MiB virtual address space
+        )
+    except ImportError:
+        pass  # Windows — resource module unavailable; limits silently skipped
+
+# ---------------------------------------------------------------------------
 # Violation detection patterns for subprocess output
 # Maps compiled regex patterns to violation_type labels.
 # ---------------------------------------------------------------------------
@@ -248,7 +290,8 @@ class SandboxAgent:
                 stderr=subprocess.PIPE,
                 cwd=cwd,
                 text=True,
-                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+                env={**os.environ, **_SANDBOX_NETWORK_ENV, "PYTHONDONTWRITEBYTECODE": "1"},
+                preexec_fn=_set_resource_limits,
             )
             try:
                 stdout, stderr = proc.communicate(timeout=self.timeout)
@@ -312,7 +355,13 @@ class SandboxAgent:
                 stderr=subprocess.PIPE,
                 cwd=tmpdir,
                 text=True,
-                env={**os.environ, "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1", "PYTHONDONTWRITEBYTECODE": "1"},
+                env={
+                    **os.environ,
+                    **_SANDBOX_NETWORK_ENV,
+                    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+                    "PYTHONDONTWRITEBYTECODE": "1",
+                },
+                preexec_fn=_set_resource_limits,
             )
             try:
                 stdout, stderr = proc.communicate(timeout=self.timeout)

@@ -6,12 +6,6 @@ from typing import Any, Dict, Optional
 
 from core.logging_utils import log_json
 from core.beads_bridge import build_beads_runtime_input
-from core.capability_manager import (
-    analyze_capability_needs,
-    provision_capability_actions,
-    queue_missing_capability_goals,
-    record_capability_status,
-)
 
 
 class CapabilitiesMixin:

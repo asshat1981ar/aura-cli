@@ -10,14 +10,11 @@ existing ``patch("core.model_adapter.…")`` targets remain stable.
 from __future__ import annotations
 
 import concurrent.futures
-import hashlib
 import os
-import shlex
-import subprocess
 import json
 import time
 from pathlib import Path
-from typing import Any, List
+from typing import List
 
 
 class _MissingPackage:
@@ -51,10 +48,7 @@ from core.logging_utils import log_json # Import log_json
 from core.file_tools import _aura_safe_loads # Import _aura_safe_loads
 from core.config_manager import config
 from core.runtime_auth import (
-    resolve_anthropic_api_key,
-    resolve_local_model_profiles,
     resolve_openai_api_key,
-    resolve_openrouter_api_key,
 )
 from memory.embedding_provider import LocalEmbeddingProvider
 

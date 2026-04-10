@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from core.sadd.mcp_tool_bridge import MCPToolBridge
     from core.sadd.n8n_pipeline_bridge import N8nPipelineBridge
 
-from core.logging_utils import log_json
 from core.sadd.sub_agent_runner import SubAgentRunner
 from core.sadd.types import (
     DesignSpec,

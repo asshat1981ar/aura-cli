@@ -18,29 +18,19 @@ Typical usage::
     print(result["stop_reason"])
 """
 
-import os
 import json
-import dataclasses
 import time
 import uuid
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 
 from core.logging_utils import log_json
-from core.schema import RoutingDecision, validate_phase_output
-from core.beads_bridge import build_beads_runtime_input
+from core.schema import validate_phase_output
 from core.operator_runtime import build_cycle_summary
-from core.cycle_outcome import CycleOutcome
 from core.hooks import HookEngine
-from core.phase_result import PhaseResult, ConfidenceRouter
+from core.phase_result import ConfidenceRouter
 from core.quality_trends import QualityTrendAnalyzer
 from core.config_manager import config
-from core.capability_manager import (
-    analyze_capability_needs,
-    provision_capability_actions,
-    queue_missing_capability_goals,
-    record_capability_status,
-)
 from core.policy import Policy
 from core.file_tools import (
     MISMATCH_OVERWRITE_BLOCK_EVENT,
@@ -49,12 +39,12 @@ from core.file_tools import (
     apply_change_with_explicit_overwrite_policy,
     mismatch_overwrite_block_log_details,
 )
-from core.skill_dispatcher import classify_goal, dispatch_skills
+from core.skill_dispatcher import classify_goal
 from core.human_gate import HumanGate
 from core.types import TaskRequest, TaskResult, ExecutionContext
 from core.mcp_agent_registry import agent_registry
 from core.mcp_client import MCPAsyncClient
-from memory.controller import memory_controller, MemoryTier
+from memory.controller import memory_controller
 from core.phase_dispatcher import PhaseDispatcher
 from core.orchestrator_phases import PhasesMixin
 from core.orchestrator_verify import VerifyMixin

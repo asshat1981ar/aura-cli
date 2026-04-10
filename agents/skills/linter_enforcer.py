@@ -11,7 +11,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from agents.skills.base import SkillBase, iter_py_files
+from agents.skills.base import SkillBase
 from core.logging_utils import log_json
 
 _SNAKE_RE = re.compile(r"^[a-z_][a-z0-9_]*$")

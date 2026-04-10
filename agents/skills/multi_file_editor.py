@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Set
 
-from agents.skills.base import SkillBase, iter_py_files
+from agents.skills.base import SkillBase
 
 _STOPWORDS: Set[str] = {
     "a", "an", "the", "in", "on", "at", "to", "for", "of", "and", "or",

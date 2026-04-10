@@ -4,7 +4,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import time
-from typing import Any, Dict
+from typing import Dict
 
 from core.logging_utils import log_json
 from core.cycle_outcome import CycleOutcome

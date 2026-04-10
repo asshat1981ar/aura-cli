@@ -6,11 +6,9 @@ import os
 import secrets
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import jwt as pyjwt
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse, Response
 from pydantic import BaseModel

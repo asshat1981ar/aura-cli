@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from core.logging_utils import log_json
 from core.schema import RoutingDecision

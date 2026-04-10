@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
-from agents.skills.base import SkillBase, iter_py_files
+from agents.skills.base import SkillBase
 from core.logging_utils import log_json
 
 _SKIP_DIRS = {

@@ -244,7 +244,8 @@ class TestPromptForgeAgent(unittest.TestCase):
 
     def test_run_auto_detects_file_tree(self):
         """When project_root exists, auto-scans files."""
-        import tempfile, os
+        import tempfile
+        import os
         with tempfile.TemporaryDirectory() as tmpdir:
             (Path := __import__("pathlib").Path)(tmpdir, "main.py").write_text("x=1")
             agent = PromptForgeAgent(project_root=tmpdir)

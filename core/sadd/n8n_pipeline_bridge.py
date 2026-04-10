@@ -6,7 +6,6 @@ import json
 import logging
 import time
 import urllib.request
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)

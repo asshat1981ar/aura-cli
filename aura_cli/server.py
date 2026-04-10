@@ -5,13 +5,17 @@ import json
 import os
 import secrets
 import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+import re
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from aura_cli.api import state as _state
 from core.logging_utils import log_json
@@ -139,13 +143,65 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+ALLOWED_ORIGINS = os.environ.get(
+    "AURA_CORS_ORIGINS",
+    "http://localhost:3000,http://localhost:8080"
+).split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+    max_age=3600,
+)
+
+from aura_cli.middleware.rate_limit import rate_limit_middleware
+app.middleware("http")(rate_limit_middleware)
+
+
+# ---------------------------------------------------------------------------
+# X-Request-ID correlation middleware
+# ---------------------------------------------------------------------------
+try:
+    from core.correlation import CorrelationManager as _CorrelationManager
+    _CORRELATION_AVAILABLE = True
+except ImportError:
+    _CORRELATION_AVAILABLE = False
+
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    """Propagate or generate an X-Request-ID for every request."""
+
+    async def dispatch(self, request: Request, call_next):
+        request_id = (
+            request.headers.get("X-Request-ID")
+            or request.headers.get("X-Correlation-ID")
+            or str(uuid.uuid4())
+        )
+        request.state.request_id = request_id
+        if _CORRELATION_AVAILABLE:
+            with _CorrelationManager.scope(request_id):
+                response = await call_next(request)
+        else:
+            response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
+app.add_middleware(RequestIDMiddleware)
+
 
 # ---------------------------------------------------------------------------
 # Prometheus HTTP request duration middleware
 # ---------------------------------------------------------------------------
+_RATE_LIMIT = int(os.getenv("AURA_RATE_LIMIT", "1000"))
+
+
 @app.middleware("http")
 async def _prometheus_timing_middleware(request: Request, call_next):
-    """Record HTTP request duration for every endpoint."""
+    """Record HTTP request duration for every endpoint and add rate-limit headers."""
     start = time.perf_counter()
     response = await call_next(request)
     if _PROMETHEUS_AVAILABLE:
@@ -153,12 +209,29 @@ async def _prometheus_timing_middleware(request: Request, call_next):
         # Normalise path to avoid high-cardinality labels (strip UUIDs etc.)
         path = request.url.path
         http_request_duration.labels(endpoint=path).observe(duration)
+    response.headers["X-RateLimit-Limit"] = str(_RATE_LIMIT)
     return response
 
 
 class ExecuteRequest(BaseModel):
     tool_name: str
     args: List[Any] = []
+    goal: Optional[str] = Field(default=None, min_length=1, max_length=2000)
+    max_cycles: int = Field(default=5, ge=1, le=20)
+    dry_run: bool = Field(default=False)
+
+    @field_validator("goal")
+    @classmethod
+    def validate_goal_content(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        suspicious = re.compile(
+            r"(ignore previous|system prompt|<\|im_start\|>|###\s*instruction)",
+            re.IGNORECASE,
+        )
+        if suspicious.search(v):
+            raise ValueError("Goal contains disallowed patterns")
+        return v.strip()
 
 
 class WebhookGoalRequest(BaseModel):
@@ -651,7 +724,7 @@ async def ready() -> Dict:
                 content={"status": "not_ready", "reason": f"Redis unavailable: {exc}"},
             )
 
-    return {"status": "ready"}
+    return {"status": "ready", "checks": {"sqlite": "ok"}}
 
 
 @app.get("/metrics", include_in_schema=False)

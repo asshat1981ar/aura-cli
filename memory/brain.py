@@ -69,7 +69,9 @@ class Brain:
         with self._lock:
             self.db.execute("PRAGMA journal_mode=WAL")
             self.db.execute("PRAGMA synchronous=NORMAL")
-            self.db.execute("PRAGMA cache_size=10000")
+            self.db.execute("PRAGMA cache_size=-64000")
+            self.db.execute("PRAGMA busy_timeout=5000")
+            self.db.execute("PRAGMA foreign_keys=ON")
             self.db.execute("""
             CREATE TABLE IF NOT EXISTS schema_version(
                 version INTEGER PRIMARY KEY

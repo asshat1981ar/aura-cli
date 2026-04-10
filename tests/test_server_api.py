@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from memory.store import MemoryStore
 
@@ -317,3 +318,60 @@ def test_execute_goal_without_args_when_enabled(server_module):
     with pytest.raises(HTTPException) as exc:
         _run(server_module.execute(server_module.ExecuteRequest(tool_name="goal", args=[])))
     assert exc.value.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# HTTP-level tests using TestClient (headers, auth, CORS, request ID)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def http_client(server_module):
+    """TestClient for HTTP-level header and auth tests."""
+    return TestClient(server_module.app, raise_server_exceptions=False)
+
+
+def test_execute_requires_auth_when_token_set(http_client, monkeypatch):
+    """POST /execute with AGENT_API_TOKEN set but no Authorization header → 401."""
+    monkeypatch.setenv("AGENT_API_TOKEN", "test-secret-token")
+    response = http_client.post(
+        "/execute",
+        json={"tool_name": "ask", "args": ["hi"]},
+    )
+    assert response.status_code == 401
+
+
+def test_rate_limit_header_present_on_response(http_client):
+    """Every response must include X-RateLimit-Limit header."""
+    response = http_client.get("/health")
+    assert "x-ratelimit-limit" in response.headers
+    assert response.headers["x-ratelimit-limit"].isdigit()
+
+
+def test_health_http_returns_200_with_status_field(http_client):
+    """GET /health returns HTTP 200 and a JSON body with a 'status' field."""
+    response = http_client.get("/health")
+    assert response.status_code == 200
+    assert "status" in response.json()
+
+
+def test_ready_http_returns_json_with_checks_field(http_client):
+    """GET /ready returns JSON that contains a 'checks' field."""
+    response = http_client.get("/ready")
+    data = response.json()
+    assert "checks" in data
+
+
+def test_cors_header_present_when_origin_sent(http_client):
+    """GET /health with an allowed Origin returns Access-Control-Allow-Origin."""
+    response = http_client.get(
+        "/health",
+        headers={"Origin": "http://localhost:3000"},
+    )
+    assert "access-control-allow-origin" in response.headers
+
+
+def test_x_request_id_returned_in_response_headers(http_client):
+    """Every response must include an X-Request-ID header."""
+    response = http_client.get("/health")
+    assert "x-request-id" in response.headers

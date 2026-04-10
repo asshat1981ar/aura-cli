@@ -10,13 +10,26 @@ Provides JWT-based authentication with:
 from __future__ import annotations
 
 import hashlib
+import os
 import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Any, Optional
 
 from core.logging_utils import log_json
+
+_ALLOWED_ALGORITHMS = {"HS256"}
+
+
+def _default_auth_db_path() -> Path:
+    custom = os.environ.get("AURA_AUTH_DB_PATH")
+    if custom:
+        return Path(custom)
+    xdg_data = os.environ.get("XDG_DATA_HOME")
+    base = Path(xdg_data) if xdg_data else Path.home() / ".local" / "share"
+    return base / "aura" / "auth.db"
 
 # Optional JWT support
 try:
@@ -114,8 +127,24 @@ class AuthManager:
         algorithm: str = "HS256",
         access_token_expire_minutes: int = 30,
         refresh_token_expire_days: int = 7,
-        db_path: Optional[str] = None,
+        db_path: Optional[Any] = None,
     ):
+        # Hard block algorithm=none unless running under pytest or explicit test mode
+        if algorithm == "none":
+            if not (
+                os.environ.get("PYTEST_CURRENT_TEST")
+                or os.environ.get("AURA_TEST_MODE") == "1"
+            ):
+                raise ValueError(
+                    "algorithm='none' is forbidden in production. "
+                    "Set AURA_TEST_MODE=1 only in test environments."
+                )
+        elif algorithm not in _ALLOWED_ALGORITHMS:
+            raise ValueError(
+                f"Algorithm '{algorithm}' not in allowlist {_ALLOWED_ALGORITHMS}. "
+                "Only HS256 is supported."
+            )
+
         self._jwt_available = JWT_AVAILABLE
         if not self._jwt_available and algorithm not in ("none", "dummy"):
             # Allow initialization without JWT for non-token operations
@@ -136,12 +165,19 @@ class AuthManager:
         self._api_keys: dict[str, str] = {}  # api_key -> username
         # Legacy in-memory set kept for non-jti revocations; primary store is SQLite
         self._revoked_tokens: set[str] = set()
-        self._db_path = db_path or "aura_auth.db"
+        resolved_db_path: Path = Path(db_path) if db_path is not None else _default_auth_db_path()
+        resolved_db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._db_path = str(resolved_db_path)
         self._init_revocation_db()
 
     def _init_revocation_db(self) -> None:
         """Create the SQLite revocation store if it doesn't exist yet."""
         with sqlite3.connect(self._db_path) as conn:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA synchronous=NORMAL")
+            conn.execute("PRAGMA cache_size=-64000")
+            conn.execute("PRAGMA busy_timeout=5000")
+            conn.execute("PRAGMA foreign_keys=ON")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS revoked_tokens (
@@ -155,6 +191,11 @@ class AuthManager:
         """Return True if *jti* is present in the SQLite revocation table."""
         try:
             with sqlite3.connect(self._db_path) as conn:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA synchronous=NORMAL")
+                conn.execute("PRAGMA cache_size=-64000")
+                conn.execute("PRAGMA busy_timeout=5000")
+                conn.execute("PRAGMA foreign_keys=ON")
                 row = conn.execute(
                     "SELECT 1 FROM revoked_tokens WHERE jti = ?", (jti,)
                 ).fetchone()
@@ -166,6 +207,11 @@ class AuthManager:
         """Insert *jti* into the SQLite revocation table."""
         try:
             with sqlite3.connect(self._db_path) as conn:
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute("PRAGMA synchronous=NORMAL")
+                conn.execute("PRAGMA cache_size=-64000")
+                conn.execute("PRAGMA busy_timeout=5000")
+                conn.execute("PRAGMA foreign_keys=ON")
                 conn.execute(
                     "INSERT OR IGNORE INTO revoked_tokens (jti, revoked_at) VALUES (?, ?)",
                     (jti, datetime.now(timezone.utc).isoformat()),

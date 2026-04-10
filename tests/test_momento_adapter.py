@@ -6,6 +6,8 @@ so the adapter is always in fallback/no-op mode.  This verifies:
   - is_available() returns False when no key
   - cache_get/set/delete/list operations return safe defaults
   - publish returns False
+  - Circuit breaker functionality
+  - Lock operations in fallback mode
   - MomentoBrain behaves identically to Brain in fallback mode
   - MomentoMemoryStore behaves identically to MemoryStore in fallback mode
   - SkillWeightAdapter works with momento=None
@@ -13,9 +15,100 @@ so the adapter is always in fallback/no-op mode.  This verifies:
 """
 
 import os
+import sys
 import tempfile
 import unittest
+import time
+import threading
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+
+def setup_momento_mocks():
+    """Inject mock Momento SDK into sys.modules to avoid import errors."""
+    if "momento" not in sys.modules:
+        momento_mock = MagicMock()
+        sys.modules["momento"] = momento_mock
+        sys.modules["momento.responses"] = MagicMock()
+        sys.modules["momento.requests"] = MagicMock()
+
+
+setup_momento_mocks()
+
+
+class TestCircuitBreaker(unittest.TestCase):
+    """Test the _CircuitBreaker class."""
+
+    def test_circuit_breaker_init(self):
+        from memory.momento_adapter import _CircuitBreaker
+        cb = _CircuitBreaker()
+        self.assertEqual(cb._state, "closed")
+        self.assertEqual(cb._failures, 0)
+
+    def test_circuit_breaker_allow_closed(self):
+        from memory.momento_adapter import _CircuitBreaker
+        cb = _CircuitBreaker()
+        self.assertTrue(cb.allow_request())
+        self.assertTrue(cb.allow_request())
+
+    def test_circuit_breaker_record_success(self):
+        from memory.momento_adapter import _CircuitBreaker
+        cb = _CircuitBreaker()
+        cb._failures = 3
+        cb.record_success()
+        self.assertEqual(cb._failures, 0)
+        self.assertEqual(cb._state, "closed")
+
+    def test_circuit_breaker_opens_after_threshold(self):
+        from memory.momento_adapter import _CircuitBreaker
+        cb = _CircuitBreaker()
+        for _ in range(cb.THRESHOLD):
+            cb.record_failure()
+        self.assertEqual(cb._state, "open")
+        self.assertFalse(cb.allow_request())
+
+    def test_circuit_breaker_half_open_after_reset(self):
+        from memory.momento_adapter import _CircuitBreaker
+        cb = _CircuitBreaker()
+        for _ in range(cb.THRESHOLD):
+            cb.record_failure()
+        cb._opened_at = time.monotonic() - cb.RESET_SECONDS - 1
+        result = cb.allow_request()
+        self.assertTrue(result)
+        self.assertEqual(cb._state, "half_open")
+
+    def test_circuit_breaker_half_open_success_closes(self):
+        from memory.momento_adapter import _CircuitBreaker
+        cb = _CircuitBreaker()
+        for _ in range(cb.THRESHOLD):
+            cb.record_failure()
+        cb._opened_at = time.monotonic() - cb.RESET_SECONDS - 1
+        cb.allow_request()
+        cb.record_success()
+        self.assertEqual(cb._state, "closed")
+
+    def test_circuit_breaker_half_open_failure_reopens(self):
+        from memory.momento_adapter import _CircuitBreaker
+        cb = _CircuitBreaker()
+        for _ in range(cb.THRESHOLD):
+            cb.record_failure()
+        cb._opened_at = time.monotonic() - cb.RESET_SECONDS - 1
+        cb.allow_request()
+        cb.record_failure()
+        self.assertEqual(cb._state, "open")
+
+    def test_circuit_breaker_thread_safe(self):
+        from memory.momento_adapter import _CircuitBreaker
+        cb = _CircuitBreaker()
+        def record_failures():
+            for _ in range(3):
+                cb.record_failure()
+        threads = [threading.Thread(target=record_failures) for _ in range(2)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        self.assertGreaterEqual(cb._failures, 5)
 
 
 class TestMomentoAdapterFallback(unittest.TestCase):
@@ -62,6 +155,49 @@ class TestMomentoAdapterFallback(unittest.TestCase):
     def test_publish_returns_false(self):
         adapter = self._make_adapter()
         self.assertFalse(adapter.publish("topic", "message"))
+
+    def test_acquire_lock_returns_true_in_fallback(self):
+        """In fallback mode (no Momento), acquire_lock returns True (local mode)."""
+        adapter = self._make_adapter()
+        self.assertTrue(adapter.acquire_lock("test-lock"))
+
+    def test_release_lock_returns_true_in_fallback(self):
+        """In fallback mode, release_lock returns True."""
+        adapter = self._make_adapter()
+        self.assertTrue(adapter.release_lock("test-lock"))
+
+    def test_list_range_with_params(self):
+        """list_range with start/end params still returns empty list."""
+        adapter = self._make_adapter()
+        result = adapter.list_range("cache", "key", start=0, end=10)
+        self.assertEqual(result, [])
+
+    def test_cache_set_with_ttl(self):
+        """cache_set with ttl_seconds still returns False."""
+        adapter = self._make_adapter()
+        result = adapter.cache_set("cache", "key", "value", ttl_seconds=120)
+        self.assertFalse(result)
+
+    def test_list_push_with_max_size(self):
+        """list_push with max_size still returns False."""
+        adapter = self._make_adapter()
+        result = adapter.list_push("cache", "key", "value", ttl_seconds=60, max_size=10)
+        self.assertFalse(result)
+
+    def test_cache_constants_exist(self):
+        """Verify cache name constants are defined."""
+        from memory.momento_adapter import (
+            WORKING_MEMORY_CACHE,
+            EPISODIC_MEMORY_CACHE,
+            TOPIC_CYCLE_COMPLETE,
+            TOPIC_WEAKNESS_FOUND,
+            TOPIC_GOAL_QUEUED,
+        )
+        self.assertEqual(WORKING_MEMORY_CACHE, "aura-working-memory")
+        self.assertEqual(EPISODIC_MEMORY_CACHE, "aura-episodic-memory")
+        self.assertTrue(TOPIC_CYCLE_COMPLETE.startswith("aura."))
+        self.assertTrue(TOPIC_WEAKNESS_FOUND.startswith("aura."))
+        self.assertTrue(TOPIC_GOAL_QUEUED.startswith("aura."))
 
 
 class TestMomentoBrainFallback(unittest.TestCase):

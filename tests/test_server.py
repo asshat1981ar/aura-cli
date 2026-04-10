@@ -115,14 +115,21 @@ class TestReadyEndpoint:
         finally:
             os.environ.pop("AGENT_API_TOKEN", None)
 
+    def _stub_redis(self, monkeypatch, mock_redis_client):
+        """Inject a fake redis module so tests run without the redis package."""
+        fake_redis = MagicMock()
+        fake_redis.from_url = MagicMock(return_value=mock_redis_client)
+        monkeypatch.setitem(sys.modules, "redis", fake_redis)
+        return fake_redis
+
     def test_ready_redis_unavailable_marks_degraded(self, monkeypatch, client):
         mock_conn = MagicMock()
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6399")
         mock_redis_client = MagicMock()
         mock_redis_client.ping.side_effect = Exception("Connection refused")
+        self._stub_redis(monkeypatch, mock_redis_client)
         with patch("sqlite3.connect", return_value=mock_conn):
-            with patch("redis.from_url", return_value=mock_redis_client):
-                resp = client.get("/ready")
+            resp = client.get("/ready")
         data = resp.json()
         assert data["status"] in ("degraded", "ready", "not_ready")
 
@@ -131,18 +138,18 @@ class TestReadyEndpoint:
         monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")
         mock_redis_client = MagicMock()
         mock_redis_client.ping.return_value = True
+        self._stub_redis(monkeypatch, mock_redis_client)
         with patch("sqlite3.connect", return_value=mock_conn):
-            with patch("redis.from_url", return_value=mock_redis_client):
-                resp = client.get("/ready")
+            resp = client.get("/ready")
         assert resp.status_code in (200, 503)
 
     def test_ready_skip_redis_when_no_env_var(self, monkeypatch, client):
         mock_conn = MagicMock()
         monkeypatch.delenv("REDIS_URL", raising=False)
+        fake_redis = self._stub_redis(monkeypatch, MagicMock())
         with patch("sqlite3.connect", return_value=mock_conn):
-            with patch("redis.from_url") as mock_redis:
-                resp = client.get("/ready")
-                mock_redis.assert_not_called()
+            resp = client.get("/ready")
+        fake_redis.from_url.assert_not_called()
         assert resp.status_code in (200, 503)
 
     def test_ready_overall_latency_ms_present(self, monkeypatch, client):

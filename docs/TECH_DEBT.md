@@ -38,3 +38,4 @@
 | TD-028 | `core/improvement_loop.py` | 525 lines — loop phases (propose, evaluate, apply) should each be extracted for testability. | LOW | Sprint 6 |
 | TD-029 | `core/agentic_evaluation.py` | 521 lines — evaluator variants embedded inline.  Extract to `core/evaluators/`. | LOW | Sprint 6 |
 | TD-030 | `tools/aura_control_mcp.py` | 510 lines — control handler split needed alongside other MCP server refactors. | LOW | Sprint 6 |
+| TD-031 | `core/vector_store.py` | v1 is deprecated — migrate all consumers to `memory/vector_store_v2.py` (`VectorStoreV2`). DeprecationWarning added; compat shim in place. Remove v1 once all callers are updated. | MEDIUM | Sprint 7 |

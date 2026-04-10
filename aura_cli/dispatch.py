@@ -33,7 +33,7 @@ from core.config_manager import DEFAULT_CONFIG, config
 from core.git_tools import GitTools
 from core.logging_utils import log_json
 from core.task_handler import _check_project_writability, run_goals_loop
-from core.vector_store import VectorStore
+from memory.vector_store_v2 import VectorStoreV2 as VectorStore
 from memory.brain import Brain
 
 

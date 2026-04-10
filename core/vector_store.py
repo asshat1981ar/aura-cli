@@ -5,6 +5,7 @@ import time
 import uuid
 import hashlib
 import sqlite3
+import warnings
 from typing import List, Dict, Any, Union
 
 
@@ -44,6 +45,12 @@ class VectorStore:
     """
 
     def __init__(self, model_adapter, brain):
+        if type(self) is VectorStore:
+            warnings.warn(
+                "core.vector_store (v1) is deprecated. Use memory.vector_store_v2 instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.model_adapter = model_adapter
         self.brain = brain
         # ASCM v2: use Row factory for name-based access in search results
@@ -403,3 +410,15 @@ class VectorStore:
     def add(self, content: str):
         rec = MemoryRecord(id=uuid.uuid4().hex, content=content, source_type="manual_add", source_ref="legacy_api", created_at=time.time(), updated_at=time.time())
         self.upsert([rec])
+
+
+# ---------------------------------------------------------------------------
+# Backwards compatibility shim
+# NOTE: memory.vector_store_v2.VectorStoreV2 *inherits* from VectorStore, so
+# we cannot reassign the name here without creating a circular dependency.
+# New code should import VectorStoreV2 directly from memory.vector_store_v2.
+# ---------------------------------------------------------------------------
+try:
+    from memory.vector_store_v2 import VectorStoreV2  # noqa: F401 – re-exported for convenience
+except ImportError:
+    pass  # Fall back to v1 implementation above

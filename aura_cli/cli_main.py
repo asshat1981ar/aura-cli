@@ -32,7 +32,7 @@ from core.policy import Policy
 from core.runtime_auth import resolve_config_api_key, runtime_provider_status, runtime_provider_summary
 from core.runtime_paths import resolve_project_path
 from core.task_handler import _check_project_writability, run_goals_loop
-from core.vector_store import VectorStore
+from memory.vector_store_v2 import VectorStoreV2 as VectorStore
 from agents.scaffolder import ScaffolderAgent
 
 from aura_cli.cli_options import (

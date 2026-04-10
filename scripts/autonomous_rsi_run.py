@@ -20,7 +20,7 @@ from aura_cli.cli_main import default_agents
 from core.evolution_loop import EvolutionLoop
 from core.recursive_improvement import RecursiveImprovementService
 from core.model_adapter import ModelAdapter
-from core.vector_store import VectorStore
+from memory.vector_store_v2 import VectorStoreV2 as VectorStore
 from memory.brain import Brain
 from core.git_tools import GitTools
 from agents.mutator import MutatorAgent

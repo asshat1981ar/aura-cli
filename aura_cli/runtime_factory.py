@@ -22,7 +22,7 @@ from core.orchestrator import LoopOrchestrator
 from core.policy import Policy
 from core.runtime_auth import resolve_config_api_key, runtime_provider_status, runtime_provider_summary
 from core.runtime_paths import resolve_project_path
-from core.vector_store import VectorStore
+from memory.vector_store_v2 import VectorStoreV2 as VectorStore
 from memory.brain import Brain
 from memory.store import MemoryStore
 

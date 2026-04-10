@@ -599,17 +599,11 @@ class TestClampedHelpers:
         assert 128 <= val <= 8 * 1024
 
     def test_clamped_timeout_respects_min(self, monkeypatch):
-        monkeypatch.setenv("AURA_RUN_TOOL_TIMEOUT_S", "0.01")
-        import importlib
-
-        importlib.reload(server_mod)
+        monkeypatch.setattr(server_mod, "RUN_TOOL_TIMEOUT_S", "0.01")
         assert server_mod._clamped_run_tool_timeout_s() >= 1.0
 
     def test_clamped_timeout_respects_max(self, monkeypatch):
-        monkeypatch.setenv("AURA_RUN_TOOL_TIMEOUT_S", "9999")
-        import importlib
-
-        importlib.reload(server_mod)
+        monkeypatch.setattr(server_mod, "RUN_TOOL_TIMEOUT_S", "9999")
         assert server_mod._clamped_run_tool_timeout_s() <= 60.0
 
 

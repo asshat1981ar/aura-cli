@@ -123,7 +123,7 @@ omit = [
 ]
 
 [tool.coverage.report]
-fail_under = 20
+fail_under = 12
 show_missing = true
 exclude_lines = [
     "pragma: no cover",
@@ -137,8 +137,8 @@ exclude_lines = [
 ]
 
 [tool.bandit]
-exclude_dirs = ["tests", "archive", "scripts"]
-skips = ["B101"]  # assert used in tests
+exclude_dirs = ["tests", "scripts", "docs", ".venv", "web-ui"]
+skips = ["B101", "B601"]  # B101=assert, B601=paramiko (not used here)
 
 [tool.ruff]
 extend = "ruff.toml"

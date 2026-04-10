@@ -64,9 +64,7 @@ class TestRunAsyncSafely:
         coro = _coro()
         mock_anyio = MagicMock()
         mock_anyio.run.return_value = 42
-        with patch("aura_cli.dispatch.anyio_available", True), patch(
-            "aura_cli.dispatch.anyio", mock_anyio, create=True
-        ):
+        with patch("aura_cli.dispatch.anyio_available", True), patch("aura_cli.dispatch.anyio", mock_anyio, create=True):
             result = _run_async_safely(coro)
         # Close coroutine in case mock didn't consume it
         try:
@@ -92,9 +90,7 @@ class TestRunAsyncSafely:
             return None
 
         coro = _coro()
-        with patch("aura_cli.dispatch.anyio_available", False), patch(
-            "asyncio.run", side_effect=RuntimeError("something else")
-        ):
+        with patch("aura_cli.dispatch.anyio_available", False), patch("asyncio.run", side_effect=RuntimeError("something else")):
             with pytest.raises(RuntimeError, match="something else"):
                 _run_async_safely(coro)
         try:
@@ -175,9 +171,7 @@ class TestPrepareRuntimeContext:
         mock_runtime = MagicMock()
         ctx.runtime_factory.return_value = mock_runtime
 
-        with patch("aura_cli.dispatch._sync_cli_compat"), patch(
-            "aura_cli.dispatch.log_json"
-        ), patch("aura_cli.dispatch._check_project_writability", return_value=True):
+        with patch("aura_cli.dispatch._sync_cli_compat"), patch("aura_cli.dispatch.log_json"), patch("aura_cli.dispatch._check_project_writability", return_value=True):
             result = _prepare_runtime_context(ctx)
 
         assert result is None
@@ -193,9 +187,7 @@ class TestPrepareRuntimeContext:
         ctx = self._make_full_ctx()
         ctx.runtime_factory.return_value = MagicMock()
 
-        with patch("aura_cli.dispatch._sync_cli_compat"), patch(
-            "aura_cli.dispatch.log_json"
-        ), patch("aura_cli.dispatch._check_project_writability", return_value=False):
+        with patch("aura_cli.dispatch._sync_cli_compat"), patch("aura_cli.dispatch.log_json"), patch("aura_cli.dispatch._check_project_writability", return_value=False):
             result = _prepare_runtime_context(ctx)
 
         assert result == 1
@@ -208,15 +200,7 @@ class TestPrepareRuntimeContext:
         mock_cfg = MagicMock()
         mock_cfg.get.return_value = {}
 
-        with patch("aura_cli.dispatch._sync_cli_compat"), patch(
-            "aura_cli.dispatch.log_json"
-        ), patch(
-            "aura_cli.dispatch._check_project_writability", return_value=True
-        ), patch(
-            "aura_cli.dispatch.config", mock_cfg
-        ), patch(
-            "aura_cli.dispatch.DEFAULT_CONFIG", {"beads": {}}
-        ):
+        with patch("aura_cli.dispatch._sync_cli_compat"), patch("aura_cli.dispatch.log_json"), patch("aura_cli.dispatch._check_project_writability", return_value=True), patch("aura_cli.dispatch.config", mock_cfg), patch("aura_cli.dispatch.DEFAULT_CONFIG", {"beads": {}}):
             _prepare_runtime_context(ctx)
 
         _, kwargs = ctx.runtime_factory.call_args
@@ -229,9 +213,7 @@ class TestPrepareRuntimeContext:
         ctx = self._make_full_ctx(decompose=True)
         ctx.runtime_factory.return_value = MagicMock()
 
-        with patch("aura_cli.dispatch._sync_cli_compat"), patch(
-            "aura_cli.dispatch.log_json"
-        ), patch("aura_cli.dispatch._check_project_writability", return_value=True):
+        with patch("aura_cli.dispatch._sync_cli_compat"), patch("aura_cli.dispatch.log_json"), patch("aura_cli.dispatch._check_project_writability", return_value=True):
             _prepare_runtime_context(ctx)
 
         _, kwargs = ctx.runtime_factory.call_args
@@ -247,9 +229,7 @@ class TestPrintJsonPayload:
     def test_prints_json_with_warnings(self, capsys):
         from aura_cli.dispatch import _print_json_payload
 
-        with patch(
-            "aura_cli.dispatch.attach_cli_warnings", side_effect=lambda p, _: p
-        ):
+        with patch("aura_cli.dispatch.attach_cli_warnings", side_effect=lambda p, _: p):
             _print_json_payload({"key": "val"}, parsed=None, indent=2)
 
         out = capsys.readouterr().out
@@ -275,19 +255,13 @@ class TestRunJsonPrintingCallable:
     def test_json_output_is_decorated_with_warnings(self, capsys):
         from aura_cli.dispatch import _run_json_printing_callable_with_warnings
 
-        ctx = _make_ctx(
-            parsed=SimpleNamespace(
-                warning_records=[SimpleNamespace(message="warn!")], warnings=[]
-            )
-        )
+        ctx = _make_ctx(parsed=SimpleNamespace(warning_records=[SimpleNamespace(message="warn!")], warnings=[]))
 
         def _func():
             print(json.dumps({"ok": True}))
             return 0
 
-        with patch(
-            "aura_cli.dispatch.attach_cli_warnings", side_effect=lambda p, _: p
-        ):
+        with patch("aura_cli.dispatch.attach_cli_warnings", side_effect=lambda p, _: p):
             result = _run_json_printing_callable_with_warnings(ctx, _func)
 
         assert result == 0
@@ -297,9 +271,7 @@ class TestRunJsonPrintingCallable:
     def test_non_json_output_passed_through(self, capsys):
         from aura_cli.dispatch import _run_json_printing_callable_with_warnings
 
-        ctx = _make_ctx(
-            parsed=SimpleNamespace(warning_records=["w"], warnings=[])
-        )
+        ctx = _make_ctx(parsed=SimpleNamespace(warning_records=["w"], warnings=[]))
 
         def _func():
             print("plain text output")
@@ -342,19 +314,21 @@ class TestContractReportDispatch:
         ctx.args.check = False
 
         mock_report = MagicMock()
-        with patch(
-            "aura_cli.dispatch._handle_contract_report_dispatch.__module__",
-            "aura_cli.dispatch",
-        ), patch(
-            "aura_cli.contract_report.build_cli_contract_report",
-            return_value=mock_report,
-        ), patch(
-            "aura_cli.contract_report.render_cli_contract_report", return_value="report\n"
-        ), patch(
-            "aura_cli.contract_report.cli_contract_report_exit_code", return_value=0
-        ), patch(
-            "aura_cli.contract_report.cli_contract_report_failure_message",
-            return_value="",
+        with (
+            patch(
+                "aura_cli.dispatch._handle_contract_report_dispatch.__module__",
+                "aura_cli.dispatch",
+            ),
+            patch(
+                "aura_cli.contract_report.build_cli_contract_report",
+                return_value=mock_report,
+            ),
+            patch("aura_cli.contract_report.render_cli_contract_report", return_value="report\n"),
+            patch("aura_cli.contract_report.cli_contract_report_exit_code", return_value=0),
+            patch(
+                "aura_cli.contract_report.cli_contract_report_failure_message",
+                return_value="",
+            ),
         ):
             code = _handle_contract_report_dispatch(ctx)
 
@@ -539,9 +513,7 @@ class TestGoalOnceDispatch:
         mock_orch.run_loop.side_effect = RuntimeError("boom")
         ctx.runtime = {"orchestrator": mock_orch}
 
-        with patch("aura_cli.dispatch.config") as mock_cfg, patch(
-            "aura_cli.dispatch.log_json"
-        ):
+        with patch("aura_cli.dispatch.config") as mock_cfg, patch("aura_cli.dispatch.log_json"):
             mock_cfg.get.return_value = 5
             code = _handle_goal_once_dispatch(ctx)
 
@@ -559,13 +531,9 @@ class TestGoalOnceDispatch:
         ctx = _make_ctx(args=args, parsed=SimpleNamespace(warning_records=[], warnings=[]))
         ctx.runtime = {"orchestrator": self._mock_orchestrator()}
 
-        with patch("aura_cli.dispatch.config") as mock_cfg, patch(
-            "aura_cli.dispatch.attach_cli_warnings", side_effect=lambda p, _: p
-        ):
+        with patch("aura_cli.dispatch.config") as mock_cfg, patch("aura_cli.dispatch.attach_cli_warnings", side_effect=lambda p, _: p):
             mock_cfg.get.return_value = 5
-            with patch(
-                "core.operator_runtime.build_beads_runtime_metadata", return_value={}
-            ):
+            with patch("core.operator_runtime.build_beads_runtime_metadata", return_value={}):
                 code = _handle_goal_once_dispatch(ctx)
 
         assert code == 0
@@ -610,9 +578,7 @@ class TestGoalRunDispatch:
 
         ctx = self._make_goal_run_ctx()
 
-        with patch("aura_cli.dispatch.run_goals_loop") as mock_loop, patch(
-            "core.in_flight_tracker.InFlightTracker"
-        ) as mock_tracker_cls:
+        with patch("aura_cli.dispatch.run_goals_loop") as mock_loop, patch("core.in_flight_tracker.InFlightTracker") as mock_tracker_cls:
             mock_tracker_cls.return_value.exists.return_value = False
             code = _handle_goal_run_dispatch(ctx)
 
@@ -624,9 +590,7 @@ class TestGoalRunDispatch:
 
         ctx = self._make_goal_run_ctx()
 
-        with patch(
-            "aura_cli.dispatch.run_goals_loop", side_effect=KeyboardInterrupt()
-        ), patch("core.in_flight_tracker.InFlightTracker") as mock_tracker_cls:
+        with patch("aura_cli.dispatch.run_goals_loop", side_effect=KeyboardInterrupt()), patch("core.in_flight_tracker.InFlightTracker") as mock_tracker_cls:
             mock_tracker_cls.return_value.exists.return_value = False
             code = _handle_goal_run_dispatch(ctx)
 
@@ -647,9 +611,7 @@ class TestGoalRunDispatch:
             "goal_archive": MagicMock(),
         }
 
-        with patch("aura_cli.dispatch.run_goals_loop"), patch(
-            "core.in_flight_tracker.InFlightTracker"
-        ) as mock_tracker_cls:
+        with patch("aura_cli.dispatch.run_goals_loop"), patch("core.in_flight_tracker.InFlightTracker") as mock_tracker_cls:
             mock_inst = mock_tracker_cls.return_value
             mock_inst.exists.return_value = True
             mock_inst.read.return_value = {"goal": "resume-me"}
@@ -747,9 +709,7 @@ class TestGoalResumeDispatch:
             }
             code = _handle_goal_resume_dispatch(ctx)
 
-        ctx.runtime["goal_queue"].prepend_batch.assert_called_once_with(
-            ["interrupted-goal"]
-        )
+        ctx.runtime["goal_queue"].prepend_batch.assert_called_once_with(["interrupted-goal"])
         assert code == 0
 
 
@@ -900,9 +860,7 @@ class TestCredentialsStatusDispatch:
         mock_cfg = MagicMock()
         mock_cfg.get_credential_store_info.return_value = self._store_info()
 
-        with patch("aura_cli.dispatch.config", mock_cfg), patch(
-            "aura_cli.dispatch.attach_cli_warnings", side_effect=lambda p, _: p
-        ):
+        with patch("aura_cli.dispatch.config", mock_cfg), patch("aura_cli.dispatch.attach_cli_warnings", side_effect=lambda p, _: p):
             code = _handle_credentials_status_dispatch(ctx)
 
         assert code == 0
@@ -935,9 +893,7 @@ class TestMcpRestartDispatch:
         args.mcp_server = "ghost_server"
         ctx = _make_ctx(args=args)
 
-        with patch(
-            "core.mcp_registry.get_registered_service", side_effect=KeyError("ghost")
-        ):
+        with patch("core.mcp_registry.get_registered_service", side_effect=KeyError("ghost")):
             code = _handle_mcp_restart_dispatch(ctx)
 
         assert code == 1
@@ -949,14 +905,16 @@ class TestMcpRestartDispatch:
         args.mcp_server = "dev_tools"
         ctx = _make_ctx(args=args)
 
-        with patch(
-            "core.mcp_registry.get_registered_service",
-            return_value={"url": "http://localhost:9000"},
-        ), patch(
-            "core.mcp_health.check_mcp_health", new=lambda *a, **kw: None
-        ), patch(
-            "aura_cli.dispatch._run_async_safely",
-            return_value={"status": "healthy"},
+        with (
+            patch(
+                "core.mcp_registry.get_registered_service",
+                return_value={"url": "http://localhost:9000"},
+            ),
+            patch("core.mcp_health.check_mcp_health", new=lambda *a, **kw: None),
+            patch(
+                "aura_cli.dispatch._run_async_safely",
+                return_value={"status": "healthy"},
+            ),
         ):
             code = _handle_mcp_restart_dispatch(ctx)
 
@@ -969,14 +927,16 @@ class TestMcpRestartDispatch:
         args.mcp_server = "dev_tools"
         ctx = _make_ctx(args=args)
 
-        with patch(
-            "core.mcp_registry.get_registered_service",
-            return_value={"url": "http://localhost:9000"},
-        ), patch(
-            "core.mcp_health.check_mcp_health", new=lambda *a, **kw: None
-        ), patch(
-            "aura_cli.dispatch._run_async_safely",
-            return_value={"status": "offline", "error": "connection refused"},
+        with (
+            patch(
+                "core.mcp_registry.get_registered_service",
+                return_value={"url": "http://localhost:9000"},
+            ),
+            patch("core.mcp_health.check_mcp_health", new=lambda *a, **kw: None),
+            patch(
+                "aura_cli.dispatch._run_async_safely",
+                return_value={"status": "offline", "error": "connection refused"},
+            ),
         ):
             code = _handle_mcp_restart_dispatch(ctx)
 
@@ -1014,11 +974,13 @@ class TestCancelDispatch:
         ctx = _make_ctx()
         ctx.args.run_id = "run-abc"
 
-        with patch(
-            "core.running_runs.list_runs",
-            return_value=[{"run_id": "run-abc"}],
-        ), patch("core.running_runs.cancel_run", return_value=True), patch(
-            "aura_cli.dispatch.log_json"
+        with (
+            patch(
+                "core.running_runs.list_runs",
+                return_value=[{"run_id": "run-abc"}],
+            ),
+            patch("core.running_runs.cancel_run", return_value=True),
+            patch("aura_cli.dispatch.log_json"),
         ):
             code = _handle_cancel_dispatch(ctx)
 
@@ -1030,10 +992,13 @@ class TestCancelDispatch:
         ctx = _make_ctx()
         ctx.args.run_id = "run-xyz"
 
-        with patch(
-            "core.running_runs.list_runs",
-            return_value=[{"run_id": "run-xyz"}],
-        ), patch("core.running_runs.cancel_run", return_value=False):
+        with (
+            patch(
+                "core.running_runs.list_runs",
+                return_value=[{"run_id": "run-xyz"}],
+            ),
+            patch("core.running_runs.cancel_run", return_value=False),
+        ):
             code = _handle_cancel_dispatch(ctx)
 
         assert code == 1
@@ -1061,9 +1026,7 @@ class TestDispatchCommand:
         parsed = self._make_parsed("totally_unknown_action_xyz")
 
         with patch("aura_cli.dispatch._sync_cli_compat"):
-            code = dispatch_command(
-                parsed, project_root=Path("/proj"), runtime_factory=MagicMock()
-            )
+            code = dispatch_command(parsed, project_root=Path("/proj"), runtime_factory=MagicMock())
 
         assert code == 1
         assert "No dispatch rule" in capsys.readouterr().err
@@ -1075,12 +1038,8 @@ class TestDispatchCommand:
 
         # COMMAND_DISPATCH_REGISTRY holds the original function reference;
         # just verify the routing works by letting doctor run with mocked internals.
-        with patch("aura_cli.dispatch._sync_cli_compat"), patch(
-            "aura_cli.dispatch._handle_doctor"
-        ) as mock_doc:
-            code = dispatch_command(
-                parsed, project_root=Path("/proj"), runtime_factory=MagicMock()
-            )
+        with patch("aura_cli.dispatch._sync_cli_compat"), patch("aura_cli.dispatch._handle_doctor") as mock_doc:
+            code = dispatch_command(parsed, project_root=Path("/proj"), runtime_factory=MagicMock())
 
         mock_doc.assert_called_once_with(Path("/proj"))
         assert code == 0
@@ -1092,12 +1051,8 @@ class TestDispatchCommand:
         parsed.warnings = ["deprecated flag"]
         parsed.warning_records = []
 
-        with patch("aura_cli.dispatch._sync_cli_compat"), patch(
-            "aura_cli.dispatch._handle_doctor_dispatch", return_value=0
-        ):
-            dispatch_command(
-                parsed, project_root=Path("/proj"), runtime_factory=MagicMock()
-            )
+        with patch("aura_cli.dispatch._sync_cli_compat"), patch("aura_cli.dispatch._handle_doctor_dispatch", return_value=0):
+            dispatch_command(parsed, project_root=Path("/proj"), runtime_factory=MagicMock())
 
         assert "deprecated flag" in capsys.readouterr().err
 
@@ -1107,12 +1062,8 @@ class TestDispatchCommand:
         parsed = self._make_parsed("doctor")
         parsed.warning_records = [SimpleNamespace(message="structured warning")]
 
-        with patch("aura_cli.dispatch._sync_cli_compat"), patch(
-            "aura_cli.dispatch._handle_doctor_dispatch", return_value=0
-        ):
-            dispatch_command(
-                parsed, project_root=Path("/proj"), runtime_factory=MagicMock()
-            )
+        with patch("aura_cli.dispatch._sync_cli_compat"), patch("aura_cli.dispatch._handle_doctor_dispatch", return_value=0):
+            dispatch_command(parsed, project_root=Path("/proj"), runtime_factory=MagicMock())
 
         assert "structured warning" in capsys.readouterr().err
 
@@ -1128,26 +1079,12 @@ class TestDispatchCommand:
         parsed.namespace.explain = False
         parsed.namespace.json = False
 
-        mock_rt = {
-            "orchestrator": MagicMock(
-                run_loop=MagicMock(
-                    return_value={"stop_reason": "done", "history": []}
-                )
-            )
-        }
+        mock_rt = {"orchestrator": MagicMock(run_loop=MagicMock(return_value={"stop_reason": "done", "history": []}))}
 
         def _fake_factory(root, *, overrides=None):
             return mock_rt
 
-        with patch("aura_cli.dispatch._sync_cli_compat"), patch(
-            "aura_cli.dispatch.log_json"
-        ), patch(
-            "aura_cli.dispatch._check_project_writability", return_value=True
-        ), patch(
-            "aura_cli.dispatch.config"
-        ) as mock_cfg, patch(
-            "aura_cli.dispatch.DEFAULT_CONFIG", {"beads": {}}
-        ):
+        with patch("aura_cli.dispatch._sync_cli_compat"), patch("aura_cli.dispatch.log_json"), patch("aura_cli.dispatch._check_project_writability", return_value=True), patch("aura_cli.dispatch.config") as mock_cfg, patch("aura_cli.dispatch.DEFAULT_CONFIG", {"beads": {}}):
             # config.get must return None/dict so _resolve_beads_runtime_override can dict() it
             mock_cfg.get.return_value = None
             code = dispatch_command(
@@ -1170,13 +1107,13 @@ class TestAgentListDispatch:
 
         ctx = _make_ctx()
 
-        with patch(
-            "agents.registry._AGENT_MODULE_MAP",
-            {"coder": ("agents.coder", "CoderAgent")},
-        ), patch(
-            "agents.registry.FALLBACK_CAPABILITIES", {"coder": ["coding"]}
-        ), patch(
-            "aura_cli.dispatch.log_json"
+        with (
+            patch(
+                "agents.registry._AGENT_MODULE_MAP",
+                {"coder": ("agents.coder", "CoderAgent")},
+            ),
+            patch("agents.registry.FALLBACK_CAPABILITIES", {"coder": ["coding"]}),
+            patch("aura_cli.dispatch.log_json"),
         ):
             code = _handle_agent_list_dispatch(ctx)
 
@@ -1222,9 +1159,7 @@ class TestCredentialsMiscDispatches:
 
         ctx = _make_ctx()
         mock_cfg = MagicMock()
-        with patch("aura_cli.dispatch.config", mock_cfg), patch(
-            "aura_cli.dispatch._handle_migrate_credentials"
-        ) as mock_m:
+        with patch("aura_cli.dispatch.config", mock_cfg), patch("aura_cli.dispatch._handle_migrate_credentials") as mock_m:
             code = _handle_credentials_migrate_dispatch(ctx)
         mock_m.assert_called_once()
         assert code == 0
@@ -1234,9 +1169,7 @@ class TestCredentialsMiscDispatches:
 
         ctx = _make_ctx()
         mock_cfg = MagicMock()
-        with patch("aura_cli.dispatch.config", mock_cfg), patch(
-            "aura_cli.dispatch._handle_secure_store"
-        ) as mock_s:
+        with patch("aura_cli.dispatch.config", mock_cfg), patch("aura_cli.dispatch._handle_secure_store") as mock_s:
             code = _handle_credentials_store_dispatch(ctx)
         mock_s.assert_called_once()
         assert code == 0
@@ -1246,9 +1179,7 @@ class TestCredentialsMiscDispatches:
 
         ctx = _make_ctx()
         mock_cfg = MagicMock()
-        with patch("aura_cli.dispatch.config", mock_cfg), patch(
-            "aura_cli.dispatch._handle_secure_delete"
-        ) as mock_d:
+        with patch("aura_cli.dispatch.config", mock_cfg), patch("aura_cli.dispatch._handle_secure_delete") as mock_d:
             code = _handle_credentials_delete_dispatch(ctx)
         mock_d.assert_called_once()
         assert code == 0
@@ -1269,16 +1200,12 @@ class TestBeadsSchemasDispatch:
         )
         ctx.project_root = Path("/fake/proj")
 
-        with patch(
-            "core.beads_contract.BEADS_SCHEMA_VERSION", "1.0"
-        ), patch(
-            "core.beads_contract.BeadsInput.__annotations__", {"goal": str}
-        ), patch(
-            "core.beads_contract.BeadsDecision.__annotations__", {"action": str}
-        ), patch(
-            "core.beads_contract.BeadsResult.__annotations__", {"success": bool}
-        ), patch(
-            "aura_cli.dispatch.attach_cli_warnings", side_effect=lambda p, _: p
+        with (
+            patch("core.beads_contract.BEADS_SCHEMA_VERSION", "1.0"),
+            patch("core.beads_contract.BeadsInput.__annotations__", {"goal": str}),
+            patch("core.beads_contract.BeadsDecision.__annotations__", {"action": str}),
+            patch("core.beads_contract.BeadsResult.__annotations__", {"success": bool}),
+            patch("aura_cli.dispatch.attach_cli_warnings", side_effect=lambda p, _: p),
         ):
             code = _handle_beads_schemas_dispatch(ctx)
 

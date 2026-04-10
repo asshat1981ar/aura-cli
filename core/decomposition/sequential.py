@@ -18,7 +18,7 @@ class SequentialDecomposition(DecompositionStrategy):
         This strategy breaks down goals into a linear sequence where
     each step depends on the previous one.
 
-        Example:
+    Example:
             Goal: "Refactor the auth module"
             Steps:
             1. Analyze current auth implementation

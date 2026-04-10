@@ -71,7 +71,7 @@ class CreativeOrchestrator:
         3. **Execution Phase**: AURA implements the selected solution
         4. **Learning Phase**: Store successful patterns for future recall
 
-        Example:
+    Example:
             >>> orchestrator = CreativeOrchestrator(
             ...     aura_orchestrator=aura_orchestrator,
             ...     brain=brain,

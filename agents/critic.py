@@ -66,7 +66,7 @@ class CriticAgent:
             major = [i for i in critic_output.issues if i.severity == "major"]
 
             return {
-                "structured_output": critic_output.dict(),
+                "structured_output": critic_output.model_dump(),
                 "assessment": critic_output.overall_assessment,
                 "confidence": critic_output.confidence,
                 "summary": critic_output.summary,
@@ -152,7 +152,7 @@ Requirements:
             security_issues = [i for i in critic_output.issues if i.category == "safety"]
 
             return {
-                "structured_output": critic_output.dict(),
+                "structured_output": critic_output.model_dump(),
                 "assessment": critic_output.overall_assessment,
                 "confidence": critic_output.confidence,
                 "summary": critic_output.summary,
@@ -213,7 +213,7 @@ Evaluate for correctness, efficiency, readability, and adherence."""
             log_json("INFO", "critic_mutation_validation", details={"decision": validation.decision, "confidence": validation.confidence_score})
 
             return {
-                "structured_output": validation.dict(),
+                "structured_output": validation.model_dump(),
                 "decision": validation.decision,
                 "confidence": validation.confidence_score,
                 "approved": validation.decision == "APPROVED",

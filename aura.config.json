@@ -88,22 +88,22 @@
     "gemini": {
       "cli_type": "gemini-cli",
       "port_range": [
-        8020,
-        8029
+        8060,
+        8069
       ]
     },
     "claude": {
       "cli_type": "claude-code",
       "port_range": [
-        8030,
-        8039
+        8070,
+        8079
       ]
     },
     "codex": {
       "cli_type": "codex-cli",
       "port_range": [
-        8040,
-        8049
+        8080,
+        8089
       ]
     }
   },

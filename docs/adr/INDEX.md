@@ -15,6 +15,11 @@ New ADRs should be added here when created.
 | 005 | [ADR-005-rate-limiting-token-bucket.md](ADR-005-rate-limiting-token-bucket.md) | Rate Limiting — Token Bucket Algorithm | Accepted | 2026-04-09 | Implement per-endpoint, per-user rate limiting using the token-bucket algorithm as in-process FastAPI middleware; Redis-backed distributed limiter deferred to v1.1. |
 | 006 | [ADR-006-multi-stage-docker-build.md](ADR-006-multi-stage-docker-build.md) | Multi-Stage Docker Build | Accepted | 2026-04-10 | Switch to two-stage Dockerfile (builder + runtime) to exclude build tools from production image; add .dockerignore; align entry point to uvicorn aura_cli.server:app on port 8000. |
 | 007 | [ADR-007-openapi-first-contract.md](ADR-007-openapi-first-contract.md) | OpenAPI-First API Contract | Accepted | 2026-04-10 | Commit generated docs/api/openapi.json as the machine-readable API contract; validate and drift-check in CI via openapi-validate job in ci-enhanced.yml. |
+| 008 | [ADR-008-typer-cli-framework.md](ADR-008-typer-cli-framework.md) | Typer CLI Framework | Accepted | 2026-04-10 | Adopt Typer as the CLI framework for type-safe, intuitive command-line interface with automatic help generation and shell completion. |
+| 009 | [ADR-009-pydantic-configuration.md](ADR-009-pydantic-configuration.md) | Pydantic Configuration Management | Accepted | 2026-04-10 | Use Pydantic models for configuration validation and management, providing type safety, validation, and serialization for all configuration files. |
+| 010 | [ADR-010-pytest-testing.md](ADR-010-pytest-testing.md) | pytest Testing Framework | Accepted | 2026-04-10 | Adopt pytest as the primary testing framework with support for async tests, fixtures, parameterized tests, and comprehensive coverage reporting. |
+| 011 | [ADR-011-10-phase-pipeline.md](ADR-011-10-phase-pipeline.md) | 10-Phase Agent Pipeline | Accepted | 2026-04-10 | Implement a 10-phase agent pipeline (ingest, plan, critique, synthesize, act, sandbox, verify, reflect, adapt, evolve, archive) with feedback loops. |
+| 012 | [ADR-012-mcp-plugin-system.md](ADR-012-mcp-plugin-system.md) | MCP-Based Plugin System | Accepted | 2026-04-10 | Adopt Model Context Protocol (MCP) as the plugin architecture for extensible tool support with standardized interfaces and secure execution. |
 
 ---
 

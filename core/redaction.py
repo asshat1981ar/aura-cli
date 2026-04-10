@@ -35,3 +35,47 @@ def mask_secrets(data: Any) -> Any:
                 masked = p.sub("[REDACTED]", masked)
         return masked
     return data
+
+
+def redact_secrets(text: str) -> str:
+    """
+    Redact secrets from text string.
+    
+    Args:
+        text: Input text that may contain secrets
+        
+    Returns:
+        Text with secrets replaced by [REDACTED]
+    """
+    if not isinstance(text, str):
+        return text
+    
+    # Additional patterns for comprehensive secret detection
+    # Patterns with capture groups for prefix preservation
+    patterns_with_prefix = [
+        (re.compile(r'(?i)(api[_-]?key\s*[=:]\s*)["\']?[\w-]+["\']?'), 1),
+        (re.compile(r'(?i)(token\s*[=:]\s*)["\']?[\w-]+["\']?'), 1),
+        (re.compile(r'(?i)(password\s*[=:]\s*)["\']?[^"\'\s]+["\']?'), 1),
+    ]
+    
+    # Patterns without capture groups (full replacement)
+    patterns_full = [
+        re.compile(r'ghp_[\w]{36}'),
+        re.compile(r'sk-[a-zA-Z0-9]{48}'),
+        re.compile(r'Bearer\s+[a-zA-Z0-9._-]+'),
+    ]
+    
+    result = text
+    
+    # Handle patterns with prefix preservation
+    for pattern, group_num in patterns_with_prefix:
+        def replace_with_prefix(m):
+            prefix = m.group(group_num) if group_num <= len(m.groups()) else ""
+            return f"{prefix}[REDACTED]" if prefix else "[REDACTED]"
+        result = pattern.sub(replace_with_prefix, result)
+    
+    # Handle patterns with full replacement
+    for pattern in patterns_full:
+        result = pattern.sub("[REDACTED]", result)
+    
+    return result

@@ -13,6 +13,23 @@ except ImportError:  # pragma: no cover - platform-specific
 from aura_cli.cli_options import CLIParseError, attach_cli_warnings, cli_parse_error_payload, parse_cli_args
 from aura_cli.dispatch import dispatch_command
 
+# Import new components from sub-agent deliverables
+from core.container import Container
+from aura_cli.error_presenter import present_error
+
+
+def _initialize_container() -> None:
+    """Initialize the dependency injection container with core services."""
+    # Register configuration manager
+    from core.config_manager import ConfigManager
+    if "config_manager" not in Container._singletons:
+        Container.register_singleton(ConfigManager, ConfigManager())
+    
+    # Register model adapter
+    from core.model_adapter import ModelAdapter
+    if "model_adapter" not in Container._singletons:
+        Container.register_singleton(ModelAdapter, ModelAdapter())
+
 
 def _resolve_project_root(project_root_override=None) -> Path:
     if project_root_override:
@@ -55,23 +72,48 @@ def _save_history(project_root: Path) -> None:
 
 
 def main(project_root_override=None, argv=None):
+    # Initialize dependency injection container
+    _initialize_container()
+    
     project_root = _resolve_project_root(project_root_override)
     _ensure_project_on_path(project_root)
     _load_history(project_root)
 
     raw_argv = list(sys.argv[1:] if argv is None else argv)
+    
+    # Check for global flags
+    verbose = "--verbose" in raw_argv or "-v" in raw_argv
+    json_output = "--json" in raw_argv
+    
     try:
         parsed = parse_cli_args(raw_argv)
     except CLIParseError as exc:
-        if "--json" in raw_argv:
+        if json_output:
             print(json.dumps(attach_cli_warnings(cli_parse_error_payload(exc))))
         else:
-            print(f"Error: {exc}", file=sys.stderr)
-            if exc.usage:
-                print(exc.usage, file=sys.stderr)
+            # Use enhanced error presenter for CLI parse errors
+            present_error(
+                exc,
+                verbose=verbose,
+                json_output=json_output,
+                command="aura"
+            )
         return exc.code
 
     try:
         return dispatch_command(parsed, project_root=project_root)
+    except Exception as exc:
+        # Use enhanced error presenter for runtime errors
+        if json_output:
+            import json
+            print(json.dumps({"error": str(exc), "type": type(exc).__name__}))
+        else:
+            present_error(
+                exc,
+                verbose=verbose,
+                json_output=json_output,
+                command=getattr(parsed, 'command', 'aura')
+            )
+        return 1
     finally:
         _save_history(project_root)

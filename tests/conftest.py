@@ -6,6 +6,7 @@ Fixtures defined here are automatically available to all tests under
 
 from __future__ import annotations
 
+import asyncio
 import signal
 from contextlib import contextmanager
 from unittest.mock import patch
@@ -90,3 +91,24 @@ def mock_adapter_patch(mock_model_adapter: MockModelAdapter):
     """
     with patch("core.model_adapter.ModelAdapter", return_value=mock_model_adapter):
         yield mock_model_adapter
+
+
+# ---------------------------------------------------------------------------
+# Asyncio event loop isolation
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _restore_event_loop():
+    """Ensure each test starts with a fresh asyncio event loop.
+
+    Some tests call ``asyncio.run()`` which closes the current event loop.
+    Without this fixture, subsequent tests that call ``asyncio.get_event_loop()``
+    raise ``RuntimeError: There is no current event loop in thread 'MainThread'``.
+    """
+    yield
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+    except Exception:
+        pass

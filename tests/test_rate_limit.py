@@ -12,6 +12,7 @@ Covers:
   - Multiple users with independent buckets
   - Concurrent async requests
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -36,6 +37,7 @@ from aura_cli.middleware.rate_limit import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_app() -> FastAPI:
     """Minimal FastAPI app wired with rate_limit_middleware."""
@@ -73,10 +75,12 @@ def _make_app() -> FastAPI:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture(autouse=True)
 def reset_limiter(monkeypatch):
     """Replace the module-level limiter with a fresh one before each test."""
     import aura_cli.middleware.rate_limit as rl_mod
+
     monkeypatch.setattr(rl_mod, "_limiter", InMemoryRateLimiter())
 
 
@@ -93,6 +97,7 @@ def client(app):
 # ============================================================================
 # 1. RateLimit dataclass
 # ============================================================================
+
 
 class TestRateLimitDataclass:
     def test_fields_are_set_correctly(self):
@@ -116,6 +121,7 @@ class TestRateLimitDataclass:
 # ============================================================================
 # 2. TokenBucket unit tests
 # ============================================================================
+
 
 class TestTokenBucket:
     def test_consume_full_bucket_is_allowed(self):
@@ -172,6 +178,7 @@ class TestTokenBucket:
 # 3. Middleware: requests within/beyond limit
 # ============================================================================
 
+
 class TestMiddlewareBasic:
     def test_requests_within_limit_return_200(self, client):
         """All requests within the limit should receive 200."""
@@ -218,6 +225,7 @@ class TestMiddlewareBasic:
 # 4. Per-endpoint limits
 # ============================================================================
 
+
 class TestEndpointLimits:
     def test_login_limit_is_5_per_60s(self):
         rl = ENDPOINT_LIMITS["/api/v1/auth/login"]
@@ -230,10 +238,7 @@ class TestEndpointLimits:
         assert rl.window_seconds == 60
 
     def test_login_has_lower_limit_than_execute(self):
-        assert (
-            ENDPOINT_LIMITS["/api/v1/auth/login"].requests
-            < ENDPOINT_LIMITS["/execute"].requests
-        )
+        assert ENDPOINT_LIMITS["/api/v1/auth/login"].requests < ENDPOINT_LIMITS["/execute"].requests
 
     def test_execute_allows_10_requests_before_429(self, client):
         for _ in range(10):
@@ -254,6 +259,7 @@ class TestEndpointLimits:
 # ============================================================================
 # 5. Rate-limit key formatting
 # ============================================================================
+
 
 class TestRateLimitKey:
     def test_ip_key_used_when_no_auth(self):
@@ -288,6 +294,7 @@ class TestRateLimitKey:
 # ============================================================================
 # 6. Multiple users have independent buckets
 # ============================================================================
+
 
 class TestMultipleUsers:
     def test_independent_buckets_per_user(self):
@@ -326,6 +333,7 @@ class TestMultipleUsers:
 # 7. Exempt paths bypass rate limiting
 # ============================================================================
 
+
 class TestExemptPaths:
     @pytest.mark.parametrize("path", ["/health", "/ready", "/api/health"])
     def test_exempt_path_not_rate_limited(self, client, path):
@@ -342,6 +350,7 @@ class TestExemptPaths:
 # ============================================================================
 # 8. Concurrent requests via asyncio
 # ============================================================================
+
 
 async def test_concurrent_requests_respect_limit():
     """Concurrent async calls to the limiter collectively honour the limit."""
@@ -364,9 +373,7 @@ async def test_concurrent_requests_via_http():
     app = _make_app()
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
-        responses = await asyncio.gather(
-            *[c.get("/api/v1/auth/login") for _ in range(15)]
-        )
+        responses = await asyncio.gather(*[c.get("/api/v1/auth/login") for _ in range(15)])
 
     statuses = [r.status_code for r in responses]
     assert 200 in statuses

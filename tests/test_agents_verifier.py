@@ -15,6 +15,7 @@ from agents.verifier import VerifierAgent
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _completed(returncode: int = 0, stdout: str = "1 passed", stderr: str = "") -> subprocess.CompletedProcess:
     return subprocess.CompletedProcess(
         args=["python3", "-m", "pytest", "-q"],
@@ -49,10 +50,12 @@ class TestVerifierPass:
 
         agent = VerifierAgent(timeout=5)
         with patch("agents.verifier.subprocess.run", return_value=_completed(0)) as mock_run:
-            result = agent.run({
-                "project_root": str(tmp_path),
-                "tests": ["python3 -m pytest -q tests/test_foo.py"],
-            })
+            result = agent.run(
+                {
+                    "project_root": str(tmp_path),
+                    "tests": ["python3 -m pytest -q tests/test_foo.py"],
+                }
+            )
 
         assert result["status"] == "pass"
         assert result["failures"] == []
@@ -64,11 +67,13 @@ class TestVerifierPass:
 
         agent = VerifierAgent(timeout=5)
         with patch("agents.verifier.subprocess.run", return_value=_completed(0)) as mock_run:
-            result = agent.run({
-                "project_root": str(tmp_path),
-                "change_set": {"changes": [{"file_path": "bar.py"}]},
-                "tests": ["python3 -m pytest -q"],  # repo-wide, should be overridden
-            })
+            result = agent.run(
+                {
+                    "project_root": str(tmp_path),
+                    "change_set": {"changes": [{"file_path": "bar.py"}]},
+                    "tests": ["python3 -m pytest -q"],  # repo-wide, should be overridden
+                }
+            )
 
         assert result["status"] == "pass"
         called_cmd = mock_run.call_args.args[0]
@@ -76,8 +81,7 @@ class TestVerifierPass:
 
     def test_aura_skip_chdir_set_in_env(self, tmp_path):
         agent = VerifierAgent(timeout=5)
-        with patch("agents.verifier.subprocess.run", return_value=_completed(0)) as mock_run, \
-             patch.dict("os.environ", {}, clear=True):
+        with patch("agents.verifier.subprocess.run", return_value=_completed(0)) as mock_run, patch.dict("os.environ", {}, clear=True):
             agent.run({"project_root": str(tmp_path)})
         env_used = mock_run.call_args.kwargs["env"]
         assert env_used.get("AURA_SKIP_CHDIR") == "1"

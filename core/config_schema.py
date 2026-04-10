@@ -183,4 +183,3 @@ def validate_config(config_dict: Dict[str, Any]) -> tuple[bool, list[str]]:
     validator = ConfigValidator()
     is_valid, _, errors = validator.validate(config_dict)
     return is_valid, errors
-

@@ -12,9 +12,12 @@ from core.config_schema import ConfigValidator
 def is_pydantic_available() -> bool:
     try:
         import pydantic  # noqa: F401
+
         return True
     except ImportError:
         return False
+
+
 from core.credential_store import CredentialStore, get_credential_store
 
 # ---------------------------------------------------------------------------

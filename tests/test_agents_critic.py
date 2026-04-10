@@ -14,6 +14,7 @@ from agents.critic import CriticAgent
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _brain():
     b = MagicMock()
     b.remember.return_value = None
@@ -116,16 +117,14 @@ class TestCritiquePlanStructured:
         return agent
 
     def test_happy_path_returns_dict_with_assessment(self):
-        with patch("agents.critic.SCHEMAS_AVAILABLE", True), \
-             patch("agents.critic.render_prompt", return_value="rendered"):
+        with patch("agents.critic.SCHEMAS_AVAILABLE", True), patch("agents.critic.render_prompt", return_value="rendered"):
             agent = self._agent_structured(json.dumps(VALID_CRITIC_DICT))
             result = agent.critique_plan("task", ["Step 1"])
         assert isinstance(result, dict)
         assert result["assessment"] == "approve"
 
     def test_requires_changes_false_on_approve(self):
-        with patch("agents.critic.SCHEMAS_AVAILABLE", True), \
-             patch("agents.critic.render_prompt", return_value="rendered"):
+        with patch("agents.critic.SCHEMAS_AVAILABLE", True), patch("agents.critic.render_prompt", return_value="rendered"):
             agent = self._agent_structured(json.dumps(VALID_CRITIC_DICT))
             result = agent.critique_plan("task", ["Step 1"])
         assert result["requires_changes"] is False
@@ -143,15 +142,13 @@ class TestCritiquePlanStructured:
                 }
             ],
         }
-        with patch("agents.critic.SCHEMAS_AVAILABLE", True), \
-             patch("agents.critic.render_prompt", return_value="rendered"):
+        with patch("agents.critic.SCHEMAS_AVAILABLE", True), patch("agents.critic.render_prompt", return_value="rendered"):
             agent = self._agent_structured(json.dumps(critic_with_critical))
             result = agent.critique_plan("task", ["Step 1"])
         assert result["requires_changes"] is True
 
     def test_invalid_json_falls_back_to_legacy(self):
-        with patch("agents.critic.SCHEMAS_AVAILABLE", True), \
-             patch("agents.critic.render_prompt", return_value="rendered"):
+        with patch("agents.critic.SCHEMAS_AVAILABLE", True), patch("agents.critic.render_prompt", return_value="rendered"):
             agent = self._agent_structured("not json")
             result = agent.critique_plan("task", ["Step 1"])
         # fallback gives feedback_text (string from legacy)
@@ -185,12 +182,14 @@ class TestCritiqueCodeLegacy:
 
 class TestValidateMutationLegacy:
     def test_approved_decision(self):
-        legacy_response = json.dumps({
-            "decision": "APPROVED",
-            "confidence_score": 0.8,
-            "impact_assessment": "positive",
-            "reasoning": "valid change",
-        })
+        legacy_response = json.dumps(
+            {
+                "decision": "APPROVED",
+                "confidence_score": 0.8,
+                "impact_assessment": "positive",
+                "reasoning": "valid change",
+            }
+        )
         agent = CriticAgent(_brain(), _model(legacy_response))
         agent.use_structured = False
         result = agent.validate_mutation("swap function X for Y")
@@ -198,12 +197,14 @@ class TestValidateMutationLegacy:
         assert result["decision"] == "APPROVED"
 
     def test_rejected_decision(self):
-        legacy_response = json.dumps({
-            "decision": "REJECTED",
-            "confidence_score": 0.3,
-            "impact_assessment": "risky",
-            "reasoning": "breaks invariants",
-        })
+        legacy_response = json.dumps(
+            {
+                "decision": "REJECTED",
+                "confidence_score": 0.3,
+                "impact_assessment": "risky",
+                "reasoning": "breaks invariants",
+            }
+        )
         agent = CriticAgent(_brain(), _model(legacy_response))
         agent.use_structured = False
         result = agent.validate_mutation("delete module X")
@@ -224,8 +225,7 @@ class TestValidateMutationLegacy:
 
 class TestValidateMutationStructured:
     def test_happy_path_structured(self):
-        with patch("agents.critic.SCHEMAS_AVAILABLE", True), \
-             patch("agents.critic.render_prompt", return_value="rendered"):
+        with patch("agents.critic.SCHEMAS_AVAILABLE", True), patch("agents.critic.render_prompt", return_value="rendered"):
             agent = CriticAgent(_brain(), _model(json.dumps(VALID_MUTATION_DICT)))
             agent.use_structured = True
             result = agent.validate_mutation("change X to Y")
@@ -233,8 +233,7 @@ class TestValidateMutationStructured:
         assert result["decision"] == "APPROVED"
 
     def test_structured_parse_failure_falls_back(self):
-        with patch("agents.critic.SCHEMAS_AVAILABLE", True), \
-             patch("agents.critic.render_prompt", return_value="rendered"):
+        with patch("agents.critic.SCHEMAS_AVAILABLE", True), patch("agents.critic.render_prompt", return_value="rendered"):
             agent = CriticAgent(_brain(), _model("garbage"))
             agent.use_structured = True
             result = agent.validate_mutation("change X")

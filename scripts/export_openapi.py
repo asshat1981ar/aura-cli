@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Export FastAPI OpenAPI spec to docs/api/openapi.json."""
+
 import json
 import sys
 from pathlib import Path

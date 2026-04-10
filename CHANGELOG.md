@@ -5,6 +5,37 @@ All notable changes to AURA CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - feat/code-quality-dx-sprint
+
+### Added
+- Pydantic v2 native — v1 compatibility shim removed (106 lines)
+- Token bucket rate limiter with per-endpoint limits (5/10/100 req/min)
+- DB migrations wired to FastAPI lifespan (idempotent, SHA256-verified)
+- 6-component /ready readiness probe (brain_db, auth_db, redis, mcp_server, model_config, sandbox)
+- JWT security hardening: HS256-only, 256-bit key minimum, 24h TTL cap, SQLite JTI revocation
+- Observability MCP server on port 8030 (6 tools)
+- Enhanced CI pipeline with 5 jobs, dependency audit, release workflows
+- Pre-commit hooks: ruff, bandit, detect-secrets
+- Unit test sub-package with auto-applied markers; test isolation fixtures
+- docs/THREAT_MODEL.md — 7 attack vectors, security controls table
+- docs/MEMORY_ARCHITECTURE.md — memory tier architecture
+- docs/adr/INDEX.md + ADR-004 (Pydantic v2) + ADR-005 (rate limiting)
+- CONTRIBUTING.md — 209-line contribution guide
+- SandboxResult: @dataclass(kw_only=True), duration_ms, violations fields, __bool__
+- Auth DB path: AURA_AUTH_DB_PATH → XDG_DATA_HOME → ~/.local/share/aura/auth.db
+- Prometheus latency histograms; _PROMETHEUS_AVAILABLE flag removed
+
+### Changed
+- Test suite reorganized with pytest markers (slow, integration, e2e, unit, security)
+- Version bumped to 1.0.0, Production/Stable PyPI classifier
+- Coverage gate raised to 20%
+- Vector store v1 now emits DeprecationWarning; consumers migrated to v2
+
+### Fixed
+- SQLite WAL mode enabled on all connections
+- config_manager.py broken import of is_pydantic_available
+- .dict() → .model_dump() Pydantic v2 migration in agents/critic.py
+
 ## [1.0.0] - 2026-04-10
 
 ### Added

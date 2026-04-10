@@ -14,6 +14,7 @@ from core.policy import Policy
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_agents(**overrides):
     """Return a minimal agents dict with MagicMock instances for every phase."""
     phase_names = ["ingest", "plan", "critique", "synthesize", "act", "verify", "reflect"]
@@ -58,6 +59,7 @@ def _patch_run_cycle(orchestrator, return_value):
 # Construction
 # ---------------------------------------------------------------------------
 
+
 class TestLoopOrchestratorInit:
     def test_agents_stored(self):
         agents = _make_agents()
@@ -84,6 +86,7 @@ class TestLoopOrchestratorInit:
 # ---------------------------------------------------------------------------
 # run_loop — stopping conditions
 # ---------------------------------------------------------------------------
+
 
 class TestRunLoop:
     def _basic_cycle_entry(self, **extra):
@@ -170,6 +173,7 @@ class TestRunLoop:
 # Improvement loops
 # ---------------------------------------------------------------------------
 
+
 class TestImprovementLoops:
     def test_attach_improvement_loops_registers_loop(self):
         orch = _make_orchestrator()
@@ -205,6 +209,7 @@ class TestImprovementLoops:
 # BeadsSyncLoop
 # ---------------------------------------------------------------------------
 
+
 class TestBeadsSyncLoop:
     def test_push_pull_called_every_n_cycles(self):
         skill = MagicMock()
@@ -224,6 +229,7 @@ class TestBeadsSyncLoop:
 # ---------------------------------------------------------------------------
 # _estimate_confidence
 # ---------------------------------------------------------------------------
+
 
 class TestEstimateConfidence:
     def setup_method(self):

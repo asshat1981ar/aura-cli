@@ -19,6 +19,7 @@ from tests.fixtures.mock_llm import MockModelAdapter
 # Marker registration (mirrors pyproject.toml [tool.pytest.ini_options])
 # ---------------------------------------------------------------------------
 
+
 def pytest_configure(config):
     config.addinivalue_line("markers", "unit: pure unit tests — no I/O, no external services")
     config.addinivalue_line("markers", "integration: tests that require external services")
@@ -31,9 +32,11 @@ def pytest_configure(config):
 # Timeout helper fixture
 # ---------------------------------------------------------------------------
 
+
 @contextmanager
 def _hard_timeout(seconds: int):
     """SIGALRM-based timeout guard (Unix only)."""
+
     def _handler(signum, frame):
         raise TimeoutError(f"Test exceeded hard timeout of {seconds}s")
 

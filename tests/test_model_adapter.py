@@ -13,6 +13,7 @@ from core.model_adapter import ModelAdapter
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _minimal_config_get(key, default=None):
     """Return safe defaults so ModelAdapter.__init__ doesn't hit the FS."""
     mapping = {
@@ -45,6 +46,7 @@ def _make_adapter(**kwargs):
 # Construction
 # ---------------------------------------------------------------------------
 
+
 class TestModelAdapterInit:
     def test_adapter_instantiates(self):
         adapter = _make_adapter()
@@ -66,6 +68,7 @@ class TestModelAdapterInit:
 # ---------------------------------------------------------------------------
 # respond() — basic flow
 # ---------------------------------------------------------------------------
+
 
 class TestRespond:
     def test_respond_returns_string(self):
@@ -174,6 +177,7 @@ class TestRespond:
 # respond_for_role()
 # ---------------------------------------------------------------------------
 
+
 class TestRespondForRole:
     def test_respond_for_role_returns_string(self):
         adapter = _make_adapter()
@@ -251,6 +255,7 @@ class TestRespondForRole:
 # Context helpers
 # ---------------------------------------------------------------------------
 
+
 class TestContextHelpers:
     def test_estimate_context_budget_doc_goal(self):
         adapter = _make_adapter()
@@ -277,6 +282,7 @@ class TestContextHelpers:
 # ---------------------------------------------------------------------------
 # Telemetry / router attachment
 # ---------------------------------------------------------------------------
+
 
 class TestAttachments:
     def test_set_router_stores_router(self):

@@ -144,6 +144,7 @@ def _run_db_migrations() -> None:
     try:
         from core.auth import _default_auth_db_path  # noqa: PLC0415
     except ImportError:  # pragma: no cover
+
         def _default_auth_db_path() -> Path:  # type: ignore[misc]
             custom = os.environ.get("AURA_AUTH_DB_PATH")
             if custom:
@@ -747,8 +748,10 @@ async def ready():
     try:
         from core.auth import _default_auth_db_path  # noqa: PLC0415
     except ImportError:
+
         def _default_auth_db_path():
             return Path(os.environ.get("AURA_AUTH_DB_PATH", "aura_auth.db"))
+
     auth_db_path = str(_default_auth_db_path())
     t0 = time.perf_counter()
     try:
@@ -767,6 +770,7 @@ async def ready():
         t0 = time.perf_counter()
         try:
             import redis as _redis  # noqa: PLC0415
+
             client = _redis.from_url(redis_url, socket_connect_timeout=1, socket_timeout=1)
             client.ping()
             components["redis"] = {"status": "ready", "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
@@ -793,12 +797,7 @@ async def ready():
         if config_path.exists():
             with open(config_path) as f:
                 cfg = json.load(f)
-            model_configured = bool(
-                cfg.get("model_name")
-                or cfg.get("api_key")
-                or cfg.get("openai_api_key")
-                or cfg.get("local_model_profiles")
-            )
+            model_configured = bool(cfg.get("model_name") or cfg.get("api_key") or cfg.get("openai_api_key") or cfg.get("local_model_profiles"))
     except Exception:
         pass
     components["model_config"] = {"status": "configured" if model_configured else "unconfigured"}

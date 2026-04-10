@@ -14,6 +14,7 @@ from agents.applicator import ApplicatorAgent, ApplyResult
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _brain():
     b = MagicMock()
     b.remember.return_value = None
@@ -200,8 +201,10 @@ class TestRollback:
     def test_rollback_returns_false_when_no_backup(self, tmp_path):
         agent = _agent(tmp_path)
         fake_result = ApplyResult(
-            success=True, target_path=str(tmp_path / "f.py"),
-            backup_path=None, code="x = 1",
+            success=True,
+            target_path=str(tmp_path / "f.py"),
+            backup_path=None,
+            code="x = 1",
         )
         assert agent.rollback(fake_result) is False
 

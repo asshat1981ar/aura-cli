@@ -14,6 +14,7 @@ from agents.planner import PlannerAgent
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _brain():
     b = MagicMock()
     b.remember.return_value = None
@@ -91,12 +92,14 @@ class TestPlannerRun:
         model = _model(VALID_PLAN_LIST)
         agent = PlannerAgent(brain, model)
         agent.use_structured = False
-        result = agent.run({
-            "goal": "fix bug",
-            "memory_snapshot": "prev work",
-            "similar_past_problems": "similar bug fixed before",
-            "known_weaknesses": "weak area",
-        })
+        result = agent.run(
+            {
+                "goal": "fix bug",
+                "memory_snapshot": "prev work",
+                "similar_past_problems": "similar bug fixed before",
+                "known_weaknesses": "weak area",
+            }
+        )
         assert "steps" in result
 
     def test_run_vector_store_query_called_with_goal(self):
@@ -171,7 +174,10 @@ class TestPlanLegacy:
         agent = PlannerAgent(brain, model)
         agent.use_structured = False
         agent.plan(
-            "goal", "", "", "",
+            "goal",
+            "",
+            "",
+            "",
             backfill_context=[{"file": "agents/foo.py", "coverage_pct": 10}],
         )
         called_prompt = model.respond.call_args[0][0]

@@ -101,8 +101,8 @@ python3 scripts/triage_tests.py --timeout 30
 | Command | Purpose |
 |---------|---------|
 | `python3 main.py` | CLI via `aura_cli.cli_main:main()` |
-| `python3 -m aura_cli.server` | Start FastAPI server |
-| `python3 tools/mcp_server.py` | Start main MCP server (port 8001) |
+| `python3 -m aura_cli.server` | Start canonical dev-tools FastAPI server (port 8001) |
+| `python3 tools/mcp_server.py` | Start legacy MCP compatibility server |
 | `python3 tools/sadd_mcp_server.py` | Start SADD MCP server (port 8020) |
 | `python3 tools/observability_mcp.py` | Start Observability MCP (port 8030) |
 | `bash run_aura.sh` | Convenience wrapper for CLI |

@@ -1,9 +1,9 @@
 """Offline command executor."""
 
 import asyncio
-from typing import Any, Callable, Optional
+from typing import Callable, Optional
 
-from .models import CommandResult, CommandStatus, ConnectivityStatus
+from .models import CommandResult, CommandStatus
 from .queue import CommandQueue
 
 

@@ -22,15 +22,12 @@ from rich import box
 from rich.console import Console
 from rich.highlighter import RegexHighlighter
 from rich.panel import Panel
-from rich.style import Style
-from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
 
 # AURA error imports
 from core.exceptions import (
-    ERROR_REGISTRY,
     AuraCLIError,
     exception_to_aura_cli_error,
     get_error_info,
@@ -240,7 +237,7 @@ class ErrorPresenter:
         
         # Error code and severity
         content.append(f"{icon} ", style="")
-        content.append(f"[{error.code}]", style=f"bold cyan")
+        content.append(f"[{error.code}]", style="bold cyan")
         content.append(f" ({error.severity.upper()})\n", style=f"bold {severity_color}")
         content.append("─" * 60 + "\n", style="dim")
         
@@ -249,7 +246,7 @@ class ErrorPresenter:
         
         # Suggestion
         if self.config.show_suggestions and error.suggestion:
-            content.append(f"\n💡 Suggestion: ", style="bold green")
+            content.append("\n💡 Suggestion: ", style="bold green")
             content.append(f"{error.suggestion}\n", style="green")
         
         # Context (if verbose or explicitly shown)
@@ -273,7 +270,7 @@ class ErrorPresenter:
         # Create panel
         panel = Panel(
             content,
-            title=f"[bold]AURA CLI Error[/bold]",
+            title="[bold]AURA CLI Error[/bold]",
             subtitle=f"[dim]{error.category}[/dim]",
             border_style=severity_color,
             box=box.ROUNDED,

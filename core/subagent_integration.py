@@ -6,6 +6,7 @@ This module provides the bridge between standalone Phase 2 sub-agents
 
 from __future__ import annotations
 
+import importlib.util
 import time
 from typing import Any, Callable, Dict, List, Optional, Protocol
 
@@ -18,41 +19,12 @@ try:
 except ImportError:
     _IOTA_AVAILABLE = False
 
-try:
-    from aura.recording import WorkflowRecorder, WorkflowReplayer
-    _KAPPA_AVAILABLE = True
-except ImportError:
-    _KAPPA_AVAILABLE = False
-
-try:
-    from aura.offline import OfflineExecutor, ConnectivityMonitor
-    _NU_AVAILABLE = True
-except ImportError:
-    _NU_AVAILABLE = False
-
-try:
-    from aura.encryption import EncryptedConfigManager
-    _PI_AVAILABLE = True
-except ImportError:
-    _PI_AVAILABLE = False
-
-try:
-    from aura.health import HealthMonitor, SystemHealthChecker
-    _RHO_AVAILABLE = True
-except ImportError:
-    _RHO_AVAILABLE = False
-
-try:
-    from aura.security import SecurityAuditor, SecretScanner
-    _SIGMA_AVAILABLE = True
-except ImportError:
-    _SIGMA_AVAILABLE = False
-
-try:
-    from aura.scheduler import TaskScheduler, CronEngine
-    _TAU_AVAILABLE = True
-except ImportError:
-    _TAU_AVAILABLE = False
+_KAPPA_AVAILABLE = importlib.util.find_spec("aura.recording") is not None
+_NU_AVAILABLE = importlib.util.find_spec("aura.offline") is not None
+_PI_AVAILABLE = importlib.util.find_spec("aura.encryption") is not None
+_RHO_AVAILABLE = importlib.util.find_spec("aura.health") is not None
+_SIGMA_AVAILABLE = importlib.util.find_spec("aura.security") is not None
+_TAU_AVAILABLE = importlib.util.find_spec("aura.scheduler") is not None
 
 
 class SubAgent(Protocol):

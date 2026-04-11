@@ -10,13 +10,13 @@ import json
 import statistics
 import threading
 import time
-from collections import defaultdict, deque
+from collections import deque
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable, Deque, Dict, List, Optional, Union
+from typing import Any, Callable, Deque, Dict, List, Optional
 
 
 class MetricType(Enum):

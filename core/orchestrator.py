@@ -39,7 +39,7 @@ from core.file_tools import (
     apply_change_with_explicit_overwrite_policy,
     mismatch_overwrite_block_log_details,
 )
-from core.skill_dispatcher import classify_goal, dispatch_skills
+from core.skill_dispatcher import classify_goal
 from core.human_gate import HumanGate
 from core.types import TaskRequest, TaskResult, ExecutionContext
 from core.mcp_agent_registry import agent_registry
@@ -50,12 +50,6 @@ from core.orchestrator_phases import PhasesMixin
 from core.orchestrator_verify import VerifyMixin
 from core.orchestrator_learn import LearnMixin
 from core.orchestrator_capabilities import CapabilitiesMixin
-from core.capability_manager import (
-    analyze_capability_needs,
-    queue_missing_capability_goals,
-    provision_capability_actions,
-    record_capability_status,
-)
 
 MAX_SANDBOX_RETRIES = 3
 

@@ -147,6 +147,14 @@ def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal
 
         orchestrator.attach_improvement_loops(_reflection, _health, _remediator, _skill_adapt, _conv_escape, _compaction)
 
+        # LearningCoordinator (PRD-003): ties all learning signals into artifacts + backlog
+        try:
+            from core.learning_coordinator import LearningCoordinator
+            _learning = LearningCoordinator(memory_store)
+            orchestrator.attach_learning_coordinator(_learning)
+        except Exception as _exc:
+            log_json("WARN", "learning_coordinator_setup_failed", details={"error": str(_exc)})
+
         if getattr(orchestrator, "beads_enabled", False) and "beads_skill" in orchestrator.skills:
             from core.orchestrator import BeadsSyncLoop
 

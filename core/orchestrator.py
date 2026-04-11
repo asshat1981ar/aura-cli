@@ -230,6 +230,9 @@ class LoopOrchestrator(PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin):
         # Self-improvement loops (all optional -- never block the main loop)
         self._improvement_loops: list = []
 
+        # Learning Coordinator (PRD-003) -- set via attach_learning_coordinator()
+        self.learning_coordinator = None  # LearningCoordinator
+
         # CASPA-W components -- set via attach_caspa() after construction
         self.adaptive_pipeline = None  # AdaptivePipeline
         self.propagation_engine = None  # PropagationEngine
@@ -269,6 +272,19 @@ class LoopOrchestrator(PhasesMixin, VerifyMixin, LearnMixin, CapabilitiesMixin):
         """
         self._improvement_loops.extend(loops)
         log_json("INFO", "orchestrator_loops_attached", details={"count": len(self._improvement_loops), "types": [type(l).__name__ for l in self._improvement_loops]})
+
+    def attach_learning_coordinator(self, coordinator) -> None:
+        """Attach the LearningCoordinator (PRD-003).
+
+        The coordinator converts cycle signals (reflector learnings, quality
+        alerts, reflection reports) into structured LearningArtifacts and
+        populates the goal queue with remediation goals.
+
+        Args:
+            coordinator: LearningCoordinator instance.
+        """
+        self.learning_coordinator = coordinator
+        log_json("INFO", "orchestrator_learning_coordinator_attached", details={"type": type(coordinator).__name__})
 
     def attach_caspa(
         self,

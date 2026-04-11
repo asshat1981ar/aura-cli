@@ -117,12 +117,13 @@ class GoalFactory:
 
 # Convenience functions for quick test data creation
 
+
 def create_test_config(**overrides: Any) -> Dict[str, Any]:
     """Create a test configuration with optional overrides.
-    
+
     Args:
         **overrides: Configuration values to override.
-        
+
     Returns:
         Configuration dictionary.
     """
@@ -134,11 +135,11 @@ def create_test_config(**overrides: Any) -> Dict[str, Any]:
 
 def create_test_agent(name: str = "test_agent", **overrides: Any) -> Dict[str, Any]:
     """Create a test agent configuration.
-    
+
     Args:
         name: Agent name.
         **overrides: Values to override.
-        
+
     Returns:
         Agent configuration dictionary.
     """
@@ -150,11 +151,11 @@ def create_test_agent(name: str = "test_agent", **overrides: Any) -> Dict[str, A
 
 def create_test_goal(description: str = "Test goal", **overrides: Any) -> Dict[str, Any]:
     """Create a test goal.
-    
+
     Args:
         description: Goal description.
         **overrides: Values to override.
-        
+
     Returns:
         Goal dictionary.
     """
@@ -197,6 +198,7 @@ class TestDataBuilder:
 
 
 # Fixture builders for specific scenarios
+
 
 def create_minimal_config() -> Dict[str, Any]:
     """Create minimal valid configuration."""

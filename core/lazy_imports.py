@@ -8,7 +8,7 @@ Usage:
     # Use:
     from core.lazy_imports import lazy_import
     ExpensiveClass = lazy_import("expensive_module", "ExpensiveClass")
-    
+
     # Or for modules:
     from core.lazy_imports import LazyModule
     expensive_module = LazyModule("expensive_module")
@@ -25,18 +25,18 @@ T = TypeVar("T")
 
 class LazyImport(Generic[T]):
     """Lazy importer for a specific attribute from a module.
-    
+
     The module is not imported until the attribute is accessed.
-    
+
     Example:
         Brain = LazyImport("memory.brain", "Brain")
         # Module not imported yet
         brain = Brain()  # Module imported here
     """
-    
+
     def __init__(self, module_path: str, attr_name: str) -> None:
         """Initialize lazy import.
-        
+
         Args:
             module_path: Full module path (e.g., "memory.brain")
             attr_name: Attribute name to import from module
@@ -46,11 +46,11 @@ class LazyImport(Generic[T]):
         self._module: Any = None
         self._attr: T | None = None
         self._loaded = False
-    
+
     def __call__(self, *args: Any, **kwargs: Any) -> T:
         """Allow lazy class instantiation: Obj()"""
         return self._get_attr()(*args, **kwargs)
-    
+
     def _get_attr(self) -> T:
         """Load module and return attribute."""
         if not self._loaded:
@@ -58,16 +58,16 @@ class LazyImport(Generic[T]):
             self._attr = getattr(self._module, self._attr_name)
             self._loaded = True
         return cast(T, self._attr)
-    
+
     def __getattr__(self, name: str) -> Any:
         """Forward attribute access to the actual class/module."""
         attr = self._get_attr()
         return getattr(attr, name)
-    
+
     def __instancecheck__(self, instance: object) -> bool:
         """Support isinstance() checks."""
         return isinstance(instance, self._get_attr())
-    
+
     def __subclasscheck__(self, subclass: type) -> bool:
         """Support issubclass() checks."""
         return issubclass(subclass, self._get_attr())
@@ -75,40 +75,40 @@ class LazyImport(Generic[T]):
 
 class LazyModule:
     """Lazy module importer.
-    
+
     The module is not imported until an attribute is accessed.
-    
+
     Example:
         numpy = LazyModule("numpy")
         # Module not imported yet
         arr = numpy.array([1, 2, 3])  # Module imported here
     """
-    
+
     def __init__(self, module_path: str) -> None:
         """Initialize lazy module.
-        
+
         Args:
             module_path: Full module path (e.g., "numpy.linalg")
         """
         self._module_path = module_path
         self._module: Any = None
         self._loaded = False
-    
+
     def _get_module(self) -> Any:
         """Import and return module if not already loaded."""
         if not self._loaded:
             self._module = importlib.import_module(self._module_path)
             self._loaded = True
         return self._module
-    
+
     def __getattr__(self, name: str) -> Any:
         """Forward attribute access to the actual module."""
         return getattr(self._get_module(), name)
-    
+
     def __dir__(self) -> list[str]:
         """Support dir() for introspection."""
         return dir(self._get_module())
-    
+
     def __repr__(self) -> str:
         """String representation."""
         status = "loaded" if self._loaded else "not loaded"
@@ -117,23 +117,23 @@ class LazyModule:
 
 def lazy_import(module_path: str, attr_name: str | None = None) -> Any:
     """Create a lazy import for a module or attribute.
-    
+
     This is the main convenience function for lazy importing.
-    
+
     Args:
         module_path: Full module path (e.g., "memory.brain")
         attr_name: Optional attribute name. If None, returns LazyModule,
                   otherwise returns LazyImport for the attribute.
-    
+
     Returns:
         LazyModule or LazyImport instance
-    
+
     Examples:
         # Lazy module import
         numpy = lazy_import("numpy")
         arr = numpy.array([1, 2, 3])  # Imports numpy here
-        
-        # Lazy attribute import  
+
+        # Lazy attribute import
         Brain = lazy_import("memory.brain", "Brain")
         brain = Brain()  # Imports memory.brain here
     """
@@ -175,7 +175,7 @@ def clear_lazy_cache() -> None:
     # Force re-import on next access by clearing module cache
     modules_to_clear = [
         "memory.brain",
-        "memory.store", 
+        "memory.store",
         "memory.vector_store_v2",
         "agents.debugger",
         "agents.planner",

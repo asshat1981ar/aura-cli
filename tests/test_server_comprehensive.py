@@ -127,6 +127,7 @@ def test_health_endpoint_succeeds_without_bound_runtime_components(server_module
 
 def test_metrics_endpoint_success(server_module):
     from fastapi.responses import Response
+
     response = _run(server_module.metrics())
     # Prometheus metrics returns a Response with text/plain body
     assert isinstance(response, Response)
@@ -287,6 +288,7 @@ def test_health_returns_healthy_version_string(server_module):
 
 def test_metrics_returns_response_object(server_module):
     from fastapi.responses import Response
+
     response = _run(server_module.metrics())
     assert isinstance(response, Response)
 
@@ -322,7 +324,7 @@ def test_execute_goal_orchestrator_returns_no_stop_reason(server_module):
 
 
 def test_execute_run_non_zero_exit_code_in_exit_event(server_module):
-    cmd = f"{sys.executable} -c \"raise SystemExit(42)\""
+    cmd = f'{sys.executable} -c "raise SystemExit(42)"'
     response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
     payloads = _sse_payloads(_run(_collect_streaming_response(response)))
     exit_events = [evt for evt in payloads if evt.get("type") == "exit"]

@@ -150,6 +150,7 @@ def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal
         # LearningCoordinator (PRD-003): ties all learning signals into artifacts + backlog
         try:
             from core.learning_coordinator import LearningCoordinator
+
             _learning = LearningCoordinator(memory_store)
             orchestrator.attach_learning_coordinator(_learning)
         except Exception as _exc:

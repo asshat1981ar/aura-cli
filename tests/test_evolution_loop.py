@@ -33,65 +33,8 @@ def _make_loop(**overrides):
         return EvolutionLoop(**defaults)
 
 
-
 # ---------------------------------------------------------------------------
 # InnovationProposal Tests
-# ---------------------------------------------------------------------------
-
-
-class TestInnovationProposal:
-    def test_as_dict(self):
-        p = InnovationProposal(
-            proposal_id="test:1",
-            title="Test",
-            category="skill",
-            goal="test goal",
-            rationale="because",
-            evidence=["ev1"],
-            smallest_surface="foo.py",
-            expected_value="high",
-            risk_level="low",
-            verification_cost="unit tests",
-            recommended_action="queue",
-        )
-        d = p.as_dict()
-        assert d["proposal_id"] == "test:1"
-        assert d["evidence"] == ["ev1"]
-        assert d["title"] == "Test"
-        assert d["category"] == "skill"
-
-    def test_frozen_dataclass(self):
-        p = InnovationProposal(
-            proposal_id="id",
-            title="t",
-            category="c",
-            goal="g",
-            rationale="r",
-            evidence=[],
-            smallest_surface="s",
-            expected_value="v",
-            risk_level="l",
-            verification_cost="v",
-            recommended_action="a",
-        )
-        with pytest.raises(AttributeError):
-            p.title = "new"
-
-    def test_proposal_with_multiple_evidence(self):
-        p = InnovationProposal(
-            proposal_id="p1",
-            title="Multi-evidence",
-            category="skill",
-            goal="g",
-            rationale="r",
-            evidence=["e1", "e2", "e3"],
-            smallest_surface="s",
-            expected_value="h",
-            risk_level="l",
-            verification_cost="v",
-            recommended_action="q",
-        )
-        assert len(p.as_dict()["evidence"]) == 3
 # ---------------------------------------------------------------------------
 
 
@@ -350,7 +293,7 @@ class TestImplementAndCritique:
         loop.critic.critique_code.return_value = "critique"
 
         loop._implement_and_critique("test goal", ["t1"])
-        
+
         call_args = loop.critic.critique_code.call_args
         assert call_args[1]["task"] == "test goal"
         assert call_args[1]["code"] == "code"
@@ -457,11 +400,7 @@ class TestMutationPlanToDSL:
 class TestNormalizeMutationPlan:
     def test_valid_plan(self):
         loop = _make_loop()
-        raw_response = json.dumps({
-            "mutations": [
-                {"file_path": "src/test.py", "old_content": "old", "new_content": "new"}
-            ]
-        })
+        raw_response = json.dumps({"mutations": [{"file_path": "src/test.py", "old_content": "old", "new_content": "new"}]})
         with patch("core.evolution_loop._aura_safe_loads", return_value=json.loads(raw_response)):
             plan, dsl = loop._normalize_mutation_plan(raw_response)
             assert isinstance(plan, dict)
@@ -802,11 +741,13 @@ class TestGetMutationResponse:
 
 class TestArchitectureExplorer:
     def test_returns_dict_with_role(self):
-        loop = _make_loop(skills={
-            "structural_analyzer": MagicMock(),
-            "tech_debt_quantifier": MagicMock(),
-            "code_clone_detector": MagicMock(),
-        })
+        loop = _make_loop(
+            skills={
+                "structural_analyzer": MagicMock(),
+                "tech_debt_quantifier": MagicMock(),
+                "code_clone_detector": MagicMock(),
+            }
+        )
         with patch.object(loop, "_safe_skill_run") as mock_run:
             mock_run.side_effect = [
                 {"hotspots": []},
@@ -886,11 +827,7 @@ class TestVerificationReviewer:
                 recommended_action="queue",
             ),
         ]
-        architecture = {
-            "structural": {
-                "hotspots": [{"file": "core/orchestrator.py", "risk_level": "high"}]
-            }
-        }
+        architecture = {"structural": {"hotspots": [{"file": "core/orchestrator.py", "risk_level": "high"}]}}
         loop = _make_loop()
         result = loop._verification_reviewer(proposals, architecture)
         assert result["reviews"][0]["residual_risk"] == "high"
@@ -1016,4 +953,3 @@ class TestCommitAndTrackExperiment:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

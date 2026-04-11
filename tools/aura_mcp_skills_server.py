@@ -32,15 +32,14 @@ if str(_ROOT) not in sys.path:
 
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 
-# R8: Import centralized MCP auth
-from tools.mcp_auth import require_skills_auth
 from pydantic import BaseModel
 
 from core.logging_utils import log_json
 from core.mcp_contracts import build_discovery_payload, build_health_payload, build_tool_descriptor
 from core.mcp_registry import get_registered_service, list_registered_services
+from tools.mcp_server_support import auth_dependency, auth_mode_label, resolve_server_port
 
 # ---------------------------------------------------------------------------
 # Input/output schemas for each skill (used to build MCP tool descriptors)
@@ -322,9 +321,10 @@ app = FastAPI(
     version="1.0.0",
 )
 
-_MCP_TOKEN = os.getenv("MCP_API_TOKEN")
 _skills: Dict[str, Any] = {}
 _load_error: Optional[str] = None
+_SERVER_START = time.time()
+_require_auth = auth_dependency("skills")
 
 
 def _load_skills() -> None:
@@ -369,18 +369,6 @@ def _list_skill_descriptors() -> List[Dict[str, Any]]:
     return [_build_skill_descriptor(name, skill) for name, skill in sorted(_skills.items())]
 
 
-# R8: Use centralized auth (legacy require_auth kept for backward compatibility)
-def require_auth(authorization: Optional[str] = Header(default=None)) -> None:
-    """Legacy auth handler - now delegates to centralized auth."""
-    from tools.mcp_auth import get_mcp_server_api_key
-
-    expected_key = get_mcp_server_api_key("skills")
-    if not expected_key:
-        return
-    if not authorization or authorization != f"Bearer {expected_key}":
-        raise HTTPException(status_code=401, detail="Invalid or missing Authorization header")
-
-
 # ---------------------------------------------------------------------------
 # Request/response models
 # ---------------------------------------------------------------------------
@@ -393,7 +381,7 @@ class CallRequest(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 @app.get("/health")
-async def health(_: str = Depends(require_skills_auth)) -> Dict:
+async def health(_: str = Depends(_require_auth)) -> Dict:
     from tools.mcp_auth import is_auth_enabled
 
     return build_health_payload(
@@ -402,13 +390,14 @@ async def health(_: str = Depends(require_skills_auth)) -> Dict:
         version="1.0.0",
         tool_count=len(_skills),
         skills_loaded=len(_skills),
+        uptime_s=round(time.time() - _SERVER_START, 1),
         auth_enabled=is_auth_enabled("skills"),
         load_error=_load_error,
     )
 
 
 @app.get("/discovery")
-async def discovery(_: str = Depends(require_skills_auth)) -> Dict:
+async def discovery(_: str = Depends(_require_auth)) -> Dict:
     return build_discovery_payload(
         current_server=get_registered_service("skills"),
         servers=list_registered_services(),
@@ -417,14 +406,14 @@ async def discovery(_: str = Depends(require_skills_auth)) -> Dict:
 
 
 @app.get("/tools")
-async def list_tools(_: str = Depends(require_skills_auth)) -> Dict:
+async def list_tools(_: str = Depends(_require_auth)) -> Dict:
     """Return MCP-compatible tool list for all loaded skills."""
     tools = _list_skill_descriptors()
     return {"tools": tools, "count": len(tools)}
 
 
 @app.get("/skill/{name}")
-async def get_skill(name: str, _: str = Depends(require_skills_auth)) -> Dict:
+async def get_skill(name: str, _: str = Depends(_require_auth)) -> Dict:
     """Return descriptor for a single skill."""
     if name not in _skills:
         raise HTTPException(status_code=404, detail=f"Skill '{name}' not found. Available: {sorted(_skills.keys())}")
@@ -434,7 +423,7 @@ async def get_skill(name: str, _: str = Depends(require_skills_auth)) -> Dict:
 
 
 @app.post("/call")
-async def call_skill(req: CallRequest, _: str = Depends(require_skills_auth)) -> Dict:
+async def call_skill(req: CallRequest, _: str = Depends(_require_auth)) -> Dict:
     """Invoke a skill by name with the given args dict."""
     if _load_error and not _skills:
         raise HTTPException(status_code=503, detail=f"Skills failed to load: {_load_error}")
@@ -474,11 +463,7 @@ async def root() -> Dict:
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
-    from core.config_manager import config as _cfg
-    from tools.mcp_auth import is_auth_enabled
 
-    # R4: port from config registry; env var still overrides for backward-compat
-    port = int(os.getenv("MCP_SKILLS_PORT", _cfg.get_mcp_server_port("skills")))
-    auth_enabled = is_auth_enabled("skills")
-    log_json("INFO", "mcp_skills_server_starting", details={"port": port, "skills": len(_skills), "auth_enabled": auth_enabled})
+    port = resolve_server_port("skills")
+    log_json("INFO", "mcp_skills_server_starting", details={"port": port, "skills": len(_skills), "auth_mode": auth_mode_label("skills")})
     uvicorn.run("tools.aura_mcp_skills_server:app", host="0.0.0.0", port=port, reload=False)

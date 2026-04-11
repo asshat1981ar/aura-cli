@@ -28,6 +28,7 @@ from core.ai_environment_registry import list_ai_environments
 from core.mcp_architecture import default_routing_profile
 from core.operator_runtime import build_run_tool_audit_summary
 from core.running_runs import register_run, deregister_run
+from tools.mcp_auth import require_dev_tools_auth
 
 # ---------------------------------------------------------------------------
 # Prometheus metrics — prometheus_client is a required dependency.
@@ -696,14 +697,11 @@ async def _execute_goal(req: ExecuteRequest):
     return StreamingResponse(goal_generator(), media_type="text/event-stream")
 
 
-def require_auth(authorization: Optional[str] = Header(default=None)) -> None:
-    token = os.getenv("AGENT_API_TOKEN")
-    if not token:
-        return
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing Authorization header")
-    if not secrets.compare_digest(authorization, f"Bearer {token}"):
-        raise HTTPException(status_code=403, detail="Invalid token")
+def require_auth(
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(default=None),
+) -> None:
+    require_dev_tools_auth(x_api_key, authorization)
 
 
 @app.get("/health")

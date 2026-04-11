@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate a local GitHub Copilot MCP config for AURA's HTTP MCP servers.
+"""Generate a local GitHub Copilot MCP config for AURA MCP servers.
 
 By default this writes a safe config with ``${env:VAR}`` token placeholders instead
 of embedding live secrets. The output defaults to ``.mcp.json`` because that file is
@@ -14,7 +14,6 @@ import io
 import json
 import os
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable
 
@@ -23,54 +22,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from core.config_manager import ConfigManager
-
-
-@dataclass(frozen=True)
-class ServerSpec:
-    config_name: str
-    config_key: str
-    output_name: str
-    token_env: str | None
-    port_envs: tuple[str, ...]
-
-
-SERVER_SPECS: tuple[ServerSpec, ...] = (
-    ServerSpec(
-        config_name="dev_tools",
-        config_key="aura-dev-tools",
-        output_name="AURA dev tools",
-        token_env="MCP_API_TOKEN",
-        port_envs=("PORT", "MCP_SERVER_PORT"),
-    ),
-    ServerSpec(
-        config_name="skills",
-        config_key="aura-skills",
-        output_name="AURA skills",
-        token_env="MCP_API_TOKEN",
-        port_envs=("MCP_SKILLS_PORT",),
-    ),
-    ServerSpec(
-        config_name="control",
-        config_key="aura-control",
-        output_name="AURA control",
-        token_env="MCP_CONTROL_TOKEN",
-        port_envs=("MCP_CONTROL_PORT",),
-    ),
-    ServerSpec(
-        config_name="agentic_loop",
-        config_key="aura-agentic-loop",
-        output_name="AURA agentic loop",
-        token_env="AGENTIC_LOOP_TOKEN",
-        port_envs=("AGENTIC_LOOP_PORT",),
-    ),
-    ServerSpec(
-        config_name="copilot",
-        config_key="aura-copilot",
-        output_name="AURA copilot",
-        token_env="COPILOT_MCP_TOKEN",
-        port_envs=("COPILOT_MCP_PORT",),
-    ),
-)
+from tools.mcp_manifest import MCPServerSpec, iter_mcp_server_specs
 
 
 def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
@@ -126,11 +78,13 @@ def load_config(path: Path) -> ConfigManager:
         return ConfigManager(config_file=path)
 
 
-def resolve_port(cfg: ConfigManager, spec: ServerSpec) -> int:
+def resolve_port(cfg: ConfigManager, spec: MCPServerSpec) -> int:
     for env_name in spec.port_envs:
         value = os.environ.get(env_name)
         if value:
             return int(value)
+    if spec.default_port is None:
+        raise ValueError(f"Server '{spec.config_name}' does not use an HTTP port")
     return int(cfg.get_mcp_server_port(spec.config_name))
 
 
@@ -138,13 +92,20 @@ def placeholder_token(token_env: str) -> str:
     return f"${{env:{token_env}}}"
 
 
-def build_headers(spec: ServerSpec, token_mode: str) -> Dict[str, str]:
+def build_headers(spec: MCPServerSpec, token_mode: str) -> Dict[str, str]:
     if not spec.token_env or token_mode == "omit":
         return {}
     return {"Authorization": f"Bearer {placeholder_token(spec.token_env)}"}
 
 
-def build_server_entry(host: str, port: int, spec: ServerSpec, token_mode: str) -> Dict[str, Any]:
+def build_server_entry(host: str, port: int, spec: MCPServerSpec, token_mode: str) -> Dict[str, Any]:
+    if spec.transport == "stdio":
+        return {
+            "type": "stdio",
+            "command": spec.command,
+            "args": list(spec.args),
+        }
+
     entry: Dict[str, Any] = {
         "type": "http",
         "url": f"http://{host}:{port}",
@@ -172,10 +133,11 @@ def generate_config(
 ) -> Dict[str, Any]:
     output: Dict[str, Any] = {} if replace else dict(existing)
     mcp_servers = {} if replace else dict(output.get("mcpServers", {}))
-    for spec in SERVER_SPECS:
+    for spec in iter_mcp_server_specs(generated_only=True):
+        port = resolve_port(cfg, spec) if spec.transport == "http" else 0
         mcp_servers[spec.config_key] = build_server_entry(
             host=host,
-            port=resolve_port(cfg, spec),
+            port=port,
             spec=spec,
             token_mode=token_mode,
         )
@@ -204,7 +166,8 @@ def main(argv: Iterable[str] | None = None) -> int:
         existing=existing,
     )
     write_output(output_path, payload)
-    print(f"Wrote {len(SERVER_SPECS)} AURA MCP servers to {output_path}")
+    generated_count = sum(1 for _ in iter_mcp_server_specs(generated_only=True))
+    print(f"Wrote {generated_count} MCP servers to {output_path}")
     if args.stdout:
         json.dump(payload, sys.stdout, indent=2)
         sys.stdout.write("\n")

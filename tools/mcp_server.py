@@ -29,7 +29,7 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 
 # R8: Import centralized MCP auth
-from tools.mcp_auth import require_dev_tools_auth
+from tools.mcp_auth import is_auth_enabled, require_dev_tools_auth
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -124,9 +124,6 @@ def _check_rate_limit(token: str) -> None:
 
 @asynccontextmanager
 async def _lifespan(application: FastAPI):
-    token = os.getenv("MCP_API_TOKEN", "").strip()
-    if not token:
-        raise RuntimeError("MCP_API_TOKEN must be set before starting the MCP server")
     yield
 
 
@@ -261,7 +258,7 @@ TOOLS_MANIFEST: List[Dict[str, str]] = [
 @app.get("/health")
 async def health(auth: str = Depends(require_dev_tools_auth)):
     """Return server health, current limits, and runtime metrics."""
-    auth_status = "enabled" if os.getenv("MCP_DEV_TOOLS_API_KEY") or os.getenv("MCP_API_TOKEN") else "disabled"
+    auth_status = "enabled" if is_auth_enabled("dev_tools") else "disabled"
     return {
         "status": "ok",
         "auth": auth_status,

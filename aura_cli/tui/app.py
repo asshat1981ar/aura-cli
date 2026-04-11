@@ -39,6 +39,7 @@ from aura_cli.tui.panels.queue_panel import build_queue_panel
 from aura_cli.tui.panels.memory_panel import build_memory_panel
 from aura_cli.tui.panels.metrics_panel import build_metrics_panel
 from aura_cli.tui.panels.ascm_panel import build_ascm_panel
+from aura_cli.tui.panels.observability_panel import build_observability_panel, build_health_panel
 from core.logging_utils import log_json
 from core.operator_runtime import build_beads_runtime_metadata, build_operator_runtime_snapshot
 
@@ -200,7 +201,8 @@ class AuraStudio:
         )
         layout["right"].split_column(
             Layout(name="queue", ratio=2),
-            Layout(name="metrics", ratio=1),
+            Layout(name="observability", ratio=2),
+            Layout(name="health", ratio=1),
         )
 
         goal_queue = self.runtime.get("goal_queue")
@@ -233,6 +235,16 @@ class AuraStudio:
         layout["queue"].update(build_queue_panel(queue_summary=snapshot["queue"]))
         layout["memory"].update(build_memory_panel(brain=brain))
         layout["metrics"].update(build_metrics_panel(cycle_log=cycle_log, run_tool_audit=snapshot.get("run_tool_audit")))
+        
+        # New observability panels
+        from aura.observability import get_metrics_store, get_tracer, SpanContext
+        metrics_store = get_metrics_store()
+        tracer = get_tracer()
+        layout["observability"].update(build_observability_panel(metrics_store=metrics_store, tracer=tracer))
+        
+        # Health panel
+        health_status = getattr(orchestrator, "health_status", None) if orchestrator else None
+        layout["health"].update(build_health_panel(health_status=health_status))
 
         return layout
 

@@ -22,7 +22,7 @@ from core.orchestrator import LoopOrchestrator
 from core.policy import Policy
 from core.runtime_auth import resolve_config_api_key, runtime_provider_status, runtime_provider_summary
 from core.runtime_paths import resolve_project_path
-from core.vector_store import VectorStore
+from memory.vector_store_v2 import VectorStoreV2 as VectorStore
 from memory.brain import Brain
 from memory.store import MemoryStore
 
@@ -146,6 +146,14 @@ def _attach_advanced_loops(orchestrator, runtime_mode, brain, memory_store, goal
         _compaction = MemoryCompactionLoop(memory_store)
 
         orchestrator.attach_improvement_loops(_reflection, _health, _remediator, _skill_adapt, _conv_escape, _compaction)
+
+        # LearningCoordinator (PRD-003): ties all learning signals into artifacts + backlog
+        try:
+            from core.learning_coordinator import LearningCoordinator
+            _learning = LearningCoordinator(memory_store)
+            orchestrator.attach_learning_coordinator(_learning)
+        except Exception as _exc:
+            log_json("WARN", "learning_coordinator_setup_failed", details={"error": str(_exc)})
 
         if getattr(orchestrator, "beads_enabled", False) and "beads_skill" in orchestrator.skills:
             from core.orchestrator import BeadsSyncLoop

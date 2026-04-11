@@ -1,10 +1,11 @@
 """Skill: extract and validate FastAPI/Flask endpoint contracts."""
+
 from __future__ import annotations
 import ast
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 from core.logging_utils import log_json
 
 _HTTP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options"}
@@ -95,9 +96,7 @@ class APIContractValidatorSkill(SkillBase):
             endpoints = _parse_endpoints(code, file_path)
         elif project_root_str:
             root = Path(project_root_str)
-            for f in root.rglob("*.py"):
-                if ".git" in f.parts or "node_modules" in f.parts or "__pycache__" in f.parts:
-                    continue
+            for f in iter_py_files(root):
                 try:
                     src = f.read_text(encoding="utf-8", errors="replace")
                 except OSError:

@@ -2,12 +2,14 @@ import inspect
 from agents.sandbox import SandboxAgent
 from core.logging_utils import log_json
 
+
 class TesterAgent:
     """
     The TesterAgent is responsible for generating unit tests for given code
     and evaluating code by executing those tests in an isolated sandbox environment.
     It provides feedback on test outcomes and code correctness.
     """
+
     def __init__(self, brain, model, sandbox: SandboxAgent):
         """
         Initializes the TesterAgent with access to the system's brain, model, and sandbox.
@@ -84,23 +86,23 @@ class TesterAgent:
             summary_parts.append("Tests PASSED.")
         else:
             summary_parts.append("Tests FAILED.")
-        
+
         if sandbox_result.timed_out:
             summary_parts.append(f"Execution TIMED OUT after {self.sandbox.timeout}s.")
-        
+
         if sandbox_result.metadata:
             summary_parts.append(f"Pytest summary: {sandbox_result.metadata.get('passed', 0)} passed, {sandbox_result.metadata.get('failed', 0)} failed, {sandbox_result.metadata.get('errors', 0)} errors.")
 
         full_summary = " ".join(summary_parts)
 
-        return {
-            "summary": full_summary,
-            "actual_output": {
-                "stdout": sandbox_result.stdout,
-                "stderr": sandbox_result.stderr,
-                "exit_code": sandbox_result.exit_code,
-                "timed_out": sandbox_result.timed_out,
-                "passed": sandbox_result.passed,
-                "metadata": sandbox_result.metadata
-            }
-        }
+        return {"summary": full_summary, "actual_output": {"stdout": sandbox_result.stdout, "stderr": sandbox_result.stderr, "exit_code": sandbox_result.exit_code, "timed_out": sandbox_result.timed_out, "passed": sandbox_result.passed, "metadata": sandbox_result.metadata}}
+
+    def run(self, input_data: dict) -> dict:
+        """Uniform execution interface for the orchestrator loop."""
+        code = input_data.get("code", "")
+        context = input_data.get("context", "")
+
+        tests = self.generate_tests(code, context)
+        evaluation = self.evaluate_code(code, tests)
+
+        return {"status": "success", "tests_generated": tests, "evaluation": evaluation}

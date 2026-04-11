@@ -5,6 +5,7 @@ import time
 import uuid
 import hashlib
 import sqlite3
+import warnings
 from typing import List, Dict, Any, Union
 
 
@@ -19,14 +20,10 @@ class _MissingPackage:
         # to the default correctly.  Python's getattr() only suppresses
         # AttributeError, not ImportError, making ImportError here break
         # unittest.mock.patch on Python 3.10.
-        raise AttributeError(
-            f"Optional dependency '{self._name}' is required for this operation."
-        )
+        raise AttributeError(f"Optional dependency '{self._name}' is required for this operation.")
 
     def __call__(self, *args: object, **kwargs: object) -> None:
-        raise ImportError(
-            f"Optional dependency '{self._name}' is required for this operation."
-        )
+        raise ImportError(f"Optional dependency '{self._name}' is required for this operation.")
 
 
 try:
@@ -46,7 +43,14 @@ class VectorStore:
     Unified Control Plane: Centralized semantic memory store.
     Implements ASCM v2 VectorStoreV2 protocol with multi-model embedding support.
     """
+
     def __init__(self, model_adapter, brain):
+        if type(self) is VectorStore:
+            warnings.warn(
+                "core.vector_store (v1) is deprecated. Use memory.vector_store_v2 instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.model_adapter = model_adapter
         self.brain = brain
         # ASCM v2: use Row factory for name-based access in search results
@@ -89,7 +93,14 @@ class VectorStore:
             self.brain.db.execute("CREATE INDEX IF NOT EXISTS idx_mr_content_hash ON memory_records(content_hash)")
             self.brain.db.execute("CREATE INDEX IF NOT EXISTS idx_mr_source_type ON memory_records(source_type)")
             self.brain.db.commit()
-            
+
+            # Namespace column migration (ASCM v2)
+            try:
+                self.brain.db.execute("ALTER TABLE memory_records ADD COLUMN namespace TEXT")
+                self.brain.db.commit()
+            except sqlite3.OperationalError:
+                pass  # column already exists
+
             # Migration check for legacy v1 table
             self._migrate_legacy_v1()
         except sqlite3.Error as e:
@@ -107,24 +118,30 @@ class VectorStore:
             migrated = 0
             for content, embedding_blob in rows:
                 content_hash = hashlib.sha256(content.encode()).hexdigest()
-                
+
                 # Check for existence
                 existing = self.brain.db.execute("SELECT id FROM memory_records WHERE content_hash=?", (content_hash,)).fetchone()
                 if not existing:
                     rid = uuid.uuid4().hex
                     now = time.time()
-                    self.brain.db.execute("""
+                    self.brain.db.execute(
+                        """
                         INSERT INTO memory_records (id, content, source_type, created_at, updated_at, content_hash)
                         VALUES (?, ?, ?, ?, ?, ?)
-                    """, (rid, content, "legacy_v1", now, now, content_hash))
-                    
+                    """,
+                        (rid, content, "legacy_v1", now, now, content_hash),
+                    )
+
                     vec = np.frombuffer(embedding_blob, dtype=np.float32)
-                    self.brain.db.execute("""
+                    self.brain.db.execute(
+                        """
                         INSERT INTO embeddings (record_id, model_id, dims, data)
                         VALUES (?, ?, ?, ?)
-                    """, (rid, "unknown_v1", len(vec), embedding_blob))
+                    """,
+                        (rid, "unknown_v1", len(vec), embedding_blob),
+                    )
                     migrated += 1
-            
+
             if migrated > 0:
                 self.brain.db.commit()
                 log_json("INFO", "vector_store_legacy_migrated", details={"count": migrated})
@@ -135,19 +152,16 @@ class VectorStore:
         """Unified upsert: handles content and model-specific embeddings."""
         count = 0
         current_model = self.model_adapter.model_id()
-        
+
         # 1. Identify records needing embeddings for the current model
         to_embed = []
         for rec in records:
             if not rec.content_hash:
                 rec.content_hash = hashlib.sha256(rec.content.encode()).hexdigest()
-            
+
             # Check if this record+model combo already has an embedding in DB
-            existing = self.brain.db.execute(
-                "SELECT record_id FROM embeddings WHERE record_id=? AND model_id=?",
-                (rec.id, current_model)
-            ).fetchone()
-            
+            existing = self.brain.db.execute("SELECT record_id FROM embeddings WHERE record_id=? AND model_id=?", (rec.id, current_model)).fetchone()
+
             if not existing and rec.embedding is None:
                 to_embed.append(rec)
 
@@ -168,30 +182,31 @@ class VectorStore:
             self.brain.db.execute("BEGIN TRANSACTION")
             for rec in records:
                 try:
-                    self.brain.db.execute("""
-                        INSERT OR REPLACE INTO memory_records 
-                        (id, content, source_type, source_ref, created_at, updated_at, 
-                         goal_id, agent_name, tags, importance, token_count, 
-                         embedding_model, embedding_dims, content_hash, embedding)
-                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
-                    """, (
-                        rec.id, rec.content, rec.source_type, rec.source_ref,
-                        rec.created_at, rec.updated_at, rec.goal_id, rec.agent_name,
-                        json.dumps(rec.tags), rec.importance, rec.token_count,
-                        rec.embedding_model, rec.embedding_dims, rec.content_hash, rec.embedding
-                    ))
-                    
+                    self.brain.db.execute(
+                        """
+                        INSERT OR REPLACE INTO memory_records
+                        (id, content, source_type, source_ref, created_at, updated_at,
+                         goal_id, agent_name, tags, importance, token_count,
+                         embedding_model, embedding_dims, content_hash, embedding, namespace)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                    """,
+                        (rec.id, rec.content, rec.source_type, rec.source_ref, rec.created_at, rec.updated_at, rec.goal_id, rec.agent_name, json.dumps(rec.tags), rec.importance, rec.token_count, rec.embedding_model, rec.embedding_dims, rec.content_hash, rec.embedding, getattr(rec, "namespace", None)),
+                    )
+
                     if rec.embedding:
-                        self.brain.db.execute("""
+                        self.brain.db.execute(
+                            """
                             INSERT OR REPLACE INTO embeddings (record_id, model_id, dims, data)
                             VALUES (?, ?, ?, ?)
-                        """, (rec.id, current_model, rec.embedding_dims, rec.embedding))
+                        """,
+                            (rec.id, current_model, rec.embedding_dims, rec.embedding),
+                        )
                     count += 1
                 except sqlite3.Error as e:
                     log_json("ERROR", "vector_store_record_upsert_failed", details={"id": rec.id, "error": str(e)})
-                    # Individual record failure doesn't necessarily abort the whole batch, 
+                    # Individual record failure doesn't necessarily abort the whole batch,
                     # but we should be careful. For now, we continue but don't commit this specific record.
-            
+
             self.brain.db.commit()
         except sqlite3.Error as e:
             self.brain.db.rollback()
@@ -231,41 +246,40 @@ class VectorStore:
                     sql += f" AND mr.{key} = ?"
                     params.append(val)
 
+        if q_obj.namespace is not None:
+            sql += " AND mr.namespace = ?"
+            params.append(q_obj.namespace)
+
         sql += " LIMIT ?"
         params.append(SEARCH_LIMIT)
 
         candidates = self.brain.db.execute(sql, params).fetchall()
         hits = []
-        
+
         # 2. Rank candidates using cosine similarity in Python (sufficient for repo-scale)
         q_norm = np.linalg.norm(query_vec)
-        if q_norm == 0: return []
+        if q_norm == 0:
+            return []
 
         for row in candidates:
             vec = np.frombuffer(row["embedding_blob"], dtype=np.float32)
             v_norm = np.linalg.norm(vec)
-            if v_norm == 0: continue
-            
+            if v_norm == 0:
+                continue
+
             score = float(np.dot(query_vec, vec) / (q_norm * v_norm))
-            
+
             # Recency bias (PRD: simple linear decay placeholder)
             if q_obj.recency_bias > 0:
                 age = time.time() - row["created_at"]
-                if age < 86400: # Boost items from last 24h
+                if age < 86400:  # Boost items from last 24h
                     score += q_obj.recency_bias * 0.1
 
             if score >= q_obj.min_score:
-                hits.append(SearchHit(
-                    record_id=row["id"],
-                    content=row["content"],
-                    score=score,
-                    source_ref=row["source_ref"],
-                    metadata={"source_type": row["source_type"], "tags": json.loads(row["tags"])},
-                    explanation=f"Similarity: {score:.3f}"
-                ))
+                hits.append(SearchHit(record_id=row["id"], content=row["content"], score=score, source_ref=row["source_ref"], metadata={"source_type": row["source_type"], "tags": json.loads(row["tags"])}, explanation=f"Similarity: {score:.3f}", embedding_model_version=current_model))
 
         hits.sort(key=lambda h: h.score, reverse=True)
-        
+
         # Deduplication by content_hash
         if q_obj.dedupe_key == "content_hash":
             unique = []
@@ -278,7 +292,7 @@ class VectorStore:
                     seen.add(cand["content_hash"])
             hits = unique
 
-        results = hits[:q_obj.k]
+        results = hits[: q_obj.k]
         if isinstance(query, str):
             return [h.content for h in results]
         return results
@@ -351,7 +365,7 @@ class VectorStore:
                 self.brain.db.commit()
 
             for start in range(0, len(rows), batch_size):
-                batch = rows[start:start + batch_size]
+                batch = rows[start : start + batch_size]
                 texts = [row["content"] if isinstance(row, sqlite3.Row) else row[1] for row in batch]
                 vectors = self.model_adapter.embed(texts)
 
@@ -399,20 +413,23 @@ class VectorStore:
         return self.rebuild({"model_id": new_model_id, "drop_existing_embeddings": True})
 
     def delete(self, ids: List[str]) -> int:
-        cur = self.brain.db.execute("DELETE FROM memory_records WHERE id IN ({})".format(
-            ",".join(["?"] * len(ids))
-        ), ids)
+        cur = self.brain.db.execute("DELETE FROM memory_records WHERE id IN ({})".format(",".join(["?"] * len(ids))), ids)
         self.brain.db.commit()
         return cur.rowcount
 
     # Legacy method compatibility
     def add(self, content: str):
-        rec = MemoryRecord(
-            id=uuid.uuid4().hex,
-            content=content,
-            source_type="manual_add",
-            source_ref="legacy_api",
-            created_at=time.time(),
-            updated_at=time.time()
-        )
+        rec = MemoryRecord(id=uuid.uuid4().hex, content=content, source_type="manual_add", source_ref="legacy_api", created_at=time.time(), updated_at=time.time())
         self.upsert([rec])
+
+
+# ---------------------------------------------------------------------------
+# Backwards compatibility shim
+# NOTE: memory.vector_store_v2.VectorStoreV2 *inherits* from VectorStore, so
+# we cannot reassign the name here without creating a circular dependency.
+# New code should import VectorStoreV2 directly from memory.vector_store_v2.
+# ---------------------------------------------------------------------------
+try:
+    from memory.vector_store_v2 import VectorStoreV2  # noqa: F401 – re-exported for convenience
+except ImportError:
+    pass  # Fall back to v1 implementation above

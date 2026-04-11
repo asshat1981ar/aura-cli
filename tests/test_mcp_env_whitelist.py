@@ -1,4 +1,5 @@
 """Tests for MCP env_snapshot whitelist security fix (issue #332)."""
+
 from __future__ import annotations
 
 import os
@@ -12,22 +13,17 @@ class TestEnvSnapshotWhitelist:
         """ENV_WHITELIST must be defined at module level in mcp_server."""
         import tools.mcp_server as mcp_server
 
-        assert hasattr(mcp_server, "ENV_WHITELIST"), (
-            "tools/mcp_server.py must define ENV_WHITELIST at module level"
-        )
+        assert hasattr(mcp_server, "ENV_WHITELIST"), "tools/mcp_server.py must define ENV_WHITELIST at module level"
         whitelist = mcp_server.ENV_WHITELIST
         assert isinstance(whitelist, (set, frozenset))
-        for key in ("PYTHONPATH", "PATH", "HOME", "USER",
-                    "AURA_SKIP_CHDIR", "AURA_ENABLE_SWARM"):
+        for key in ("PYTHONPATH", "PATH", "HOME", "USER", "AURA_SKIP_CHDIR", "AURA_ENABLE_SWARM"):
             assert key in whitelist, f"ENV_WHITELIST must contain {key!r}"
 
     def test_helper_exists(self):
         """_env_snapshot helper must be importable from tools.mcp_server."""
         import tools.mcp_server as mcp_server
 
-        assert hasattr(mcp_server, "_env_snapshot"), (
-            "tools/mcp_server.py must define a _env_snapshot(args) helper"
-        )
+        assert hasattr(mcp_server, "_env_snapshot"), "tools/mcp_server.py must define a _env_snapshot(args) helper"
 
     def test_no_keys_returns_only_whitelisted_vars(self):
         """Without explicit keys, only whitelisted env vars are returned."""
@@ -75,10 +71,7 @@ class TestEnvSnapshotWhitelist:
         """Non-whitelisted vars are always excluded when no explicit keys given."""
         import tools.mcp_server as mcp_server
 
-        malicious_env = {k: "value" for k in (
-            "GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN",
-            "DATABASE_URL", "REDIS_PASSWORD"
-        )}
+        malicious_env = {k: "value" for k in ("GEMINI_API_KEY", "ANTHROPIC_API_KEY", "GITHUB_TOKEN", "DATABASE_URL", "REDIS_PASSWORD")}
         malicious_env["PATH"] = "/usr/bin"
 
         with patch.dict(os.environ, malicious_env, clear=True):

@@ -5,24 +5,101 @@ import json
 import os
 import secrets
 import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse, Response
+from pydantic import BaseModel, Field, field_validator
+import re
+from starlette.middleware.base import BaseHTTPMiddleware
 
+from aura_cli.api import state as _state
+from aura_cli.api.runtime_bootstrap import (
+    RuntimeBootstrapState,
+    apply_runtime_state as _bootstrap_apply_runtime_state,
+    current_project_root as _bootstrap_current_project_root,
+    ensure_runtime_initialized as _bootstrap_ensure_runtime_initialized,
+    load_model_config_status,
+    resolve_runtime_component as _bootstrap_resolve_runtime_component,
+    run_db_migrations as _bootstrap_run_db_migrations,
+    runtime_metrics_snapshot as _bootstrap_runtime_metrics_snapshot,
+)
 from core.logging_utils import log_json
 from core.mcp_contracts import (
     build_discovery_payload,
-    build_health_payload,
     build_tool_descriptor,
 )
 from core.mcp_registry import list_registered_services
 from core.ai_environment_registry import list_ai_environments
 from core.mcp_architecture import default_routing_profile
 from core.operator_runtime import build_run_tool_audit_summary
+from core.running_runs import register_run, deregister_run
+from tools.mcp_auth import require_dev_tools_auth
+
+# ---------------------------------------------------------------------------
+# Prometheus metrics — prometheus_client is a required dependency.
+# ---------------------------------------------------------------------------
+from prometheus_client import (
+    Counter,
+    Gauge,
+    Histogram,
+    REGISTRY,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+)
+
+
+def _get_or_create_metric(factory, name: str, documentation: str, labelnames=()):
+    """Return an existing collector when this module is re-imported in tests."""
+    try:
+        return factory(name, documentation, labelnames)
+    except ValueError:
+        collector = REGISTRY._names_to_collectors.get(name)  # type: ignore[attr-defined]
+        if collector is None and not name.endswith("_total"):
+            collector = REGISTRY._names_to_collectors.get(f"{name}_total")  # type: ignore[attr-defined]
+        if collector is None:
+            raise
+        return collector
+
+
+pipeline_runs_total = _get_or_create_metric(
+    Counter,
+    "aura_pipeline_runs",
+    "Total pipeline runs",
+    ["status"],
+)
+active_pipeline_runs = _get_or_create_metric(
+    Gauge,
+    "aura_active_pipeline_runs",
+    "Currently executing pipelines",
+)
+goal_queue_depth = _get_or_create_metric(
+    Gauge,
+    "aura_goal_queue_depth",
+    "Number of goals waiting in the webhook queue",
+)
+sandbox_violations_total = _get_or_create_metric(
+    Counter,
+    "aura_sandbox_violations",
+    "Sandbox violations caught by the run-tool denylist",
+    ["type"],
+)
+http_request_duration = _get_or_create_metric(
+    Histogram,
+    "http_request_duration_seconds",
+    "HTTP request latency in seconds",
+    ["endpoint"],
+)
+aura_request_latency_seconds = _get_or_create_metric(
+    Histogram,
+    "aura_request_latency_seconds",
+    "AURA API request latency in seconds",
+    ["endpoint"],
+)
 
 # Project root for environment listing
 PROJECT_ROOT = Path.cwd()
@@ -33,6 +110,7 @@ orchestrator = None
 model_adapter = None
 memory_store = None
 _runtime_init_error: str | None = None
+_bootstrap_state = RuntimeBootstrapState()
 
 RUN_TOOL_TIMEOUT_S = float(os.getenv("AURA_RUN_TOOL_TIMEOUT_S", "15"))
 RUN_TOOL_MAX_OUTPUT_BYTES = int(os.getenv("AURA_RUN_TOOL_MAX_OUTPUT_BYTES", str(64 * 1024)))
@@ -67,8 +145,30 @@ def _beads_runtime_snapshot():
     return {"enabled": False, "required": False, "scope": "none"}
 
 
+def _sync_runtime_state_from_exports() -> None:
+    _bootstrap_state.runtime = runtime
+    _bootstrap_state.orchestrator = orchestrator
+    _bootstrap_state.model_adapter = model_adapter
+    _bootstrap_state.memory_store = memory_store
+    _bootstrap_state.runtime_init_error = _runtime_init_error
+
+
+def _sync_runtime_exports() -> None:
+    global runtime, orchestrator, model_adapter, memory_store, _runtime_init_error
+    runtime = _bootstrap_state.runtime
+    orchestrator = _bootstrap_state.orchestrator
+    model_adapter = _bootstrap_state.model_adapter
+    memory_store = _bootstrap_state.memory_store
+    _runtime_init_error = _bootstrap_state.runtime_init_error
+
+
+def _run_db_migrations() -> None:
+    _bootstrap_run_db_migrations(log_json)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    await asyncio.to_thread(_run_db_migrations)
     await _ensure_runtime_initialized()
     yield
 
@@ -80,10 +180,90 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+ALLOWED_ORIGINS = os.environ.get("AURA_CORS_ORIGINS", "http://localhost:3000,http://localhost:8080").split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
+    max_age=3600,
+)
+
+from aura_cli.middleware.rate_limit import rate_limit_middleware
+
+app.middleware("http")(rate_limit_middleware)
+
+
+# ---------------------------------------------------------------------------
+# X-Request-ID correlation middleware
+# ---------------------------------------------------------------------------
+try:
+    from core.correlation import CorrelationManager as _CorrelationManager
+
+    _CORRELATION_AVAILABLE = True
+except ImportError:
+    _CORRELATION_AVAILABLE = False
+
+
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    """Propagate or generate an X-Request-ID for every request."""
+
+    async def dispatch(self, request: Request, call_next):
+        request_id = request.headers.get("X-Request-ID") or request.headers.get("X-Correlation-ID") or str(uuid.uuid4())
+        request.state.request_id = request_id
+        if _CORRELATION_AVAILABLE:
+            with _CorrelationManager.scope(request_id):
+                response = await call_next(request)
+        else:
+            response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        return response
+
+
+app.add_middleware(RequestIDMiddleware)
+
+
+# ---------------------------------------------------------------------------
+# Prometheus HTTP request duration middleware
+# ---------------------------------------------------------------------------
+_RATE_LIMIT = int(os.getenv("AURA_RATE_LIMIT", "1000"))
+
+
+@app.middleware("http")
+async def _prometheus_timing_middleware(request: Request, call_next):
+    """Record HTTP request duration for every endpoint and add rate-limit headers."""
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration = time.perf_counter() - start
+    # Normalise path to avoid high-cardinality labels (strip UUIDs etc.)
+    path = request.url.path
+    http_request_duration.labels(endpoint=path).observe(duration)
+    aura_request_latency_seconds.labels(endpoint=path).observe(duration)
+    response.headers["X-RateLimit-Limit"] = str(_RATE_LIMIT)
+    return response
+
 
 class ExecuteRequest(BaseModel):
     tool_name: str
     args: List[Any] = []
+    goal: Optional[str] = Field(default=None, min_length=1, max_length=2000)
+    max_cycles: int = Field(default=5, ge=1, le=20)
+    dry_run: bool = Field(default=False)
+
+    @field_validator("goal")
+    @classmethod
+    def validate_goal_content(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        suspicious = re.compile(
+            r"(ignore previous|system prompt|<\|im_start\|>|###\s*instruction)",
+            re.IGNORECASE,
+        )
+        if suspicious.search(v):
+            raise ValueError("Goal contains disallowed patterns")
+        return v.strip()
 
 
 class WebhookGoalRequest(BaseModel):
@@ -104,63 +284,49 @@ class WebhookPlanReviewRequest(BaseModel):
 
 
 def _current_project_root() -> Path:
-    configured_root = os.getenv("AURA_PROJECT_ROOT")
-    return Path(configured_root).resolve() if configured_root else PROJECT_ROOT.resolve()
+    return _bootstrap_current_project_root(PROJECT_ROOT)
 
 
 def _apply_runtime_state(runtime_state: Dict[str, Any]) -> None:
-    global runtime, orchestrator, model_adapter, memory_store
-    runtime = runtime_state
-    orchestrator = runtime_state.get("orchestrator")
-    model_adapter = runtime_state.get("model_adapter")
-    memory_store = runtime_state.get("memory_store")
+    _bootstrap_apply_runtime_state(_bootstrap_state, runtime_state, _state)
+    _sync_runtime_exports()
 
 
 async def _ensure_runtime_initialized() -> Dict[str, Any]:
-    global _runtime_init_error
-    if runtime:
-        return runtime
-    try:
-        from aura_cli.cli_main import create_runtime
+    _sync_runtime_state_from_exports()
+    from aura_cli.cli_main import create_runtime
 
-        runtime_state = await asyncio.to_thread(create_runtime, _current_project_root(), None)
-        _apply_runtime_state(runtime_state)
-        _runtime_init_error = None
-        return runtime_state
-    except Exception as exc:
-        _runtime_init_error = str(exc)
-        log_json("WARN", "aura_server_runtime_init_failed", details={"error": _runtime_init_error})
-        return {}
+    runtime_state = await _bootstrap_ensure_runtime_initialized(
+        state=_bootstrap_state,
+        project_root=_current_project_root(),
+        create_runtime_func=create_runtime,
+        shared_state_module=_state,
+        log_json=log_json,
+    )
+    _sync_runtime_exports()
+    return runtime_state
 
 
 async def _resolve_runtime_component(name: str) -> Any:
-    component = globals().get(name)
-    if component is not None:
-        return component
-    if not runtime:
-        await _ensure_runtime_initialized()
-        component = globals().get(name)
-        if component is not None:
-            return component
-    detail = f"{name} is not configured"
-    if _runtime_init_error and not runtime:
-        detail = f"{detail}: {_runtime_init_error}"
-    raise HTTPException(status_code=503, detail=detail)
+    _sync_runtime_state_from_exports()
+    result = await _bootstrap_resolve_runtime_component(
+        state=_bootstrap_state,
+        name=name,
+        ensure_runtime_initialized_func=_ensure_runtime_initialized,
+    )
+    _sync_runtime_exports()
+    return result
 
 
 def _runtime_metrics_snapshot() -> Dict[str, Any]:
-    entries: list[Any] = []
-    if memory_store is not None and hasattr(memory_store, "read_log"):
-        try:
-            entries = list(memory_store.read_log(limit=1000) or [])
-        except Exception:
-            entries = []
-    return {
-        "total_calls": len(entries),
-        "registered_services": len(list_registered_services()),
-        "environment_count": len(list_ai_environments(PROJECT_ROOT)),
-        "run_tool_audit": build_run_tool_audit_summary(memory_store),
-    }
+    _sync_runtime_state_from_exports()
+    return _bootstrap_runtime_metrics_snapshot(
+        state=_bootstrap_state,
+        project_root=PROJECT_ROOT,
+        list_registered_services_func=list_registered_services,
+        list_ai_environments_func=list_ai_environments,
+        build_run_tool_audit_summary_func=build_run_tool_audit_summary,
+    )
 
 
 def _clamped_run_tool_timeout_s() -> float:
@@ -285,6 +451,7 @@ async def _execute_run(req: ExecuteRequest):
         raise HTTPException(status_code=400, detail="Missing command in args")
     blocked_pattern = _is_denylisted_command(command)
     if blocked_pattern is not None:
+        sandbox_violations_total.labels(type="denylist").inc()
         raise HTTPException(status_code=403, detail=f"Command blocked by policy: {blocked_pattern}")
 
     async def run_generator():
@@ -513,33 +680,138 @@ async def _execute_goal(req: ExecuteRequest):
     return StreamingResponse(goal_generator(), media_type="text/event-stream")
 
 
-def require_auth(authorization: Optional[str] = Header(default=None)) -> None:
-    token = os.getenv("AGENT_API_TOKEN")
-    if not token:
-        return
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing Authorization header")
-    if not secrets.compare_digest(authorization, f"Bearer {token}"):
-        raise HTTPException(status_code=403, detail="Invalid token")
+def require_auth(
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(default=None),
+) -> None:
+    require_dev_tools_auth(x_api_key, authorization)
 
 
 @app.get("/health")
 async def health() -> Dict:
-    return build_health_payload(
-        status="ok",
-        server="aura-dev-tools",
-        version="1.0.0",
-        providers={"chat": "connected", "embeddings": "enabled", "openai": "connected", "openrouter": "connected", "gemini": "connected"},
-        run_enabled=os.getenv("AGENT_API_ENABLE_RUN") == "1",
+    return {
+        "status": "healthy",
+        "version": "0.1.0",
+        "providers": {
+            "openai": "connected",
+            "openrouter": "connected",
+            "gemini": "connected",
+        },
+    }
+
+
+@app.get("/ready")
+async def ready():
+    """Readiness probe: checks all critical and optional subsystems."""
+    import socket
+    import sqlite3 as _sqlite3
+    import subprocess
+
+    from fastapi.responses import JSONResponse
+
+    overall_start = time.perf_counter()
+    components: Dict[str, Any] = {}
+    status = "ready"
+
+    # --- brain_db ---
+    brain_db_path = Path(os.environ.get("AURA_BRAIN_DB_PATH", "memory/brain.db"))
+    t0 = time.perf_counter()
+    try:
+        conn = _sqlite3.connect(str(brain_db_path), timeout=2.0)
+        conn.execute("SELECT 1")
+        conn.close()
+        components["brain_db"] = {"status": "ready", "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
+    except Exception as exc:
+        components["brain_db"] = {"status": "degraded", "error": str(exc), "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
+        status = "degraded"
+
+    # --- auth_db ---
+    try:
+        from core.auth import _default_auth_db_path  # noqa: PLC0415
+    except ImportError:
+
+        def _default_auth_db_path():
+            return Path(os.environ.get("AURA_AUTH_DB_PATH", "aura_auth.db"))
+
+    auth_db_path = str(_default_auth_db_path())
+    t0 = time.perf_counter()
+    try:
+        conn = _sqlite3.connect(auth_db_path, timeout=2.0)
+        conn.execute("SELECT 1")
+        conn.close()
+        components["auth_db"] = {"status": "ready", "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
+    except Exception as exc:
+        components["auth_db"] = {"status": "degraded", "error": str(exc), "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
+        if status == "ready":
+            status = "degraded"
+
+    # --- redis (optional) ---
+    redis_url = os.getenv("REDIS_URL")
+    if redis_url:
+        t0 = time.perf_counter()
+        try:
+            import redis as _redis  # noqa: PLC0415
+
+            client = _redis.from_url(redis_url, socket_connect_timeout=1, socket_timeout=1)
+            client.ping()
+            components["redis"] = {"status": "ready", "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
+        except Exception:
+            components["redis"] = {"status": "unavailable", "latency_ms": None}
+            if status == "ready":
+                status = "degraded"
+    else:
+        components["redis"] = {"status": "unavailable", "latency_ms": None}
+
+    # --- mcp_server (optional — unavailable is not a failure) ---
+    t0 = time.perf_counter()
+    try:
+        sock = socket.create_connection(("localhost", 8001), timeout=1.0)
+        sock.close()
+        components["mcp_server"] = {"status": "ready", "latency_ms": round((time.perf_counter() - t0) * 1000, 2)}
+    except (OSError, ConnectionRefusedError):
+        components["mcp_server"] = {"status": "unavailable", "latency_ms": None}
+
+    # --- model_config ---
+    model_configured = load_model_config_status(PROJECT_ROOT)
+    components["model_config"] = {"status": "configured" if model_configured else "unconfigured"}
+
+    # --- sandbox ---
+    t0 = time.perf_counter()
+    try:
+        proc = await asyncio.to_thread(
+            subprocess.run,
+            ["python3", "-c", "print('ok')"],
+            capture_output=True,
+            timeout=2.0,
+        )
+        sandbox_ok = proc.returncode == 0 and b"ok" in proc.stdout
+        components["sandbox"] = {
+            "status": "ready" if sandbox_ok else "degraded",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+        }
+        if not sandbox_ok and status == "ready":
+            status = "degraded"
+    except Exception as exc:
+        components["sandbox"] = {
+            "status": "degraded",
+            "error": str(exc),
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 2),
+        }
+        if status == "ready":
+            status = "degraded"
+
+    overall_latency_ms = round((time.perf_counter() - overall_start) * 1000, 2)
+    http_status = 200 if status in ("ready", "degraded") else 503
+    return JSONResponse(
+        {"status": status, "components": components, "overall_latency_ms": overall_latency_ms},
+        status_code=http_status,
     )
 
 
-@app.get("/metrics")
-async def metrics(_: None = Depends(require_auth)) -> Dict:
-    return {
-        "status": "ok",
-        "skill_metrics": _runtime_metrics_snapshot(),
-    }
+@app.get("/metrics", include_in_schema=False)
+async def metrics():
+    """Expose Prometheus-format metrics (no auth — scraper must be on private network)."""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/tools")
@@ -615,15 +887,22 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
         "queued_at": time.time(),
     }
     _webhook_goal_queue[goal_id] = entry
-    log_json("INFO", "aura_webhook_goal_received", details={
-        "goal_id": goal_id,
-        "goal": req.goal[:200],
-        "pipeline_run_id": req.metadata.get("pipeline_run_id", ""),
-        "complexity": req.metadata.get("complexity", "unknown"),
-    })
+    goal_queue_depth.set(sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued"))
+    log_json(
+        "INFO",
+        "aura_webhook_goal_received",
+        details={
+            "goal_id": goal_id,
+            "goal": req.goal[:200],
+            "pipeline_run_id": req.metadata.get("pipeline_run_id", ""),
+            "complexity": req.metadata.get("complexity", "unknown"),
+        },
+    )
 
     # Fire-and-forget: run the cycle in background so n8n can poll /webhook/status
     async def _run_cycle() -> None:
+        active_pipeline_runs.inc()
+        goal_queue_depth.set(sum(1 for e in _webhook_goal_queue.values() if e["status"] == "queued"))
         try:
             _webhook_goal_queue[goal_id]["status"] = "running"
             _webhook_goal_queue[goal_id]["started_at"] = time.time()
@@ -632,18 +911,26 @@ async def webhook_goal(req: WebhookGoalRequest, _: None = Depends(require_auth))
                 active_orchestrator.run_cycle,
                 req.goal,
             )
-            _webhook_goal_queue[goal_id].update({
-                "status": "done",
-                "result": result,
-                "completed_at": time.time(),
-            })
+            _webhook_goal_queue[goal_id].update(
+                {
+                    "status": "done",
+                    "result": result,
+                    "completed_at": time.time(),
+                }
+            )
+            pipeline_runs_total.labels(status="success").inc()
         except Exception as exc:
-            _webhook_goal_queue[goal_id].update({
-                "status": "failed",
-                "error": str(exc),
-                "completed_at": time.time(),
-            })
+            _webhook_goal_queue[goal_id].update(
+                {
+                    "status": "failed",
+                    "error": str(exc),
+                    "completed_at": time.time(),
+                }
+            )
             log_json("WARN", "aura_webhook_goal_failed", details={"goal_id": goal_id, "error": str(exc)})
+            pipeline_runs_total.labels(status="failure").inc()
+        finally:
+            active_pipeline_runs.dec()
 
     asyncio.create_task(_run_cycle())
     return {"status": "queued", "goal_id": goal_id}
@@ -683,7 +970,7 @@ async def webhook_plan_review(req: WebhookPlanReviewRequest, _: None = Depends(r
     if isinstance(plan_steps, str):
         plan_text = plan_steps
     elif isinstance(plan_steps, list):
-        plan_text = "\n".join(f"{i+1}. {step}" for i, step in enumerate(plan_steps))
+        plan_text = "\n".join(f"{i + 1}. {step}" for i, step in enumerate(plan_steps))
     else:
         plan_text = str(plan_steps)
 
@@ -695,9 +982,69 @@ async def webhook_plan_review(req: WebhookPlanReviewRequest, _: None = Depends(r
         "file_targets": req.task_bundle.get("file_targets", []),
         "critique": req.task_bundle.get("critique", ""),
     }
-    log_json("INFO", "aura_webhook_plan_review_requested", details={
-        "goal": req.goal[:200],
-        "pipeline_run_id": req.pipeline_run_id,
-        "plan_steps": len(plan_steps) if isinstance(plan_steps, list) else 1,
-    })
+    log_json(
+        "INFO",
+        "aura_webhook_plan_review_requested",
+        details={
+            "goal": req.goal[:200],
+            "pipeline_run_id": req.pipeline_run_id,
+            "plan_steps": len(plan_steps) if isinstance(plan_steps, list) else 1,
+        },
+    )
     return {"status": "ok", "review_payload": review_payload}
+
+
+class RunRequest(BaseModel):
+    """Request body for POST /run."""
+
+    goal: str
+    max_cycles: int = 1
+    dry_run: bool = False
+
+
+@app.post("/run")
+async def run_pipeline(req: RunRequest, _: None = Depends(require_auth)) -> Dict:
+    """Trigger a goal-oriented pipeline run via LoopOrchestrator.
+
+    Requires the ``AGENT_API_ENABLE_RUN=1`` environment variable to be set.
+    Returns a ``run_id`` that can be used to track or cancel the run.
+    """
+    if os.getenv("AGENT_API_ENABLE_RUN") != "1":
+        raise HTTPException(status_code=403, detail="Run endpoint disabled; set AGENT_API_ENABLE_RUN=1")
+
+    run_id = secrets.token_hex(12)
+
+    async def _background_run() -> None:
+        register_run(run_id)
+        try:
+            active_orchestrator = await _resolve_runtime_component("orchestrator")
+            await asyncio.to_thread(
+                active_orchestrator.run_loop,
+                req.goal,
+                req.max_cycles,
+                req.dry_run,
+            )
+        finally:
+            deregister_run(run_id)
+
+    asyncio.create_task(_background_run())
+    return {"run_id": run_id, "status": "accepted"}
+
+
+# ---------------------------------------------------------------------------
+# Router registration — extracted sub-modules wired in at startup.
+# Routes in runs_router and health_router are mounted under /api to avoid
+# conflicts with the existing endpoints defined above.
+# ---------------------------------------------------------------------------
+try:
+    from aura_cli.api.routers.ws import router as _ws_router
+    from aura_cli.api.routers.health import router as _health_router
+    from aura_cli.api.routers.runs import router as _runs_router
+    from aura_cli.api.routers.auth import router as _auth_router
+
+    app.include_router(_ws_router)
+    app.include_router(_health_router, prefix="/api")
+    app.include_router(_runs_router, prefix="/api")
+    app.include_router(_auth_router)
+except Exception as _router_import_err:  # pragma: no cover
+    log_json("WARN", "aura_server_router_registration_failed", details={"error": str(_router_import_err)})

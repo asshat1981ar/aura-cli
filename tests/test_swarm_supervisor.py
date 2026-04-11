@@ -51,6 +51,7 @@ def test_learning_is_injected_on_every_fifth_cycle(tmp_path: Path) -> None:
     async def scenario() -> None:
         store = LessonStore(tmp_path / "memory")
         from core.swarm_models import CycleReport, PRGateDecision
+
         seed = CycleReport(
             cycle_number=1,
             story_id="seed",
@@ -175,9 +176,7 @@ def test_missing_worker_returns_failed_result(tmp_path: Path) -> None:
             },
         )
 
-        coder_result = next(
-            (r for r in report.results if r.role == AgentRole.CODER), None
-        )
+        coder_result = next((r for r in report.results if r.role == AgentRole.CODER), None)
         assert coder_result is not None
         assert coder_result.state == TaskState.FAILED
         assert coder_result.error_message == "worker_missing"
@@ -204,9 +203,7 @@ def test_worker_without_execute_or_run_fails(tmp_path: Path) -> None:
             },
         )
 
-        architect_result = next(
-            (r for r in report.results if r.role == AgentRole.ARCHITECT), None
-        )
+        architect_result = next((r for r in report.results if r.role == AgentRole.ARCHITECT), None)
         assert architect_result is not None
         assert architect_result.state == TaskState.FAILED
         assert architect_result.error_message == "worker_contract_invalid"

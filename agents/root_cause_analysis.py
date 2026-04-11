@@ -1,4 +1,5 @@
 """Structured root-cause analysis for failed AURA cycles."""
+
 from __future__ import annotations
 
 from collections import Counter
@@ -92,13 +93,9 @@ class RootCauseAnalysisAgent:
             matches = [self._fallback_match(evidence)]
 
         repeated_failures = self._detect_repeated_failures(failures, history)
-        recommended_actions = self._dedupe(
-            action for match in matches for action in match["recommended_actions"]
-        )
+        recommended_actions = self._dedupe(action for match in matches for action in match["recommended_actions"])
         if repeated_failures:
-            recommended_actions.append(
-                "The same failure is repeating. Revisit the plan or reduce scope before another retry."
-            )
+            recommended_actions.append("The same failure is repeating. Revisit the plan or reduce scope before another retry.")
 
         summary_parts = [matches[0]["summary"]]
         if goal:

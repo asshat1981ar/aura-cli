@@ -24,10 +24,7 @@ def test_claude_environment_isolation_and_bootstrap(temp_workspaces: Path):
     and isolated from other environments, creating its own config, logs, deps,
     and a specific .mcp.json file.
     """
-    manager = EnvironmentManager(
-        project_root=temp_workspaces.parent,
-        workspaces_dir=temp_workspaces
-    )
+    manager = EnvironmentManager(project_root=temp_workspaces.parent, workspaces_dir=temp_workspaces)
 
     # Bootstrap the Claude environment
     env = manager.bootstrap_environment("claude", cli_type="claude-code")
@@ -49,19 +46,17 @@ def test_claude_environment_isolation_and_bootstrap(temp_workspaces: Path):
 
     # Verify the specific MCP config file for claude is .mcp.json
     from environments.bootstrap import bootstrap_claude
-    
-    mcp_config_path = bootstrap_claude(
-        env, host="127.0.0.1", project_root=temp_workspaces.parent
-    )
+
+    mcp_config_path = bootstrap_claude(env, host="127.0.0.1", project_root=temp_workspaces.parent)
     assert mcp_config_path.exists()
     assert mcp_config_path.name == "mcp.json"
-    
+
     mcp_config_data = json.loads(mcp_config_path.read_text())
     assert "mcpServers" in mcp_config_data
     # Verify both HTTP and stdio servers exist
     assert "aura-hub" in mcp_config_data["mcpServers"]
     assert "filesystem" in mcp_config_data["mcpServers"]
-    
+
     # Verify environment health
     health = manager.environment_health("claude")
     assert health["status"] == "healthy"

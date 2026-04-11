@@ -6,6 +6,7 @@ These tests verify:
 - The lazy import cache (_agent_cache) is populated after load
 - Module-level imports for optional agents do NOT happen at import time
 """
+
 from __future__ import annotations
 
 import os
@@ -24,6 +25,7 @@ sys.path.insert(0, str(_ROOT))
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_brain():
     brain = MagicMock()
@@ -78,6 +80,7 @@ class TestDefaultAgentsStructure:
 
     def setup_method(self):
         from agents.registry import default_agents
+
         self.agents = default_agents(
             brain=_make_brain(),
             model=_make_model(),
@@ -98,57 +101,54 @@ class TestDefaultAgentsStructure:
         """Core pipeline agents must expose a callable run() method."""
         for name in EXPECTED_CORE_AGENTS:
             agent = self.agents[name]
-            assert callable(getattr(agent, "run", None)), (
-                f"Core agent '{name}' does not have a callable run() method"
-            )
+            assert callable(getattr(agent, "run", None)), f"Core agent '{name}' does not have a callable run() method"
 
     def test_specialized_agents_with_run_method(self):
         """Specialized adapters that wrap a run() interface expose it."""
         # These adapters are explicitly known to have run()
         adapter_agents = [
-            "python_agent", "typescript_agent", "external_llm",
-            "monitoring", "notification",
+            "python_agent",
+            "typescript_agent",
+            "external_llm",
+            "monitoring",
+            "notification",
         ]
         for name in adapter_agents:
             agent = self.agents[name]
-            assert callable(getattr(agent, "run", None)), (
-                f"Adapter agent '{name}' does not have a callable run() method"
-            )
+            assert callable(getattr(agent, "run", None)), f"Adapter agent '{name}' does not have a callable run() method"
 
     def test_agent_names_match_keys(self):
         """Adapters with an explicit `name` attribute must match their dict key."""
         for key, agent in self.agents.items():
             agent_name = getattr(agent, "name", None)
             if agent_name is not None:
-                assert agent_name == key, (
-                    f"Agent key '{key}' mismatches agent.name '{agent_name}'"
-                )
+                assert agent_name == key, f"Agent key '{key}' mismatches agent.name '{agent_name}'"
 
 
 # ---------------------------------------------------------------------------
 # Capability declarations
 # ---------------------------------------------------------------------------
 
+
 class TestCapabilityDeclarations:
     """FALLBACK_CAPABILITIES covers all expected pipeline phases."""
 
     def test_fallback_capabilities_not_empty(self):
         from agents.registry import FALLBACK_CAPABILITIES
+
         assert len(FALLBACK_CAPABILITIES) > 0
 
     def test_core_phases_in_fallback(self):
         from agents.registry import FALLBACK_CAPABILITIES
+
         for phase in EXPECTED_CORE_AGENTS:
-            assert phase in FALLBACK_CAPABILITIES, (
-                f"Phase '{phase}' missing from FALLBACK_CAPABILITIES"
-            )
+            assert phase in FALLBACK_CAPABILITIES, f"Phase '{phase}' missing from FALLBACK_CAPABILITIES"
 
     def test_each_capability_list_nonempty(self):
         from agents.registry import FALLBACK_CAPABILITIES
+
         for name, caps in FALLBACK_CAPABILITIES.items():
-            assert isinstance(caps, list) and len(caps) > 0, (
-                f"Empty capability list for '{name}'"
-            )
+            assert isinstance(caps, list) and len(caps) > 0, f"Empty capability list for '{name}'"
 
     def test_make_spec_uses_native_capabilities(self):
         """_make_spec() should prefer an agent's own `capabilities` attribute."""
@@ -186,32 +186,34 @@ class TestCapabilityDeclarations:
 # Lazy loading cache
 # ---------------------------------------------------------------------------
 
+
 class TestLazyAgentCache:
     """Verify the module-level _agent_cache dict exists and is populated."""
 
     def test_agent_cache_exists(self):
         import agents.registry as reg
-        assert hasattr(reg, "_agent_cache"), (
-            "agents.registry must expose a module-level _agent_cache dict"
-        )
+
+        assert hasattr(reg, "_agent_cache"), "agents.registry must expose a module-level _agent_cache dict"
 
     def test_agent_cache_is_dict(self):
         import agents.registry as reg
+
         assert isinstance(reg._agent_cache, dict)
 
     def test_lazy_import_function_exists(self):
         import agents.registry as reg
-        assert hasattr(reg, "_lazy_import"), (
-            "agents.registry must expose a _lazy_import() function"
-        )
+
+        assert hasattr(reg, "_lazy_import"), "agents.registry must expose a _lazy_import() function"
 
     def test_lazy_import_callable(self):
         import agents.registry as reg
+
         assert callable(reg._lazy_import)
 
     def test_lazy_import_returns_module_or_class(self):
         """_lazy_import('planner') should return the PlannerAgent class."""
         import agents.registry as reg
+
         result = reg._lazy_import("planner")
         # Must be truthy (a module or class), not None
         assert result is not None
@@ -219,6 +221,7 @@ class TestLazyAgentCache:
     def test_lazy_import_caches_result(self):
         """Calling _lazy_import twice with the same key returns the same object."""
         import agents.registry as reg
+
         # Clear cache to test fresh population
         reg._agent_cache.clear()
         first = reg._lazy_import("planner")
@@ -228,6 +231,7 @@ class TestLazyAgentCache:
     def test_cache_populated_after_default_agents(self):
         """After calling default_agents(), _agent_cache should be non-empty."""
         import agents.registry as reg
+
         reg._agent_cache.clear()
         reg.default_agents(brain=_make_brain(), model=_make_model())
         assert len(reg._agent_cache) > 0
@@ -237,23 +241,28 @@ class TestLazyAgentCache:
 # Backward compatibility
 # ---------------------------------------------------------------------------
 
+
 class TestBackwardCompatibility:
     """default_agents() return value is backward-compatible."""
 
     def test_plan_agent_runs(self):
         from agents.registry import default_agents
+
         agents = default_agents(brain=_make_brain(), model=_make_model())
-        result = agents["plan"].run({
-            "goal": "test goal",
-            "memory_snapshot": "",
-            "similar_past_problems": "",
-            "known_weaknesses": "",
-        })
+        result = agents["plan"].run(
+            {
+                "goal": "test goal",
+                "memory_snapshot": "",
+                "similar_past_problems": "",
+                "known_weaknesses": "",
+            }
+        )
         assert "steps" in result
         assert "risks" in result
 
     def test_critique_agent_runs(self):
         from agents.registry import default_agents
+
         agents = default_agents(brain=_make_brain(), model=_make_model())
         result = agents["critique"].run({"task": "test task", "plan": []})
         assert "issues" in result
@@ -261,6 +270,7 @@ class TestBackwardCompatibility:
 
     def test_sandbox_agent_dry_run(self):
         from agents.registry import default_agents
+
         agents = default_agents(brain=_make_brain(), model=_make_model())
         result = agents["sandbox"].run({"dry_run": True})
         assert result["status"] == "skip"
@@ -269,6 +279,7 @@ class TestBackwardCompatibility:
     def test_second_call_returns_same_shape(self):
         """Calling default_agents() twice returns dicts with identical keys."""
         from agents.registry import default_agents
+
         brain = _make_brain()
         model = _make_model()
         first = default_agents(brain=brain, model=model)

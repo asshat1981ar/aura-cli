@@ -1,5 +1,7 @@
 import unittest
+from unittest.mock import patch, MagicMock
 from core.sadd.mcp_tool_bridge import MCPToolBridge
+
 
 class TestMCPToolBridge(unittest.TestCase):
     def test_discover_tools_returns_list(self):
@@ -31,6 +33,32 @@ class TestMCPToolBridge(unittest.TestCase):
         self.assertIn("available_tools", ctx)
         self.assertEqual(len(ctx["available_tools"]), 2)
         self.assertEqual(ctx["available_tools"][0]["name"], "security_scanner")
+
+    @patch("core.sadd.mcp_tool_bridge.requests.post")
+    def test_build_tool_context_preserves_match_metadata(self, mock_post):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "data": {
+                "results": [
+                    {
+                        "name": "security_scanner",
+                        "server": "dev_tools",
+                        "description": "scan for vulnerabilities",
+                        "score": 0.91,
+                    }
+                ]
+            }
+        }
+        mock_post.return_value = mock_response
+
+        bridge = MCPToolBridge()
+        matched = bridge.match_tools_for_goal("scan for vulnerabilities")
+        ctx = bridge.build_tool_context(matched)
+
+        self.assertEqual(ctx["available_tools"][0]["match_source"], "semantic_discovery")
+        self.assertTrue(ctx["available_tools"][0]["matched_semantic"])
+        self.assertEqual(ctx["available_tools"][0]["server"], "dev_tools")
 
     def test_no_duplicate_matches(self):
         bridge = MCPToolBridge()

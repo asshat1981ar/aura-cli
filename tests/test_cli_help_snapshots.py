@@ -81,10 +81,7 @@ class TestCLIHelpSnapshots(unittest.TestCase):
         self.assertIn("json_contracts", payload)
         self.assertTrue(payload.get("deterministic"))
 
-        command_map = {
-            " ".join(item["path"]): item
-            for item in payload["commands"]
-        }
+        command_map = {" ".join(item["path"]): item for item in payload["commands"]}
 
         self.assertIn("cli_errors", payload["json_contracts"])
         self.assertIn("cli_warnings", payload["json_contracts"])

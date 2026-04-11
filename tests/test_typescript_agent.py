@@ -1,4 +1,5 @@
 """Unit tests for agents/typescript_agent.py."""
+
 from __future__ import annotations
 
 import subprocess

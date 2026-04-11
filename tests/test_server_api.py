@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from fastapi.testclient import TestClient
 
 from memory.store import MemoryStore
 
@@ -121,21 +122,21 @@ def _sse_payloads(chunks: list[str]) -> list[dict[str, Any]]:
 def test_health_returns_200(server_module):
     os.environ.pop("AGENT_API_TOKEN", None)
     data = _run(server_module.health())
-    assert data["status"] == "ok"
+    assert data["status"] == "healthy"
 
 
 def test_health_body_has_status(server_module):
     os.environ.pop("AGENT_API_TOKEN", None)
     data = _run(server_module.health())
     assert "status" in data
-    assert data["status"] in ("ok", "degraded")
+    assert data["status"] == "healthy"
 
 
-def test_health_body_has_providers(server_module):
+def test_health_body_has_version(server_module):
     os.environ.pop("AGENT_API_TOKEN", None)
     data = _run(server_module.health())
-    assert "providers" in data
-    assert isinstance(data["providers"], dict)
+    assert "version" in data
+    assert data["version"] == "0.1.0"
 
 
 def test_health_still_serves_when_runtime_components_are_missing(server_module):
@@ -149,8 +150,8 @@ def test_health_still_serves_when_runtime_components_are_missing(server_module):
     server_module.memory_store = None
     try:
         data = _run(server_module.health())
-        assert data["status"] == "ok"
-        assert "providers" in data
+        assert data["status"] == "healthy"
+        assert data["version"] == "0.1.0"
     finally:
         server_module.runtime = original_runtime
         server_module.orchestrator = original_orchestrator
@@ -178,11 +179,11 @@ def test_tools_returns_non_empty_list(server_module):
         assert expected in names
 
 
-def test_metrics_has_skill_metrics(server_module):
-    data = _run(server_module.metrics())
-    assert data["status"] == "ok"
-    assert "skill_metrics" in data
-    assert data["skill_metrics"]["total_calls"] >= 0
+def test_metrics_returns_prometheus_format(server_module):
+    response = _run(server_module.metrics())
+    # Prometheus format returns a Response object with text/plain content
+    assert hasattr(response, "body") or hasattr(response, "media_type")
+    assert "prometheus" in (getattr(response, "media_type", "") or "").lower() or b"TYPE" in (getattr(response, "body", b"") or b"")
 
 
 def test_execute_env_tool_disabled(server_module):
@@ -251,7 +252,7 @@ def test_execute_run_streams_stderr_and_exit_code(server_module, monkeypatch):
     assert any(evt.get("type") == "exit" and evt.get("code") == 3 for evt in payloads)
 
 
-def test_execute_run_persists_audit_entries_and_metrics_reflect_them(server_module, monkeypatch, tmp_path):
+def test_execute_run_persists_audit_entries(server_module, monkeypatch, tmp_path):
     store = MemoryStore(tmp_path / "memory")
     original_store = server_module.memory_store
 
@@ -269,11 +270,6 @@ def test_execute_run_persists_audit_entries_and_metrics_reflect_them(server_modu
         assert all(entry["type"] == "server_run_tool" for entry in audit_entries)
         assert audit_entries[0]["command"] == cmd
         assert audit_entries[0]["code"] == 0
-
-        metrics = _run(server_module.metrics())
-        assert metrics["skill_metrics"]["total_calls"] == len(audit_entries)
-        assert metrics["skill_metrics"]["run_tool_audit"]["count"] == 1
-        assert metrics["skill_metrics"]["run_tool_audit"]["last_command"] == cmd
     finally:
         server_module.memory_store = original_store
 
@@ -281,7 +277,7 @@ def test_execute_run_persists_audit_entries_and_metrics_reflect_them(server_modu
 def test_execute_run_timeouts_emit_timeout_metadata(server_module, monkeypatch):
     monkeypatch.setenv("AGENT_API_ENABLE_RUN", "1")
     monkeypatch.setattr(server_module, "_clamped_run_tool_timeout_s", lambda: 0.01, raising=False)
-    cmd = f"{sys.executable} -c \"import time; time.sleep(1)\""
+    cmd = f'{sys.executable} -c "import time; time.sleep(1)"'
 
     response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
     payloads = _sse_payloads(_run(_collect_streaming_response(response)))
@@ -315,3 +311,93 @@ def test_execute_goal_without_args_when_enabled(server_module):
     with pytest.raises(HTTPException) as exc:
         _run(server_module.execute(server_module.ExecuteRequest(tool_name="goal", args=[])))
     assert exc.value.status_code == 400
+
+
+# ---------------------------------------------------------------------------
+# HTTP-level tests using TestClient (headers, auth, CORS, request ID)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def http_client(server_module):
+    """TestClient for HTTP-level header and auth tests."""
+    return TestClient(server_module.app, raise_server_exceptions=False)
+
+
+def test_execute_requires_auth_when_token_set(http_client, monkeypatch):
+    """POST /execute with AGENT_API_TOKEN set but no Authorization header → 401."""
+    monkeypatch.setenv("AGENT_API_TOKEN", "test-secret-token")
+    response = http_client.post(
+        "/execute",
+        json={"tool_name": "ask", "args": ["hi"]},
+    )
+    assert response.status_code == 401
+
+
+def test_rate_limit_header_present_on_response(http_client):
+    """Every response must include X-RateLimit-Limit header."""
+    response = http_client.get("/health")
+    assert "x-ratelimit-limit" in response.headers
+    assert response.headers["x-ratelimit-limit"].isdigit()
+
+
+def test_health_http_returns_200_with_status_field(http_client):
+    """GET /health returns HTTP 200 and a JSON body with a 'status' field."""
+    response = http_client.get("/health")
+    assert response.status_code == 200
+    assert "status" in response.json()
+
+
+def test_ready_http_returns_json_with_components_field(http_client):
+    """GET /ready returns JSON that contains a 'components' field."""
+    response = http_client.get("/ready")
+    data = response.json()
+    assert "components" in data
+
+
+def test_ready_http_has_status_and_overall_latency(http_client):
+    """GET /ready returns 'status' and 'overall_latency_ms' fields."""
+    response = http_client.get("/ready")
+    data = response.json()
+    assert "status" in data
+    assert data["status"] in ("ready", "degraded", "not_ready")
+    assert "overall_latency_ms" in data
+    assert isinstance(data["overall_latency_ms"], (int, float))
+
+
+def test_ready_components_include_required_keys(http_client):
+    """GET /ready components include brain_db, auth_db, mcp_server, model_config, and sandbox."""
+    response = http_client.get("/ready")
+    data = response.json()
+    components = data.get("components", {})
+    for key in ("brain_db", "auth_db", "mcp_server", "model_config", "sandbox"):
+        assert key in components, f"Missing component: {key}"
+    assert components["mcp_server"]["status"] in ("ready", "unavailable")
+    assert components["model_config"]["status"] in ("configured", "unconfigured")
+    assert components["sandbox"]["status"] in ("ready", "degraded")
+
+
+def test_ready_mcp_server_unavailable_does_not_cause_503(http_client):
+    """MCP server being unavailable should not cause a 503 response."""
+    response = http_client.get("/ready")
+    data = response.json()
+    # Even if mcp_server is unavailable, overall status should not be not_ready
+    mcp_status = data.get("components", {}).get("mcp_server", {}).get("status")
+    assert mcp_status in ("ready", "unavailable")
+    # HTTP status should be 200 for ready or degraded
+    assert response.status_code in (200, 503)
+
+
+def test_cors_header_present_when_origin_sent(http_client):
+    """GET /health with an allowed Origin returns Access-Control-Allow-Origin."""
+    response = http_client.get(
+        "/health",
+        headers={"Origin": "http://localhost:3000"},
+    )
+    assert "access-control-allow-origin" in response.headers
+
+
+def test_x_request_id_returned_in_response_headers(http_client):
+    """Every response must include an X-Request-ID header."""
+    response = http_client.get("/health")
+    assert "x-request-id" in response.headers

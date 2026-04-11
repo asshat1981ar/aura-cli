@@ -1,4 +1,5 @@
 """Central registry metadata for AURA MCP-compatible HTTP services."""
+
 from __future__ import annotations
 
 import os

@@ -1,0 +1,270 @@
+{
+  "name": "Fleet Dispatcher - WF-7 SADDSessionManager",
+  "nodes": [
+    {
+      "id": "wf7-webhook-001",
+      "name": "SADD Session Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
+        "path": "sadd-session",
+        "httpMethod": "POST",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "webhookId": "sadd-session"
+    },
+    {
+      "id": "wf7-switch-001",
+      "name": "Route Event Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        500,
+        300
+      ],
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.body.event_type }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "session.started",
+              "output": 0
+            },
+            {
+              "value2": "workstream.completed",
+              "output": 1
+            },
+            {
+              "value2": "workstream.failed",
+              "output": 2
+            },
+            {
+              "value2": "session.completed",
+              "output": 3
+            }
+          ]
+        },
+        "fallbackOutput": -1
+      }
+    },
+    {
+      "id": "wf7-set-started-001",
+      "name": "Log Session Started",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        750,
+        100
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "wf7-assign-session-id",
+              "name": "session_id",
+              "value": "={{ $json.body.session_id }}",
+              "type": "string"
+            },
+            {
+              "id": "wf7-assign-design-title",
+              "name": "design_title",
+              "value": "={{ $json.body.payload.design_title }}",
+              "type": "string"
+            },
+            {
+              "id": "wf7-assign-total-ws",
+              "name": "total_workstreams",
+              "value": "={{ $json.body.payload.total_workstreams }}",
+              "type": "number"
+            },
+            {
+              "id": "wf7-assign-event-started",
+              "name": "event",
+              "value": "session.started",
+              "type": "string"
+            },
+            {
+              "id": "wf7-assign-ts-started",
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "include": "none",
+        "options": {}
+      }
+    },
+    {
+      "id": "wf7-set-ws-completed-001",
+      "name": "Track Workstream Completed",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        750,
+        250
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "wf7-assign-ws-completed-sid",
+              "name": "session_id",
+              "value": "={{ $json.body.session_id }}",
+              "type": "string"
+            },
+            {
+              "id": "wf7-assign-ws-completed-id",
+              "name": "ws_id",
+              "value": "={{ $json.body.payload.ws_id }}",
+              "type": "string"
+            },
+            {
+              "id": "wf7-assign-ws-completed-status",
+              "name": "status",
+              "value": "completed",
+              "type": "string"
+            },
+            {
+              "id": "wf7-assign-ws-completed-cycles",
+              "name": "cycles_used",
+              "value": "={{ $json.body.payload.cycles_used }}",
+              "type": "number"
+            },
+            {
+              "id": "wf7-assign-ws-completed-ts",
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "include": "none",
+        "options": {}
+      }
+    },
+    {
+      "id": "wf7-set-ws-failed-001",
+      "name": "Track Workstream Failed",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        750,
+        400
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "wf7-assign-ws-failed-sid",
+              "name": "session_id",
+              "value": "={{ $json.body.session_id }}",
+              "type": "string"
+            },
+            {
+              "id": "wf7-assign-ws-failed-id",
+              "name": "ws_id",
+              "value": "={{ $json.body.payload.ws_id }}",
+              "type": "string"
+            },
+            {
+              "id": "wf7-assign-ws-failed-status",
+              "name": "status",
+              "value": "failed",
+              "type": "string"
+            },
+            {
+              "id": "wf7-assign-ws-failed-error",
+              "name": "error",
+              "value": "={{ $json.body.payload.error }}",
+              "type": "string"
+            },
+            {
+              "id": "wf7-assign-ws-failed-ts",
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "include": "none",
+        "options": {}
+      }
+    },
+    {
+      "id": "wf7-respond-completed-001",
+      "name": "Session Summary Response",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        750,
+        550
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({status: \"ok\", event: \"session.completed\", session_id: $json.body.session_id, summary: $json.body.payload}) }}",
+        "options": {
+          "responseCode": 200
+        }
+      }
+    }
+  ],
+  "connections": {
+    "SADD Session Webhook": {
+      "main": [
+        [
+          {
+            "node": "Route Event Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Event Type": {
+      "main": [
+        [
+          {
+            "node": "Log Session Started",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Track Workstream Completed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Track Workstream Failed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Session Summary Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "fleet-dispatcher"
+  },
+  "id": "f3a7c1e2-9d45-4b8a-a1f0-7e2d3c4b5a6d"
+}

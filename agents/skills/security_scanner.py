@@ -1,19 +1,20 @@
 """Skill: static security analysis – secrets, injection patterns, unsafe calls."""
+
 from __future__ import annotations
 import ast
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 from core.logging_utils import log_json
 
 _SECRET_PATTERNS = [
     (re.compile(r'(?i)(api_key|apikey|secret_key|access_token|auth_token)\s*=\s*["\'][^"\']{8,}["\']'), "hardcoded_secret", "critical"),
     (re.compile(r'(?i)(password|passwd|pwd)\s*=\s*["\'][^"\']{4,}["\']'), "hardcoded_password", "critical"),
-    (re.compile(r'Bearer\s+[A-Za-z0-9\-_\.]{20,}'), "bearer_token_in_code", "high"),
+    (re.compile(r"Bearer\s+[A-Za-z0-9\-_\.]{20,}"), "bearer_token_in_code", "high"),
     (re.compile(r'(?i)private[_\s]?key\s*=\s*["\'][^"\']{10,}'), "hardcoded_private_key", "critical"),
-    (re.compile(r'(?:AKIA|ASIA)[A-Z0-9]{16}'), "aws_access_key", "critical"),
+    (re.compile(r"(?:AKIA|ASIA)[A-Z0-9]{16}"), "aws_access_key", "critical"),
 ]
 
 _SQL_PATTERNS = [
@@ -84,9 +85,7 @@ class SecurityScannerSkill(SkillBase):
             all_findings.extend(_scan_ast(code, file_path))
         elif project_root_str:
             root = Path(project_root_str)
-            for f in root.rglob("*.py"):
-                if ".git" in f.parts or "node_modules" in f.parts or "__pycache__" in f.parts:
-                    continue
+            for f in iter_py_files(root):
                 try:
                     src = f.read_text(encoding="utf-8", errors="replace")
                 except OSError:

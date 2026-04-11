@@ -1,4 +1,5 @@
 """End-to-end smoke test: dry-run cycle through the full orchestrator pipeline."""
+
 import os
 import unittest
 from pathlib import Path
@@ -13,6 +14,7 @@ class TestDryRunCycleSmoke(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         from aura_cli.cli_main import create_runtime
+
         cls.runtime = create_runtime(project_root=Path(".").resolve())
 
     def test_cycle_completes_without_exception(self):
@@ -36,6 +38,7 @@ class TestDryRunCycleSmoke(unittest.TestCase):
     def test_adaptive_pipeline_used(self):
         """Regression: PipelineConfig.confidence field must exist (was missing)."""
         from core.adaptive_pipeline import AdaptivePipeline, PipelineConfig
+
         pipeline = AdaptivePipeline()
         cfg = pipeline.configure("write a test", "feature")
         self.assertIsInstance(cfg, PipelineConfig)
@@ -45,8 +48,7 @@ class TestDryRunCycleSmoke(unittest.TestCase):
     def test_runtime_all_agents_registered(self):
         """All 8 pipeline agents must be wired in create_runtime."""
         orc = self.runtime["orchestrator"]
-        required = {"ingest", "plan", "critique", "synthesize", "act",
-                    "sandbox", "verify", "reflect"}
+        required = {"ingest", "plan", "critique", "synthesize", "act", "sandbox", "verify", "reflect"}
         missing = required - set(orc.agents.keys())
         self.assertEqual(missing, set(), f"Missing agents: {missing}")
 

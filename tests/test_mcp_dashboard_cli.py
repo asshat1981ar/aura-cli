@@ -5,6 +5,7 @@ Covers:
   aura mcp restart  → _handle_mcp_restart_dispatch
   aura beads schemas → _handle_beads_schemas_dispatch
 """
+
 from __future__ import annotations
 
 import io
@@ -36,9 +37,11 @@ class TestMCPStatusDispatch(unittest.TestCase):
             {"name": "dev_tools", "status": "healthy", "port": 8001, "health_data": {"timestamp": "now", "tool_count": 5}},
             {"name": "skills", "status": "healthy", "port": 8002, "health_data": {}},
         ]
-        with patch("core.mcp_health.check_all_mcp_health", new=AsyncMock(return_value=healthy_results)), \
-             patch("core.mcp_health.get_health_summary", return_value={"total_servers": 2, "healthy_count": 2, "unhealthy_count": 0, "all_healthy": True}), \
-             patch("core.mcp_registry.list_registered_services", return_value=[{"config_name": "dev_tools", "url": "http://127.0.0.1:8001"}, {"config_name": "skills", "url": "http://127.0.0.1:8002"}]):
+        with (
+            patch("core.mcp_health.check_all_mcp_health", new=AsyncMock(return_value=healthy_results)),
+            patch("core.mcp_health.get_health_summary", return_value={"total_servers": 2, "healthy_count": 2, "unhealthy_count": 0, "all_healthy": True}),
+            patch("core.mcp_registry.list_registered_services", return_value=[{"config_name": "dev_tools", "url": "http://127.0.0.1:8001"}, {"config_name": "skills", "url": "http://127.0.0.1:8002"}]),
+        ):
             code, out, err = _dispatch(["mcp", "status"])
         self.assertEqual(code, 0)
 
@@ -46,17 +49,21 @@ class TestMCPStatusDispatch(unittest.TestCase):
         results = [
             {"name": "dev_tools", "status": "unhealthy", "error": "refused", "health_data": None},
         ]
-        with patch("core.mcp_health.check_all_mcp_health", new=AsyncMock(return_value=results)), \
-             patch("core.mcp_health.get_health_summary", return_value={"total_servers": 1, "healthy_count": 0, "unhealthy_count": 1, "all_healthy": False}), \
-             patch("core.mcp_registry.list_registered_services", return_value=[{"config_name": "dev_tools", "url": "http://127.0.0.1:8001"}]):
+        with (
+            patch("core.mcp_health.check_all_mcp_health", new=AsyncMock(return_value=results)),
+            patch("core.mcp_health.get_health_summary", return_value={"total_servers": 1, "healthy_count": 0, "unhealthy_count": 1, "all_healthy": False}),
+            patch("core.mcp_registry.list_registered_services", return_value=[{"config_name": "dev_tools", "url": "http://127.0.0.1:8001"}]),
+        ):
             code, out, err = _dispatch(["mcp", "status"])
         self.assertEqual(code, 1)
 
     def test_mcp_status_json_output(self):
         results = [{"name": "dev_tools", "status": "healthy", "health_data": {}}]
-        with patch("core.mcp_health.check_all_mcp_health", new=AsyncMock(return_value=results)), \
-             patch("core.mcp_health.get_health_summary", return_value={"total_servers": 1, "healthy_count": 1, "unhealthy_count": 0, "all_healthy": True}), \
-             patch("core.mcp_registry.list_registered_services", return_value=[]):
+        with (
+            patch("core.mcp_health.check_all_mcp_health", new=AsyncMock(return_value=results)),
+            patch("core.mcp_health.get_health_summary", return_value={"total_servers": 1, "healthy_count": 1, "unhealthy_count": 0, "all_healthy": True}),
+            patch("core.mcp_registry.list_registered_services", return_value=[]),
+        ):
             code, out, err = _dispatch(["mcp", "status", "--json"])
         self.assertEqual(code, 0)
         payload = json.loads(out)
@@ -70,16 +77,14 @@ class TestMCPRestartDispatch(unittest.TestCase):
     def test_restart_healthy_server_returns_zero(self):
         health_result = {"name": "dev_tools", "status": "healthy", "port": 8001, "health_data": {}}
         svc = {"name": "aura-dev-tools", "url": "http://127.0.0.1:8001", "config_name": "dev_tools"}
-        with patch("core.mcp_health.check_mcp_health", new=AsyncMock(return_value=health_result)), \
-             patch("core.mcp_registry.get_registered_service", return_value=svc):
+        with patch("core.mcp_health.check_mcp_health", new=AsyncMock(return_value=health_result)), patch("core.mcp_registry.get_registered_service", return_value=svc):
             code, out, err = _dispatch(["mcp", "restart", "dev_tools"])
         self.assertEqual(code, 0)
 
     def test_restart_unhealthy_server_returns_one(self):
         health_result = {"name": "dev_tools", "status": "unhealthy", "error": "connection refused"}
         svc = {"name": "aura-dev-tools", "url": "http://127.0.0.1:8001", "config_name": "dev_tools"}
-        with patch("core.mcp_health.check_mcp_health", new=AsyncMock(return_value=health_result)), \
-             patch("core.mcp_registry.get_registered_service", return_value=svc):
+        with patch("core.mcp_health.check_mcp_health", new=AsyncMock(return_value=health_result)), patch("core.mcp_registry.get_registered_service", return_value=svc):
             code, out, err = _dispatch(["mcp", "restart", "dev_tools"])
         self.assertEqual(code, 1)
 
@@ -91,8 +96,7 @@ class TestMCPRestartDispatch(unittest.TestCase):
     def test_restart_json_output(self):
         health_result = {"name": "dev_tools", "status": "healthy", "health_data": {}}
         svc = {"name": "aura-dev-tools", "url": "http://127.0.0.1:8001", "config_name": "dev_tools"}
-        with patch("core.mcp_health.check_mcp_health", new=AsyncMock(return_value=health_result)), \
-             patch("core.mcp_registry.get_registered_service", return_value=svc):
+        with patch("core.mcp_health.check_mcp_health", new=AsyncMock(return_value=health_result)), patch("core.mcp_registry.get_registered_service", return_value=svc):
             code, out, err = _dispatch(["mcp", "restart", "dev_tools", "--json"])
         self.assertEqual(code, 0)
         payload = json.loads(out)
@@ -102,7 +106,6 @@ class TestMCPRestartDispatch(unittest.TestCase):
 
 class TestBeadsSchemasDispatch(unittest.TestCase):
     """aura beads schemas — list registered BEADS schema contracts."""
-
 
     def test_beads_schemas_returns_zero(self):
         code, out, err = _dispatch(["beads", "schemas"])

@@ -1,4 +1,5 @@
 """Architecture metadata for multi-server MCP deployments."""
+
 from __future__ import annotations
 
 from typing import Any, Dict

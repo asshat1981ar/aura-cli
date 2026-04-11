@@ -14,6 +14,7 @@ Usage::
     result = remediator.run(brain, goal_queue, limit=3)
     # {"goals_generated": 2, "goals": [...]}
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -24,27 +25,18 @@ from core.logging_utils import log_json
 
 # Maps structured insight types to human-readable goal templates
 _GOAL_TEMPLATES: Dict[str, str] = {
-    "phase_failure": (
-        "Investigate and fix repeated '{phase}' phase failures "
-        "(failure rate: {failure_rate:.0%}, severity: {severity})"
-    ),
-    "low_value_skill": (
-        "Evaluate or reconfigure '{skill}' skill — "
-        "only {actionable_rate:.0%} actionable output rate after {runs} runs"
-    ),
-    "goal_type_struggling": (
-        "Improve handling of '{goal_type}' goals — "
-        "only {success_rate:.0%} success rate"
-    ),
+    "phase_failure": ("Investigate and fix repeated '{phase}' phase failures (failure rate: {failure_rate:.0%}, severity: {severity})"),
+    "low_value_skill": ("Evaluate or reconfigure '{skill}' skill — only {actionable_rate:.0%} actionable output rate after {runs} runs"),
+    "goal_type_struggling": ("Improve handling of '{goal_type}' goals — only {success_rate:.0%} success rate"),
     "negative_sentiment": "Address recurring issue: {description}",
     "keyword": "Investigate flagged issue: {description}",
 }
 
 # Severity → numeric priority weight (higher = more urgent)
 _SEVERITY_WEIGHT: Dict[str, float] = {
-    "HIGH":   3.0,
+    "HIGH": 3.0,
     "MEDIUM": 2.0,
-    "LOW":    1.0,
+    "LOW": 1.0,
 }
 
 
@@ -108,9 +100,7 @@ class WeaknessRemediator:
             goal_queue.add(goal_text)
             brain.mark_weakness_queued(w_hash)
             new_goals.append(goal_text)
-            log_json("INFO", "weakness_remediator_goal_queued",
-                     details={"goal": goal_text, "score": round(score, 2),
-                               "type": parsed.get("type", "unknown")})
+            log_json("INFO", "weakness_remediator_goal_queued", details={"goal": goal_text, "score": round(score, 2), "type": parsed.get("type", "unknown")})
 
         return {"goals_generated": len(new_goals), "goals": new_goals}
 

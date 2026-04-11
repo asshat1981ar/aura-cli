@@ -27,6 +27,7 @@ Thread safety:
     All in-process operations are protected by a single ``threading.RLock``.
     SQLite writes use ``check_same_thread=False`` with a per-call connection.
 """
+
 from __future__ import annotations
 
 import sqlite3
@@ -63,8 +64,7 @@ class LocalCacheAdapter:
         self._lists: dict[str, list[str]] = {}
         self._db_path = db_path
         self._init_db()
-        log_json("INFO", "local_cache_adapter_initialized",
-                 details={"db_path": db_path})
+        log_json("INFO", "local_cache_adapter_initialized", details={"db_path": db_path})
 
     # ── Availability ─────────────────────────────────────────────────────────
 
@@ -159,8 +159,7 @@ class LocalCacheAdapter:
                 )
             return True
         except Exception as exc:
-            log_json("WARN", "local_cache_publish_failed",
-                     details={"topic": topic, "error": str(exc)})
+            log_json("WARN", "local_cache_publish_failed", details={"topic": topic, "error": str(exc)})
             return False
 
     def read_events(
@@ -179,14 +178,12 @@ class LocalCacheAdapter:
             with sqlite3.connect(self._db_path, check_same_thread=False) as conn:
                 conn.row_factory = sqlite3.Row
                 rows = conn.execute(
-                    "SELECT id, topic, message, ts FROM topic_events "
-                    "WHERE topic = ? AND ts > ? ORDER BY ts ASC LIMIT ?",
+                    "SELECT id, topic, message, ts FROM topic_events WHERE topic = ? AND ts > ? ORDER BY ts ASC LIMIT ?",
                     (topic, since_ts, limit),
                 ).fetchall()
             return [dict(row) for row in rows]
         except Exception as exc:
-            log_json("WARN", "local_cache_read_events_failed",
-                     details={"topic": topic, "error": str(exc)})
+            log_json("WARN", "local_cache_read_events_failed", details={"topic": topic, "error": str(exc)})
             return []
 
     # ── Compatibility stubs (match MomentoAdapter API exactly) ────────────────
@@ -200,10 +197,7 @@ class LocalCacheAdapter:
         """Return a snapshot of in-process cache statistics."""
         with self._lock:
             now = time.time()
-            live = sum(
-                1 for (_, exp) in self._kv.values()
-                if exp is None or exp > now
-            )
+            live = sum(1 for (_, exp) in self._kv.values() if exp is None or exp > now)
             expired = len(self._kv) - live
             list_items = sum(len(v) for v in self._lists.values())
         return {
@@ -218,10 +212,7 @@ class LocalCacheAdapter:
         now = time.time()
         removed = 0
         with self._lock:
-            expired_keys = [
-                k for k, (_, exp) in self._kv.items()
-                if exp is not None and now > exp
-            ]
+            expired_keys = [k for k, (_, exp) in self._kv.items() if exp is not None and now > exp]
             for k in expired_keys:
                 del self._kv[k]
                 removed += 1
@@ -248,15 +239,13 @@ class LocalCacheAdapter:
                         ts      REAL    NOT NULL
                     )
                 """)
-                conn.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_topic_ts "
-                    "ON topic_events (topic, ts)"
-                )
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_topic_ts ON topic_events (topic, ts)")
         except Exception as exc:
             log_json("WARN", "local_cache_db_init_failed", details={"error": str(exc)})
 
 
 # ── Module-level helper ───────────────────────────────────────────────────────
+
 
 def _ns(cache: str, key: str) -> str:
     """Namespace a key as ``cache:key`` (matches Momento's logical separation)."""

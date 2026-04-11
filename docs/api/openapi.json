@@ -1,33 +1,24 @@
 {
-  "openapi": "3.0.0",
+  "openapi": "3.1.0",
   "info": {
-    "title": "AURA API",
-    "description": "Autonomous software development platform API",
-    "version": "0.1.0",
-    "contact": {
-      "name": "AURA CLI",
-      "url": "https://github.com/asshat1981ar/aura-cli"
-    }
+    "title": "AURA Dev Tools MCP",
+    "description": "Main entry point for AURA developer tools and orchestration.",
+    "version": "1.0.0"
   },
-  "servers": [
-    {
-      "url": "http://localhost:8000/api",
-      "description": "Local development server"
-    }
-  ],
   "paths": {
     "/health": {
       "get": {
-        "summary": "Health check",
-        "description": "Returns the health status of the API server",
-        "operationId": "health_check",
+        "summary": "Health",
+        "operationId": "health_health_get",
         "responses": {
           "200": {
-            "description": "Server is healthy",
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HealthResponse"
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Health Health Get"
                 }
               }
             }
@@ -35,500 +26,1212 @@
         }
       }
     },
-    "/auth/login": {
-      "post": {
-        "summary": "Login",
-        "description": "Authenticate and receive JWT token",
-        "operationId": "login",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/LoginRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Login successful",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/LoginResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid credentials",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/goals": {
+    "/ready": {
       "get": {
-        "summary": "List goals",
-        "description": "Get all goals in the system",
-        "operationId": "list_goals",
-        "security": [{"BearerAuth": []}],
+        "summary": "Ready",
+        "description": "Readiness probe: checks all critical and optional subsystems.",
+        "operationId": "ready_ready_get",
         "responses": {
           "200": {
-            "description": "List of goals",
+            "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Goal"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          }
-        }
-      },
-      "post": {
-        "summary": "Create goal",
-        "description": "Create a new goal",
-        "operationId": "create_goal",
-        "security": [{"BearerAuth": []}],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GoalCreate"
+                "schema": {}
               }
             }
           }
-        },
+        }
+      }
+    },
+    "/tools": {
+      "get": {
+        "summary": "Tools",
+        "operationId": "tools_tools_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "responses": {
           "200": {
-            "description": "Goal created",
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Goal"
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Tools Tools Get"
                 }
               }
             }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
           },
           "422": {
-            "$ref": "#/components/responses/ValidationError"
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
     },
-    "/goals/{goal_id}/cancel": {
+    "/discovery": {
+      "get": {
+        "summary": "Discovery",
+        "operationId": "discovery_discovery_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Discovery Discovery Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/environments": {
+      "get": {
+        "summary": "Environments",
+        "operationId": "environments_environments_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Environments Environments Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/architecture": {
+      "get": {
+        "summary": "Architecture",
+        "operationId": "architecture_architecture_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Architecture Architecture Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/execute": {
       "post": {
-        "summary": "Cancel goal",
-        "description": "Cancel a running goal",
-        "operationId": "cancel_goal",
-        "security": [{"BearerAuth": []}],
+        "summary": "Execute",
+        "operationId": "execute_execute_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecuteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook/goal": {
+      "post": {
+        "summary": "Webhook Goal",
+        "description": "Enqueue a goal submitted by n8n (P1 fast lane or direct trigger).",
+        "operationId": "webhook_goal_webhook_goal_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/aura_cli__server__WebhookGoalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Webhook Goal Webhook Goal Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/webhook/status/{goal_id}": {
+      "get": {
+        "summary": "Webhook Goal Status",
+        "description": "Poll the status of a webhook-submitted goal (used by n8n P1 fast lane).",
+        "operationId": "webhook_goal_status_webhook_status__goal_id__get",
         "parameters": [
           {
             "name": "goal_id",
             "in": "path",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "string",
+              "title": "Goal Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Goal cancelled",
+            "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SuccessResponse"
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Webhook Goal Status Webhook Status  Goal Id  Get"
                 }
               }
             }
           },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
     },
-    "/agents": {
-      "get": {
-        "summary": "List agents",
-        "description": "Get all registered agents",
-        "operationId": "list_agents",
-        "security": [{"BearerAuth": []}],
-        "responses": {
-          "200": {
-            "description": "List of agents",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Agent"
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          }
-        }
-      }
-    },
-    "/stats": {
-      "get": {
-        "summary": "Get statistics",
-        "description": "Get system statistics",
-        "operationId": "get_stats",
-        "security": [{"BearerAuth": []}],
-        "responses": {
-          "200": {
-            "description": "System statistics",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Stats"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthorized"
-          }
-        }
-      }
-    }
-  },
-  "webhooks": {
-    "/github/webhook": {
+    "/webhook/plan-review": {
       "post": {
-        "summary": "GitHub webhook",
-        "description": "Receive GitHub webhook events",
+        "summary": "Webhook Plan Review",
+        "description": "Format a task bundle as a plan text for Dev Suite Quality Gate (P2) review.\n\nCalled by P3 Pipeline Coordinator before triggering AURA act phase.\nReturns human-readable plan text that Dev Suite agents can critique.",
+        "operationId": "webhook_plan_review_webhook_plan_review_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "type": "object"
+                "$ref": "#/components/schemas/aura_cli__server__WebhookPlanReviewRequest"
               }
             }
           }
         },
-        "parameters": [
-          {
-            "name": "X-GitHub-Event",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Webhook Plan Review Webhook Plan Review Post"
+                }
+              }
             }
           },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/run": {
+      "post": {
+        "summary": "Run Pipeline",
+        "description": "Trigger a goal-oriented pipeline run via LoopOrchestrator.\n\nRequires the ``AGENT_API_ENABLE_RUN=1`` environment variable to be set.\nReturns a ``run_id`` that can be used to track or cancel the run.",
+        "operationId": "run_pipeline_run_post",
+        "parameters": [
           {
-            "name": "X-Hub-Signature-256",
+            "name": "authorization",
             "in": "header",
             "required": false,
             "schema": {
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Run Pipeline Run Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Liveness",
+        "description": "Liveness probe \u2014 returns 200 if the process is alive.",
+        "operationId": "liveness_api_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Liveness Api Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ready": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Readiness",
+        "description": "Deep readiness check \u2014 verifies all critical dependencies.",
+        "operationId": "readiness_api_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/run": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Run Pipeline",
+        "description": "Trigger a goal-oriented pipeline run via LoopOrchestrator.\n\nRequires the ``AGENT_API_ENABLE_RUN=1`` environment variable to be set.\nReturns a ``run_id`` that can be used to track or cancel the run.\n\nArgs:\n    req: RunRequest with goal, max_cycles, and dry_run options.\n\nReturns:\n    Dict with run_id and status.\n\nRaises:\n    HTTPException: 403 if run endpoint is disabled.",
+        "operationId": "run_pipeline_api_run_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Run Pipeline Api Run Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/webhook/goal": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Webhook Goal",
+        "description": "Enqueue a goal submitted by n8n (P1 fast lane or direct trigger).\n\nArgs:\n    req: WebhookGoalRequest with goal, priority, and metadata.\n\nReturns:\n    Dict with goal_id and status.",
+        "operationId": "webhook_goal_api_webhook_goal_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/aura_cli__api__routers__runs__WebhookGoalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Webhook Goal Api Webhook Goal Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/webhook/status/{goal_id}": {
+      "get": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Webhook Goal Status",
+        "description": "Poll the status of a webhook-submitted goal (used by n8n P1 fast lane).\n\nArgs:\n    goal_id: The goal ID returned by /webhook/goal.\n\nReturns:\n    Dict with goal status, result (if done), or error (if failed).\n\nRaises:\n    HTTPException: 404 if goal not found.",
+        "operationId": "webhook_goal_status_api_webhook_status__goal_id__get",
+        "parameters": [
+          {
+            "name": "goal_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Goal Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Webhook processed"
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Webhook Goal Status Api Webhook Status  Goal Id  Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/webhook/plan-review": {
+      "post": {
+        "tags": [
+          "runs"
+        ],
+        "summary": "Webhook Plan Review",
+        "description": "Format a task bundle as a plan text for Dev Suite Quality Gate (P2) review.\n\nCalled by P3 Pipeline Coordinator before triggering AURA act phase.\nReturns human-readable plan text that Dev Suite agents can critique.\n\nArgs:\n    req: WebhookPlanReviewRequest with task_bundle and goal.\n\nReturns:\n    Dict with review_payload containing formatted plan text.",
+        "operationId": "webhook_plan_review_api_webhook_plan_review_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/aura_cli__api__routers__runs__WebhookPlanReviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Webhook Plan Review Api Webhook Plan Review Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Authenticate and obtain tokens",
+        "description": "Authenticate with username + password; returns access and refresh JWTs.",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Refresh access token",
+        "description": "Exchange a valid refresh token for a new access token.\n\nThe old refresh token remains valid until it expires naturally.",
+        "operationId": "refresh_api_v1_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Revoke a token",
+        "description": "Revoke the supplied token.  Its jti is added to the SQLite blocklist.\n\nAccepts either an access token or a refresh token.  After this call the\ntoken will be rejected by ``verify_token`` even before it expires.",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
           }
         }
       }
     }
   },
   "components": {
-    "securitySchemes": {
-      "BearerAuth": {
-        "type": "http",
-        "scheme": "bearer",
-        "bearerFormat": "JWT"
-      }
-    },
     "schemas": {
-      "HealthResponse": {
-        "type": "object",
+      "ExecuteRequest": {
         "properties": {
-          "status": {
+          "tool_name": {
             "type": "string",
-            "example": "healthy"
+            "title": "Tool Name"
           },
-          "timestamp": {
-            "type": "string",
-            "format": "date-time"
+          "args": {
+            "items": {},
+            "type": "array",
+            "title": "Args",
+            "default": []
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "max_cycles": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Max Cycles",
+            "default": 5
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "default": false
           }
-        }
+        },
+        "type": "object",
+        "required": [
+          "tool_name"
+        ],
+        "title": "ExecuteRequest"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
       },
       "LoginRequest": {
-        "type": "object",
-        "required": ["username", "password"],
         "properties": {
           "username": {
-            "type": "string"
+            "type": "string",
+            "title": "Username"
           },
           "password": {
             "type": "string",
-            "format": "password"
+            "title": "Password"
           }
-        }
-      },
-      "LoginResponse": {
+        },
         "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
+      "LogoutRequest": {
         "properties": {
-          "access_token": {
-            "type": "string"
-          },
-          "user": {
-            "$ref": "#/components/schemas/User"
+          "token": {
+            "type": "string",
+            "title": "Token"
           }
-        }
-      },
-      "User": {
+        },
         "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "LogoutRequest"
+      },
+      "RefreshRequest": {
         "properties": {
-          "username": {
-            "type": "string"
-          },
-          "role": {
+          "refresh_token": {
             "type": "string",
-            "enum": ["admin", "developer", "viewer"]
+            "title": "Refresh Token"
           }
-        }
-      },
-      "Goal": {
+        },
         "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "title": "RefreshRequest"
+      },
+      "RunRequest": {
         "properties": {
-          "id": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string"
-          },
-          "status": {
+          "goal": {
             "type": "string",
-            "enum": ["pending", "running", "completed", "failed"]
-          },
-          "priority": {
-            "type": "integer"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "progress": {
-            "type": "integer"
-          },
-          "cycles": {
-            "type": "integer"
+            "title": "Goal"
           },
           "max_cycles": {
-            "type": "integer"
+            "type": "integer",
+            "title": "Max Cycles",
+            "default": 1
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "default": false
           }
-        }
-      },
-      "GoalCreate": {
+        },
         "type": "object",
-        "required": ["description"],
+        "required": [
+          "goal"
+        ],
+        "title": "RunRequest",
+        "description": "Request body for POST /run."
+      },
+      "TokenResponse": {
         "properties": {
-          "description": {
-            "type": "string"
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token"
+          },
+          "token_type": {
+            "type": "string",
+            "title": "Token Type",
+            "default": "bearer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "refresh_token"
+        ],
+        "title": "TokenResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "aura_cli__api__routers__runs__WebhookGoalRequest": {
+        "properties": {
+          "goal": {
+            "type": "string",
+            "title": "Goal"
           },
           "priority": {
             "type": "integer",
-            "default": 1
+            "title": "Priority",
+            "default": 5
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "default": false
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata",
+            "default": {}
           }
-        }
-      },
-      "Agent": {
+        },
         "type": "object",
+        "required": [
+          "goal"
+        ],
+        "title": "WebhookGoalRequest",
+        "description": "Request body for POST /webhook/goal."
+      },
+      "aura_cli__api__routers__runs__WebhookPlanReviewRequest": {
         "properties": {
-          "id": {
-            "type": "string"
+          "task_bundle": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Task Bundle"
           },
-          "name": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string"
-          },
-          "status": {
+          "goal": {
             "type": "string",
-            "enum": ["idle", "busy", "error", "offline"]
+            "title": "Goal"
           },
-          "capabilities": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "last_seen": {
+          "pipeline_run_id": {
             "type": "string",
-            "format": "date-time"
-          },
-          "stats": {
-            "$ref": "#/components/schemas/AgentStats"
+            "title": "Pipeline Run Id",
+            "default": ""
           }
-        }
-      },
-      "AgentStats": {
+        },
         "type": "object",
-        "properties": {
-          "tasks_completed": {
-            "type": "integer"
-          },
-          "tasks_failed": {
-            "type": "integer"
-          },
-          "avg_execution_time": {
-            "type": "number"
-          }
-        }
+        "required": [
+          "task_bundle",
+          "goal"
+        ],
+        "title": "WebhookPlanReviewRequest",
+        "description": "Request body for POST /webhook/plan-review."
       },
-      "Stats": {
+      "aura_cli__server__WebhookGoalRequest": {
+        "properties": {
+          "goal": {
+            "type": "string",
+            "title": "Goal"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority",
+            "default": 5
+          },
+          "dry_run": {
+            "type": "boolean",
+            "title": "Dry Run",
+            "default": false
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Metadata",
+            "default": {}
+          }
+        },
         "type": "object",
-        "properties": {
-          "goals": {
-            "$ref": "#/components/schemas/GoalStats"
-          },
-          "agents": {
-            "$ref": "#/components/schemas/AgentSystemStats"
-          },
-          "system": {
-            "$ref": "#/components/schemas/SystemStats"
-          }
-        }
+        "required": [
+          "goal"
+        ],
+        "title": "WebhookGoalRequest"
       },
-      "GoalStats": {
+      "aura_cli__server__WebhookPlanReviewRequest": {
+        "properties": {
+          "task_bundle": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Task Bundle"
+          },
+          "goal": {
+            "type": "string",
+            "title": "Goal"
+          },
+          "pipeline_run_id": {
+            "type": "string",
+            "title": "Pipeline Run Id",
+            "default": ""
+          }
+        },
         "type": "object",
-        "properties": {
-          "total": {
-            "type": "integer"
-          },
-          "pending": {
-            "type": "integer"
-          },
-          "running": {
-            "type": "integer"
-          },
-          "completed": {
-            "type": "integer"
-          },
-          "failed": {
-            "type": "integer"
-          }
-        }
-      },
-      "AgentSystemStats": {
-        "type": "object",
-        "properties": {
-          "total": {
-            "type": "integer"
-          },
-          "active": {
-            "type": "integer"
-          },
-          "idle": {
-            "type": "integer"
-          }
-        }
-      },
-      "SystemStats": {
-        "type": "object",
-        "properties": {
-          "uptime_seconds": {
-            "type": "integer"
-          },
-          "memory_usage_mb": {
-            "type": "integer"
-          },
-          "cpu_percent": {
-            "type": "number"
-          }
-        }
-      },
-      "SuccessResponse": {
-        "type": "object",
-        "properties": {
-          "success": {
-            "type": "boolean"
-          }
-        }
-      },
-      "Error": {
-        "type": "object",
-        "properties": {
-          "detail": {
-            "type": "string"
-          }
-        }
-      }
-    },
-    "responses": {
-      "Unauthorized": {
-        "description": "Not authenticated",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
-          }
-        }
-      },
-      "NotFound": {
-        "description": "Resource not found",
-        "content": {
-          "application/json": {
-            "schema": {
-              "$ref": "#/components/schemas/Error"
-            }
-          }
-        }
-      },
-      "ValidationError": {
-        "description": "Validation error",
-        "content": {
-          "application/json": {
-            "schema": {
-              "type": "object",
-              "properties": {
-                "detail": {
-                  "type": "array",
-                  "items": {
-                    "type": "object"
-                  }
-                }
-              }
-            }
-          }
-        }
+        "required": [
+          "task_bundle",
+          "goal"
+        ],
+        "title": "WebhookPlanReviewRequest"
       }
     }
   }

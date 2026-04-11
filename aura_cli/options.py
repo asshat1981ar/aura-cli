@@ -47,7 +47,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         path=("bootstrap",),
-        summary="Create default config",
+        summary="[EXPERIMENTAL] Create default config",
         description="Bootstrap local configuration files for AURA.",
         examples=("python3 main.py bootstrap",),
         legacy_flags=("--bootstrap",),
@@ -59,9 +59,18 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         examples=("python3 main.py config",),
     ),
     CommandSpec(
+        path=("config", "set"),
+        summary="Set a config value",
+        description=("Persist a configuration key-value pair to aura.config.json.\nUse dotted model paths like 'model.code_generation' to set model routing."),
+        examples=(
+            "python3 main.py config set model.code_generation google/gemini-2.5-pro",
+            "python3 main.py config set dry_run true",
+        ),
+    ),
+    CommandSpec(
         path=("contract-report",),
-        summary="Print CLI contract report",
-        description="Print aggregated parser/help/schema/dispatch contract checks as JSON.",
+        summary="[EXPERIMENTAL] Print CLI contract report",
+        description="[EXPERIMENTAL] Print aggregated parser/help/schema/dispatch contract checks as JSON.",
         examples=(
             "python3 main.py contract-report --check",
             "python3 main.py contract-report --compact",
@@ -69,7 +78,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         path=("diag",),
-        summary="MCP diagnostics snapshot",
+        summary="[EXPERIMENTAL] MCP diagnostics snapshot",
         description="Fetch MCP health, metrics, limits, and recent logs via HTTP.",
         examples=("python3 main.py diag",),
         legacy_flags=("--diag",),
@@ -84,9 +93,19 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         ),
     ),
     CommandSpec(
+        path=("history",),
+        summary="Show completed goal history",
+        description="List the last N completed goals with their scores and timestamps from the goal archive.",
+        examples=(
+            "python3 main.py history",
+            "python3 main.py history --limit 20",
+            "python3 main.py history --json",
+        ),
+    ),
+    CommandSpec(
         path=("watch",),
-        summary="Launch TUI monitor",
-        description="Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.",
+        summary="[EXPERIMENTAL] Launch TUI monitor",
+        description="[EXPERIMENTAL] Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.",
         examples=(
             "python3 main.py watch",
             "python3 main.py watch --autonomous",
@@ -94,8 +113,8 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         path=("studio",),
-        summary="Launch AURA Studio",
-        description="Launch the rich real-time dashboard. Use --autonomous to start the goal loop.",
+        summary="[EXPERIMENTAL] Launch AURA Studio",
+        description="[EXPERIMENTAL] Launch the rich real-time dashboard. Use --autonomous to start the goal loop.",
         examples=(
             "python3 main.py studio",
             "python3 main.py studio --autonomous",
@@ -150,11 +169,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("goal", "resume"),
         summary="Resume an interrupted goal",
-        description=(
-            "Re-queue a goal that was interrupted mid-execution due to a crash or "
-            "process kill. Reads memory/in_flight_goal.json written by the goal run "
-            "loop. Use --run to immediately execute the re-queued goal."
-        ),
+        description=("Re-queue a goal that was interrupted mid-execution due to a crash or process kill. Reads memory/in_flight_goal.json written by the goal run loop. Use --run to immediately execute the re-queued goal."),
         examples=(
             "python3 main.py goal resume",
             "python3 main.py goal resume --run",
@@ -168,7 +183,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         path=("workflow", "run"),
-        summary="Run a workflow goal",
+        summary="[EXPERIMENTAL] Run a workflow goal",
         description="Run the orchestrator loop for a single workflow goal.",
         examples=('python3 main.py workflow run "Summarize repo" --max-cycles 3',),
         legacy_flags=("--workflow-goal",),
@@ -181,38 +196,31 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         path=("mcp", "tools"),
-        summary="List MCP tools",
+        summary="[EXPERIMENTAL] List MCP tools",
         description="List servers and tools exposed by the repo-local MCP config.",
         examples=("python3 main.py mcp tools",),
         legacy_flags=("--mcp-tools",),
     ),
     CommandSpec(
         path=("mcp", "call"),
-        summary="Call an MCP tool",
+        summary="[EXPERIMENTAL] Call an MCP tool",
         description="Invoke a repo-local MCP server/tool target with optional JSON args.",
         examples=(
-            "python3 main.py mcp call filesystem/read_file --args '{\"path\":\"README.md\"}'",
-            "python3 main.py mcp call sqlite/query --args '{\"sql\":\"select 1\"}'",
+            'python3 main.py mcp call filesystem/read_file --args \'{"path":"README.md"}\'',
+            'python3 main.py mcp call sqlite/query --args \'{"sql":"select 1"}\'',
         ),
         legacy_flags=("--mcp-call",),
     ),
     CommandSpec(
         path=("mcp", "status"),
         summary="Show MCP server health dashboard",
-        description=(
-            "Query all registered MCP servers and render a Rich table showing "
-            "server name, endpoint URL, health status, last heartbeat, average "
-            "response latency, and tool count."
-        ),
+        description=("Query all registered MCP servers and render a Rich table showing server name, endpoint URL, health status, last heartbeat, average response latency, and tool count."),
         examples=("python3 main.py mcp status",),
     ),
     CommandSpec(
         path=("mcp", "restart"),
         summary="Restart / validate an MCP server",
-        description=(
-            "Trigger a manual health validation pass for a named MCP server. "
-            "Pass the server config-name (e.g. 'dev_tools', 'skills')."
-        ),
+        description=("Trigger a manual health validation pass for a named MCP server. Pass the server config-name (e.g. 'dev_tools', 'skills')."),
         examples=(
             "python3 main.py mcp restart dev_tools",
             "python3 main.py mcp restart skills",
@@ -222,17 +230,12 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         path=("beads",),
         summary="BEADS contract commands",
         description="Inspect and validate BEADS schema contracts.",
-        examples=(
-            "python3 main.py beads schemas",
-        ),
+        examples=("python3 main.py beads schemas",),
     ),
     CommandSpec(
         path=("beads", "schemas"),
         summary="List registered BEADS schemas",
-        description=(
-            "Print a table of all BEADS schema contracts registered in .beads/. "
-            "Includes schema version, TypedDict names, and interaction count."
-        ),
+        description=("Print a table of all BEADS schema contracts registered in .beads/. Includes schema version, TypedDict names, and interaction count."),
         examples=(
             "python3 main.py beads schemas",
             "python3 main.py beads schemas --json",
@@ -297,7 +300,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         path=("memory", "search"),
-        summary="Search semantic memory",
+        summary="[EXPERIMENTAL] Search semantic memory",
         description="Perform a semantic search over brain entries.",
         examples=(
             'python3 main.py memory search "workflow engine"',
@@ -306,7 +309,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         path=("memory", "reindex"),
-        summary="Rebuild semantic memory embeddings",
+        summary="[EXPERIMENTAL] Rebuild semantic memory embeddings",
         description="Rebuild semantic memory embeddings for the active model and force a project sync.",
         examples=(
             "python3 main.py memory reindex",
@@ -324,7 +327,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     ),
     CommandSpec(
         path=("sadd",),
-        summary="Sub-Agent Driven Development",
+        summary="[EXPERIMENTAL] Sub-Agent Driven Development",
         description="Decompose a design spec into parallel workstreams and execute via sub-agents.",
         examples=(
             "python3 main.py sadd run --spec design.md --dry-run",
@@ -451,6 +454,74 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         summary="Run goal via Agent SDK meta-controller",
         description="Execute a development goal using Claude-as-brain orchestration with dynamic tool/skill/workflow selection.",
     ),
+    CommandSpec(
+        path=("agent", "list"),
+        summary="List registered agents",
+        description="Display all registered AURA agents, their type, and status.",
+        examples=("python3 main.py agent list",),
+    ),
+    # Security Issue #427: Credential migration commands
+    CommandSpec(
+        path=("credentials",),
+        summary="Secure credential management",
+        description="Manage API keys and credentials in secure storage (OS keyring or encrypted file).",
+        examples=(
+            "python3 main.py credentials migrate",
+            "python3 main.py credentials migrate --yes",
+            "python3 main.py credentials store --key api_key",
+            "python3 main.py credentials delete --key api_key --yes",
+        ),
+    ),
+    CommandSpec(
+        path=("credentials", "migrate"),
+        summary="Migrate credentials to secure storage",
+        description="Migrate API keys from plaintext aura.config.json to secure credential store (OS keyring).",
+        examples=(
+            "python3 main.py credentials migrate",
+            "python3 main.py credentials migrate --yes",
+        ),
+    ),
+    CommandSpec(
+        path=("credentials", "store"),
+        summary="Store a credential securely",
+        description="Store an API key or credential in the secure credential store.",
+        examples=(
+            "python3 main.py credentials store --key api_key",
+            "python3 main.py credentials store --key api_key --value sk-xxx",
+        ),
+    ),
+    CommandSpec(
+        path=("credentials", "delete"),
+        summary="Delete a stored credential",
+        description="Remove a credential from the secure credential store.",
+        examples=(
+            "python3 main.py credentials delete --key api_key",
+            "python3 main.py credentials delete --key api_key --yes",
+        ),
+    ),
+    CommandSpec(
+        path=("credentials", "status"),
+        summary="Show credential storage status",
+        description="Display information about the credential store configuration and stored credentials.",
+        examples=(
+            "python3 main.py credentials status",
+            "python3 main.py credentials status --json",
+        ),
+    ),
+    # ── Run management ──────────────────────────────────────────────────────────
+    CommandSpec(
+        path=("cancel",),
+        summary="Cancel an active pipeline run",
+        description=(
+            "Send a cancellation signal to a running AURA pipeline and verify "
+            "that no partial filesystem changes remain on disk.\n\n"
+            "Exit codes:\n"
+            "  0 — run cancelled and filesystem restored\n"
+            "  1 — run_id not found in the active-run registry\n"
+            "  2 — cancellation signal sent but rollback verification failed"
+        ),
+        examples=("python3 main.py cancel <run-id>",),
+    ),
 )
 
 COMMAND_SPECS_BY_PATH: dict[tuple[str, ...], CommandSpec] = {spec.path: spec for spec in COMMAND_SPECS}
@@ -463,6 +534,7 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("readiness", True, ("readiness",)),
     CLIActionSpec("bootstrap", False, ("bootstrap",), legacy_primary_flags=("bootstrap",)),
     CLIActionSpec("show_config", False, ("config",)),
+    CLIActionSpec("config_set", False, ("config", "set")),
     CLIActionSpec("contract_report", False, ("contract-report",)),
     CLIActionSpec("mcp_tools", False, ("mcp", "tools"), legacy_primary_flags=("mcp_tools",)),
     CLIActionSpec("mcp_call", False, ("mcp", "call"), legacy_primary_flags=("mcp_call",)),
@@ -471,6 +543,7 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("beads_schemas", False, ("beads", "schemas")),
     CLIActionSpec("diag", False, ("diag",), legacy_primary_flags=("diag",)),
     CLIActionSpec("logs", False, ("logs",)),
+    CLIActionSpec("history", True, ("history",)),
     CLIActionSpec("watch", True, ("watch",)),
     CLIActionSpec("studio", True, ("studio",)),
     CLIActionSpec("workflow_run", True, ("workflow", "run"), legacy_primary_flags=("workflow_goal",)),
@@ -507,6 +580,14 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("innovate_insights", True, ("innovate", "insights")),
     CLIActionSpec("interactive", True, None),
     CLIActionSpec("agent_run", True, ("agent", "run")),
+    CLIActionSpec("agent_list", False, ("agent", "list")),
+    # Security Issue #427: Credential migration actions
+    CLIActionSpec("credentials_migrate", False, ("credentials", "migrate")),
+    CLIActionSpec("credentials_store", False, ("credentials", "store")),
+    CLIActionSpec("credentials_delete", False, ("credentials", "delete")),
+    CLIActionSpec("credentials_status", False, ("credentials", "status")),
+    # ── Run management ──────────────────────────────────────────────────────────
+    CLIActionSpec("cancel", False, ("cancel",)),
 )
 
 CLI_ACTION_SPECS_BY_ACTION: dict[str, CLIActionSpec] = {spec.action: spec for spec in CLI_ACTION_SPECS}
@@ -514,6 +595,7 @@ CLI_ACTION_SPECS_BY_ACTION: dict[str, CLIActionSpec] = {spec.action: spec for sp
 _ACTION_SMOKE_OVERRIDES: dict[str, tuple[str, ...]] = {
     "interactive": (),
     "json_help": ("--json-help",),
+    "config_set": ("config", "set", "example.key", "example-value"),
     "goal_add_run": ("goal", "add", "example-goal", "--run"),
     "sadd_run": ("sadd", "run", "--spec", "example-spec.md", "--dry-run"),
     "sadd_resume": ("sadd", "resume", "--session-id", "example-id"),
@@ -522,6 +604,9 @@ _ACTION_SMOKE_OVERRIDES: dict[str, tuple[str, ...]] = {
     "innovate_export": ("innovate", "export", "--session-id", "example-id"),
     "innovate_to_goals": ("innovate", "to-goals", "--session-id", "example-id"),
     "mcp_restart": ("mcp", "restart", "dev_tools"),
+    # Security Issue #427: Credential command smoke overrides
+    "credentials_store": ("credentials", "store", "--key", "example_key", "--value", "example_value"),
+    "credentials_delete": ("credentials", "delete", "--key", "example_key", "--yes"),
 }
 
 _SMOKE_POSITIONAL_ARGS_BY_PATH: dict[tuple[str, ...], tuple[str, ...]] = {
@@ -532,6 +617,7 @@ _SMOKE_POSITIONAL_ARGS_BY_PATH: dict[tuple[str, ...], tuple[str, ...]] = {
     ("scaffold",): ("demo",),
     ("memory", "search"): ("example-query",),
     ("innovate", "start"): ("example-problem-statement",),
+    ("cancel",): ("example-run-id",),
 }
 
 HELP_SCHEMA_VERSION = 3
@@ -587,9 +673,11 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("readiness",): "readiness",
     ("bootstrap",): "bootstrap",
     ("config",): "show_config",
+    ("config", "set"): "config_set",
     ("contract-report",): "contract_report",
     ("diag",): "diag",
     ("logs",): "logs",
+    ("history",): "history",
     ("watch",): "watch",
     ("studio",): "studio",
     ("workflow", "run"): "workflow_run",
@@ -621,6 +709,14 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("innovate", "to-goals"): "innovate_to_goals",
     ("innovate", "insights"): "innovate_insights",
     ("agent", "run"): "agent_run",
+    ("agent", "list"): "agent_list",
+    # Security Issue #427: Credential management paths
+    ("credentials", "migrate"): "credentials_migrate",
+    ("credentials", "store"): "credentials_store",
+    ("credentials", "delete"): "credentials_delete",
+    ("credentials", "status"): "credentials_status",
+    # ── Run management ──────────────────────────────────────────────────────────
+    ("cancel",): "cancel",
 }
 
 _LEGACY_PRIMARY_FLAGS: tuple[str, ...] = (

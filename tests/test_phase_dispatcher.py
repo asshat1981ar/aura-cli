@@ -10,6 +10,7 @@ Tests cover:
 - Canary routing is skipped when enable_new_orchestrator is False
 - Shadow-mode check in orchestrator._run_phase delegation
 """
+
 import unittest
 from unittest.mock import MagicMock, call, patch
 
@@ -19,6 +20,7 @@ from core.phase_dispatcher import PhaseDispatcher
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_agent(return_value=None):
     agent = MagicMock()
@@ -44,6 +46,7 @@ def _make_hook_engine(should_proceed=True, modified_input=None):
 # ---------------------------------------------------------------------------
 # Basic dispatch
 # ---------------------------------------------------------------------------
+
 
 class TestPhaseDispatcherBasic(unittest.TestCase):
     def test_dispatch_calls_registered_agent(self):
@@ -76,6 +79,7 @@ class TestPhaseDispatcherBasic(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Hook integration
 # ---------------------------------------------------------------------------
+
 
 class TestPhaseDispatcherHooks(unittest.TestCase):
     def test_pre_hook_blocking_returns_sentinel(self):
@@ -137,6 +141,7 @@ class TestPhaseDispatcherHooks(unittest.TestCase):
 # Legacy bypass
 # ---------------------------------------------------------------------------
 
+
 class TestPhaseDispatcherLegacyBypass(unittest.TestCase):
     def test_force_legacy_skips_hooks(self):
         agent = _make_agent({"legacy": True})
@@ -164,6 +169,7 @@ class TestPhaseDispatcherLegacyBypass(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Canary routing (unit-level — canary disabled)
 # ---------------------------------------------------------------------------
+
 
 class TestPhaseDispatcherCanary(unittest.TestCase):
     def test_canary_not_triggered_without_flag(self):
@@ -195,6 +201,7 @@ class TestPhaseDispatcherCanary(unittest.TestCase):
 # Config propagation
 # ---------------------------------------------------------------------------
 
+
 class TestPhaseDispatcherConfig(unittest.TestCase):
     def test_default_config_is_empty_dict(self):
         dispatcher = PhaseDispatcher(agents={})
@@ -212,6 +219,7 @@ class TestPhaseDispatcherConfig(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Orchestrator delegation smoke test
 # ---------------------------------------------------------------------------
+
 
 class TestOrchestratorDelegation(unittest.TestCase):
     """Verify that LoopOrchestrator._run_phase delegates to PhaseDispatcher."""
@@ -242,9 +250,7 @@ class TestOrchestratorDelegation(unittest.TestCase):
 
     def test_run_phase_shadow_check_skipped_when_blocked_by_hook(self):
         orc = self._make_orchestrator()
-        orc._phase_dispatcher.dispatch = MagicMock(
-            return_value={"_blocked_by_hook": True, "phase": "plan"}
-        )
+        orc._phase_dispatcher.dispatch = MagicMock(return_value={"_blocked_by_hook": True, "phase": "plan"})
         with patch.object(orc, "_run_shadow_check") as mock_shadow:
             orc._run_phase("plan", {})
             mock_shadow.assert_not_called()

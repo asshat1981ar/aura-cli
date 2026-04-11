@@ -1,4 +1,5 @@
 """Fast quality metrics after each cycle — runs in < 500ms."""
+
 from __future__ import annotations
 import py_compile
 import subprocess
@@ -87,16 +88,13 @@ def run_quality_snapshot(
         return {"error": str(e)}
 
 
-def check_coverage_thresholds(
-    project_root: Path,
-    files: List[str],
-    threshold: float = 80.0
-) -> List[Dict[str, Any]]:
+def check_coverage_thresholds(project_root: Path, files: List[str], threshold: float = 80.0) -> List[Dict[str, Any]]:
     """
     Checks if given files meet the coverage threshold.
     Requires coverage.json to exist in project_root.
     """
     import json
+
     cov_path = project_root / "coverage.json"
     if not cov_path.exists():
         return []
@@ -105,7 +103,7 @@ def check_coverage_thresholds(
         data = json.loads(cov_path.read_text())
         files_data = data.get("files", {})
         gaps = []
-        
+
         for f in files:
             # Normalize path for comparison
             matched = None
@@ -114,7 +112,7 @@ def check_coverage_thresholds(
                 if f.replace("\\", "/") in cov_f.replace("\\", "/"):
                     matched = fd
                     break
-            
+
             if matched:
                 pct = matched.get("summary", {}).get("percent_covered", 0.0)
                 if pct < threshold:
@@ -122,7 +120,7 @@ def check_coverage_thresholds(
             else:
                 # If file not in coverage data at all, it's 0%
                 gaps.append({"file": f, "coverage": 0.0})
-                
+
         return gaps
     except (OSError, IOError, ValueError):
         return []

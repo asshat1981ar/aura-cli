@@ -1,4 +1,5 @@
 """Skill: analyse git commit history for hotspots and change patterns."""
+
 from __future__ import annotations
 import subprocess
 from collections import Counter

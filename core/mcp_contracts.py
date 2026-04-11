@@ -1,4 +1,5 @@
 """Shared helpers for MCP-style tool descriptors and service metadata."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, Mapping

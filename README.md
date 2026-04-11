@@ -1,224 +1,441 @@
 # AURA CLI
 
-Developer entry points:
+<p align="center">
+  <img src="https://raw.githubusercontent.com/asshat1981ar/aura-cli/main/docs/assets/logo.png" alt="AURA CLI Logo" width="200">
+</p>
 
-- CLI reference (generated): `docs/CLI_REFERENCE.md`
-- **Web UI Dashboard**: `http://localhost:8000` (see [Web UI Guide](docs/WEB_UI_GUIDE.md))
-- **API Documentation**: [docs/API.md](docs/API.md)
-- **Innovation Catalyst guide**: `docs/INNOVATION_CATALYST.md` (structured brainstorming)
-- Integration map: `docs/INTEGRATION_MAP.md`
-- Development automation guide: `docs/DEVELOPMENT_AUTOMATION_GUIDE.md`
-- Operator prompt: `docs/AURA_OPERATOR_PROMPT.md`
-- Iterative workflow: `docs/AURA_ITERATIVE_WORKFLOW.md`
-- Multi-agent workflow: `docs/AURA_MULTI_AGENT_WORKFLOW.md`
-- Sweep templates: `docs/AURA_SWEEP_TEMPLATES.md`
-- Active sweep status: `docs/ACTIVE_SWEEP_STATUS.md`
-- PR reviewer summary template: `docs/PR_REVIEWER_SUMMARY_TEMPLATE.md`
-- Active PR reviewer summary: `docs/ACTIVE_PR_REVIEWER_SUMMARY.md`
-- Sweep artifact generator: `python3 scripts/generate_active_sweep_artifacts.py --pr <number>`
-- Sweep artifact drift check: `python3 scripts/generate_active_sweep_artifacts.py --pr <number> --check`
-- Canonical runtime entrypoint: installed `aura` console script → `aura_cli.cli_main:main`
-- Developer shim: `main.py` (lightweight wrapper that delegates to `aura_cli.cli_main.main()`)
-- Shell wrapper: `run_aura.sh`
+<p align="center">
+  <a href="https://github.com/asshat1981ar/aura-cli/actions/workflows/ci.yml">
+    <img src="https://github.com/asshat1981ar/aura-cli/actions/workflows/ci.yml/badge.svg" alt="CI Status">
+  </a>
+  <a href="https://codecov.io/gh/asshat1981ar/aura-cli">
+    <img src="https://codecov.io/gh/asshat1981ar/aura-cli/branch/main/graph/badge.svg" alt="Coverage">
+  </a>
+  <a href="https://pypi.org/project/aura-cli/">
+    <img src="https://img.shields.io/pypi/v/aura-cli.svg" alt="PyPI Version">
+  </a>
+  <a href="https://pypi.org/project/aura-cli/">
+    <img src="https://img.shields.io/pypi/pyversions/aura-cli.svg" alt="Python Versions">
+  </a>
+  <a href="LICENSE">
+    <img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License">
+  </a>
+  <a href="https://github.com/asshat1981ar/aura-cli/stargazers">
+    <img src="https://img.shields.io/github/stars/asshat1981ar/aura-cli?style=social" alt="GitHub Stars">
+  </a>
+</p>
 
-Product boundary for the current release:
+---
 
-- shipped surface: CLI (`aura`) + **Web UI Dashboard**
-- development-only shim: `main.py`
-- convenience wrapper: `run_aura.sh`
-- web interface: React-based dashboard at `web-ui/`
-- experimental / non-shipped: `vscode-extension`, `orchestrator_hub`, transport-mode/editor integration work
+**AURA** is an autonomous software development platform that accepts natural-language goals and runs a **10-phase multi-agent pipeline** to design, implement, test, and commit changes with minimal human intervention.
 
-## Web UI Dashboard
-
-AURA now includes a comprehensive web-based dashboard for monitoring and controlling the system:
-
-```bash
-# Start the API server (serves the web UI)
-python3 -m aura_cli.api_server
-
-# Access the dashboard
-open http://localhost:8000
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                   10-Phase Multi-Agent Pipeline                   │
+│                                                                   │
+│   ingest → plan → critique → code → apply → verify → reflect    │
+│     ↑                                              ↓              │
+│   archive ← evolve ← adapt ←────────────────────────┘           │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Features
+## ✨ Features
 
-| Feature | Description |
-|---------|-------------|
-| **Dashboard** | Real-time system overview with key metrics |
-| **AI Chat** | Multi-agent chat interface with history |
-| **Code Editor** | Monaco-based editor with file tree browser |
-| **Goal Queue** | Visual goal management and tracking |
-| **Agent Observatory** | Real-time agent monitoring with lifecycle controls |
-| **SADD Manager** | Design decomposition and workstream visualization |
-| **n8n Workflows** | Visual workflow editor and execution |
-| **MCP Tools** | Execute tools from 12 configured MCP servers |
-| **Terminal** | Integrated multi-session shell console |
-| **Coverage** | Test coverage analysis and quality metrics |
-| **Logs & Telemetry** | Real-time logs with filtering and search |
-| **Settings** | Full configuration panel with MCP management |
+- 🤖 **Autonomous Development**: Natural language goals → production code
+- 🔁 **10-Phase Pipeline**: Ingest, plan, critique, code, apply, verify, reflect, adapt, evolve, archive
+- 🧠 **Multi-Agent System**: Specialized agents for planning, coding, review, and verification
+- 🔌 **MCP Integration**: Model Context Protocol for extensible tool support
+- 🛡️ **Safety First**: Sandboxed execution, input validation, autonomous apply policies
+- 📊 **Observability**: Rich logging, metrics, and WebSocket real-time updates
+- 🔐 **Enterprise Security**: JWT authentication, rate limiting, secret management
 
-### Architecture
+---
 
-- **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS
-- **Backend**: FastAPI with WebSocket support
-- **State**: Zustand for client-side state management
-- **Charts**: Recharts for data visualization
-- **Icons**: Lucide React
+## 🚀 Quick Start
 
-### Performance
+### Prerequisites
 
-The Web UI is optimized for production:
-- Code splitting with lazy loading (75% bundle reduction)
-- Service Worker for offline caching
-- Request deduplication and SWR pattern
-- Virtual scrolling for large lists
-- Web Vitals monitoring
+- Python 3.10+
+- Git
+- (Optional) Redis for caching
 
-See [docs/WEB_UI_GUIDE.md](docs/WEB_UI_GUIDE.md) for detailed usage instructions and [docs/API.md](docs/API.md) for API documentation.
-
-## Sweep Artifact Generator
-
-`scripts/generate_active_sweep_artifacts.py` can populate or check the live sweep docs for the current branch.
-
-Defaults and inferred inputs:
-
-- `--pr` overrides the active PR number.
-- If `--pr` is omitted, the script checks `AURA_ACTIVE_PR`, `GITHUB_PR_NUMBER`, then `PR_NUMBER`.
-- `--ci-checks` overrides the reviewer-summary check list.
-- If `--ci-checks` is omitted, the script checks `AURA_CI_CHECKS`, then `GITHUB_CHECKS`.
-- `--reviewer-complete` overrides reviewer completion state.
-- If `--reviewer-complete` is omitted, the script checks `AURA_REVIEWER_COMPLETE`.
-- `--check` validates the current artifact files instead of rewriting them.
-
-Examples:
-
-- `python3 scripts/generate_active_sweep_artifacts.py --pr 219`
-- `python3 scripts/generate_active_sweep_artifacts.py --check`
-- `AURA_CI_CHECKS="Python CI,Claude Code Review" AURA_REVIEWER_COMPLETE=true python3 scripts/generate_active_sweep_artifacts.py --check`
-- `python3 scripts/generate_active_sweep_artifacts.py --config docs/ACTIVE_SWEEP_CONFIG.example.json`
-
-Optional config file:
-
-- Use `--config <path>` or `AURA_SWEEP_CONFIG=<path>` to load branch-specific defaults from JSON.
-- See `docs/ACTIVE_SWEEP_CONFIG.example.json` for the supported keys.
-
-## Wrapper Usage
-
-`run_aura.sh` is a convenience wrapper around `python3 main.py`.
-
-- `./run_aura.sh` starts the interactive CLI.
-- `./run_aura.sh run --dry-run` forwards to `python3 main.py goal run --dry-run`.
-- `./run_aura.sh once "Summarize repo" --max-cycles 1` forwards to `python3 main.py goal once ...`.
-- `./run_aura.sh goal status` passes canonical commands through unchanged.
-- `./run_aura.sh --help` shows wrapper-specific usage and alias help.
-
-## Innovation Catalyst
-
-Structured brainstorming with 8 proven techniques:
+### Installation
 
 ```bash
-# Quick start - generate ideas for any problem
-python3 main.py innovate start "How to improve user onboarding?" --execute-phase divergence
+# Install from PyPI (recommended)
+pip install aura-cli
 
-# List all sessions with progress
-python3 main.py innovate list
-
-# Export results to markdown
-python3 main.py innovate export <session_id> --format markdown
-
-# View available techniques
-python3 main.py innovate techniques
+# Or install from source
+git clone https://github.com/asshat1981ar/aura-cli.git
+cd aura-cli
+pip install -e ".[dev]"
 ```
 
-The Innovation Catalyst runs a 5-phase process (immersion → divergence → convergence → incubation → transformation) using techniques like SCAMPER, Six Thinking Hats, Mind Mapping, and more.
+### Configuration
 
-See `docs/INNOVATION_CATALYST.md` for the full guide.
+```bash
+# Copy the example environment file
+cp .env.example .env
 
-## CLI Maintenance
+# Generate a secure JWT secret
+python3 -c "import secrets; print(secrets.token_urlsafe(43))"
 
-When changing CLI commands, help text, parsing, or JSON output contracts:
+# Edit .env and set:
+#   AURA_JWT_SECRET=<your-generated-secret>
+#   OPENAI_API_KEY=<your-openai-key>  # or ANTHROPIC_API_KEY
+```
 
-1. Regenerate the CLI reference:
-   - `python3 scripts/generate_cli_reference.py`
-2. Run CLI docs/snapshot checks:
-   - `python3 -m pytest -q tests/test_cli_docs_generator.py tests/test_cli_help_snapshots.py tests/test_cli_error_snapshots.py tests/test_cli_main_dispatch.py -k snapshot`
-3. If output changes intentionally, update the affected files in `tests/snapshots/`.
-4. Verify docs are current:
-   - `python3 scripts/generate_cli_reference.py --check`
+### Run Your First Goal
 
-CI enforces the generated CLI docs and snapshot contracts via `.github/workflows/ci.yml`.
+```bash
+# Run a single goal
+aura goal once "Add input validation to the login endpoint"
 
-## Experimental Editor Integration
+# Or start the autonomous loop
+aura goal run
 
-The VS Code/editor integration work is currently experimental and not part of the shipped product contract. In particular, the repo does not currently ship a supported `transport` backend for editor runtime integration. Treat editor/transport work as incubation until it is explicitly completed and reintroduced.
+# Check system health
+aura doctor
+```
 
-## GitHub Copilot CLI in this repo
+---
 
-This repository already ships repo-specific Copilot guidance and MCP-compatible HTTP servers.
+## 📖 Command Reference
 
-Use these setup assets for a safe local configuration:
+| Command | Description | Example |
+|---------|-------------|---------|
+| `aura goal once "<goal>"` | Run a single goal | `aura goal once "Fix typo in README"` |
+| `aura goal run` | Run the goal queue | `aura goal run --dry-run` |
+| `aura goal add "<goal>"` | Add goal to queue | `aura goal add "Refactor auth" --run` |
+| `aura goal status` | Show queue status | `aura goal status --json` |
+| `aura doctor` | System health check | `aura doctor --fix` |
+| `aura config` | Show configuration | `aura config list` |
+| `aura mcp tools` | List MCP tools | `aura mcp tools` |
+| `aura memory search` | Search memory | `aura memory search "auth pattern"` |
+| `aura agent list` | List agents | `aura agent list` |
+| `aura sadd run` | Run SADD workflow | `aura sadd run --spec design.md` |
+| `aura innovate start` | Start innovation session | `aura innovate start "How to improve X?"` |
 
-- MCP example: `.vscode/mcp.json.example`
-- Copilot MCP config helper: `bash scripts/configure_copilot_mcp.sh`
-- Repo LSP config: `.github/lsp.json`
-- Primary repo instructions: `.github/copilot-instructions.md`
-- Focused instruction shards: `.github/instructions/copilot/`
+See the [full CLI Reference](docs/CLI_REFERENCE.md) for complete documentation.
 
-Typical local flow:
+---
 
-1. Start the AURA servers you want to expose to Copilot:
-   - `uvicorn aura_cli.server:app --port 8001`
-   - `uvicorn tools.aura_mcp_skills_server:app --port 8002`
-   - optional: `uvicorn tools.github_copilot_mcp:app --port 8007`
-2. Generate your local Copilot MCP config:
-   - `bash scripts/configure_copilot_mcp.sh`
-3. Launch `copilot` in the repo and verify:
-   - `/mcp` shows the configured servers
-   - `/lsp` picks up the repo-local Python LSP
-   - `/instructions` shows the repo guidance
+## 🏗️ Architecture
 
-## Repo-Local MCP CLI
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                         AURA CLI Architecture                     │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐  │
+│  │   CLI Layer │───▶│   Typer     │───▶│  Command Handlers   │  │
+│  │   (aura)    │    │   Router    │    │  (aura_cli/commands)│  │
+│  └─────────────┘    └─────────────┘    └──────────┬──────────┘  │
+│                                                   │              │
+│  ┌─────────────┐    ┌─────────────┐              ▼              │
+│  │   REST API  │───▶│   FastAPI   │───▶│  Core Orchestrator  │  │
+│  │  (:8001)    │    │   Server    │    │  (core/orchestrator)│  │
+│  └─────────────┘    └─────────────┘    └──────────┬──────────┘  │
+│                                                   │              │
+│                              ┌────────────────────┼──────────┐  │
+│                              ▼                    ▼          │  │
+│  ┌─────────────┐    ┌─────────────────┐   ┌──────────────┐  │  │
+│  │   Memory    │◀───│  10-Phase Agent │   │   MCP Tools  │  │  │
+│  │   System    │    │     Pipeline    │──▶│   Registry   │  │  │
+│  └─────────────┘    └─────────────────┘   └──────────────┘  │  │
+│                              │                              │  │
+│                    ┌─────────┼─────────┐                    │  │
+│                    ▼         ▼         ▼                    │  │
+│              ┌────────┐ ┌────────┐ ┌────────┐              │  │
+│              │Planner │ │ Coder  │ │Verifier│              │  │
+│              └────────┘ └────────┘ └────────┘              │  │
+│                                                                   │
+└──────────────────────────────────────────────────────────────────┘
+```
 
-This repo now includes a local MCP CLI that reads [`./.mcp.json`](/home/westonaaron675/aura-cli/.mcp.json) by default and can inspect or call both `stdio` and HTTP-backed MCP servers.
+### Core Components
 
-Examples:
+| Component | Path | Description |
+|-----------|------|-------------|
+| CLI | `aura_cli/cli_main.py` | Typer-based command interface |
+| API Server | `aura_cli/server.py` | FastAPI REST + WebSocket endpoints |
+| Orchestrator | `core/orchestrator.py` | 10-phase pipeline loop |
+| Agents | `agents/` | Specialized pipeline agents |
+| Memory | `memory/` | SQLite, JSONL, Redis tiers |
+| MCP Tools | `tools/` | Model Context Protocol servers |
 
-- `python3 -m aura_cli.mcp_cli`
-- `python3 -m aura_cli.mcp_cli filesystem`
-- `python3 -m aura_cli.mcp_cli filesystem/read_file '{"path":"README.md"}'`
-- `python3 -m aura_cli.mcp_cli grep '*git*'`
+---
 
-If the package is installed, the same commands are available as `aura-mcp-cli`.
+## ⚙️ Configuration
 
-Notes:
+### Configuration Precedence (highest → lowest)
 
-- Use `-d` to include descriptions.
-- Use `--json` for machine-readable output.
-- Use `--raw` to print plain text tool results when available.
-- Set `AURA_MCP_CONFIG=/path/to/config.json` to target a different MCP config file.
+| Priority | Source |
+|----------|--------|
+| 1 | Environment variables / `.env` |
+| 2 | `aura.config.json` (or `AURA_CONFIG_PATH`) |
+| 3 | `settings.json` (model routing, provider config) |
+| 4 | Built-in defaults |
 
-## Autonomous Apply Safety
+### Key Environment Variables
 
-Autonomous code-apply paths (queue loop, orchestrator, hybrid loop, mutator, and atomic apply) enforce an explicit overwrite safety policy for stale-snippet mismatches.
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `AURA_JWT_SECRET` | Yes | — | JWT signing key (43+ chars) |
+| `OPENAI_API_KEY` | Yes* | — | OpenAI API key |
+| `ANTHROPIC_API_KEY` | Yes* | — | Anthropic API key (alternative) |
+| `AURA_ENV` | No | `development` | Runtime environment |
+| `AURA_LOG_LEVEL` | No | `info` | Log verbosity |
+| `AURA_API_HOST` | No | `0.0.0.0` | Server bind address |
+| `AURA_API_PORT` | No | `8001` | Server bind port |
+| `REDIS_URL` | No | — | Redis connection string |
+| `AURA_DRY_RUN` | No | `false` | Simulate without changes |
 
-- Stale snippet mismatch + `overwrite_file=true` is blocked by default.
-- Intentional full-file replacement must use:
-  - `overwrite_file=true`
-  - `old_code=""` (empty string)
-- Policy-block failures are logged as `old_code_mismatch_overwrite_blocked` with policy `explicit_overwrite_file_required`.
+*At least one LLM provider key is required.
 
-This policy is centralized in `core/file_tools.py` via `allow_mismatch_overwrite_for_change(...)` and `apply_change_with_explicit_overwrite_policy(...)`.
+### Configuration Files
 
-## Capability Bootstrap
+| File | Purpose |
+|------|---------|
+| `.env` | Runtime secrets and overrides (never commit) |
+| `aura.config.json` | Project configuration |
+| `settings.json` | Model routing and provider selection |
+| `.mcp.json` | Repo-local MCP server registry |
+| `aura_auth.db` | JWT revocation store (never commit) |
 
-AURA can now expand its skill set for a cycle when a goal clearly implies extra tooling, and it can optionally provision known MCP server config using the existing setup script.
+---
 
-- Skill augmentation is enabled by default via `auto_add_capabilities=true`.
-- Missing skills can be turned into queued self-development goals via `auto_queue_missing_capabilities=true`.
-- Those self-development goals are now pushed to the front of the remaining queue so AURA can close capability gaps right after the current goal completes.
-- MCP provisioning is opt-in via `AURA_AUTO_PROVISION_MCP=true`.
-- Starting MCP servers as part of that provisioning is separately opt-in via `AURA_AUTO_START_MCP_SERVERS=true`.
-- Provisioning decisions are recorded in cycle `phase_outputs` as `capability_plan` and `capability_provisioning`.
-- Queued self-development follow-ups are recorded as `capability_goal_queue`.
-- `goal status` and `doctor` now surface the last matched capability rules plus pending/running MCP bootstrap actions.
+## 🧪 Testing
+
+```bash
+# Fast regression suite (~4-6 seconds)
+python3 -m pytest tests/test_auth.py tests/test_sanitizer.py \
+  tests/test_server_api.py tests/test_cli_exit_codes.py \
+  tests/test_correlation.py tests/test_config_schema.py \
+  -v --timeout=30
+
+# With coverage
+python3 -m pytest tests/ -v --timeout=30 \
+  --cov=aura_cli --cov=core --cov=agents \
+  --cov-report=term-missing
+
+# All tests with triage (handles hanging tests)
+python3 scripts/triage_tests.py --timeout 30
+```
+
+Required test environment:
+```bash
+export AURA_SKIP_CHDIR=1
+export AURA_TEST_MODE=1
+```
+
+---
+
+## 🐳 Docker
+
+```bash
+# Development stack (includes n8n, observability)
+docker compose up
+
+# Production stack
+docker compose -f docker-compose.prod.yml up
+
+# Build production image
+docker build -t aura-cli:latest .
+
+# Run with custom config
+docker run -v $(pwd)/aura.config.json:/app/aura.config.json aura-cli:latest
+```
+
+---
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| `AURA_JWT_SECRET not set` | Generate with `python3 -c "import secrets; print(secrets.token_urlsafe(43))"` |
+| `ModuleNotFoundError` | Run `pip install -e ".[dev]"` from repo root |
+| `Port 8001 already in use` | Set `AURA_API_PORT=8002` or kill existing process |
+| `Redis connection failed` | Start Redis or set `REDIS_ENABLED=false` |
+| `Tests hang indefinitely` | Always use `--timeout=30` flag with pytest |
+| `Permission denied` | Ensure `AURA_SKIP_CHDIR=1` is set for tests |
+
+### Debug Mode
+
+```bash
+# Enable debug logging
+export AURA_LOG_LEVEL=debug
+
+# Run with verbose output
+aura goal once "Test goal" --verbose
+
+# Check system health
+aura doctor --json
+
+# View recent logs
+aura logs --tail 100
+```
+
+### Getting Help
+
+```bash
+# Show help for any command
+aura --help
+aura goal --help
+aura goal once --help
+
+# Generate diagnostic report
+aura diag
+
+# Check MCP server status
+aura mcp status
+```
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+
+### Quick Start for Contributors
+
+```bash
+# 1. Fork and clone
+git clone https://github.com/YOUR_USERNAME/aura-cli.git
+cd aura-cli
+
+# 2. Set up development environment
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+
+# 3. Install pre-commit hooks
+pre-commit install
+
+# 4. Run tests
+python3 -m pytest tests/ -v --timeout=30
+
+# 5. Create a branch and make changes
+git checkout -b feature/my-feature
+
+# 6. Submit a pull request
+```
+
+### Development Commands
+
+```bash
+# Lint
+python3 -m ruff check .
+
+# Type check
+python3 -m mypy aura_cli core agents
+
+# Security scan
+python3 -m bandit -r aura_cli core agents -ll
+
+# Regenerate CLI docs
+python3 scripts/generate_cli_reference.py
+
+# Validate config
+python3 scripts/validate_config.py
+```
+
+---
+
+## 📚 Documentation
+
+| Document | Description |
+|----------|-------------|
+| [CLI Reference](docs/CLI_REFERENCE.md) | Complete command reference |
+| [Command Docs](docs/commands/) | Per-command detailed guides |
+| [API Guide](docs/API_GUIDE.md) | REST API documentation |
+| [User Guide](docs/USER_GUIDE.md) | End-user guide |
+| [Architecture](docs/INTEGRATION_MAP.md) | System architecture |
+| [ADRs](docs/adr/INDEX.md) | Architecture Decision Records |
+| [Memory Architecture](docs/MEMORY_ARCHITECTURE.md) | Memory tier system |
+| [MCP Servers](docs/MCP_SERVERS.md) | MCP integration |
+| [Security](docs/SECURITY.md) | Security policy |
+| [Threat Model](docs/THREAT_MODEL.md) | Threat model analysis |
+| [Contributing](CONTRIBUTING.md) | Contribution guidelines |
+| [Changelog](CHANGELOG.md) | Version history |
+
+### 📖 Documentation Site
+
+View the full documentation at [https://asshat1981ar.github.io/aura-cli](https://asshat1981ar.github.io/aura-cli) or run locally:
+
+```bash
+# Install mkdocs
+pip install mkdocs-material mkdocstrings
+
+# Serve locally
+mkdocs serve
+
+# Build site
+mkdocs build
+```
+
+---
+
+## 🛡️ Security
+
+AURA implements multiple security layers:
+
+- **JWT Authentication**: All API endpoints require valid Bearer tokens
+- **Rate Limiting**: Token-bucket algorithm per endpoint/user
+- **Sandbox Isolation**: Untrusted code runs in subprocess with tempdir
+- **Input Sanitization**: All user input passes through `core/sanitizer.py`
+- **Autonomous Apply Policy**: Stale-snippet overwrites blocked by default
+- **Secret Management**: Secure credential storage with keyring
+
+See [SECURITY.md](docs/SECURITY.md) and [THREAT_MODEL.md](docs/THREAT_MODEL.md) for details.
+
+---
+
+## 📈 Performance
+
+Benchmarks on reference hardware (AMD Ryzen 9, 32GB RAM):
+
+| Metric | Value |
+|--------|-------|
+| CLI startup time | ~150ms |
+| Goal ingestion | ~500ms |
+| Pipeline cycle | ~5-30s (depends on LLM) |
+| API request latency (p99) | <100ms |
+| Memory footprint | ~150MB base |
+
+See [Performance Guide](docs/performance.md) for optimization strategies.
+
+---
+
+## 🗺️ Roadmap
+
+See [ROADMAP_PRD_SERIES.md](docs/ROADMAP_PRD_SERIES.md) for planned features and development timeline.
+
+Highlights:
+- Enhanced multi-agent coordination
+- Additional LLM provider support
+- Improved sandbox capabilities
+- Web UI enhancements
+- Enterprise SSO integration
+
+---
+
+## 📄 License
+
+MIT License — see [LICENSE](LICENSE) for details.
+
+---
+
+## 💬 Community
+
+- [GitHub Issues](https://github.com/asshat1981ar/aura-cli/issues) — Bug reports and feature requests
+- [GitHub Discussions](https://github.com/asshat1981ar/aura-cli/discussions) — Q&A and general discussion
+- [Discord](https://discord.gg/aura-cli) — Community chat (coming soon)
+
+---
+
+<p align="center">
+  Built with ❤️ by the AURA team and contributors
+</p>

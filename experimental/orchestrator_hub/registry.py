@@ -3,6 +3,7 @@
 Extends the concept from agents/registry.py to a multi-environment context
 with dynamic discovery and capability-based lookup.
 """
+
 from __future__ import annotations
 
 import time
@@ -98,27 +99,15 @@ class AgentRegistryHub:
 
     def discover(self, capability: str) -> List[AgentInfo]:
         """Find all agents that provide a given capability."""
-        return [
-            agent
-            for agent in self._agents.values()
-            if capability in agent.capabilities and agent.status == "active"
-        ]
+        return [agent for agent in self._agents.values() if capability in agent.capabilities and agent.status == "active"]
 
     def discover_by_type(self, agent_type: str) -> List[AgentInfo]:
         """Find all agents of a given type."""
-        return [
-            agent
-            for agent in self._agents.values()
-            if agent.agent_type == agent_type and agent.status == "active"
-        ]
+        return [agent for agent in self._agents.values() if agent.agent_type == agent_type and agent.status == "active"]
 
     def discover_by_environment(self, environment: str) -> List[AgentInfo]:
         """Find all agents in a given environment."""
-        return [
-            agent
-            for agent in self._agents.values()
-            if agent.environment == environment
-        ]
+        return [agent for agent in self._agents.values() if agent.environment == environment]
 
     def heartbeat(self, name: str) -> bool:
         """Update agent heartbeat timestamp."""

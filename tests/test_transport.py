@@ -1,4 +1,5 @@
 """Tests for core/transport.py — JSON-RPC 2.0 stdio transport."""
+
 import io
 import json
 import datetime
@@ -18,6 +19,7 @@ from core.transport import (
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_request(method, params=None, request_id=1):
     """Build a minimal valid JSON-RPC 2.0 request dict."""
@@ -45,6 +47,7 @@ def _transport(orchestrator=None):
 # ---------------------------------------------------------------------------
 # system/health
 # ---------------------------------------------------------------------------
+
 
 class TestSystemHealth:
     def test_health_returns_ok_status(self):
@@ -84,6 +87,7 @@ class TestSystemHealth:
 # ---------------------------------------------------------------------------
 # goal/status
 # ---------------------------------------------------------------------------
+
 
 class TestGoalStatus:
     def test_status_no_orchestrator(self):
@@ -125,6 +129,7 @@ class TestGoalStatus:
 # goal/add
 # ---------------------------------------------------------------------------
 
+
 class TestGoalAdd:
     def test_add_queues_goal(self):
         orch = _make_orchestrator()
@@ -165,6 +170,7 @@ class TestGoalAdd:
 # ---------------------------------------------------------------------------
 # goal/run
 # ---------------------------------------------------------------------------
+
 
 class TestGoalRun:
     def test_run_calls_orchestrator(self):
@@ -215,6 +221,7 @@ class TestGoalRun:
 # ---------------------------------------------------------------------------
 # Error / edge cases
 # ---------------------------------------------------------------------------
+
 
 class TestErrorHandling:
     def test_unknown_method_returns_method_not_found(self):
@@ -273,6 +280,7 @@ class TestErrorHandling:
 # ---------------------------------------------------------------------------
 # run() — full stdin/stdout loop
 # ---------------------------------------------------------------------------
+
 
 class TestRunLoop:
     def _run_with_lines(self, lines, orchestrator=None):

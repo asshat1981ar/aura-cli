@@ -28,9 +28,9 @@ class TestPRFixAgent:
         """Test fixing print statements."""
         content = 'def test():\n    print("debug")\n    return 42\n'
         lines = content.split("\n")
-        
+
         result = agent._fix_print_statement(sample_comment, lines)
-        
+
         assert result.status == FixStatus.SUCCESS
         assert "log_json" in result.fixed_code
         assert "print" not in result.fixed_code
@@ -45,11 +45,11 @@ class TestPRFixAgent:
             severity=Severity.WARNING,
             rule_id="TODO_WITHOUT_TICKET",
         )
-        content = '# TODO fix this\ndef test():\n    pass\n'
+        content = "# TODO fix this\ndef test():\n    pass\n"
         lines = content.split("\n")
-        
+
         result = agent._fix_todo(comment, lines)
-        
+
         assert result.status == FixStatus.SUCCESS
         assert "TODO(TICKET-XXX)" in result.fixed_code
 
@@ -63,11 +63,11 @@ class TestPRFixAgent:
             severity=Severity.ERROR,
             rule_id="DEBUG_BREAKPOINT",
         )
-        content = 'def test():\n    breakpoint()\n    pass\n'
+        content = "def test():\n    breakpoint()\n    pass\n"
         lines = content.split("\n")
-        
+
         result = agent._fix_breakpoint(comment, lines)
-        
+
         assert result.status == FixStatus.SUCCESS
         assert result.fixed_code is not None
         assert "breakpoint()" not in result.fixed_code
@@ -82,11 +82,11 @@ class TestPRFixAgent:
             severity=Severity.ERROR,
             rule_id="BARE_EXCEPT",
         )
-        content = 'try:\n    do_something()\nexcept:\n    pass\n'
+        content = "try:\n    do_something()\nexcept:\n    pass\n"
         lines = content.split("\n")
-        
+
         result = agent._fix_bare_except(comment, lines)
-        
+
         assert result.status == FixStatus.SUCCESS
         assert "except Exception:" in result.fixed_code
         assert "except:" not in result.fixed_code.replace("except Exception:", "")
@@ -103,20 +103,20 @@ class TestPRFixAgent:
         )
         content = 'x = "' + "a" * 150 + '"\n'
         lines = content.split("\n")
-        
+
         result = agent._fix_long_line(comment, lines)
-        
+
         assert result.status == FixStatus.SKIPPED
         assert result.fixed_code is None
 
     @pytest.mark.asyncio
     async def test_fix_multiple_issues(self, agent):
         """Test fixing multiple issues in one file."""
-        content = '''def test():
+        content = """def test():
     print("debug")
     # TODO fix this
     return 42
-'''
+"""
         comments = [
             ReviewComment(
                 path="src/test.py",
@@ -133,9 +133,9 @@ class TestPRFixAgent:
                 rule_id="TODO_WITHOUT_TICKET",
             ),
         ]
-        
+
         results = await agent.fix_issues("src/test.py", content, comments)
-        
+
         assert len(results) == 2
         # At least one fix should succeed
         assert any(r.status == FixStatus.SUCCESS for r in results)
@@ -163,7 +163,7 @@ class TestPRFixAgent:
             severity=Severity.WARNING,
             rule_id="UNKNOWN_RULE",
         )
-        
+
         assert agent.can_fix(fixable) is True
         assert agent.can_fix(not_fixable) is False  # Requires manual review
         assert agent.can_fix(unknown) is False
@@ -187,9 +187,9 @@ class TestPRFixAgent:
                 line_number=2,
             ),
         ]
-        
+
         fixed, summary = agent.apply_fixes(original, results)
-        
+
         assert "log_json" in fixed
         assert "print" not in fixed
         assert summary["applied"] == 1
@@ -205,9 +205,9 @@ class TestPRFixAgent:
             rule_id="UNKNOWN_RULE",
         )
         content = "def test():\n    pass\n"
-        
+
         results = await agent.fix_issues("src/test.py", content, [comment])
-        
+
         assert len(results) == 1
         assert results[0].status == FixStatus.SKIPPED
         assert "No fixer available" in results[0].message

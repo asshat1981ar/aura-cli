@@ -29,6 +29,7 @@ from aura_cli.options import (
 _REQUIRED_SUBCOMMAND_PARENT_PATHS: set[tuple[str, ...]] = {
     ("agent",),
     ("beads",),
+    ("credentials",),
     ("goal",),
     ("innovate",),
     ("mcp",),
@@ -367,6 +368,10 @@ def _customize_logs(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--follow", action="store_true", help="Follow the file when using --file.")
 
 
+def _customize_history(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--limit", "-n", type=int, default=10, help="Number of recent completed goals to show (default: 10).")
+
+
 def _customize_studio(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(watch=True)
     parser.add_argument("--autonomous", action="store_true", help="Start the goal loop in the background.")
@@ -466,6 +471,75 @@ def _customize_innovate_insights(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
 
 
+# Security Issue #427: Credential management command customizers
+
+
+def _customize_credentials_migrate(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(credentials_migrate=True)
+    parser.add_argument(
+        "--yes",
+        dest="yes",
+        action="store_true",
+        help="Skip confirmation and proceed with migration.",
+    )
+
+
+def _customize_credentials_store(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(credentials_store=True)
+    parser.add_argument(
+        "--key",
+        dest="key",
+        required=True,
+        help="Credential key name (e.g., api_key, openai_api_key).",
+    )
+    parser.add_argument(
+        "--value",
+        dest="value",
+        help="Credential value (if not provided, will prompt securely).",
+    )
+
+
+def _customize_credentials_delete(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(credentials_delete=True)
+    parser.add_argument(
+        "--key",
+        dest="key",
+        required=True,
+        help="Credential key name to delete.",
+    )
+    parser.add_argument(
+        "--yes",
+        dest="yes",
+        action="store_true",
+        help="Skip confirmation and delete immediately.",
+    )
+
+
+def _customize_credentials_status(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(credentials_status=True)
+
+
+# ── Run management customizer ──────────────────────────────────────────────────
+
+
+def _customize_cancel(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "run_id",
+        help="Run ID of the active pipeline to cancel.",
+    )
+
+
+def _customize_config_set(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "config_key",
+        help="Config key to set (e.g. model.code_generation or dry_run).",
+    )
+    parser.add_argument(
+        "config_value",
+        help="Value to assign to the key.",
+    )
+
+
 _PARSER_CUSTOMIZERS.update(
     {
         ("help",): _customize_help,
@@ -487,6 +561,7 @@ _PARSER_CUSTOMIZERS.update(
         ("scaffold",): _customize_scaffold,
         ("evolve",): _customize_evolve,
         ("logs",): _customize_logs,
+        ("history",): _customize_history,
         ("queue", "list"): _customize_queue_list,
         ("queue", "clear"): _customize_queue_clear,
         ("memory", "search"): _customize_memory_search,
@@ -504,6 +579,15 @@ _PARSER_CUSTOMIZERS.update(
         ("innovate", "techniques"): _customize_innovate_techniques,
         ("innovate", "to-goals"): _customize_innovate_to_goals,
         ("innovate", "insights"): _customize_innovate_insights,
+        # Security Issue #427: Credential management customizers
+        ("credentials", "migrate"): _customize_credentials_migrate,
+        ("credentials", "store"): _customize_credentials_store,
+        ("credentials", "delete"): _customize_credentials_delete,
+        ("credentials", "status"): _customize_credentials_status,
+        # ── Run management ──────────────────────────────────────────────────────
+        ("cancel",): _customize_cancel,
+        # ── Config management ───────────────────────────────────────────────────
+        ("config", "set"): _customize_config_set,
     }
 )
 
@@ -805,6 +889,10 @@ def _documented_default_actions() -> set[str]:
     return documented
 
 
+def _action_canonical_paths() -> set[tuple[str, ...]]:
+    return {spec.canonical_path for spec in CLI_ACTION_SPECS_BY_ACTION.values() if spec.canonical_path is not None}
+
+
 def _smoke_invocation_and_dispatch_failures(
     dispatch_registry: Mapping[str, Any] | None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -864,6 +952,7 @@ def cli_contract_report(dispatch_registry: Mapping[str, Any] | None = None) -> d
     leaf_paths = parser_leaf_command_paths()
     parent_paths = parser_parent_command_paths()
     required_parent_paths = parser_required_subcommand_parent_paths()
+    action_canonical_paths = _action_canonical_paths()
     customizer_paths = parser_customizer_paths()
 
     help_items = help_schema().get("commands", [])
@@ -919,7 +1008,9 @@ def cli_contract_report(dispatch_registry: Mapping[str, Any] | None = None) -> d
         "extra_in_help_schema": sorted(help_paths - spec_paths),
         "duplicate_help_paths": duplicate_help_paths,
         "customizers_on_non_leaf_paths": sorted(customizer_paths - leaf_paths),
-        "missing_required_parent_paths": sorted(parent_paths - required_parent_paths),
+        # Parent commands that are also canonical invocations (for example
+        # `config`) do not need to force a subcommand to satisfy the contract.
+        "missing_required_parent_paths": sorted(path for path in (parent_paths - required_parent_paths) if path not in action_canonical_paths),
         "extra_required_parent_paths": sorted(required_parent_paths - parent_paths),
         "action_spec_actions": action_spec_actions,
         "help_actions": help_actions,

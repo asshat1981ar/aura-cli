@@ -24,7 +24,7 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
@@ -32,23 +32,30 @@ if str(_ROOT) not in sys.path:
 
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 
-from fastapi import Depends, FastAPI, Header, HTTPException
-from tools.mcp_types import ToolCallRequest, ToolResult
+from fastapi import Depends, FastAPI, HTTPException
+from core.mcp_contracts import build_tool_descriptors_from_schemas
 from core.logging_utils import log_json
 from core.sadd.design_spec_parser import DesignSpecParser
 from core.sadd.session_store import SessionStore
 from core.sadd.types import validate_spec
 from core.sadd.workstream_graph import WorkstreamGraph
+from tools.mcp_server_support import (
+    auth_dependency,
+    auth_mode_label,
+    build_basic_metrics_payload,
+    resolve_server_port,
+)
+from tools.mcp_types import ToolCallRequest, ToolResult
 
 # ---------------------------------------------------------------------------
 # App setup
 # ---------------------------------------------------------------------------
 
 app = FastAPI(title="SADD MCP", version="1.0.0")
-_TOKEN = os.getenv("SADD_MCP_TOKEN", "")
 _SERVER_START = time.time()
 _call_counts: Dict[str, int] = {}
 _call_errors: Dict[str, int] = {}
+_require_auth = auth_dependency("sadd")
 
 _store = SessionStore()
 _parser = DesignSpecParser()
@@ -57,13 +64,6 @@ _parser = DesignSpecParser()
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
-
-
-def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
-    if not _TOKEN:
-        return
-    if authorization != f"Bearer {_TOKEN}":
-        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 # ---------------------------------------------------------------------------
@@ -106,16 +106,7 @@ _TOOL_SCHEMAS: Dict[str, Dict] = {
 
 
 def _build_descriptor(name: str) -> Dict:
-    schema = _TOOL_SCHEMAS[name]
-    return {
-        "name": name,
-        "description": schema["description"],
-        "inputSchema": {
-            "type": "object",
-            "properties": schema.get("input", {}),
-            "required": [k for k, v in schema.get("input", {}).items() if v.get("required")],
-        },
-    }
+    return build_tool_descriptors_from_schemas(_TOOL_SCHEMAS, names=[name])[0]
 
 
 # ---------------------------------------------------------------------------
@@ -199,7 +190,7 @@ _TOOL_HANDLERS = {
 
 
 @app.get("/health")
-async def health(_: None = Depends(_check_auth)):
+async def health(_: None = Depends(_require_auth)):
     return {
         "status": "ok",
         "tool_count": len(_TOOL_HANDLERS),
@@ -209,19 +200,19 @@ async def health(_: None = Depends(_check_auth)):
 
 
 @app.get("/tools")
-async def list_tools(_: None = Depends(_check_auth)) -> List[Dict]:
-    return [_build_descriptor(name) for name in _TOOL_SCHEMAS]
+async def list_tools(_: None = Depends(_require_auth)) -> List[Dict]:
+    return build_tool_descriptors_from_schemas(_TOOL_SCHEMAS)
 
 
 @app.get("/tool/{name}")
-async def get_tool(name: str, _: None = Depends(_check_auth)) -> Dict:
+async def get_tool(name: str, _: None = Depends(_require_auth)) -> Dict:
     if name not in _TOOL_SCHEMAS:
         raise HTTPException(status_code=404, detail=f"Tool '{name}' not found.")
     return _build_descriptor(name)
 
 
 @app.post("/call")
-async def call_tool(request: ToolCallRequest, _: None = Depends(_check_auth)) -> ToolResult:
+async def call_tool(request: ToolCallRequest, _: None = Depends(_require_auth)) -> ToolResult:
     name = request.tool_name
     handler = _TOOL_HANDLERS.get(name)
     if not handler:
@@ -247,24 +238,13 @@ async def call_tool(request: ToolCallRequest, _: None = Depends(_check_auth)) ->
 
 
 @app.get("/metrics")
-async def get_metrics(_: None = Depends(_check_auth)) -> Dict:
-    uptime_s = round(time.time() - _SERVER_START, 1)
-    total_calls = sum(_call_counts.values())
-    total_errors = sum(_call_errors.values())
-    per_tool = {
-        name: {
-            "calls": _call_counts.get(name, 0),
-            "errors": _call_errors.get(name, 0),
-        }
-        for name in _TOOL_SCHEMAS
-    }
-    return {
-        "uptime_seconds": uptime_s,
-        "total_calls": total_calls,
-        "total_errors": total_errors,
-        "error_rate": round(total_errors / max(total_calls, 1), 4),
-        "tools": per_tool,
-    }
+async def get_metrics(_: None = Depends(_require_auth)) -> Dict:
+    return build_basic_metrics_payload(
+        server_start=_SERVER_START,
+        tool_names=_TOOL_SCHEMAS,
+        call_counts=_call_counts,
+        call_errors=_call_errors,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +253,7 @@ async def get_metrics(_: None = Depends(_check_auth)) -> Dict:
 
 if __name__ == "__main__":
     import uvicorn
-    from core.config_manager import config as _cfg
 
-    port = int(os.getenv("SADD_MCP_PORT", _cfg.get_mcp_server_port("sadd", default=8020)))
+    port = resolve_server_port("sadd")
+    print(f"[MCP sadd] Starting on port {port} (auth: {auth_mode_label('sadd')})")
     uvicorn.run("tools.sadd_mcp_server:app", host="0.0.0.0", port=port, reload=False)

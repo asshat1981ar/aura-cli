@@ -2,6 +2,7 @@
 migration_assistant.py — LLM-ready migration prompts for the AURA CLI
 Typer + AutoGen migration assistant with 7-step structured prompts.
 """
+
 from __future__ import annotations
 
 

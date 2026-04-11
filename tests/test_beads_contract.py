@@ -1,4 +1,5 @@
 """Unit tests for core/beads_contract.py — TypedDicts, dataclass, constants."""
+
 from core.beads_contract import (
     BEADS_SCHEMA_VERSION,
     BeadsBridgeConfig,
@@ -36,6 +37,7 @@ class TestBeadsBridgeConfig:
 
     def test_frozen_prevents_mutation(self):
         import pytest
+
         cfg = BeadsBridgeConfig(command=("bd",))
         with pytest.raises((AttributeError, TypeError)):
             cfg.enabled = False  # type: ignore[misc]

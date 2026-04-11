@@ -202,6 +202,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"{args.output} is out of date. Run scripts/generate_cli_reference.py.")
             if existing is not None:
                 import difflib
+
                 diff = difflib.unified_diff(
                     existing.splitlines(),
                     rendered.splitlines(),

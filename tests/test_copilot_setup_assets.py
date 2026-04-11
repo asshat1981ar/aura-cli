@@ -22,6 +22,7 @@ def test_mcp_example_is_valid_and_secret_free() -> None:
         "aura-control",
         "aura-agentic-loop",
         "aura-copilot",
+        "n8n-mcp",
     }
     serialized = json.dumps(payload)
     assert "ghp_" not in serialized
@@ -30,6 +31,7 @@ def test_mcp_example_is_valid_and_secret_free() -> None:
     assert "${env:MCP_CONTROL_TOKEN}" in serialized
     assert "${env:AGENTIC_LOOP_TOKEN}" in serialized
     assert "${env:COPILOT_MCP_TOKEN}" in serialized
+    assert "${env:N8N_MCP_TOKEN}" in serialized
 
 
 def test_repo_lsp_config_includes_ruff_and_pyright_servers() -> None:

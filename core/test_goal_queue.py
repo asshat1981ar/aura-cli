@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 from core.goal_queue import GoalQueue
 
-class TestGoalQueue(unittest.TestCase):
 
+class TestGoalQueue(unittest.TestCase):
     def setUp(self):
         self.test_queue_path = Path(__file__).parent / "test_goal_queue.json"
         if self.test_queue_path.exists():
@@ -28,24 +28,23 @@ class TestGoalQueue(unittest.TestCase):
         self.assertEqual(self.goal_queue.queue[0], "Implement feature A")
 
         # Verify in JSON file
-        with open(self.test_queue_path, 'r') as f:
+        with open(self.test_queue_path, "r") as f:
             content = json.load(f)
         self.assertEqual(content["queue"], ["Implement feature A"])
 
     def test_next_goal(self):
         self.goal_queue.add("Implement feature A")
         self.goal_queue.add("Fix bug B")
-        
+
         next_goal = self.goal_queue.next()
         self.assertEqual(next_goal, "Implement feature A")
         self.assertEqual(len(self.goal_queue.queue), 1)
         self.assertEqual(self.goal_queue.queue[0], "Fix bug B")
 
         # Verify in JSON file
-        with open(self.test_queue_path, 'r') as f:
+        with open(self.test_queue_path, "r") as f:
             content = json.load(f)
         self.assertEqual(content["queue"], ["Fix bug B"])
-
 
     def test_next_with_empty_queue(self):
         self.assertIsNone(self.goal_queue.next())
@@ -54,7 +53,7 @@ class TestGoalQueue(unittest.TestCase):
     def test_persistence(self):
         self.goal_queue.add("Goal 1 for persistence")
         self.goal_queue.add("Goal 2 for persistence")
-        
+
         # Simulate reopening the queue
         new_queue = GoalQueue(queue_path=self.test_queue_path)
 
@@ -80,9 +79,10 @@ class TestGoalQueue(unittest.TestCase):
             ["First priority", "Second priority", "Existing goal"],
         )
 
-        with open(self.test_queue_path, 'r') as f:
+        with open(self.test_queue_path, "r") as f:
             content = json.load(f)
         self.assertEqual(content["queue"], ["First priority", "Second priority", "Existing goal"])
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

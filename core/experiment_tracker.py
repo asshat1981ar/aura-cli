@@ -6,6 +6,7 @@ capture baseline → mutate → measure → keep if improved, discard if regress
 Inspired by Karpathy's "autoresearch" (March 2026): edit code, run experiment,
 measure performance, keep or discard, repeat.
 """
+
 import json
 import time
 from dataclasses import dataclass, field, asdict
@@ -18,6 +19,7 @@ from core.logging_utils import log_json
 @dataclass
 class ExperimentResult:
     """Result of a single self-improvement experiment."""
+
     experiment_id: str
     hypothesis: str
     change_description: str
@@ -122,8 +124,7 @@ class MetricsCollector:
 class ExperimentTracker:
     """Tracks experiments with keep/discard discipline, persists to JSONL."""
 
-    def __init__(self, experiments_path: Path,
-                 metrics_collector: MetricsCollector):
+    def __init__(self, experiments_path: Path, metrics_collector: MetricsCollector):
         self.experiments_path = experiments_path
         self.metrics = metrics_collector
         self.experiments: list[ExperimentResult] = []
@@ -137,36 +138,23 @@ class ExperimentTracker:
                 if not line.strip():
                     continue
                 data = json.loads(line)
-                self.experiments.append(ExperimentResult(**{
-                    k: v for k, v in data.items()
-                    if k in ExperimentResult.__dataclass_fields__
-                }))
+                self.experiments.append(ExperimentResult(**{k: v for k, v in data.items() if k in ExperimentResult.__dataclass_fields__}))
         except (json.JSONDecodeError, TypeError, OSError):
             pass
 
-    def start_experiment(self, experiment_id: str,
-                         hypothesis: str) -> dict[str, float]:
+    def start_experiment(self, experiment_id: str, hypothesis: str) -> dict[str, float]:
         """Capture baseline metrics before an experiment."""
-        log_json("INFO", "experiment_started",
-                 details={"id": experiment_id, "hypothesis": hypothesis})
+        log_json("INFO", "experiment_started", details={"id": experiment_id, "hypothesis": hypothesis})
         return self.metrics.collect()
 
-    def finish_experiment(self, experiment_id: str, hypothesis: str,
-                          change_description: str,
-                          metrics_before: dict[str, float],
-                          cycle_number: int = 0,
-                          duration: float = 0.0) -> ExperimentResult:
+    def finish_experiment(self, experiment_id: str, hypothesis: str, change_description: str, metrics_before: dict[str, float], cycle_number: int = 0, duration: float = 0.0) -> ExperimentResult:
         """Finish experiment, measure improvement, decide keep/discard."""
         metrics_after = self.metrics.collect()
-        improvement = {
-            k: metrics_after.get(k, 0) - metrics_before.get(k, 0)
-            for k in set(metrics_before) | set(metrics_after)
-        }
+        improvement = {k: metrics_after.get(k, 0) - metrics_before.get(k, 0) for k in set(metrics_before) | set(metrics_after)}
 
         net = sum(improvement.values()) / max(len(improvement), 1)
         kept = net > 0
-        reason = (f"Net improvement: {net:+.4f}"
-                  if kept else f"Net regression: {net:+.4f} — discarding")
+        reason = f"Net improvement: {net:+.4f}" if kept else f"Net regression: {net:+.4f} — discarding"
 
         result = ExperimentResult(
             experiment_id=experiment_id,
@@ -183,9 +171,7 @@ class ExperimentTracker:
         self.experiments.append(result)
         self._persist(result)
 
-        log_json("INFO", "experiment_finished",
-                 details={"id": experiment_id, "kept": kept,
-                          "net_improvement": net, "reason": reason})
+        log_json("INFO", "experiment_finished", details={"id": experiment_id, "kept": kept, "net_improvement": net, "reason": reason})
         return result
 
     def _persist(self, result: ExperimentResult):
@@ -195,8 +181,7 @@ class ExperimentTracker:
     def get_summary(self) -> dict[str, Any]:
         """Get experiment summary for CLI display."""
         if not self.experiments:
-            return {"total": 0, "kept": 0, "discarded": 0,
-                    "net_improvement": 0.0}
+            return {"total": 0, "kept": 0, "discarded": 0, "net_improvement": 0.0}
         kept = [e for e in self.experiments if e.kept]
         discarded = [e for e in self.experiments if not e.kept]
         return {
@@ -205,9 +190,5 @@ class ExperimentTracker:
             "discarded": len(discarded),
             "keep_rate": len(kept) / len(self.experiments),
             "net_improvement": sum(e.net_improvement for e in kept),
-            "top_improvements": [
-                {"id": e.experiment_id, "improvement": e.net_improvement}
-                for e in sorted(kept, key=lambda x: x.net_improvement,
-                                reverse=True)[:5]
-            ],
+            "top_improvements": [{"id": e.experiment_id, "improvement": e.net_improvement} for e in sorted(kept, key=lambda x: x.net_improvement, reverse=True)[:5]],
         }

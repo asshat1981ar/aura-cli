@@ -3,6 +3,7 @@
 Defines predefined phase sequences for common goal types (bug_fix, feature,
 refactor) with retry policies and escalation rules.
 """
+
 from __future__ import annotations
 
 import enum
@@ -190,9 +191,7 @@ class WorkflowExecutor:
             phase_results=results,
         )
 
-    def _run_phase(
-        self, phase: WorkflowPhase, goal: str, context: Dict[str, Any]
-    ) -> PhaseResult:
+    def _run_phase(self, phase: WorkflowPhase, goal: str, context: Dict[str, Any]) -> PhaseResult:
         """Execute a single phase via its tool handler."""
         handler = self._handlers.get(phase.tool_name)
         if handler is None:

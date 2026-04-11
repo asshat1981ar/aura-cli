@@ -5,3 +5,6 @@ Print the resolved effective runtime configuration.
 Examples:
   python3 main.py config
 
+Subcommands:
+  set          Set a config value
+

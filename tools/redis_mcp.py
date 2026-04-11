@@ -19,6 +19,7 @@ Start:
 Auth (optional):
   Set REDIS_MCP_TOKEN env var
 """
+
 from __future__ import annotations
 
 import os
@@ -55,10 +56,7 @@ def _get_client():
     """Lazy-load and return the Redis client singleton."""
     global _redis_client
     if not _redis_available:
-        raise RuntimeError(
-            "redis Python package is not installed. "
-            "Install it with: pip install redis"
-        )
+        raise RuntimeError("redis Python package is not installed. Install it with: pip install redis")
     if _redis_client is None:
         url = os.getenv("REDIS_URL", "redis://localhost:6379")
         _redis_client = _redis_mod.from_url(url, decode_responses=True)
@@ -79,6 +77,7 @@ _call_errors: Dict[str, int] = {}
 # ---------------------------------------------------------------------------
 # Auth
 # ---------------------------------------------------------------------------
+
 
 def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
     if not _TOKEN:
@@ -159,6 +158,7 @@ def _build_descriptor(name: str) -> Dict:
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
+
 
 def _cache_get(args: Dict) -> Any:
     key = args.get("key", "").strip()
@@ -265,6 +265,7 @@ _TOOL_HANDLERS = {
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @app.get("/health")
 async def health(_: None = Depends(_check_auth)):
     return {
@@ -342,5 +343,6 @@ async def get_metrics(_: None = Depends(_check_auth)) -> Dict:
 if __name__ == "__main__":
     import uvicorn
     from core.config_manager import config as _cfg
+
     port = int(os.getenv("REDIS_MCP_PORT", _cfg.get_mcp_server_port("redis", default=8014)))
     uvicorn.run("tools.redis_mcp:app", host="0.0.0.0", port=port, reload=False)

@@ -5,6 +5,7 @@ These tests verify the full assembly pipeline without requiring
 the claude-agent-sdk to be installed — they test everything up to
 the actual SDK call.
 """
+
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -93,10 +94,12 @@ class TestProductionLoopIntegration(unittest.TestCase):
 
     def setUp(self):
         import tempfile
+
         self.tmpdir = tempfile.mkdtemp()
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_full_feedback_chain(self):
@@ -117,8 +120,10 @@ class TestProductionLoopIntegration(unittest.TestCase):
         session_store = SessionStore(db_path=config.session_db_path)
         skill_updater = SkillWeightUpdater(weights_path=config.skill_weights_path)
         feedback = FeedbackCollector(
-            model_router=router, skill_updater=skill_updater,
-            brain=None, session_store=session_store,
+            model_router=router,
+            skill_updater=skill_updater,
+            brain=None,
+            session_store=session_store,
         )
 
         # 1. Router selects default model
@@ -134,9 +139,14 @@ class TestProductionLoopIntegration(unittest.TestCase):
 
         # 4. Trigger feedback
         result = feedback.on_goal_complete(
-            session_pk=pk, goal="Fix bug", goal_type="bug_fix",
-            model=model, skills_used=["linter", "type_checker"],
-            success=True, verification_result={"passed": True}, cost=0.05,
+            session_pk=pk,
+            goal="Fix bug",
+            goal_type="bug_fix",
+            model=model,
+            skills_used=["linter", "type_checker"],
+            success=True,
+            verification_result={"passed": True},
+            cost=0.05,
         )
         self.assertTrue(result["model_updated"])
 
@@ -151,7 +161,9 @@ class TestProductionLoopIntegration(unittest.TestCase):
     def test_workflow_executor_with_mock_handlers(self):
         """Execute a workflow with mock tool handlers."""
         from core.agent_sdk.workflow_templates import (
-            WorkflowExecutor, WorkflowTemplate, WorkflowPhase,
+            WorkflowExecutor,
+            WorkflowTemplate,
+            WorkflowPhase,
         )
 
         success_handler = lambda args: {"result": "ok"}
@@ -162,7 +174,8 @@ class TestProductionLoopIntegration(unittest.TestCase):
             "verify_changes": success_handler,
         }
         wf = WorkflowTemplate(
-            name="test", goal_types=["test"],
+            name="test",
+            goal_types=["test"],
             phases=[
                 WorkflowPhase(tool_name="analyze_goal"),
                 WorkflowPhase(tool_name="create_plan"),

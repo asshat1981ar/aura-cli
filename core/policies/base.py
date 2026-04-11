@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 class PolicyBase:
-    def evaluate(self, history, verification, started_at=None):
+    def evaluate(self, history: list[dict], verification: dict, started_at: float | None = None) -> str:
         raise NotImplementedError

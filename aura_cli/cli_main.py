@@ -32,7 +32,7 @@ from core.policy import Policy
 from core.runtime_auth import resolve_config_api_key, runtime_provider_status, runtime_provider_summary
 from core.runtime_paths import resolve_project_path
 from core.task_handler import _check_project_writability, run_goals_loop
-from core.vector_store import VectorStore
+from memory.vector_store_v2 import VectorStoreV2 as VectorStore
 from agents.scaffolder import ScaffolderAgent
 
 from aura_cli.cli_options import (
@@ -78,8 +78,11 @@ from aura_cli.dispatch import (
     _handle_sadd_status_dispatch,
     _handle_scaffold_dispatch,
     _handle_show_config_dispatch,
+    _handle_config_set_dispatch,
     _handle_watch_dispatch,
     _handle_workflow_run_dispatch,
+    _handle_agent_list_dispatch,
+    _handle_cancel_dispatch,
     _maybe_add_goal,
     _prepare_runtime_context,
     _print_json_payload,
@@ -91,10 +94,19 @@ from aura_cli.dispatch import (
 )
 from aura_cli.mcp_client import cmd_diag, cmd_mcp_call, cmd_mcp_tools
 from aura_cli.commands import (
-    _handle_add, _handle_run, _handle_status, _handle_exit, _handle_help,
-    _handle_doctor, _handle_clear, _handle_readiness,
-    _handle_innovate_start, _handle_innovate_list, _handle_innovate_show,
-    _handle_innovate_resume, _handle_innovate_export,
+    _handle_add,
+    _handle_run,
+    _handle_status,
+    _handle_exit,
+    _handle_help,
+    _handle_doctor,
+    _handle_clear,
+    _handle_readiness,
+    _handle_innovate_start,
+    _handle_innovate_list,
+    _handle_innovate_show,
+    _handle_innovate_resume,
+    _handle_innovate_export,
 )
 
 from aura_cli.interactive_shell import cli_interaction_loop as _cli_interaction_loop
@@ -175,6 +187,7 @@ def create_runtime(project_root: Path, overrides: dict | None = None):
     if os.environ.get("AURA_ENABLE_SWARM", "0") == "1":
         try:
             from core.swarm_supervisor import install_swarm_runtime
+
             orchestrator = runtime.get("orchestrator")
             registry = runtime.get("agents", {})
             if orchestrator is not None:

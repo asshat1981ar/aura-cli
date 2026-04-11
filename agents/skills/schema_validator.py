@@ -1,4 +1,5 @@
 """Skill: validate JSON schemas and discover Pydantic model definitions."""
+
 from __future__ import annotations
 import ast
 from typing import Any, Dict, List, Optional
@@ -69,6 +70,7 @@ class SchemaValidatorSkill(SkillBase):
             # Try jsonschema first
             try:
                 import jsonschema
+
                 v = jsonschema.Draft7Validator(schema)
                 errors = [e.message for e in v.iter_errors(instance)]
             except ImportError:

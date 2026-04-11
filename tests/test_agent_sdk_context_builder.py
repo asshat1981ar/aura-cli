@@ -1,5 +1,6 @@
 # tests/test_agent_sdk_context_builder.py
 """Tests for Agent SDK context builder."""
+
 import unittest
 from unittest.mock import MagicMock, patch
 from pathlib import Path
@@ -91,9 +92,7 @@ class TestContextBuilderV2(unittest.TestCase):
         context = {
             "failure_patterns": ["timeout on large files", "import error in test env"],
         }
-        prompt = builder.build_system_prompt(
-            goal="Fix auth bug", goal_type="bug_fix", context=context
-        )
+        prompt = builder.build_system_prompt(goal="Fix auth bug", goal_type="bug_fix", context=context)
         self.assertIn("Failure Patterns", prompt)
         self.assertIn("timeout on large files", prompt)
         self.assertIn("import error in test env", prompt)
@@ -105,9 +104,7 @@ class TestContextBuilderV2(unittest.TestCase):
         context = {
             "skill_weights": {"linter": 0.5, "type_checker": 0.9, "coverage": 0.7},
         }
-        prompt = builder.build_system_prompt(
-            goal="Refactor module", goal_type="refactor", context=context
-        )
+        prompt = builder.build_system_prompt(goal="Refactor module", goal_type="refactor", context=context)
         self.assertIn("Skill Weights", prompt)
         # type_checker (0.9) should appear before linter (0.5) in sorted order
         # Use " (0.9)" and " (0.5)" markers to avoid substring collisions
@@ -123,9 +120,7 @@ class TestContextBuilderV2(unittest.TestCase):
             "workflow_info": "refactor-standard v1.2",
             "model_tier": "quality",
         }
-        prompt = builder.build_system_prompt(
-            goal="Refactor utils", goal_type="refactor", context=context
-        )
+        prompt = builder.build_system_prompt(goal="Refactor utils", goal_type="refactor", context=context)
         self.assertIn("Workflow", prompt)
         self.assertIn("refactor-standard v1.2", prompt)
         self.assertIn("Model Tier", prompt)
@@ -137,17 +132,16 @@ class TestContextBuilderSemantic(unittest.TestCase):
 
     def test_codebase_context_with_querier(self):
         from core.agent_sdk.context_builder import ContextBuilder
+
         mock_querier = MagicMock()
         mock_querier.architecture_overview.return_value = {
-            "total_files": 50, "clusters": {"core": 20}, "summary": "50 files...",
+            "total_files": 50,
+            "clusters": {"core": 20},
+            "summary": "50 files...",
             "top_coupled": [],
         }
-        mock_querier.find_similar.return_value = [
-            {"name": "auth", "path": "core/auth.py"}
-        ]
-        mock_querier.what_depends_on.return_value = [
-            {"path": "core/server.py", "rel_type": "imports"}
-        ]
+        mock_querier.find_similar.return_value = [{"name": "auth", "path": "core/auth.py"}]
+        mock_querier.what_depends_on.return_value = [{"path": "core/server.py", "rel_type": "imports"}]
         builder = ContextBuilder(
             project_root=Path("/tmp/test"),
             semantic_querier=mock_querier,
@@ -158,12 +152,14 @@ class TestContextBuilderSemantic(unittest.TestCase):
 
     def test_codebase_context_without_querier(self):
         from core.agent_sdk.context_builder import ContextBuilder
+
         builder = ContextBuilder(project_root=Path("/tmp/test"))
         ctx = builder.build(goal="Fix auth bug")
         self.assertNotIn("codebase_overview", ctx)
 
     def test_prompt_renders_codebase_understanding(self):
         from core.agent_sdk.context_builder import ContextBuilder
+
         builder = ContextBuilder(project_root=Path("/tmp/test"))
         ctx = {
             "recommended_skills": [],
@@ -171,9 +167,7 @@ class TestContextBuilderSemantic(unittest.TestCase):
                 "summary": "200 files in 4 clusters",
                 "total_files": 200,
             },
-            "relevant_symbols": [
-                {"name": "auth_func", "path": "core/auth.py", "intent_summary": "Handles auth"}
-            ],
+            "relevant_symbols": [{"name": "auth_func", "path": "core/auth.py", "intent_summary": "Handles auth"}],
         }
         prompt = builder.build_system_prompt(goal="Fix bug", goal_type="bug_fix", context=ctx)
         self.assertIn("Codebase Understanding", prompt)

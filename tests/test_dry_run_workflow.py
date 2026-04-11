@@ -19,17 +19,21 @@ class _StaticAgent:
 
 def _base_agents(*, change_set):
     return {
-        "ingest": _StaticAgent({
-            "goal": "test goal",
-            "snapshot": "snapshot",
-            "memory_summary": "",
-            "constraints": {},
-        }),
+        "ingest": _StaticAgent(
+            {
+                "goal": "test goal",
+                "snapshot": "snapshot",
+                "memory_summary": "",
+                "constraints": {},
+            }
+        ),
         "plan": _StaticAgent({"steps": ["step"], "risks": []}),
         "critique": _StaticAgent({"issues": [], "fixes": []}),
-        "synthesize": _StaticAgent({
-            "tasks": [{"id": "t1", "title": "demo", "intent": "", "files": [], "tests": []}],
-        }),
+        "synthesize": _StaticAgent(
+            {
+                "tasks": [{"id": "t1", "title": "demo", "intent": "", "files": [], "tests": []}],
+            }
+        ),
         "act": _StaticAgent(change_set),
         "sandbox": _StaticAgent({"passed": True, "summary": "ok"}),
         "verify": _StaticAgent({"status": "pass", "failures": [], "logs": ""}),
@@ -53,12 +57,14 @@ class TestDryRunWorkflow(unittest.TestCase):
             orchestrator = self._make_orchestrator(
                 root,
                 change_set={
-                    "changes": [{
-                        "file_path": "test_file.py",
-                        "old_code": "",
-                        "new_code": "def new_func():\n    return 1\n",
-                        "overwrite_file": True,
-                    }],
+                    "changes": [
+                        {
+                            "file_path": "test_file.py",
+                            "old_code": "",
+                            "new_code": "def new_func():\n    return 1\n",
+                            "overwrite_file": True,
+                        }
+                    ],
                 },
             )
 
@@ -82,12 +88,14 @@ class TestDryRunWorkflow(unittest.TestCase):
             orchestrator = self._make_orchestrator(
                 root,
                 change_set={
-                    "changes": [{
-                        "file_path": "test_file.py",
-                        "old_code": "def old_func():\n    pass\n",
-                        "new_code": "def new_func():\n    return 1\n",
-                        "overwrite_file": False,
-                    }],
+                    "changes": [
+                        {
+                            "file_path": "test_file.py",
+                            "old_code": "def old_func():\n    pass\n",
+                            "new_code": "def new_func():\n    return 1\n",
+                            "overwrite_file": False,
+                        }
+                    ],
                 },
             )
 

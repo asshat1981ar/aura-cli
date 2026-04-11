@@ -10,6 +10,7 @@ Achieves 89-95% compression while maintaining retrieval quality by:
 - Merging near-duplicate memories
 - Enforcing capacity limits with priority-based eviction
 """
+
 import hashlib
 import json
 import time
@@ -23,6 +24,7 @@ from core.logging_utils import log_json
 @dataclass
 class MemoryEntry:
     """A single memory with metadata for consolidation decisions."""
+
     id: str
     content: str
     memory_type: str  # "goal_outcome", "decision", "pattern", "error", "insight"
@@ -49,17 +51,13 @@ class MemoryEntry:
     @property
     def retention_score(self) -> float:
         """Overall score for retention decisions. Higher = keep."""
-        return (
-            self.effective_confidence * 0.4
-            + min(self.access_count / 10, 1.0) * 0.3
-            + (1.0 if self.sentiment < -0.5 else 0.5) * 0.1
-            + (1.0 if self.memory_type in ("pattern", "insight") else 0.5) * 0.2
-        )
+        return self.effective_confidence * 0.4 + min(self.access_count / 10, 1.0) * 0.3 + (1.0 if self.sentiment < -0.5 else 0.5) * 0.1 + (1.0 if self.memory_type in ("pattern", "insight") else 0.5) * 0.2
 
 
 @dataclass
 class ConsolidationResult:
     """Result of a consolidation pass."""
+
     memories_before: int = 0
     memories_after: int = 0
     pruned: int = 0
@@ -73,19 +71,13 @@ class ConsolidationResult:
 class MemoryConsolidator:
     """Consolidates memories: prune low-value, summarize old, merge similar."""
 
-    def __init__(self,
-                 retention_threshold: float = 0.2,
-                 summarize_after_days: int = 7,
-                 max_memories: int = 10000,
-                 similarity_threshold: float = 0.85):
+    def __init__(self, retention_threshold: float = 0.2, summarize_after_days: int = 7, max_memories: int = 10000, similarity_threshold: float = 0.85):
         self.retention_threshold = retention_threshold
         self.summarize_after_days = summarize_after_days
         self.max_memories = max_memories
         self.similarity_threshold = similarity_threshold
 
-    def consolidate(self, memories: list[MemoryEntry],
-                    summarizer: Callable | None = None
-                    ) -> tuple[list[MemoryEntry], ConsolidationResult]:
+    def consolidate(self, memories: list[MemoryEntry], summarizer: Callable | None = None) -> tuple[list[MemoryEntry], ConsolidationResult]:
         """Run full consolidation pass.
 
         Args:
@@ -115,31 +107,30 @@ class MemoryConsolidator:
         if len(retained) > self.max_memories:
             retained.sort(key=lambda m: m.retention_score, reverse=True)
             overflow = len(retained) - self.max_memories
-            retained = retained[:self.max_memories]
+            retained = retained[: self.max_memories]
             result.pruned += overflow
 
         result.memories_after = len(retained)
-        result.compression_ratio = 1.0 - (
-            result.memories_after / max(result.memories_before, 1)
-        )
+        result.compression_ratio = 1.0 - (result.memories_after / max(result.memories_before, 1))
         result.duration_seconds = time.time() - start
 
-        log_json("INFO", "memory_consolidated", details={
-            "before": result.memories_before,
-            "after": result.memories_after,
-            "pruned": result.pruned,
-            "merged": result.merged,
-            "compression": f"{result.compression_ratio:.1%}",
-        })
+        log_json(
+            "INFO",
+            "memory_consolidated",
+            details={
+                "before": result.memories_before,
+                "after": result.memories_after,
+                "pruned": result.pruned,
+                "merged": result.merged,
+                "compression": f"{result.compression_ratio:.1%}",
+            },
+        )
         return retained, result
 
     def _prune(self, memories: list[MemoryEntry]) -> list[MemoryEntry]:
-        return [m for m in memories
-                if m.retention_score >= self.retention_threshold]
+        return [m for m in memories if m.retention_score >= self.retention_threshold]
 
-    def _summarize_clusters(self, memories: list[MemoryEntry],
-                            summarizer: Callable | None = None
-                            ) -> tuple[list[MemoryEntry], list[str]]:
+    def _summarize_clusters(self, memories: list[MemoryEntry], summarizer: Callable | None = None) -> tuple[list[MemoryEntry], list[str]]:
         if not summarizer:
             return memories, []
 
@@ -165,22 +156,23 @@ class MemoryConsolidator:
             try:
                 summary_text = summarizer(contents)
                 summaries.append(summary_text)
-                summary_entries.append(MemoryEntry(
-                    id=hashlib.sha256(summary_text.encode()).hexdigest()[:16],
-                    content=summary_text,
-                    memory_type=mtype,
-                    confidence=0.8,
-                    access_count=sum(m.access_count for m in cluster),
-                    tags=list(set(t for m in cluster for t in m.tags)),
-                    sentiment=sum(m.sentiment for m in cluster) / len(cluster),
-                ))
+                summary_entries.append(
+                    MemoryEntry(
+                        id=hashlib.sha256(summary_text.encode()).hexdigest()[:16],
+                        content=summary_text,
+                        memory_type=mtype,
+                        confidence=0.8,
+                        access_count=sum(m.access_count for m in cluster),
+                        tags=list(set(t for m in cluster for t in m.tags)),
+                        sentiment=sum(m.sentiment for m in cluster) / len(cluster),
+                    )
+                )
             except Exception:
                 recent.extend(cluster)
 
         return recent + summary_entries, summaries
 
-    def _merge_duplicates(self, memories: list[MemoryEntry]
-                          ) -> tuple[list[MemoryEntry], int]:
+    def _merge_duplicates(self, memories: list[MemoryEntry]) -> tuple[list[MemoryEntry], int]:
         if len(memories) < 2:
             return memories, 0
 
@@ -225,17 +217,17 @@ class NegativeExampleStore:
         except (json.JSONDecodeError, OSError):
             self.examples = []
 
-    def add(self, goal: str, failure_reason: str, cycle_count: int = 0,
-            error_type: str = "",
-            attempted_fixes: list[str] | None = None):
-        self.examples.append({
-            "goal": goal,
-            "failure_reason": failure_reason,
-            "cycle_count": cycle_count,
-            "error_type": error_type,
-            "attempted_fixes": attempted_fixes or [],
-            "timestamp": time.time(),
-        })
+    def add(self, goal: str, failure_reason: str, cycle_count: int = 0, error_type: str = "", attempted_fixes: list[str] | None = None):
+        self.examples.append(
+            {
+                "goal": goal,
+                "failure_reason": failure_reason,
+                "cycle_count": cycle_count,
+                "error_type": error_type,
+                "attempted_fixes": attempted_fixes or [],
+                "timestamp": time.time(),
+            }
+        )
         self._save()
 
     def _save(self):

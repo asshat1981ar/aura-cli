@@ -6,7 +6,7 @@
 # Runtime (same as tools/requirements.txt)
 fastapi==0.135.1
 uvicorn==0.44.0
-requests==2.32.5
+requests>=2.33.0
 pydantic==2.12.5
 python-dotenv
 numpy
@@ -14,6 +14,10 @@ gitpython
 rich
 textblob
 networkx
+# Explicit pins for CVE remediation
+Jinja2>=3.1.6
+tornado>=6.5.5
+future>=0.18.3
 
 # Development / testing
 pytest>=7.0
@@ -26,4 +30,6 @@ typer>=0.12.0
 pyautogen>=0.2.0,<0.11
 claude-agent-sdk>=0.1.0
 openapi_spec_validator>=0.7.0
-jsonschema>=4.0.0
+prometheus-client>=0.20.0
+bandit>=1.8
+pytest-timeout>=2.0

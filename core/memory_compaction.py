@@ -14,6 +14,7 @@ Usage::
     compactor.on_cycle_complete(cycle_entry)   # auto-trigger
     result = compactor.run()                   # or trigger manually
 """
+
 from __future__ import annotations
 
 import json
@@ -24,8 +25,8 @@ from typing import Any, Dict, List
 
 from core.logging_utils import log_json
 
-MAX_ENTRIES: int = 200   # trigger compaction when log exceeds this
-KEEP_RECENT: int = 50    # keep this many entries in the live log after compaction
+MAX_ENTRIES: int = 200  # trigger compaction when log exceeds this
+KEEP_RECENT: int = 50  # keep this many entries in the live log after compaction
 COMPACTED_LOG_NAME: str = "compacted_history.jsonl"
 
 
@@ -70,7 +71,8 @@ class MemoryCompactionLoop:
         self._rewrite_log(recent)
 
         log_json(
-            "INFO", "memory_compaction_complete",
+            "INFO",
+            "memory_compaction_complete",
             details={
                 "entries_compacted": len(old),
                 "entries_kept": len(recent),
@@ -93,11 +95,7 @@ class MemoryCompactionLoop:
         summaries: List[Dict] = []
         for goal_type, group in by_type.items():
             total = len(group)
-            passed = sum(
-                1 for e in group
-                if e.get("phase_outputs", {}).get("verification", {}).get("status")
-                in ("pass", "skip")
-            )
+            passed = sum(1 for e in group if e.get("phase_outputs", {}).get("verification", {}).get("status") in ("pass", "skip"))
 
             # Collect unique learnings
             learnings: List[str] = []
@@ -106,14 +104,16 @@ class MemoryCompactionLoop:
                     if l and l not in learnings:
                         learnings.append(l)
 
-            summaries.append({
-                "type": "compacted_summary",
-                "goal_type": goal_type,
-                "cycles": total,
-                "pass_rate": round(passed / max(total, 1), 3),
-                "unique_learnings": learnings[:20],  # cap at 20
-                "compacted_at": time.time(),
-            })
+            summaries.append(
+                {
+                    "type": "compacted_summary",
+                    "goal_type": goal_type,
+                    "cycles": total,
+                    "pass_rate": round(passed / max(total, 1), 3),
+                    "unique_learnings": learnings[:20],  # cap at 20
+                    "compacted_at": time.time(),
+                }
+            )
         return summaries
 
     def _write_compacted(self, summaries: List[Dict]) -> None:

@@ -146,3 +146,29 @@ sdlc-orchestrator/.adk/logs/
 # ── swarm-mcp-server ─────────────────────────────────────────────────
 swarm-mcp-server/node_modules/
 swarm-mcp-server/dist/
+
+# ── detect-secrets baseline ─────────────────────────────────────────
+.secrets.baseline
+
+# === Security-sensitive files ===
+aura_auth.db-journal
+.env.local
+.env.production
+
+# === Runtime artifacts ===
+.aura_loop_state.json
+goal_queue.json
+
+# === Memory artifacts ===
+memory/decision_log.jsonl
+memory/skill_weights.json
+
+# === Test & Coverage artifacts ===
+coverage.xml
+test-results.xml
+htmlcov/
+reports/
+
+# === Security scan reports ===
+bandit-report.json
+pip-audit-report.json

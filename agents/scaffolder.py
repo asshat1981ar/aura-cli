@@ -1,11 +1,10 @@
-import re # Added for path validation
+import re  # Added for path validation
 from typing import Dict
 import json
 from pathlib import Path
 
 from core.file_tools import _aura_safe_loads
 from core.logging_utils import log_json
-
 
 
 class ScaffolderAgent:
@@ -15,6 +14,7 @@ class ScaffolderAgent:
     path validation to prevent malicious file system operations and ensures
     all generated paths are confined to the intended project root.
     """
+
     def __init__(self, brain, model):
         """
         Initializes the ScaffolderAgent with access to the system's brain and model.
@@ -45,21 +45,21 @@ class ScaffolderAgent:
         Validates an individual path component (file or directory name).
         Raises ValueError if the component is invalid (e.g., contains '..', is absolute).
         """
-        if not component or component.strip() == '':
+        if not component or component.strip() == "":
             raise ValueError(f"Path component cannot be empty. Context: {context}")
-        
+
         path_obj = Path(component)
 
         # Disallow absolute paths or paths starting with separator
-        if path_obj.is_absolute() or str(path_obj).startswith(('/', '\\')):
+        if path_obj.is_absolute() or str(path_obj).startswith(("/", "\\")):
             raise ValueError(f"Path component '{component}' is absolute or starts with a separator. Context: {context}")
 
         # Disallow path traversal
-        if '..' in path_obj.parts:
+        if ".." in path_obj.parts:
             raise ValueError(f"Path component '{component}' contains path traversal ('..'). Context: {context}")
-        
+
         # Disallow Windows drive letters if applicable (though unlikely in current env)
-        if re.match(r'^[a-zA-Z]:[/\\]', component):
+        if re.match(r"^[a-zA-Z]:[/\\]", component):
             raise ValueError(f"Path component '{component}' contains Windows drive letter. Context: {context}")
 
         return component
@@ -114,7 +114,7 @@ if __name__ == '__main__':
             validated_project_name = self._validate_path_component(project_name, "project_name")
             project_root = Path(f"projects/{validated_project_name}")
             project_root.mkdir(parents=True, exist_ok=True)
-            
+
             self._create_from_structure(project_root, project_structure)
             return f"Project '{validated_project_name}' scaffolded successfully at {project_root.resolve()}"
 
@@ -139,24 +139,24 @@ if __name__ == '__main__':
             structure (Dict): A dictionary where keys are file/directory names and values
                               are either content (for files) or nested dictionaries (for directories).
         """
-        project_root = current_path.resolve() # This is the actual project root for validation
+        project_root = current_path.resolve()  # This is the actual project root for validation
         for name, content in structure.items():
             try:
                 # Validate individual component
                 validated_name = self._validate_path_component(name, f"structure key: {name}")
 
                 path = current_path / validated_name
-                
+
                 # Ensure the resolved path remains within the project_root
                 resolved_path = path.resolve()
                 if not resolved_path.is_relative_to(project_root):
                     log_json("ERROR", "scaffolder_path_outside_root", details={"invalid_path": str(resolved_path), "project_root": str(project_root), "original_name": name})
-                    continue # Skip this entry
+                    continue  # Skip this entry
 
-                if isinstance(content, dict): # It's a directory
+                if isinstance(content, dict):  # It's a directory
                     path.mkdir(parents=True, exist_ok=True)
                     self._create_from_structure(path, content)
-                elif isinstance(content, str): # It's a file
+                elif isinstance(content, str):  # It's a file
                     with open(path, "w", encoding="utf-8") as f:
                         f.write(content)
                 else:
@@ -165,3 +165,12 @@ if __name__ == '__main__':
                 log_json("ERROR", "scaffolder_structure_validation_error", details={"error": str(ve), "name": name})
             except Exception as e:
                 log_json("ERROR", "scaffolder_create_from_structure_unexpected_error", details={"error": str(e), "name": name})
+
+    def run(self, input_data: dict) -> dict:
+        """Uniform execution interface for the orchestrator loop."""
+        project_name = input_data.get("project_name", "new_project")
+        description = input_data.get("description", "")
+
+        result = self.scaffold_project(project_name, description)
+
+        return {"status": "success", "result": result}

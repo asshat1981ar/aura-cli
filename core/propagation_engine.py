@@ -35,6 +35,7 @@ Usage::
         action=lambda ctx: ctx["goal_queue"].add("Update API docs after new feature"),
     ))
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -62,6 +63,7 @@ class PropagationRule:
                             per unique goal string per session.
         enabled:    Toggle without removing from the registry.
     """
+
     name: str
     event: str
     condition: Callable[[Dict], bool]
@@ -71,16 +73,18 @@ class PropagationRule:
 
 
 # Event types emitted by PropagationEngine
-EVENT_TYPES = frozenset([
-    "verification_pass",
-    "verification_fail",
-    "weakness_detected",
-    "phase_failure_spike",
-    "health_breach",
-    "coverage_drop",
-    "consecutive_failures",
-    "cycle_complete",
-])
+EVENT_TYPES = frozenset(
+    [
+        "verification_pass",
+        "verification_fail",
+        "weakness_detected",
+        "phase_failure_spike",
+        "health_breach",
+        "coverage_drop",
+        "consecutive_failures",
+        "cycle_complete",
+    ]
+)
 
 
 class PropagationEngine:
@@ -131,19 +135,19 @@ class PropagationEngine:
                         self.queue.add(result)
                         self._record_fire(rule.name, result)
                         queued.append(result)
-                        log_json("INFO", "propagation_rule_fired",
-                                 details={"rule": rule.name, "event": event,
-                                          "goal": result[:80]})
+                        log_json("INFO", "propagation_rule_fired", details={"rule": rule.name, "event": event, "goal": result[:80]})
                 except Exception as exc:
-                    log_json("WARN", "propagation_rule_error",
-                             details={"rule": rule.name, "error": str(exc)})
+                    log_json("WARN", "propagation_rule_error", details={"rule": rule.name, "error": str(exc)})
 
         if queued:
-            self.memory.put("propagation_events", {
-                "cycle_id": entry.get("cycle_id"),
-                "goals_generated": queued,
-                "timestamp": time.time(),
-            })
+            self.memory.put(
+                "propagation_events",
+                {
+                    "cycle_id": entry.get("cycle_id"),
+                    "goals_generated": queued,
+                    "timestamp": time.time(),
+                },
+            )
         return queued
 
     def _extract_events(self, entry: Dict) -> List[str]:
@@ -169,7 +173,7 @@ class PropagationEngine:
                 break
 
         # Phase failure spike from reflection loop output — only if report is recent (<1h)
-        for report in (self.memory.query("reflection_reports", limit=1) or []):
+        for report in self.memory.query("reflection_reports", limit=1) or []:
             report_age = time.time() - report.get("timestamp", 0)
             if report_age > 3600:  # ignore stale reports older than 1 hour
                 continue
@@ -182,10 +186,7 @@ class PropagationEngine:
         if len(snapshots) >= 2:
             prev_cov = snapshots[-2].get("metrics", {}).get("test_coverage_analyzer")
             curr_cov = snapshots[-1].get("metrics", {}).get("test_coverage_analyzer")
-            if (prev_cov is not None and curr_cov is not None
-                    and isinstance(curr_cov, (int, float))
-                    and isinstance(prev_cov, (int, float))
-                    and curr_cov < prev_cov * 0.9):
+            if prev_cov is not None and curr_cov is not None and isinstance(curr_cov, (int, float)) and isinstance(prev_cov, (int, float)) and curr_cov < prev_cov * 0.9:
                 events.append("coverage_drop")
 
         return list(dict.fromkeys(events))  # deduplicate, preserve order
@@ -197,22 +198,22 @@ class PropagationEngine:
         remediation_plan = verif.get("remediation_plan", {}) if isinstance(verif, dict) else {}
         failure_investigation = verif.get("failure_investigation", {}) if isinstance(verif, dict) else {}
         return {
-            "cycle_id":       entry.get("cycle_id", ""),
-            "goal":           entry.get("goal", ""),
-            "goal_type":      entry.get("goal_type", "default"),
-            "events":         events,
-            "verification":   verif,
-            "apply_result":   apply_result,
-            "applied_files":  apply_result.get("applied", []),
-            "failed_files":   apply_result.get("failed", []),
-            "failures":       verif.get("failures", []),
+            "cycle_id": entry.get("cycle_id", ""),
+            "goal": entry.get("goal", ""),
+            "goal_type": entry.get("goal_type", "default"),
+            "events": events,
+            "verification": verif,
+            "apply_result": apply_result,
+            "applied_files": apply_result.get("applied", []),
+            "failed_files": apply_result.get("failed", []),
+            "failures": verif.get("failures", []),
             "remediation_plan": remediation_plan if isinstance(remediation_plan, dict) else {},
             "failure_investigation": failure_investigation if isinstance(failure_investigation, dict) else {},
-            "phase_outputs":  po,
+            "phase_outputs": po,
             "consecutive_fails": self._consecutive_fail_count,
-            "goal_queue":     self.queue,
-            "context_graph":  self.graph,
-            "memory":         self.memory,
+            "goal_queue": self.queue,
+            "context_graph": self.graph,
+            "memory": self.memory,
         }
 
     def _can_fire(self, rule_name: str, goal_text: str) -> bool:
@@ -242,14 +243,8 @@ class PropagationEngine:
             PropagationRule(
                 name="regression_test_after_fix",
                 event="verification_pass",
-                condition=lambda ctx: (
-                    ctx["goal_type"] == "bug_fix"
-                    and bool(ctx["applied_files"])
-                ),
-                action=lambda ctx: (
-                    f"Add regression test for fix in: "
-                    f"{', '.join(ctx['applied_files'][:2])}"
-                ),
+                condition=lambda ctx: ctx["goal_type"] == "bug_fix" and bool(ctx["applied_files"]),
+                action=lambda ctx: f"Add regression test for fix in: {', '.join(ctx['applied_files'][:2])}",
             ),
             # 2. After a successful feature, queue API contract validation
             PropagationRule(
@@ -263,19 +258,14 @@ class PropagationEngine:
                 name="arch_validate_after_refactor",
                 event="verification_pass",
                 condition=lambda ctx: ctx["goal_type"] == "refactor",
-                action=lambda ctx: (
-                    "Run architecture validation after refactor — check for new circular deps"
-                ),
+                action=lambda ctx: "Run architecture validation after refactor — check for new circular deps",
             ),
             # 4. HIGH severity weakness → immediate remediation goal
             PropagationRule(
                 name="remediate_high_severity_weakness",
                 event="weakness_detected",
                 condition=lambda ctx: ctx["goal_type"] != "default",
-                action=lambda ctx: (
-                    f"Immediate remediation: HIGH severity weakness detected "
-                    f"in {ctx['goal_type']} cycle"
-                ),
+                action=lambda ctx: f"Immediate remediation: HIGH severity weakness detected in {ctx['goal_type']} cycle",
                 max_fires_per_goal=2,
             ),
             # 5. Phase failure spike → investigate goal
@@ -298,20 +288,14 @@ class PropagationEngine:
                 name="context_enrichment_on_failures",
                 event="consecutive_failures",
                 condition=lambda ctx: ctx["consecutive_fails"] >= 2,
-                action=lambda ctx: (
-                    f"Investigate root cause of consecutive {ctx['consecutive_fails']}x "
-                    f"failures on {ctx['goal_type']} goal"
-                ),
+                action=lambda ctx: f"Investigate root cause of consecutive {ctx['consecutive_fails']}x failures on {ctx['goal_type']} goal",
                 max_fires_per_goal=1,
             ),
             # 8. Structured remediation on failure → targeted follow-up goal
             PropagationRule(
                 name="remediation_follow_up_goal",
                 event="verification_fail",
-                condition=lambda ctx: bool(ctx["remediation_plan"]) and (
-                    ctx["remediation_plan"].get("repeated_failure_detected")
-                    or ctx["remediation_plan"].get("route") in ("replan", "skip")
-                ),
+                condition=lambda ctx: bool(ctx["remediation_plan"]) and (ctx["remediation_plan"].get("repeated_failure_detected") or ctx["remediation_plan"].get("route") in ("replan", "skip")),
                 action=lambda ctx: self._remediation_follow_up_goal(ctx),
                 max_fires_per_goal=1,
             ),
@@ -326,8 +310,7 @@ class PropagationEngine:
         for rule in rules:
             self._rules[rule.name] = rule
 
-        log_json("INFO", "propagation_builtin_rules_registered",
-                 details={"count": len(rules)})
+        log_json("INFO", "propagation_builtin_rules_registered", details={"count": len(rules)})
 
     @staticmethod
     def _phase_failure_goal(ctx: Dict) -> Optional[str]:
@@ -337,10 +320,7 @@ class PropagationEngine:
             return None
         for ins in reports[-1].get("insights", []):
             if ins.get("type") == "phase_failure" and ins.get("severity") == "HIGH":
-                return (
-                    f"Investigate and fix repeated '{ins['phase']}' phase failures "
-                    f"(rate: {ins.get('failure_rate', '?')})"
-                )
+                return f"Investigate and fix repeated '{ins['phase']}' phase failures (rate: {ins.get('failure_rate', '?')})"
         return None
 
     @staticmethod

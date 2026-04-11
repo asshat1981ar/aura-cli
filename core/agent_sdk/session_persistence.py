@@ -4,6 +4,7 @@
 Stores session state for resumption and tracks cost per session,
 per goal type, per model tier.
 """
+
 from __future__ import annotations
 
 import logging
@@ -75,8 +76,12 @@ class SessionStore:
         self._conn.executescript(_SCHEMA)
 
     def create_session(
-        self, session_id: str, goal: str, goal_type: str,
-        workflow: str, model_tier: str,
+        self,
+        session_id: str,
+        goal: str,
+        goal_type: str,
+        workflow: str,
+        model_tier: str,
     ) -> int:
         """Create a new session. Returns the primary key."""
         now = datetime.utcnow().isoformat()
@@ -90,9 +95,15 @@ class SessionStore:
         return cur.lastrowid
 
     def record_event(
-        self, session_pk: int, phase: str, tool_name: str,
-        model: str, tokens_in: int, tokens_out: int,
-        success: bool, error: Optional[str],
+        self,
+        session_pk: int,
+        phase: str,
+        tool_name: str,
+        model: str,
+        tokens_in: int,
+        tokens_out: int,
+        success: bool,
+        error: Optional[str],
     ) -> None:
         """Record a cycle event and update session totals."""
         cost = compute_cost(model, tokens_in, tokens_out)
@@ -101,8 +112,7 @@ class SessionStore:
             """INSERT INTO cycle_events (session_pk, phase, tool_name, model_used,
                input_tokens, output_tokens, cost_usd, success, error_msg, created_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (session_pk, phase, tool_name, model, tokens_in, tokens_out,
-             cost, success, error, now),
+            (session_pk, phase, tool_name, model, tokens_in, tokens_out, cost, success, error, now),
         )
         self._conn.execute(
             """UPDATE sessions SET
@@ -117,7 +127,10 @@ class SessionStore:
         self._conn.commit()
 
     def update_status(
-        self, session_pk: int, status: str, error_summary: Optional[str] = None,
+        self,
+        session_pk: int,
+        status: str,
+        error_summary: Optional[str] = None,
     ) -> None:
         """Update session status."""
         now = datetime.utcnow().isoformat()
@@ -130,13 +143,13 @@ class SessionStore:
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         """Get session by SDK session ID."""
-        row = self._conn.execute(
-            "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
-        ).fetchone()
+        row = self._conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
         return dict(row) if row else None
 
     def list_sessions(
-        self, status: Optional[str] = None, limit: int = 20,
+        self,
+        status: Optional[str] = None,
+        limit: int = 20,
     ) -> List[Dict[str, Any]]:
         """List sessions, optionally filtered by status."""
         if status:
@@ -146,7 +159,8 @@ class SessionStore:
             ).fetchall()
         else:
             rows = self._conn.execute(
-                "SELECT * FROM sessions ORDER BY created_at DESC LIMIT ?", (limit,),
+                "SELECT * FROM sessions ORDER BY created_at DESC LIMIT ?",
+                (limit,),
             ).fetchall()
         return [dict(r) for r in rows]
 

@@ -27,10 +27,7 @@ def test_benchmark_retrieval_honors_env_var_brain_db_path(tmp_path, monkeypatch)
     ):
         benchmark_retrieval.config.refresh()
         try:
-            with patch.object(benchmark_retrieval, "Brain", return_value=fake_brain) as mock_brain_cls, \
-                 patch.object(benchmark_retrieval, "ModelAdapter"), \
-                 patch.object(benchmark_retrieval, "VectorStore", return_value=fake_vector_store), \
-                 patch.object(benchmark_retrieval.console, "print"):
+            with patch.object(benchmark_retrieval, "Brain", return_value=fake_brain) as mock_brain_cls, patch.object(benchmark_retrieval, "ModelAdapter"), patch.object(benchmark_retrieval, "VectorStore", return_value=fake_vector_store), patch.object(benchmark_retrieval.console, "print"):
                 with pytest.raises(SystemExit) as exc:
                     benchmark_retrieval.main()
         finally:
@@ -38,6 +35,4 @@ def test_benchmark_retrieval_honors_env_var_brain_db_path(tmp_path, monkeypatch)
             benchmark_retrieval.config.refresh()
 
     assert exc.value.code == 0
-    mock_brain_cls.assert_called_once_with(
-        db_path=str(Path(tmp_path) / "state" / "benchmark_brain.db")
-    )
+    mock_brain_cls.assert_called_once_with(db_path=str(Path(tmp_path) / "state" / "benchmark_brain.db"))

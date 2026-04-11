@@ -1,4 +1,5 @@
 """Memory browser panel for AURA TUI."""
+
 from __future__ import annotations
 
 from typing import Any, Optional
@@ -7,6 +8,7 @@ try:
     from rich.panel import Panel
     from rich.table import Table
     from rich import box
+
     _RICH_AVAILABLE = True
 except ImportError:
     _RICH_AVAILABLE = False

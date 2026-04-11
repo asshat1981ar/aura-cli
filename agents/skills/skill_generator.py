@@ -4,6 +4,7 @@ Analyzes recurring task patterns or explicit requests for new capabilities,
 generates the Python implementation for a new SkillBase subclass,
 persists it to agents/skills/, and registers it in the skill registry.
 """
+
 from __future__ import annotations
 
 import re
@@ -12,6 +13,7 @@ from typing import Any, Dict, Optional
 
 from agents.skills.base import SkillBase
 from core.logging_utils import log_json
+
 
 class SkillGeneratorSkill(SkillBase):
     """
@@ -24,7 +26,7 @@ class SkillGeneratorSkill(SkillBase):
         capability = input_data.get("capability")
         description = input_data.get("description", "")
         project_root = Path(input_data.get("project_root", "."))
-        
+
         if not capability:
             return {"error": "No capability specified for skill generation"}
 
@@ -40,11 +42,11 @@ class SkillGeneratorSkill(SkillBase):
 
         # 2. Extract skill name and class name
         skill_name_match = re.search(r'name = "(.+?)"', skill_code)
-        class_name_match = re.search(r'class (.+?)\(SkillBase\):', skill_code)
-        
+        class_name_match = re.search(r"class (.+?)\(SkillBase\):", skill_code)
+
         if not skill_name_match or not class_name_match:
             return {"error": "Generated code is missing name or class definition"}
-            
+
         skill_name = skill_name_match.group(1)
         class_name = class_name_match.group(1)
         file_name = f"{skill_name}.py"
@@ -65,16 +67,11 @@ class SkillGeneratorSkill(SkillBase):
         # 5. Update dispatcher
         dispatcher_error = self._update_dispatcher(project_root, skill_name, capability)
         if dispatcher_error:
-             log_json("WARN", "skill_generator_dispatcher_update_failed", details={"error": dispatcher_error})
+            log_json("WARN", "skill_generator_dispatcher_update_failed", details={"error": dispatcher_error})
 
         log_json("INFO", "skill_generator_complete", details={"skill": skill_name, "class": class_name})
-        
-        return {
-            "status": "success",
-            "skill_name": skill_name,
-            "class_name": class_name,
-            "file_path": str(file_path)
-        }
+
+        return {"status": "success", "skill_name": skill_name, "class_name": class_name, "file_path": str(file_path)}
 
     def _generate_skill_code(self, capability: str, description: str) -> str:
         prompt = f"""
@@ -114,23 +111,22 @@ Respond ONLY with the Python code for the skill, inside a markdown code block.
         registry_path = project_root / "agents" / "skills" / "registry.py"
         if not registry_path.exists():
             return "Registry file not found"
-            
+
         try:
             content = registry_path.read_text(encoding="utf-8")
-            
+
             # 1. Add import
             import_line = f"    from agents.skills.{skill_name} import {class_name}"
             if import_line not in content:
                 # Insert before the first SkillBase return
-                content = content.replace("    from agents.skills.base import SkillBase", 
-                                          f"    from agents.skills.base import SkillBase\n{import_line}")
-            
+                content = content.replace("    from agents.skills.base import SkillBase", f"    from agents.skills.base import SkillBase\n{import_line}")
+
             # 2. Add to dictionary
             entry = f'        "{skill_name}": {class_name}(brain=brain, model=model),'
             if entry not in content:
                 # Insert before the closing brace of the dict
                 content = content.replace("    }", f"{entry}\n    }}")
-            
+
             registry_path.write_text(content, encoding="utf-8")
             return None
         except Exception as e:
@@ -140,15 +136,14 @@ Respond ONLY with the Python code for the skill, inside a markdown code block.
         dispatcher_path = project_root / "core" / "skill_dispatcher.py"
         if not dispatcher_path.exists():
             return "Dispatcher file not found"
-            
+
         try:
             content = dispatcher_path.read_text(encoding="utf-8")
             # For simplicity, add to "default" list for now, or "feature" if it sounds like one
             if '"default": [' in content:
                 content = content.replace('"default": [', f'"default": [\n        "{skill_name}",')
-            
+
             dispatcher_path.write_text(content, encoding="utf-8")
             return None
         except Exception as e:
             return str(e)
-

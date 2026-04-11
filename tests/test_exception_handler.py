@@ -1,4 +1,5 @@
 """Unit tests for core/exception_handler.py — ExceptionHandler, common handlers."""
+
 import pytest
 
 from core.exception_handler import (

@@ -3,6 +3,7 @@
 Delegates to tree-sitter MCP for AST analysis, semgrep for pattern matching,
 and uses api_contract_validator and schema_validator skills.
 """
+
 from __future__ import annotations
 
 import subprocess

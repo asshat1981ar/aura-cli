@@ -17,7 +17,7 @@ def run(
 ):
     """Run the AURA API server."""
     log_json("INFO", "api_server_starting", {"host": host, "port": port})
-    
+
     uvicorn.run(
         "aura_cli.api_server:app",
         host=host,
@@ -32,6 +32,7 @@ def run(
 def status():
     """Check API server status."""
     import requests
+
     try:
         response = requests.get("http://localhost:8000/health", timeout=5)
         if response.status_code == 200:

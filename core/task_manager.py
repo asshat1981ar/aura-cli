@@ -6,36 +6,23 @@ from pathlib import Path
 from core.logging_utils import log_json
 from memory.controller import memory_controller, MemoryTier
 
+
 @dataclass
 class Task:
     id: str
     title: str
     status: str = "pending"
     description: str = ""
-    subtasks: List['Task'] = field(default_factory=list)
+    subtasks: List["Task"] = field(default_factory=list)
     result: Optional[str] = None
 
     def to_dict(self):
-        return {
-            "id": self.id,
-            "title": self.title,
-            "status": self.status,
-            "description": self.description,
-            "subtasks": [s.to_dict() for s in self.subtasks],
-            "result": self.result
-        }
+        return {"id": self.id, "title": self.title, "status": self.status, "description": self.description, "subtasks": [s.to_dict() for s in self.subtasks], "result": self.result}
 
     @classmethod
     def from_dict(cls, data):
         subtasks = [cls.from_dict(s) for s in data.get("subtasks", [])]
-        return cls(
-            id=data["id"],
-            title=data["title"],
-            status=data.get("status", "pending"),
-            description=data.get("description", ""),
-            subtasks=subtasks,
-            result=data.get("result")
-        )
+        return cls(id=data["id"], title=data["title"], status=data.get("status", "pending"), description=data.get("description", ""), subtasks=subtasks, result=data.get("result"))
 
     def display(self, indent: int = 0) -> str:
         status = self.status.replace("_", " ")
@@ -44,10 +31,12 @@ class Task:
             lines.append(subtask.display(indent + 1))
         return "\n".join(lines)
 
+
 class TaskManager:
     """
     Unified Control Plane: Manages task hierarchies via MemoryController.
     """
+
     def __init__(self, persistence_path=None):
         self.persistence_path = Path(persistence_path) if persistence_path else None
         self.root_tasks: List[Task] = []
@@ -88,7 +77,7 @@ class TaskManager:
         records = memory_controller.retrieve(MemoryTier.PROJECT, limit=500)
         # Look for the most recent task_hierarchy record
         hierarchy_record = next((r for r in reversed(records) if isinstance(r, dict) and r.get("type") == "task_hierarchy"), None)
-        
+
         if hierarchy_record:
             try:
                 data = hierarchy_record.get("data", [])
@@ -120,9 +109,7 @@ class TaskManager:
             pending.extend(self.get_pending_tasks(task.subtasks))
         return pending
 
-    def decompose_goal(self, goal: str, planner_agent: Any,
-                       memory_snapshot: str = "", similar_past_problems: str = "",
-                       known_weaknesses: str = "") -> Task:
+    def decompose_goal(self, goal: str, planner_agent: Any, memory_snapshot: str = "", similar_past_problems: str = "", known_weaknesses: str = "") -> Task:
         log_json("INFO", "decomposing_goal", details={"goal": goal})
         root = Task(id=f"goal_{int(time.time())}", title=goal)
         try:

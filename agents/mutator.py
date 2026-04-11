@@ -41,7 +41,7 @@ class MutatorAgent:
             raise ValueError(f"Absolute paths are not allowed: {file_path}")
 
         # 2. Prevent path traversal (e.g., '..')
-        if '..' in path_obj.parts:
+        if ".." in path_obj.parts:
             raise ValueError(f"Path traversal ('..') is not allowed: {file_path}")
 
         # 3. Resolve path and ensure it's within project_root
@@ -63,6 +63,7 @@ class MutatorAgent:
 
         # Try JSON first
         from core.file_tools import _aura_safe_loads
+
         try:
             parsed = _aura_safe_loads(mutation_proposal, "mutator_json_apply")
             if isinstance(parsed, dict) and "mutations" in parsed:
@@ -73,14 +74,14 @@ class MutatorAgent:
             pass
 
         # Fallback to block parsing
-        blocks = re.split(r'^(?=ADD_FILE|REPLACE_IN_FILE)', mutation_proposal, flags=re.MULTILINE)
+        blocks = re.split(r"^(?=ADD_FILE|REPLACE_IN_FILE)", mutation_proposal, flags=re.MULTILINE)
 
         for block in blocks:
             block = block.strip()
             if not block:
                 continue
 
-            lines = block.split('\n')
+            lines = block.split("\n")
             command_line = lines[0].strip()
 
             if command_line.startswith("ADD_FILE"):
@@ -107,17 +108,14 @@ class MutatorAgent:
                 rel_path = str(validated.relative_to(self.project_root_resolved))
 
                 if m_type == "file_change" or m_type == "add_file":
-                    apply_change_with_explicit_overwrite_policy(
-                        self.project_root, rel_path, old_code, new_content,
-                        overwrite_file=(not old_code)
-                    )
+                    apply_change_with_explicit_overwrite_policy(self.project_root, rel_path, old_code, new_content, overwrite_file=(not old_code))
                     log_json("INFO", "mutator_json_mutation_success", details={"file": rel_path})
             except Exception as e:
                 log_json("ERROR", "mutator_json_mutation_failed", details={"error": str(e), "mutation": str(m)[:200]})
 
     def _handle_add_file(self, command_line: str, content_lines: list):
         try:
-            parts = command_line.split(' ', 1)
+            parts = command_line.split(" ", 1)
             if len(parts) < 2:
                 log_json("ERROR", "mutator_add_file_missing_filepath", details={"command_line": command_line})
                 return
@@ -132,17 +130,21 @@ class MutatorAgent:
                 content,
                 overwrite_file=True,
             )
-            log_json("INFO", "mutator_add_file_success", details={
-                "file_path": str(validated_file_path.relative_to(self.project_root_resolved)),
-                "content_length": len(content),
-            })
+            log_json(
+                "INFO",
+                "mutator_add_file_success",
+                details={
+                    "file_path": str(validated_file_path.relative_to(self.project_root_resolved)),
+                    "content_length": len(content),
+                },
+            )
         except Exception as e:
             log_json("ERROR", "mutator_add_file_failed", details={"error": str(e), "command": command_line})
 
     def _handle_replace_in_file(self, command_line: str, lines: list, full_block: str):
         file_path = "N/A"
         try:
-            parts = command_line.split(' ', 1)
+            parts = command_line.split(" ", 1)
             if len(parts) >= 2:
                 file_path = parts[1].strip()
                 content_start_idx = 0
@@ -165,14 +167,18 @@ class MutatorAgent:
                 new_start_idx = search_lines.index(new_content_start_marker, old_end_idx + 1)
                 new_end_idx = search_lines.index(new_content_end_marker, new_start_idx + 1)
             except ValueError:
-                log_json("ERROR", "mutator_replace_in_file_format_error", details={
-                    "file_path": file_path,
-                    "block_snippet": full_block[:200],
-                })
+                log_json(
+                    "ERROR",
+                    "mutator_replace_in_file_format_error",
+                    details={
+                        "file_path": file_path,
+                        "block_snippet": full_block[:200],
+                    },
+                )
                 return
 
-            old_string = "\n".join(search_lines[old_start_idx + 1: old_end_idx])
-            new_string = "\n".join(search_lines[new_start_idx + 1: new_end_idx])
+            old_string = "\n".join(search_lines[old_start_idx + 1 : old_end_idx])
+            new_string = "\n".join(search_lines[new_start_idx + 1 : new_end_idx])
 
             validated_file_path = self._validate_file_path(file_path)
             apply_change_with_explicit_overwrite_policy(
@@ -181,9 +187,13 @@ class MutatorAgent:
                 old_string,
                 new_string,
             )
-            log_json("INFO", "mutator_replace_in_file_success", details={
-                "file_path": str(validated_file_path.relative_to(self.project_root_resolved)),
-            })
+            log_json(
+                "INFO",
+                "mutator_replace_in_file_success",
+                details={
+                    "file_path": str(validated_file_path.relative_to(self.project_root_resolved)),
+                },
+            )
         except MismatchOverwriteBlockedError as e:
             log_json("ERROR", MISMATCH_OVERWRITE_BLOCK_EVENT, details=mismatch_overwrite_block_log_details(e, file_path))
             log_json("ERROR", "mutator_replace_in_file_failed", details={"error": str(e), "file": file_path})

@@ -15,6 +15,7 @@ Usage::
     result = decomposer.maybe_decompose(goal, goal_queue, skills, project_root=".")
     # Returns {"decomposed": True, "sub_goals": [...]} or {"decomposed": False}
 """
+
 from __future__ import annotations
 
 import uuid
@@ -25,8 +26,17 @@ from core.file_tools import _aura_safe_loads
 
 # Heuristics — any of these in the goal text suggest decomposition is needed
 _SCOPE_KEYWORDS = [
-    "entire", "all", "whole", "every", "throughout", "across", "complete",
-    "full", "refactor all", "migrate all", "rewrite",
+    "entire",
+    "all",
+    "whole",
+    "every",
+    "throughout",
+    "across",
+    "complete",
+    "full",
+    "refactor all",
+    "migrate all",
+    "rewrite",
 ]
 
 # Goal character length above which we also consider decomposition
@@ -64,31 +74,26 @@ class GoalDecomposer:
 
     # ── Internal ─────────────────────────────────────────────────────────────
 
-    def _maybe_decompose(
-        self, goal: str, goal_queue, skills, project_root: str
-    ) -> Dict[str, Any]:
+    def _maybe_decompose(self, goal: str, goal_queue, skills, project_root: str) -> Dict[str, Any]:
         forced = goal.startswith("[DECOMPOSE]")
         clean_goal = goal.removeprefix("[DECOMPOSE]").strip()
 
         if not forced and not self._should_decompose(clean_goal, skills, project_root):
             return {"decomposed": False}
 
-        log_json("INFO", "goal_decomposer_decomposing",
-                 details={"goal": clean_goal[:80], "forced": forced})
+        log_json("INFO", "goal_decomposer_decomposing", details={"goal": clean_goal[:80], "forced": forced})
 
         sub_goals = self._generate_sub_goals(clean_goal)
         if not sub_goals or len(sub_goals) < 2:
-            log_json("WARN", "goal_decomposer_insufficient_sub_goals",
-                     details={"count": len(sub_goals)})
+            log_json("WARN", "goal_decomposer_insufficient_sub_goals", details={"count": len(sub_goals)})
             return {"decomposed": False, "reason": "llm_returned_too_few_sub_goals"}
 
         parent_id = uuid.uuid4().hex[:10]
         for i, sg in enumerate(sub_goals):
-            tagged = f"[SUBTASK:{parent_id}:{i+1}/{len(sub_goals)}] {sg}"
+            tagged = f"[SUBTASK:{parent_id}:{i + 1}/{len(sub_goals)}] {sg}"
             goal_queue.add(tagged)
 
-        log_json("INFO", "goal_decomposer_done",
-                 details={"parent_id": parent_id, "sub_goals": len(sub_goals)})
+        log_json("INFO", "goal_decomposer_done", details={"parent_id": parent_id, "sub_goals": len(sub_goals)})
         return {
             "decomposed": True,
             "parent_id": parent_id,
@@ -96,9 +101,7 @@ class GoalDecomposer:
             "sub_goals_queued": len(sub_goals),
         }
 
-    def _should_decompose(
-        self, goal: str, skills: Optional[Dict], project_root: str
-    ) -> bool:
+    def _should_decompose(self, goal: str, skills: Optional[Dict], project_root: str) -> bool:
         """Return True if this goal looks large enough to warrant decomposition."""
         goal_lower = goal.lower()
 
@@ -145,6 +148,5 @@ No explanatory text outside the JSON.
             if isinstance(parsed, list) and all(isinstance(s, str) for s in parsed):
                 return [s.strip() for s in parsed if s.strip()]
         except Exception as exc:
-            log_json("WARN", "goal_decomposer_llm_parse_failed",
-                     details={"error": str(exc)})
+            log_json("WARN", "goal_decomposer_llm_parse_failed", details={"error": str(exc)})
         return []

@@ -4,6 +4,7 @@ Tests HookEngine, ConfidenceRouter, NBestEngine, ExperimentTracker,
 A2AServer, EventBus, MemoryConsolidator, and NegativeExampleStore
 working together and with the orchestrator.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -126,8 +127,7 @@ class TestConfidenceRouterSmartRouting(unittest.TestCase):
         # with the last value < retry_below (0.4)
         self.assertTrue(
             router.should_escalate(results[-1]),
-            "Should escalate when confidence declines across 3+ phases "
-            "and latest is below retry threshold",
+            "Should escalate when confidence declines across 3+ phases and latest is below retry threshold",
         )
 
     def test_stable_confidence_no_escalation(self):
@@ -200,17 +200,22 @@ class TestNBestEngineEndToEnd(unittest.TestCase):
 
         # Mock model that returns different code per call
         call_count = 0
+
         def mock_respond(prompt):
             nonlocal call_count
             call_count += 1
             # Return JSON with changes for each variant
-            return json.dumps({
-                "changes": [{
-                    "file_path": f"module_{call_count}.py",
-                    "old_code": "",
-                    "new_code": f"def solution_{call_count}(): pass  # variant {call_count}",
-                }]
-            })
+            return json.dumps(
+                {
+                    "changes": [
+                        {
+                            "file_path": f"module_{call_count}.py",
+                            "old_code": "",
+                            "new_code": f"def solution_{call_count}(): pass  # variant {call_count}",
+                        }
+                    ]
+                }
+            )
 
         model = MagicMock()
         model.respond = mock_respond
@@ -232,16 +237,15 @@ class TestNBestEngineEndToEnd(unittest.TestCase):
 
         # Mock critic scoring: variant 1 gets highest scores
         def mock_critic_respond(prompt):
-            return json.dumps({
-                "scores": {
-                    "0": {"correctness": 0.9, "elegance": 0.9, "efficiency": 0.8,
-                           "maintainability": 0.9, "test_coverage": 0.8},
-                    "1": {"correctness": 0.6, "elegance": 0.5, "efficiency": 0.7,
-                           "maintainability": 0.5, "test_coverage": 0.4},
-                    "2": {"correctness": 0.7, "elegance": 0.7, "efficiency": 0.6,
-                           "maintainability": 0.6, "test_coverage": 0.5},
+            return json.dumps(
+                {
+                    "scores": {
+                        "0": {"correctness": 0.9, "elegance": 0.9, "efficiency": 0.8, "maintainability": 0.9, "test_coverage": 0.8},
+                        "1": {"correctness": 0.6, "elegance": 0.5, "efficiency": 0.7, "maintainability": 0.5, "test_coverage": 0.4},
+                        "2": {"correctness": 0.7, "elegance": 0.7, "efficiency": 0.6, "maintainability": 0.6, "test_coverage": 0.5},
+                    }
                 }
-            })
+            )
 
         critic_model = MagicMock()
         critic_model.respond = mock_critic_respond
@@ -374,15 +378,16 @@ class TestA2AServerTaskLifecycle(unittest.TestCase):
         server = A2AServer()
 
         def my_handler(task):
-            return {"summary": "Task done!", "artifacts": [
-                {"name": "output", "content": {"data": 42}, "mime_type": "application/json"},
-            ]}
+            return {
+                "summary": "Task done!",
+                "artifacts": [
+                    {"name": "output", "content": {"data": 42}, "mime_type": "application/json"},
+                ],
+            }
 
         server.register_handler("code_generation", my_handler)
 
-        task = asyncio.run(
-            server.create_task("code_generation", "Generate hello world")
-        )
+        task = asyncio.run(server.create_task("code_generation", "Generate hello world"))
 
         self.assertEqual(task.state, TaskState.COMPLETED)
         self.assertTrue(len(task.messages) >= 2)  # user msg + agent msg
@@ -400,9 +405,7 @@ class TestA2AServerTaskLifecycle(unittest.TestCase):
 
         server = A2AServer()
 
-        task = asyncio.run(
-            server.create_task("nonexistent_capability", "Do something")
-        )
+        task = asyncio.run(server.create_task("nonexistent_capability", "Do something"))
 
         self.assertEqual(task.state, TaskState.FAILED)
         # Should contain error about unknown capability
@@ -444,6 +447,7 @@ class TestA2AServerFastAPIRoutes(unittest.TestCase):
             def decorator(fn):
                 registered_routes[f"{method} {path}"] = fn
                 return fn
+
             return decorator
 
         mock_app.get = lambda path: make_decorator("GET", path)
@@ -459,7 +463,8 @@ class TestA2AServerFastAPIRoutes(unittest.TestCase):
         ]
         for route in expected_routes:
             self.assertIn(
-                route, registered_routes,
+                route,
+                registered_routes,
                 f"Expected route '{route}' to be registered",
             )
 
@@ -578,10 +583,12 @@ class TestEventBusPubSubSSE(unittest.TestCase):
 
         bus = EventBus()
         for i in range(5):
-            bus.publish_sync(MCPEvent(
-                event_type=EventType.CUSTOM,
-                source=f"source_{i}",
-            ))
+            bus.publish_sync(
+                MCPEvent(
+                    event_type=EventType.CUSTOM,
+                    source=f"source_{i}",
+                )
+            )
 
         history = bus.get_history(event_type="custom", limit=3)
         self.assertEqual(len(history), 3)
@@ -624,22 +631,25 @@ class TestMemoryConsolidatorEndToEnd(unittest.TestCase):
                 created_at = now - 86400  # 1 day old
                 decay_rate = 0.005
 
-            memories.append(MemoryEntry(
-                id=f"mem_{i:03d}",
-                content=f"Memory content #{i}: some knowledge about topic {i % 10}",
-                memory_type=["goal_outcome", "decision", "pattern", "error", "insight"][i % 5],
-                confidence=confidence,
-                access_count=access_count,
-                created_at=created_at,
-                decay_rate=decay_rate,
-                tags=[f"tag_{i % 3}"],
-            ))
+            memories.append(
+                MemoryEntry(
+                    id=f"mem_{i:03d}",
+                    content=f"Memory content #{i}: some knowledge about topic {i % 10}",
+                    memory_type=["goal_outcome", "decision", "pattern", "error", "insight"][i % 5],
+                    confidence=confidence,
+                    access_count=access_count,
+                    created_at=created_at,
+                    decay_rate=decay_rate,
+                    tags=[f"tag_{i % 3}"],
+                )
+            )
 
         retained, result = consolidator.consolidate(memories)
 
         self.assertEqual(result.memories_before, 100)
         self.assertGreater(
-            result.compression_ratio, 0.5,
+            result.compression_ratio,
+            0.5,
             f"Expected > 50% compression, got {result.compression_ratio:.1%}",
         )
         self.assertLess(len(retained), 100)
@@ -653,12 +663,9 @@ class TestMemoryConsolidatorEndToEnd(unittest.TestCase):
         consolidator = MemoryConsolidator()
 
         memories = [
-            MemoryEntry(id="a", content="The quick brown fox", memory_type="insight",
-                        confidence=0.8, access_count=5),
-            MemoryEntry(id="b", content="The quick brown fox", memory_type="insight",
-                        confidence=0.6, access_count=3),
-            MemoryEntry(id="c", content="Something different", memory_type="decision",
-                        confidence=0.7, access_count=2),
+            MemoryEntry(id="a", content="The quick brown fox", memory_type="insight", confidence=0.8, access_count=5),
+            MemoryEntry(id="b", content="The quick brown fox", memory_type="insight", confidence=0.6, access_count=3),
+            MemoryEntry(id="c", content="Something different", memory_type="decision", confidence=0.7, access_count=2),
         ]
 
         retained, result = consolidator.consolidate(memories)
@@ -789,10 +796,8 @@ class TestOrchestratorRunPhaseWithHooks(unittest.TestCase):
 
         # Both hooks should have fired
         self.assertEqual(len(orch.hook_engine.history), 2)
-        pre_hooks = [h for h in orch.hook_engine.history
-                     if h.timing == HookTiming.PRE]
-        post_hooks = [h for h in orch.hook_engine.history
-                      if h.timing == HookTiming.POST]
+        pre_hooks = [h for h in orch.hook_engine.history if h.timing == HookTiming.PRE]
+        post_hooks = [h for h in orch.hook_engine.history if h.timing == HookTiming.POST]
         self.assertEqual(len(pre_hooks), 1)
         self.assertEqual(len(post_hooks), 1)
 

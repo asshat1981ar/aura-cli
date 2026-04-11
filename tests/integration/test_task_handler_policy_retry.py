@@ -63,9 +63,7 @@ def test_queue_loop_policy_block_retries_once_with_grounding_hint_and_no_overwri
     target = tmp_path / "core" / "existing.py"
     target.write_text("print('before')\n", encoding="utf-8")
 
-    with patch("core.task_handler.TaskManager", _FakeTaskManager), \
-         patch("core.task_handler.log_json") as mock_log, \
-         patch("core.file_tools.recover_old_code_from_git", return_value=None):
+    with patch("core.task_handler.TaskManager", _FakeTaskManager), patch("core.task_handler.log_json") as mock_log, patch("core.file_tools.recover_old_code_from_git", return_value=None):
         task_handler.run_goals_loop(
             args,
             queue,
@@ -94,8 +92,5 @@ def test_queue_loop_policy_block_retries_once_with_grounding_hint_and_no_overwri
     assert "old_code_not_found" not in events
     assert "goal_terminated_without_convergence" not in events
 
-    blocked_logs = [
-        c for c in mock_log.call_args_list
-        if len(c.args) >= 2 and c.args[1] == "old_code_mismatch_overwrite_blocked"
-    ]
+    blocked_logs = [c for c in mock_log.call_args_list if len(c.args) >= 2 and c.args[1] == "old_code_mismatch_overwrite_blocked"]
     assert blocked_logs[0].kwargs["details"]["policy"] == "explicit_overwrite_file_required"

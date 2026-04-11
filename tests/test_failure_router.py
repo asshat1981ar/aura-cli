@@ -1,4 +1,5 @@
 """Tests for FailureRouter (#317)."""
+
 import pytest
 from core.failure_router import FailureRouter, FailureAction
 
@@ -51,12 +52,12 @@ class TestFailureRouter:
     def test_legacy_route_returns_strings(self):
         """Legacy route() method returns string literals."""
         router = FailureRouter(max_act_retries=3)
-        
+
         result = router.route({"failures": ["error"], "logs": ""})
         assert result == "act"
-        
+
         result = router.route({"failures": ["circular"], "logs": ""})
         assert result == "plan"
-        
+
         result = router.route({"failures": ["network"], "logs": ""})
         assert result == "skip"

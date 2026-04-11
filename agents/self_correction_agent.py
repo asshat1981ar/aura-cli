@@ -2,11 +2,13 @@ import json
 import re
 from core.logging_utils import log_json
 
+
 class SelfCorrectionAgent:
     """
     Intercepts failed tool calls or invalid LLM responses, analyzes errors,
     and generates adjusted prompts to prevent repetitive failures.
     """
+
     def __init__(self, brain=None):
         self.brain = brain
         self.error_log = []
@@ -17,7 +19,7 @@ class SelfCorrectionAgent:
         Combines heuristic pattern matching with optional LLM reasoning.
         """
         log_json("INFO", "self_correction_analysis_start", details={"error": error_message, "phase": context.get("phase")})
-        
+
         # 1. Heuristic Analysis for common Python/System errors
         heuristics = [
             (r"IndentationError", "Fix the indentation in the generated code. Ensure consistency between tabs and spaces."),
@@ -28,7 +30,7 @@ class SelfCorrectionAgent:
             (r"syntax error(?:[:\s]+(.*))?", "There is a syntax error: {0}. Review the code structure and fix the invalid syntax."),
             (r"TypeError: '(\w+)' object is not subscriptable", "You are trying to access an index on '{0}', which is not a list or dict. Check the variable type."),
             (r"timeout|TimeoutError", "The task timed out. Try to break it down into smaller sub-tasks or increase the timeout limit."),
-            (r"quota|rate limit", "API rate limit exceeded. Consider switching model providers or reducing request frequency.")
+            (r"quota|rate limit", "API rate limit exceeded. Consider switching model providers or reducing request frequency."),
         ]
 
         for pattern, suggestion in heuristics:
@@ -41,7 +43,7 @@ class SelfCorrectionAgent:
                 return f"Self-Correction Suggestion: {suggestion}"
 
         # 2. LLM-based Analysis (if brain/model is available and heuristics fail)
-        if self.brain and hasattr(self.brain, 'ask'):
+        if self.brain and hasattr(self.brain, "ask"):
             try:
                 # This would be a lightweight call to diagnose complex tracebacks
                 prompt = f"Analyze this error message from an autonomous agent cycle and provide a concise one-sentence fix instruction.\nError: {error_message}\nContext: {json.dumps(context)}"

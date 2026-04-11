@@ -26,6 +26,7 @@ Usage::
     discovery.on_cycle_complete(cycle_entry)   # auto-trigger every N cycles
     report = discovery.run_scan()              # or trigger manually
 """
+
 from __future__ import annotations
 
 import ast
@@ -40,9 +41,9 @@ from core.logging_utils import log_json
 
 # Lines to scan for (pattern, goal_type, priority)
 _CODE_SIGNAL_PATTERNS: List[Tuple[str, str, str]] = [
-    (r"#\s*(TODO|FIXME|HACK|XXX)\s*:?\s*(.+)",  "todo_fixme",   "low"),
-    (r"#\s*type:\s*ignore",                       "type_ignore",  "medium"),
-    (r"#\s*noqa",                                  "noqa",         "low"),
+    (r"#\s*(TODO|FIXME|HACK|XXX)\s*:?\s*(.+)", "todo_fixme", "low"),
+    (r"#\s*type:\s*ignore", "type_ignore", "medium"),
+    (r"#\s*noqa", "noqa", "low"),
 ]
 
 # Directories that contain source (not tests, not vendor)
@@ -51,8 +52,12 @@ _TEST_DIR = "tests"
 
 # Skip files matching these patterns
 _SKIP_PATTERNS = [
-    "__pycache__", ".git", "node_modules", "*.pyc",
-    "test_", "_test.py",
+    "__pycache__",
+    ".git",
+    "node_modules",
+    "*.pyc",
+    "test_",
+    "_test.py",
 ]
 
 # Max goals emitted per scan to avoid flooding the queue
@@ -98,11 +103,11 @@ class AutonomousDiscovery:
     def _enqueue_findings(self, findings: Dict) -> int:
         """Enqueue up to 3 high-priority findings as goals."""
         suggestions = findings.get("suggestions", [])[:3]
-        if not suggestions or not hasattr(self, '_goal_queue') or self._goal_queue is None:
+        if not suggestions or not hasattr(self, "_goal_queue") or self._goal_queue is None:
             return 0
         new_goals = [s.get("suggested_goal", s.get("description", "")) for s in suggestions]
         new_goals = [g for g in new_goals if g]
-        if new_goals and hasattr(self._goal_queue, 'batch_add'):
+        if new_goals and hasattr(self._goal_queue, "batch_add"):
             self._goal_queue.batch_add(new_goals)
         elif new_goals:
             for g in new_goals:
@@ -112,8 +117,7 @@ class AutonomousDiscovery:
     # ── Internal ─────────────────────────────────────────────────────────────
 
     def _scan(self) -> Dict[str, Any]:
-        log_json("INFO", "autonomous_discovery_scan_start",
-                 details={"root": str(self.root)})
+        log_json("INFO", "autonomous_discovery_scan_start", details={"root": str(self.root)})
 
         findings: List[Dict] = []
         findings += self._scan_code_signals()
@@ -135,8 +139,7 @@ class AutonomousDiscovery:
             self._seen.add(item_hash)
             self.queue.add(f["goal"])
             new_goals.append(f["goal"])
-            log_json("INFO", "autonomous_discovery_goal_queued",
-                     details={"goal": f["goal"][:80], "signal": f["signal"]})
+            log_json("INFO", "autonomous_discovery_goal_queued", details={"goal": f["goal"][:80], "signal": f["signal"]})
 
         self._save_seen()
         report = {
@@ -146,8 +149,7 @@ class AutonomousDiscovery:
             "goals": new_goals,
         }
         self.memory.put("discovery_reports", report)
-        log_json("INFO", "autonomous_discovery_scan_complete",
-                 details={"new_goals": len(new_goals), "seen_total": len(self._seen)})
+        log_json("INFO", "autonomous_discovery_scan_complete", details={"new_goals": len(new_goals), "seen_total": len(self._seen)})
         return report
 
     def _scan_code_signals(self) -> List[Dict]:
@@ -185,14 +187,16 @@ class AutonomousDiscovery:
                 else:
                     goal = f"Fix {signal} annotation in {rel}:{lineno}"
                 item_hash = hashlib.sha256(f"{rel}:{lineno}:{signal}".encode()).hexdigest()[:16]
-                findings.append({
-                    "signal": signal,
-                    "priority": priority,
-                    "goal": goal,
-                    "hash": item_hash,
-                    "file": rel,
-                    "line": lineno,
-                })
+                findings.append(
+                    {
+                        "signal": signal,
+                        "priority": priority,
+                        "goal": goal,
+                        "hash": item_hash,
+                        "file": rel,
+                        "line": lineno,
+                    }
+                )
 
     def _scan_missing_tests(self) -> List[Dict]:
         """Find source modules without a corresponding test file."""
@@ -201,10 +205,7 @@ class AutonomousDiscovery:
         if not test_dir.is_dir():
             return findings
 
-        existing_tests = {
-            f.stem.removeprefix("test_")
-            for f in test_dir.glob("test_*.py")
-        }
+        existing_tests = {f.stem.removeprefix("test_") for f in test_dir.glob("test_*.py")}
 
         for src_dir in _SOURCE_DIRS:
             dir_path = self.root / src_dir
@@ -222,14 +223,16 @@ class AutonomousDiscovery:
                 rel = str(py_file.relative_to(self.root))
                 goal = f"Add unit tests for {rel} (no test file found in {_TEST_DIR}/)"
                 item_hash = hashlib.sha256(f"missing_test:{rel}".encode()).hexdigest()[:16]
-                findings.append({
-                    "signal": "missing_tests",
-                    "priority": "low",
-                    "goal": goal,
-                    "hash": item_hash,
-                    "file": rel,
-                    "line": 0,
-                })
+                findings.append(
+                    {
+                        "signal": "missing_tests",
+                        "priority": "low",
+                        "goal": goal,
+                        "hash": item_hash,
+                        "file": rel,
+                        "line": 0,
+                    }
+                )
         return findings
 
     def _scan_structural_debt(self) -> List[Dict]:
@@ -237,44 +240,34 @@ class AutonomousDiscovery:
         findings = []
         try:
             from agents.skills.structural_analyzer import StructuralAnalyzerSkill
-            # We don't have easy access to the ContextGraph from here currently, 
+
+            # We don't have easy access to the ContextGraph from here currently,
             # unless we instantiate it. Luckily StructuralAnalyzerSkill handles default.
             analyzer = StructuralAnalyzerSkill()
             result = analyzer.run({"project_root": str(self.root)})
-            
+
             # 1. Cycles
             for cycle in result.get("circular_dependencies", []):
                 goal = f"Fix circular dependency cycle: {' -> '.join(cycle)}"
                 item_hash = hashlib.sha256(f"cycle:{''.join(sorted(cycle))}".encode()).hexdigest()[:16]
-                findings.append({
-                    "signal": "architectural_cycle",
-                    "priority": "high",
-                    "goal": goal,
-                    "hash": item_hash
-                })
-            
+                findings.append({"signal": "architectural_cycle", "priority": "high", "goal": goal, "hash": item_hash})
+
             # 2. Hotspots
             for hs in result.get("hotspots", []):
                 goal = f"Refactor hotspot {hs['file']} (Centrality: {hs['centrality']:.2f}, Complexity: {hs['max_complexity']})"
                 item_hash = hashlib.sha256(f"hotspot:{hs['file']}".encode()).hexdigest()[:16]
-                findings.append({
-                    "signal": "structural_hotspot",
-                    "priority": "high" if hs["risk_level"] == "CRITICAL" else "medium",
-                    "goal": goal,
-                    "hash": item_hash
-                })
-                
+                findings.append({"signal": "structural_hotspot", "priority": "high" if hs["risk_level"] == "CRITICAL" else "medium", "goal": goal, "hash": item_hash})
+
         except Exception as e:
             log_json("WARN", "structural_debt_scan_failed", details={"error": str(e)})
-            
+
         return findings
 
     def _has_definitions(self, path: Path) -> bool:
         """Return True if file contains at least one function or class definition."""
         try:
             tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
-            return any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
-                       for n in ast.walk(tree))
+            return any(isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) for n in ast.walk(tree))
         except (SyntaxError, UnicodeDecodeError):
             return False
 
@@ -294,9 +287,6 @@ class AutonomousDiscovery:
     def _save_seen(self) -> None:
         try:
             self._seen_path.parent.mkdir(parents=True, exist_ok=True)
-            self._seen_path.write_text(
-                json.dumps(sorted(self._seen), indent=2), encoding="utf-8"
-            )
+            self._seen_path.write_text(json.dumps(sorted(self._seen), indent=2), encoding="utf-8")
         except Exception as exc:
-            log_json("WARN", "autonomous_discovery_save_failed",
-                     details={"error": str(exc)})
+            log_json("WARN", "autonomous_discovery_save_failed", details={"error": str(exc)})

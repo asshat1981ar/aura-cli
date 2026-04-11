@@ -1,5 +1,6 @@
 # tests/test_agent_sdk_tool_registry.py
 """Tests for Agent SDK custom MCP tool registry."""
+
 import unittest
 from unittest.mock import MagicMock, AsyncMock, patch
 from pathlib import Path
@@ -99,18 +100,21 @@ class TestDispatchSkillsTool(unittest.TestCase):
 class TestQueryCodebaseTool(unittest.TestCase):
     def test_query_codebase_in_tool_list(self):
         from core.agent_sdk.tool_registry import create_aura_tools
+
         tools = create_aura_tools(project_root=Path("/tmp/test"))
         names = [t.name for t in tools]
         self.assertIn("query_codebase", names)
 
     def test_query_codebase_without_querier(self):
         from core.agent_sdk.tool_registry import _handle_query_codebase
+
         result = _handle_query_codebase({"query_type": "what_calls", "target": "foo"})
         self.assertIn("error", result)
         self.assertIn("not available", result["error"])
 
     def test_query_codebase_dispatches(self):
         from core.agent_sdk.tool_registry import _handle_query_codebase
+
         mock_querier = MagicMock()
         mock_querier.what_calls.return_value = [{"caller": "bar"}]
         result = _handle_query_codebase(
@@ -121,6 +125,7 @@ class TestQueryCodebaseTool(unittest.TestCase):
 
     def test_query_codebase_unknown_type(self):
         from core.agent_sdk.tool_registry import _handle_query_codebase
+
         mock_querier = MagicMock()
         result = _handle_query_codebase(
             {"query_type": "nonexistent"},

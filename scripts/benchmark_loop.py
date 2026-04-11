@@ -4,6 +4,7 @@ Run synthetic goals through the AURA loop and emit JSON results.
 Usage:
   python scripts/benchmark_loop.py --goals "add docstring" "refactor utils" --cycles 3 --json out.json
 """
+
 from __future__ import annotations
 
 import argparse

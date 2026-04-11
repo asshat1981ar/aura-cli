@@ -12,6 +12,7 @@ from tests.cli_entrypoint_test_utils import REPO_ROOT, run_main_subprocess as _r
 
 SCRIPT_PATH = REPO_ROOT / "scripts" / "print_cli_contract_report.py"
 
+
 def load_script_module():
     spec = importlib.util.spec_from_file_location("print_cli_contract_report", SCRIPT_PATH)
     if spec is None or spec.loader is None:
@@ -19,6 +20,7 @@ def load_script_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
 
 def compact_json_text(raw_json: str) -> str:
     return json.dumps(json.loads(raw_json), sort_keys=True, separators=(",", ":")) + "\n"
@@ -36,21 +38,23 @@ def strip_aura_logs(text: str) -> str:
     clean_lines = []
     for line in lines:
         stripped = line.strip()
-        if stripped.startswith('{"ts":') and stripped.endswith('}'):
+        if stripped.startswith('{"ts":') and stripped.endswith("}"):
             try:
                 json.loads(stripped)
-                continue # Skip this log line
+                continue  # Skip this log line
             except json.JSONDecodeError:
                 pass
         clean_lines.append(line)
-    
+
     result = "\n".join(clean_lines)
     if text.endswith("\n") and clean_lines:
         result += "\n"
     return result
 
+
 def run_dispatch_with_report(report: dict, *argv: str):
     import aura_cli.cli_main as cli_main
+
     parsed = parse_cli_args(list(argv))
     out = io.StringIO()
     err = io.StringIO()
@@ -59,6 +63,7 @@ def run_dispatch_with_report(report: dict, *argv: str):
             code = cli_main.dispatch_command(parsed, project_root=REPO_ROOT, runtime_factory=None)
     return code, strip_aura_logs(out.getvalue()), strip_aura_logs(err.getvalue())
 
+
 def run_script_main(*argv: str):
     mod = load_script_module()
     out = io.StringIO()
@@ -66,6 +71,7 @@ def run_script_main(*argv: str):
     with redirect_stdout(out), redirect_stderr(err):
         code = mod.main(list(argv))
     return code, strip_aura_logs(out.getvalue()), strip_aura_logs(err.getvalue())
+
 
 def run_script_main_with_report(report: dict, *argv: str):
     mod = load_script_module()
@@ -76,22 +82,27 @@ def run_script_main_with_report(report: dict, *argv: str):
             code = mod.main(list(argv))
     return code, strip_aura_logs(out.getvalue()), strip_aura_logs(err.getvalue())
 
+
 def run_main_main(*argv: str):
     from aura_cli.cli_main import main as main_func
+
     out = io.StringIO()
     err = io.StringIO()
     with redirect_stdout(out), redirect_stderr(err):
         code = main_func(argv=list(argv))
     return code, strip_aura_logs(out.getvalue()), strip_aura_logs(err.getvalue())
 
+
 def run_main_main_with_report(report: dict, *argv: str):
     from aura_cli.cli_main import main as main_func
+
     out = io.StringIO()
     err = io.StringIO()
     with patch("aura_cli.contract_report.build_cli_contract_report", return_value=report):
         with redirect_stdout(out), redirect_stderr(err):
             code = main_func(argv=list(argv))
     return code, strip_aura_logs(out.getvalue()), strip_aura_logs(err.getvalue())
+
 
 def run_script_subprocess(*argv: str):
     env = os.environ.copy()
@@ -108,11 +119,13 @@ def run_script_subprocess(*argv: str):
     proc.stderr = strip_aura_logs(proc.stderr)
     return proc
 
+
 def run_main_subprocess(*argv: str):
     proc = _run_main_subprocess(*argv)
     proc.stdout = strip_aura_logs(proc.stdout)
     proc.stderr = strip_aura_logs(proc.stderr)
     return proc
+
 
 def run_patched_main_subprocess(report: dict, *argv: str):
     env = os.environ.copy()

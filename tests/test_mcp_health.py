@@ -1,4 +1,5 @@
 """Unit tests for core/mcp_health.py — check_mcp_health, get_health_summary."""
+
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -49,8 +50,7 @@ class TestCheckMcpHealth:
         mock_client = MagicMock()
         mock_client.get_health = AsyncMock(return_value={"status": "ok"})
 
-        with patch("core.mcp_health.config") as mock_config, \
-             patch("core.mcp_health.MCPAsyncClient", return_value=mock_client):
+        with patch("core.mcp_health.config") as mock_config, patch("core.mcp_health.MCPAsyncClient", return_value=mock_client):
             mock_config.get_mcp_server_port.return_value = 8001
             result = asyncio.run(check_mcp_health("github"))
 
@@ -60,9 +60,7 @@ class TestCheckMcpHealth:
         assert "health_data" in result
 
     def test_returns_unhealthy_dict_on_exception(self):
-        with patch("core.mcp_health.config") as mock_config, \
-             patch("core.mcp_health.MCPAsyncClient", side_effect=ConnectionError("refused")), \
-             patch("core.mcp_health.log_json"):
+        with patch("core.mcp_health.config") as mock_config, patch("core.mcp_health.MCPAsyncClient", side_effect=ConnectionError("refused")), patch("core.mcp_health.log_json"):
             mock_config.get_mcp_server_port.return_value = 8002
             result = asyncio.run(check_mcp_health("slack"))
 
@@ -71,9 +69,7 @@ class TestCheckMcpHealth:
         assert "error" in result
 
     def test_unhealthy_result_contains_error_string(self):
-        with patch("core.mcp_health.config") as mock_config, \
-             patch("core.mcp_health.MCPAsyncClient", side_effect=TimeoutError("timed out")), \
-             patch("core.mcp_health.log_json"):
+        with patch("core.mcp_health.config") as mock_config, patch("core.mcp_health.MCPAsyncClient", side_effect=TimeoutError("timed out")), patch("core.mcp_health.log_json"):
             mock_config.get_mcp_server_port.return_value = 8003
             result = asyncio.run(check_mcp_health("sentry"))
 

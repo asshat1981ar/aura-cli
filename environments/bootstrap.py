@@ -5,6 +5,7 @@ Follows patterns from:
   - scripts/write_copilot_mcp_config.py (Claude/Copilot)
   - scripts/mcp_server_setup.sh (general MCP setup)
 """
+
 from __future__ import annotations
 
 import json
@@ -57,9 +58,7 @@ def bootstrap_gemini(
         "mcpServers": {
             f"aura-{name}": {
                 "url": _mcp_server_url(host, port),
-                "headers": {
-                    "Authorization": "${MCP_API_TOKEN}"
-                },
+                "headers": {"Authorization": "${MCP_API_TOKEN}"},
             }
             for name, port in ports.items()
         }
@@ -97,17 +96,14 @@ def bootstrap_claude(
         mcp_config["mcpServers"][f"aura-{name}"] = {
             "type": "http",
             "url": _mcp_server_url(host, port),
-            "headers": {
-                "Authorization": "Bearer ${MCP_API_TOKEN}"
-            },
+            "headers": {"Authorization": "Bearer ${MCP_API_TOKEN}"},
         }
 
     # Add standard stdio servers
     stdio_servers = {
         "filesystem": {
             "command": "npx",
-            "args": ["-y", "@modelcontextprotocol/server-filesystem",
-                     str(project_root) if project_root else "."],
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", str(project_root) if project_root else "."],
         },
         "git": {
             "command": "npx",

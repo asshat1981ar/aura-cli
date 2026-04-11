@@ -1,0 +1,260 @@
+{
+  "name": "Fleet Dispatcher - WF-8 SADDWorkstreamMonitor",
+  "nodes": [
+    {
+      "id": "wf8-webhook-001",
+      "name": "SADD Workstream Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        250,
+        300
+      ],
+      "parameters": {
+        "path": "sadd-workstream",
+        "httpMethod": "POST",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "webhookId": "sadd-workstream"
+    },
+    {
+      "id": "wf8-switch-001",
+      "name": "Route Event Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        500,
+        300
+      ],
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{ $json.body.event_type }}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "workstream.executing",
+              "output": 0
+            },
+            {
+              "value2": "workstream.cycle_checkpoint",
+              "output": 1
+            },
+            {
+              "value2": "workstream.completed",
+              "output": 2
+            }
+          ]
+        },
+        "fallbackOutput": -1
+      }
+    },
+    {
+      "id": "wf8-set-executing-001",
+      "name": "Log Workstream Executing",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        750,
+        150
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "wf8-assign-exec-sid",
+              "name": "session_id",
+              "value": "={{ $json.body.session_id }}",
+              "type": "string"
+            },
+            {
+              "id": "wf8-assign-exec-wsid",
+              "name": "ws_id",
+              "value": "={{ $json.body.payload.ws_id }}",
+              "type": "string"
+            },
+            {
+              "id": "wf8-assign-exec-title",
+              "name": "title",
+              "value": "={{ $json.body.payload.title }}",
+              "type": "string"
+            },
+            {
+              "id": "wf8-assign-exec-event",
+              "name": "event",
+              "value": "workstream.executing",
+              "type": "string"
+            },
+            {
+              "id": "wf8-assign-exec-ts",
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "include": "none",
+        "options": {}
+      }
+    },
+    {
+      "id": "wf8-set-checkpoint-001",
+      "name": "Capture Cycle Checkpoint",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        750,
+        300
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "wf8-assign-cp-sid",
+              "name": "session_id",
+              "value": "={{ $json.body.session_id }}",
+              "type": "string"
+            },
+            {
+              "id": "wf8-assign-cp-wsid",
+              "name": "ws_id",
+              "value": "={{ $json.body.payload.ws_id }}",
+              "type": "string"
+            },
+            {
+              "id": "wf8-assign-cp-cycle",
+              "name": "cycle_id",
+              "value": "={{ $json.body.payload.cycle_id }}",
+              "type": "number"
+            },
+            {
+              "id": "wf8-assign-cp-verify",
+              "name": "verification_status",
+              "value": "={{ $json.body.payload.verification_status }}",
+              "type": "string"
+            },
+            {
+              "id": "wf8-assign-cp-files",
+              "name": "changed_files",
+              "value": "={{ JSON.stringify($json.body.payload.changed_files) }}",
+              "type": "string"
+            },
+            {
+              "id": "wf8-assign-cp-ts",
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "include": "none",
+        "options": {}
+      }
+    },
+    {
+      "id": "wf8-set-completed-001",
+      "name": "Workstream Final Metrics",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        750,
+        450
+      ],
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "wf8-assign-done-sid",
+              "name": "session_id",
+              "value": "={{ $json.body.session_id }}",
+              "type": "string"
+            },
+            {
+              "id": "wf8-assign-done-wsid",
+              "name": "ws_id",
+              "value": "={{ $json.body.payload.ws_id }}",
+              "type": "string"
+            },
+            {
+              "id": "wf8-assign-done-cycles",
+              "name": "cycles_used",
+              "value": "={{ $json.body.payload.cycles_used }}",
+              "type": "number"
+            },
+            {
+              "id": "wf8-assign-done-elapsed",
+              "name": "elapsed_s",
+              "value": "={{ $json.body.payload.elapsed_s }}",
+              "type": "number"
+            },
+            {
+              "id": "wf8-assign-done-artifacts",
+              "name": "artifacts",
+              "value": "={{ JSON.stringify($json.body.payload.artifacts || $json.body.payload.changed_files || []) }}",
+              "type": "string"
+            },
+            {
+              "id": "wf8-assign-done-event",
+              "name": "event",
+              "value": "workstream.completed",
+              "type": "string"
+            },
+            {
+              "id": "wf8-assign-done-ts",
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "include": "none",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "SADD Workstream Webhook": {
+      "main": [
+        [
+          {
+            "node": "Route Event Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Event Type": {
+      "main": [
+        [
+          {
+            "node": "Log Workstream Executing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Capture Cycle Checkpoint",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Workstream Final Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "instanceId": "fleet-dispatcher"
+  },
+  "id": "b8c2d4e6-1f3a-5c7b-9d0e-2a4b6c8d0f1a"
+}

@@ -21,6 +21,7 @@ Start:
 Auth (optional):
   Set HUB_TOKEN env var
 """
+
 from __future__ import annotations
 
 import os
@@ -124,6 +125,7 @@ def _register_default_servers() -> None:
 # Auth
 # ---------------------------------------------------------------------------
 
+
 def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
     if not _TOKEN:
         return
@@ -138,6 +140,7 @@ def _track(endpoint: str) -> None:
 # ---------------------------------------------------------------------------
 # Request/Response models
 # ---------------------------------------------------------------------------
+
 
 class AgentRegistration(BaseModel):
     name: str
@@ -165,6 +168,7 @@ class BroadcastMessage(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @app.get("/health")
 async def health(_: None = Depends(_check_auth)):
     _track("health")
@@ -180,6 +184,7 @@ async def health(_: None = Depends(_check_auth)):
 
 
 # -- Server management --
+
 
 @app.get("/servers")
 async def list_servers(_: None = Depends(_check_auth)):
@@ -234,6 +239,7 @@ async def server_health(name: str, _: None = Depends(_check_auth)):
 
 # -- Agent management --
 
+
 @app.get("/agents")
 async def list_agents(_: None = Depends(_check_auth)):
     _track("agents_list")
@@ -268,6 +274,7 @@ async def agent_heartbeat(name: str, _: None = Depends(_check_auth)):
 
 # -- Task dispatch --
 
+
 @app.post("/dispatch")
 async def dispatch_task(task: TaskDispatch, _: None = Depends(_check_auth)):
     _track("dispatch")
@@ -284,11 +291,15 @@ async def dispatch_task(task: TaskDispatch, _: None = Depends(_check_auth)):
 
     # Publish dispatch event
     bus = _get_bus()
-    bus.publish(TOPIC_AGENT_REQUEST, {
-        "agent": agent_name,
-        "goal": task.goal or task.task,
-        "environment": task.environment,
-    }, sender="hub")
+    bus.publish(
+        TOPIC_AGENT_REQUEST,
+        {
+            "agent": agent_name,
+            "goal": task.goal or task.task,
+            "environment": task.environment,
+        },
+        sender="hub",
+    )
 
     registry = _get_registry()
     agent = registry.get_agent(agent_name)
@@ -304,6 +315,7 @@ async def dispatch_task(task: TaskDispatch, _: None = Depends(_check_auth)):
 
 # -- Broadcast --
 
+
 @app.post("/broadcast")
 async def broadcast(msg: BroadcastMessage, _: None = Depends(_check_auth)):
     _track("broadcast")
@@ -313,6 +325,7 @@ async def broadcast(msg: BroadcastMessage, _: None = Depends(_check_auth)):
 
 
 # -- Messages --
+
 
 @app.get("/messages")
 async def get_messages(
@@ -327,11 +340,13 @@ async def get_messages(
 
 # -- Environments --
 
+
 @app.get("/environments")
 async def list_environments(_: None = Depends(_check_auth)):
     _track("environments")
     try:
         from environments.manager import EnvironmentManager
+
         mgr = EnvironmentManager(project_root=_ROOT)
         envs = mgr.list_environments()
         return {"environments": [e.as_dict() for e in envs]}
@@ -341,6 +356,7 @@ async def list_environments(_: None = Depends(_check_auth)):
 
 
 # -- Metrics --
+
 
 @app.get("/metrics")
 async def get_metrics(_: None = Depends(_check_auth)):
@@ -368,5 +384,6 @@ async def get_metrics(_: None = Depends(_check_auth)):
 
 if __name__ == "__main__":
     import uvicorn
+
     port = int(os.getenv("HUB_PORT", "8010"))
     uvicorn.run("orchestrator_hub.hub:app", host="0.0.0.0", port=port, reload=False)

@@ -1,4 +1,5 @@
 """Skill #23 — MultiFileEditorSkill: dependency-ordered change planning across files."""
+
 from __future__ import annotations
 
 import re
@@ -8,12 +9,57 @@ from typing import Any, Dict, List, Set
 from agents.skills.base import SkillBase
 
 _STOPWORDS: Set[str] = {
-    "a", "an", "the", "in", "on", "at", "to", "for", "of", "and", "or",
-    "is", "it", "all", "with", "from", "this", "that", "be", "by", "as",
-    "are", "was", "were", "has", "have", "had", "do", "does", "did",
+    "a",
+    "an",
+    "the",
+    "in",
+    "on",
+    "at",
+    "to",
+    "for",
+    "of",
+    "and",
+    "or",
+    "is",
+    "it",
+    "all",
+    "with",
+    "from",
+    "this",
+    "that",
+    "be",
+    "by",
+    "as",
+    "are",
+    "was",
+    "were",
+    "has",
+    "have",
+    "had",
+    "do",
+    "does",
+    "did",
 }
 
-_SKIP_DIRS: Set[str] = {"__pycache__", ".git", "node_modules", "venv", ".venv", ".tox"}
+_SKIP_DIRS: Set[str] = {
+    "__pycache__",
+    ".git",
+    "node_modules",
+    "venv",
+    ".venv",
+    ".tox",
+    "env",
+    ".env",
+    "test-aura-env",
+    "site-packages",
+    "dist",
+    "build",
+    "aura_cli.egg-info",
+    "tmp_out",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
+}
 
 
 def _keywords(goal: str) -> List[str]:
@@ -126,15 +172,16 @@ class MultiFileEditorSkill(SkillBase):
             priority = _assign_priority(rel, score, max_score)
             is_define = rel in symbol_priority_files or any(kw in Path(rel).name.lower() for kw in keywords)
             action = "rename definition" if is_define else "update references"
-            change_plan.append({
-                "file": rel,
-                "reason": _reason(rel, score, symbol_priority_files, symbol_caller_files, keywords),
-                "priority": priority,
-                "suggested_action": action,
-            })
+            change_plan.append(
+                {
+                    "file": rel,
+                    "reason": _reason(rel, score, symbol_priority_files, symbol_caller_files, keywords),
+                    "priority": priority,
+                    "suggested_action": action,
+                }
+            )
 
-        change_plan.sort(key=lambda x: (x["priority"], -scored[[r for _, r, _ in scored].index(x["file"])][0]
-                                        if x["file"] in [r for _, r, _ in scored] else 0))
+        change_plan.sort(key=lambda x: (x["priority"], -scored[[r for _, r, _ in scored].index(x["file"])][0] if x["file"] in [r for _, r, _ in scored] else 0))
 
         return {
             "change_plan": change_plan,

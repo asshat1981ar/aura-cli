@@ -4,13 +4,24 @@
     "llm_timeout": 120,
     "primary_provider": "openrouter",
     "model_routing": {
-        "code_generation": "anthropic/claude-3.5-sonnet",
-        "planning": "deepseek/deepseek-chat",
+        "code_generation": [
+            "anthropic/claude-sonnet-4",
+            "openai/codex-mini-latest",
+            "google/gemini-2.5-pro",
+            "deepseek/deepseek-coder-v3",
+            "qwen/qwen3-coder"
+        ],
+        "planning": "openai/gpt-4o",
         "analysis": "google/gemini-2.5-flash",
-        "critique": "deepseek/deepseek-r1-0528",
+        "critique": [
+            "deepseek/deepseek-r1-0528",
+            "openai/o3-mini",
+            "anthropic/claude-sonnet-4",
+            "google/gemini-2.5-pro"
+        ],
         "embedding": "openai/text-embedding-3-small",
         "fast": "google/gemini-2.0-flash-001",
-        "quality": "deepseek/deepseek-r1-0528",
+        "quality": "openai/o3",
         "ingest": "google/gemini-2.0-flash-001",
         "reflection": "deepseek/deepseek-chat",
         "synthesis": "qwen/qwen3-235b-a22b",
@@ -18,17 +29,17 @@
         "fallback": "meta-llama/llama-3.3-70b-instruct:free"
     },
     "model_routing_notes": {
-        "code_generation": "Claude 3.5 Sonnet — best code quality, 200K ctx, $3.00/M",
-        "planning": "DeepSeek V3.1 — strong reasoning for plan decomposition, $0.15/M",
-        "analysis": "Gemini 2.5 Flash — 1M ctx for large codebase analysis, $0.30/M",
-        "critique": "DeepSeek R1 — deep reasoning for adversarial review, $0.45/M",
-        "fast": "Gemini 2.0 Flash — cheapest capable model for bulk work, $0.10/M",
-        "quality": "DeepSeek R1 — best reasoning-per-dollar for critical decisions",
-        "ingest": "Gemini 2.0 Flash — fast context gathering",
-        "reflection": "DeepSeek Chat — good at summarization and learning extraction",
-        "synthesis": "Qwen3 235B — large model for merging plan+critique, $0.45/M",
-        "verification": "Gemini 2.0 Flash — fast for running test/lint analysis",
-        "fallback": "Llama 3.3 70B — free fallback when rate-limited"
+        "code_generation": "Claude 3.5 Sonnet \u2014 best code quality, 200K ctx, $3.00/M",
+        "planning": "DeepSeek V3.1 \u2014 strong reasoning for plan decomposition, $0.15/M",
+        "analysis": "Gemini 2.5 Flash \u2014 1M ctx for large codebase analysis, $0.30/M",
+        "critique": "DeepSeek R1 \u2014 deep reasoning for adversarial review, $0.45/M",
+        "fast": "Gemini 2.0 Flash \u2014 cheapest capable model for bulk work, $0.10/M",
+        "quality": "DeepSeek R1 \u2014 best reasoning-per-dollar for critical decisions",
+        "ingest": "Gemini 2.0 Flash \u2014 fast context gathering",
+        "reflection": "DeepSeek Chat \u2014 good at summarization and learning extraction",
+        "synthesis": "Qwen3 235B \u2014 large model for merging plan+critique, $0.45/M",
+        "verification": "Gemini 2.0 Flash \u2014 fast for running test/lint analysis",
+        "fallback": "Llama 3.3 70B \u2014 free fallback when rate-limited"
     },
     "autonomous_evolution": {
         "enabled": true,
@@ -66,5 +77,6 @@
     },
     "beads": {
         "enabled": false
-    }
+    },
+    "max_iterations": "42"
 }

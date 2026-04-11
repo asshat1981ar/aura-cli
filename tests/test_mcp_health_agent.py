@@ -1,4 +1,5 @@
 """Unit tests for agents/mcp_health_agent.py."""
+
 from __future__ import annotations
 
 import unittest
@@ -24,6 +25,7 @@ class TestUpdateRegistryHealth(unittest.TestCase):
     def test_healthy_server_marks_agent_healthy(self, mock_registry):
         from agents.mcp_health_agent import _update_registry_health
         import agents.mcp_health_agent as mod
+
         spec = self._make_spec("my-agent", "mcp", "server-a")
         mock_registry.list_agents.return_value = [spec]
 
@@ -40,6 +42,7 @@ class TestUpdateRegistryHealth(unittest.TestCase):
     @patch("agents.mcp_health_agent.agent_registry", create=True)
     def test_unhealthy_server_marks_agent_unhealthy(self, mock_registry):
         from agents.mcp_health_agent import _update_registry_health
+
         spec = self._make_spec("my-agent", "mcp", "server-b")
         mock_registry.list_agents.return_value = [spec]
 
@@ -51,6 +54,7 @@ class TestUpdateRegistryHealth(unittest.TestCase):
     @patch("agents.mcp_health_agent.agent_registry", create=True)
     def test_non_mcp_agent_skipped(self, mock_registry):
         from agents.mcp_health_agent import _update_registry_health
+
         spec = self._make_spec("local-agent", "local", "server-a")
         mock_registry.list_agents.return_value = [spec]
 
@@ -66,15 +70,18 @@ class TestMCPHealthAgent(unittest.TestCase):
 
     def _make_agent(self):
         from agents.mcp_health_agent import MCPHealthAgent
+
         return MCPHealthAgent()
 
     def test_agent_metadata(self):
         from agents.mcp_health_agent import MCPHealthAgent
+
         self.assertEqual(MCPHealthAgent.name, "mcp_health")
         self.assertIn("health", MCPHealthAgent.description.lower())
 
     def test_run_returns_success_on_good_check(self):
         import sys
+
         expected = {"status": "success", "results": [], "summary": {"healthy": 2}}
         mock_anyio = MagicMock()
         mock_anyio.run.return_value = expected
@@ -85,6 +92,7 @@ class TestMCPHealthAgent(unittest.TestCase):
             # Re-import to pick up patched modules
             import importlib
             import agents.mcp_health_agent as mod
+
             importlib.reload(mod)
             agent = mod.MCPHealthAgent()
             result = agent.run({})
@@ -93,6 +101,7 @@ class TestMCPHealthAgent(unittest.TestCase):
 
     def test_run_returns_error_dict_on_exception(self):
         import sys
+
         mock_anyio = MagicMock()
         mock_anyio.run.side_effect = Exception("connection refused")
         mock_asyncio = MagicMock()
@@ -101,6 +110,7 @@ class TestMCPHealthAgent(unittest.TestCase):
         with patch.dict(sys.modules, {"anyio": mock_anyio, "asyncio": mock_asyncio}):
             import importlib
             import agents.mcp_health_agent as mod
+
             importlib.reload(mod)
             agent = mod.MCPHealthAgent()
             result = agent.run({})

@@ -1,4 +1,5 @@
 """Unit tests for core/aura_manager.py — AuraManager, orchestration_manager, safe_execute."""
+
 from unittest.mock import MagicMock
 
 from core.aura_manager import AuraManager, orchestration_manager, safe_execute

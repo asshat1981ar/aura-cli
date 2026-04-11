@@ -4,6 +4,7 @@
 Each subagent is specialized for a class of work and gets a focused
 tool set and system prompt.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -44,11 +45,7 @@ def get_subagent_definitions() -> Dict[str, SubagentDef]:
     """Return all available subagent definitions."""
     return {
         "planning-agent": SubagentDef(
-            description=(
-                "Senior Software Architect agent for deep planning. "
-                "Analyzes codebases, identifies risks, decomposes complex goals "
-                "into ordered implementation steps with dependency tracking."
-            ),
+            description=("Senior Software Architect agent for deep planning. Analyzes codebases, identifies risks, decomposes complex goals into ordered implementation steps with dependency tracking."),
             prompt=(
                 "You are a Senior Software Architect planning an implementation. "
                 "Read the codebase to understand the current architecture. "
@@ -59,11 +56,7 @@ def get_subagent_definitions() -> Dict[str, SubagentDef]:
             tools=["Read", "Glob", "Grep", "Bash"],
         ),
         "implementation-agent": SubagentDef(
-            description=(
-                "Expert developer agent for code generation. "
-                "Writes clean, tested code following project conventions. "
-                "Handles file creation, editing, and sandbox verification."
-            ),
+            description=("Expert developer agent for code generation. Writes clean, tested code following project conventions. Handles file creation, editing, and sandbox verification."),
             prompt=(
                 "You are an Expert Python Developer implementing a specific task. "
                 "Read existing code to match conventions. Write clean code with "
@@ -74,31 +67,13 @@ def get_subagent_definitions() -> Dict[str, SubagentDef]:
             tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep"],
         ),
         "verification-agent": SubagentDef(
-            description=(
-                "Quality assurance agent for comprehensive verification. "
-                "Runs tests, linters, type checks, and security scans. "
-                "Reports findings with severity and fix suggestions."
-            ),
-            prompt=(
-                "You are a Principal QA Engineer verifying code changes. "
-                "Run the full test suite. Check for lint violations, type errors, "
-                "and security issues. Report every finding with severity level "
-                "and a specific fix suggestion. Be thorough — miss nothing."
-            ),
+            description=("Quality assurance agent for comprehensive verification. Runs tests, linters, type checks, and security scans. Reports findings with severity and fix suggestions."),
+            prompt=("You are a Principal QA Engineer verifying code changes. Run the full test suite. Check for lint violations, type errors, and security issues. Report every finding with severity level and a specific fix suggestion. Be thorough — miss nothing."),
             tools=["Read", "Bash", "Glob", "Grep"],
         ),
         "research-agent": SubagentDef(
-            description=(
-                "Codebase research agent for exploration and context gathering. "
-                "Explores architecture, traces call chains, identifies patterns, "
-                "and summarizes findings for other agents."
-            ),
-            prompt=(
-                "You are a codebase researcher gathering context for a development task. "
-                "Explore the relevant parts of the codebase. Trace call chains, "
-                "identify patterns, find related code, and summarize your findings "
-                "concisely. Focus on what's relevant to the task at hand."
-            ),
+            description=("Codebase research agent for exploration and context gathering. Explores architecture, traces call chains, identifies patterns, and summarizes findings for other agents."),
+            prompt=("You are a codebase researcher gathering context for a development task. Explore the relevant parts of the codebase. Trace call chains, identify patterns, find related code, and summarize your findings concisely. Focus on what's relevant to the task at hand."),
             tools=["Read", "Glob", "Grep", "Bash"],
         ),
     }

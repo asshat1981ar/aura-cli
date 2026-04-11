@@ -1,4 +1,5 @@
 """Tests for tools/aura_control_mcp.py."""
+
 from __future__ import annotations
 
 import sys
@@ -80,10 +81,12 @@ class _DirectClient:
             detail = getattr(exc, "detail", str(exc))
             return _Response(status, {"detail": detail})
 
+
 @pytest.fixture(autouse=True)
 def reset_singletons():
     """Reset module-level singletons between tests."""
     import tools.aura_control_mcp as mod
+
     mod._goal_queue = None
     mod._goal_archive = None
     mod._brain = None
@@ -106,10 +109,12 @@ def mock_queue():
 @pytest.fixture()
 def mock_archive():
     a = MagicMock()
-    a._load_archive = MagicMock(return_value=[
-        {"goal": "Old goal", "score": 0.9},
-        {"goal": "Another goal", "score": 0.7},
-    ])
+    a._load_archive = MagicMock(
+        return_value=[
+            {"goal": "Old goal", "score": 0.9},
+            {"goal": "Another goal", "score": 0.7},
+        ]
+    )
     return a
 
 
@@ -128,6 +133,7 @@ def mock_brain():
 @pytest.fixture()
 def client(mock_queue, mock_archive, mock_brain):
     import tools.aura_control_mcp as mod
+
     mod._goal_queue = mock_queue
     mod._goal_archive = mock_archive
     mod._brain = mock_brain
@@ -137,6 +143,7 @@ def client(mock_queue, mock_archive, mock_brain):
 # ---------------------------------------------------------------------------
 # /health
 # ---------------------------------------------------------------------------
+
 
 class TestHealth:
     def test_health_ok(self, client):
@@ -166,6 +173,7 @@ class TestHealth:
 # /tools
 # ---------------------------------------------------------------------------
 
+
 class TestListTools:
     def test_returns_all_tools(self, client):
         resp = client.get("/tools")
@@ -173,9 +181,17 @@ class TestListTools:
         tools = resp.json()
         names = {t["name"] for t in tools}
         expected = {
-            "goal_add", "goal_list", "goal_remove", "goal_clear", "goal_archive_list",
-            "memory_search", "memory_add", "memory_weaknesses",
-            "file_read", "file_list", "project_status",
+            "goal_add",
+            "goal_list",
+            "goal_remove",
+            "goal_clear",
+            "goal_archive_list",
+            "memory_search",
+            "memory_add",
+            "memory_weaknesses",
+            "file_read",
+            "file_list",
+            "project_status",
         }
         assert expected == names
 
@@ -201,6 +217,7 @@ class TestGetTool:
 # ---------------------------------------------------------------------------
 # /call — goal management
 # ---------------------------------------------------------------------------
+
 
 class TestGoalAdd:
     def test_add_goal(self, client, mock_queue):
@@ -277,6 +294,7 @@ class TestGoalArchiveList:
 # /call — memory tools
 # ---------------------------------------------------------------------------
 
+
 class TestMemorySearch:
     def test_search_with_match(self, client, mock_brain):
         resp = client.post("/call", json={"tool_name": "memory_search", "args": {"query": "Python"}})
@@ -322,9 +340,11 @@ class TestMemoryWeaknesses:
 # /call — file tools
 # ---------------------------------------------------------------------------
 
+
 class TestFileRead:
     def test_read_existing_file(self, client, tmp_path):
         import tools.aura_control_mcp as mod
+
         original_root = mod._ROOT
         mod._ROOT = tmp_path
         (tmp_path / "test.txt").write_text("hello world")
@@ -338,6 +358,7 @@ class TestFileRead:
 
     def test_read_missing_file(self, client, tmp_path):
         import tools.aura_control_mcp as mod
+
         original_root = mod._ROOT
         mod._ROOT = tmp_path
         try:
@@ -356,6 +377,7 @@ class TestFileRead:
 class TestFileList:
     def test_list_directory(self, client, tmp_path):
         import tools.aura_control_mcp as mod
+
         original_root = mod._ROOT
         mod._ROOT = tmp_path
         (tmp_path / "a.py").write_text("")
@@ -374,6 +396,7 @@ class TestFileList:
 # ---------------------------------------------------------------------------
 # /call — project_status
 # ---------------------------------------------------------------------------
+
 
 class TestProjectStatus:
     def test_project_status(self, client):
@@ -399,10 +422,7 @@ class TestRuntimeStoragePaths:
         }.get(key, default)
 
         try:
-            with patch.object(mod, "ConfigManager", return_value=fake_config), \
-                 patch.object(mod, "GoalQueue") as mock_goal_queue, \
-                 patch.object(mod, "GoalArchive") as mock_goal_archive, \
-                 patch.object(mod, "Brain") as mock_brain:
+            with patch.object(mod, "ConfigManager", return_value=fake_config), patch.object(mod, "GoalQueue") as mock_goal_queue, patch.object(mod, "GoalArchive") as mock_goal_archive, patch.object(mod, "Brain") as mock_brain:
                 mod._get_goal_queue()
                 mod._get_goal_archive()
                 mod._get_brain()
@@ -420,6 +440,7 @@ class TestRuntimeStoragePaths:
 # ---------------------------------------------------------------------------
 # Error cases
 # ---------------------------------------------------------------------------
+
 
 class TestErrors:
     def test_unknown_tool(self, client):

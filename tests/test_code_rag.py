@@ -1,4 +1,5 @@
 """Tests for core.code_rag — RAG-augmented code generation."""
+
 import json
 import time
 import unittest
@@ -297,6 +298,7 @@ class TestSearchFailures(unittest.TestCase):
 
         try:
             from memory.consolidation import NegativeExampleStore
+
             store = NegativeExampleStore(tmp_path)
             similar = store.find_similar_failures("implement auth", limit=3)
             self.assertTrue(len(similar) >= 1)
@@ -331,10 +333,12 @@ class TestExtractTargetFiles(unittest.TestCase):
 
     def test_deduplicates(self):
         rag = CodeRAG()
-        bundle = {"tasks": [
-            {"files": ["a.py"], "target_file": "a.py"},
-            {"files": ["a.py"]},
-        ]}
+        bundle = {
+            "tasks": [
+                {"files": ["a.py"], "target_file": "a.py"},
+                {"files": ["a.py"]},
+            ]
+        }
         result = rag._extract_target_files(bundle)
         self.assertEqual(result.count("a.py"), 1)
 

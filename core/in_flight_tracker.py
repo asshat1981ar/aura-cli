@@ -8,6 +8,7 @@ survives on disk and can be recovered with ``python3 main.py goal resume``.
 The record is written atomically (write to ``.tmp`` then ``os.replace``) so a
 kill during the write itself cannot produce a partial/corrupt file.
 """
+
 from __future__ import annotations
 
 import json
@@ -93,7 +94,7 @@ class InFlightTracker:
 
     def get_summary(self) -> Optional[dict]:
         """Get a human-readable summary of the in-flight goal.
-        
+
         Returns:
             Summary dict with formatted timestamps and elapsed time,
             or None if no goal is in-flight.
@@ -101,16 +102,16 @@ class InFlightTracker:
         record = self.read()
         if not record:
             return None
-        
+
         from datetime import datetime
-        
+
         started_at = record.get("started_at", "")
         goal = record.get("goal", "Unknown")
-        
+
         try:
             started_dt = datetime.fromisoformat(started_at.replace("Z", "+00:00"))
             elapsed = (datetime.now(timezone.utc) - started_dt).total_seconds()
-            
+
             # Format elapsed time
             if elapsed < 60:
                 elapsed_str = f"{int(elapsed)}s"
@@ -120,7 +121,7 @@ class InFlightTracker:
                 hours = int(elapsed / 3600)
                 minutes = int((elapsed % 3600) / 60)
                 elapsed_str = f"{hours}h {minutes}m"
-            
+
             return {
                 "goal": goal,
                 "started_at": started_at,

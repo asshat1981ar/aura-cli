@@ -1,4 +1,5 @@
 """Definitions for isolated AI CLI runtime environments."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass

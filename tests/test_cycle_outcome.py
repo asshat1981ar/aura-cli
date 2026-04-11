@@ -1,4 +1,5 @@
 """20 focused tests for CycleOutcome dataclass."""
+
 import json
 import time
 import uuid

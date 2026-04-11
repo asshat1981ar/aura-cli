@@ -1,4 +1,5 @@
 """Tests for DeepReflectionLoop, HealthMonitor, WeaknessRemediator."""
+
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -8,6 +9,7 @@ from core.weakness_remediator import WeaknessRemediator
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
 
 def _make_cycle_entry(phase_status="pass", skill_name="linter", skill_ok=True):
     """Build a minimal cycle entry dict compatible with reflection loop."""
@@ -25,6 +27,7 @@ def _make_cycle_entry(phase_status="pass", skill_name="linter", skill_ok=True):
 
 
 # ── DeepReflectionLoop ────────────────────────────────────────────────────────
+
 
 class TestDeepReflectionLoopTrigger(unittest.TestCase):
     def _make_loop(self, entries_count: int) -> DeepReflectionLoop:
@@ -91,6 +94,7 @@ class TestDeepReflectionLoopInsights(unittest.TestCase):
 
 # ── HealthMonitor ─────────────────────────────────────────────────────────────
 
+
 class TestHealthMonitorTrigger(unittest.TestCase):
     def _make_monitor(self) -> HealthMonitor:
         skills = {}
@@ -147,6 +151,7 @@ class TestHealthMonitorScan(unittest.TestCase):
 
 # ── WeaknessRemediator ────────────────────────────────────────────────────────
 
+
 class TestWeaknessRemediatorRun(unittest.TestCase):
     def _make_brain(self, weaknesses=None):
         brain = MagicMock()
@@ -163,12 +168,15 @@ class TestWeaknessRemediatorRun(unittest.TestCase):
 
     def test_generates_goal_for_structured_weakness(self):
         import json
-        weakness = json.dumps({
-            "type": "phase_failure",
-            "phase": "act",
-            "failure_rate": 0.80,
-            "severity": "HIGH",
-        })
+
+        weakness = json.dumps(
+            {
+                "type": "phase_failure",
+                "phase": "act",
+                "failure_rate": 0.80,
+                "severity": "HIGH",
+            }
+        )
         brain = self._make_brain([weakness])
         queue = MagicMock()
         result = WeaknessRemediator().run(brain, queue, limit=3)
@@ -177,11 +185,8 @@ class TestWeaknessRemediatorRun(unittest.TestCase):
 
     def test_respects_limit(self):
         import json
-        weaknesses = [
-            json.dumps({"type": "phase_failure", "phase": f"p{i}",
-                        "failure_rate": 0.9, "severity": "HIGH"})
-            for i in range(5)
-        ]
+
+        weaknesses = [json.dumps({"type": "phase_failure", "phase": f"p{i}", "failure_rate": 0.9, "severity": "HIGH"}) for i in range(5)]
         brain = self._make_brain(weaknesses)
         queue = MagicMock()
         result = WeaknessRemediator().run(brain, queue, limit=2)
@@ -191,8 +196,8 @@ class TestWeaknessRemediatorRun(unittest.TestCase):
     def test_skips_already_queued_weaknesses(self):
         import json
         import hashlib
-        weakness = json.dumps({"type": "phase_failure", "phase": "act",
-                               "failure_rate": 0.9, "severity": "HIGH"})
+
+        weakness = json.dumps({"type": "phase_failure", "phase": "act", "failure_rate": 0.9, "severity": "HIGH"})
         w_hash = hashlib.sha256(weakness.encode()).hexdigest()[:16]
         brain = self._make_brain([weakness])
         brain.recall_queued_weakness_hashes.return_value = [w_hash]

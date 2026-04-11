@@ -1,18 +1,20 @@
 """Embedding providers for ASCM v2.
 
-Provides a structured EmbeddingResult type and two interchangeable backends:
+Provides a structured EmbeddingResult type and interchangeable backends:
   - LocalEmbeddingProvider: deterministic, no-network, for tests and offline runs.
   - OpenAIEmbeddingProvider: hosted embeddings via the OpenAI API.
+  - ONNXEmbeddingProvider: local mobile-optimized embeddings via ONNX Runtime.
 
-Both expose the ASCM v2 contract (embed_text / embed_batch returning EmbeddingResult)
+All expose the ASCM v2 contract (embed_text / embed_batch returning EmbeddingResult)
 as well as the legacy embed(texts) shim consumed by ModelAdapter.
 """
 
 from __future__ import annotations
 
 import hashlib
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Iterable, List
+from typing import Iterable, List, Optional
 
 
 class _MissingPackage:
@@ -41,20 +43,67 @@ class EmbeddingResult:
     vector: List[float]
     model_name: str
     model_version: str
-    provider_type: str  # "local" | "openai"
+    provider_type: str  # "local" | "openai" | "onnx"
     dimensions: int
 
 
-class LocalEmbeddingProvider:
+class EmbeddingProvider(ABC):
+    """Abstract base class for all embedding providers."""
+
+    @property
+    @abstractmethod
+    def model_name(self) -> str:
+        """Name of the model used by the provider."""
+
+    @property
+    @abstractmethod
+    def model_version(self) -> str:
+        """Version of the model used by the provider."""
+
+    @property
+    @abstractmethod
+    def provider_type(self) -> str:
+        """Type of provider (e.g., 'local', 'openai', 'onnx')."""
+
+    @abstractmethod
+    def dimensions(self) -> int:
+        """Return the dimensionality of the generated embeddings."""
+
+    @abstractmethod
+    def embed(self, texts: Iterable[str]) -> List[List[float]]:
+        """Legacy interface: returns list of raw float vectors (no metadata)."""
+
+    @abstractmethod
+    def embed_text(self, text: str) -> EmbeddingResult:
+        """Embed a single string and return a structured EmbeddingResult."""
+
+    @abstractmethod
+    def embed_batch(self, texts: List[str]) -> List[EmbeddingResult]:
+        """Embed a batch of strings and return a list of EmbeddingResults."""
+
+    @abstractmethod
+    def healthcheck(self) -> bool:
+        """Verify the provider is operational."""
+
+
+class LocalEmbeddingProvider(EmbeddingProvider):
     """Generate deterministic fixed-size local embeddings.
 
     Vectors are stable across runs, require no external model downloads, and
     satisfy the interface expected by ``core.model_adapter.ModelAdapter``.
     """
 
-    model_name: str = "local-sha256"
-    model_version: str = "1.0"
-    provider_type: str = "local"
+    @property
+    def model_name(self) -> str:
+        return "local-sha256"
+
+    @property
+    def model_version(self) -> str:
+        return "1.0"
+
+    @property
+    def provider_type(self) -> str:
+        return "local"
 
     def __init__(self, dims: int = 50):
         self._dims = dims
@@ -100,15 +149,20 @@ class LocalEmbeddingProvider:
         return True
 
 
-class OpenAIEmbeddingProvider:
+class OpenAIEmbeddingProvider(EmbeddingProvider):
     """Hosted embeddings via the OpenAI API.
 
     Uses ``requests`` (lazy-imported) to POST to the embeddings endpoint.
     Pass ``api_key`` explicitly or set the ``OPENAI_API_KEY`` environment variable.
     """
 
-    model_version: str = "1"
-    provider_type: str = "openai"
+    @property
+    def model_version(self) -> str:
+        return "1"
+
+    @property
+    def provider_type(self) -> str:
+        return "openai"
 
     def __init__(self, api_key: str, model: str = "text-embedding-3-small"):
         self._api_key = api_key
@@ -157,7 +211,7 @@ class OpenAIEmbeddingProvider:
         return [
             EmbeddingResult(
                 vector=vec,
-                model_name=self._model,
+                model_name=self.model_name,
                 model_version=self.model_version,
                 provider_type=self.provider_type,
                 dimensions=len(vec),

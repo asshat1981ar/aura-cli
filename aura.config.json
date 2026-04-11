@@ -107,6 +107,7 @@
   "tree_of_thought_candidates": 1,
   "code_rag_enabled": true,
   "skill_correlation_enabled": true,
+  "REACT_GRAPH_ENABLED": true,
   "hooks": {},
   "a2a": {
     "enabled": true,

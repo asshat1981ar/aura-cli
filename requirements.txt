@@ -32,3 +32,14 @@ openapi_spec_validator>=0.7.0
 prometheus-client>=0.20.0
 bandit>=1.8
 pytest-timeout>=2.0
+
+# LangGraph & Redis Persistence
+langgraph>=0.0.30
+langchain-core>=0.1.40
+redis>=5.0.0
+langgraph-checkpoint-redis>=1.0.0
+
+# ONNX Local Embeddings (Optional)
+# onnxruntime-mobile>=1.17.0
+# huggingface_hub>=0.20.0
+# tokenizers>=0.15.0

@@ -24,7 +24,6 @@ Usage::
 from __future__ import annotations
 
 import dataclasses
-import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.learning_types import LearningArtifact
@@ -172,11 +171,7 @@ class LearningCoordinator:
         # 5. Collect immediate high-severity goals (cap at MAX_GOALS_PER_CYCLE)
         immediate_goals: List[str] = []
         for art in artifacts:
-            if (
-                art.is_actionable()
-                and art.severity in self.ENQUEUE_SEVERITIES
-                and len(immediate_goals) < self.MAX_GOALS_PER_CYCLE
-            ):
+            if art.is_actionable() and art.severity in self.ENQUEUE_SEVERITIES and len(immediate_goals) < self.MAX_GOALS_PER_CYCLE:
                 immediate_goals.append(art.suggested_goal)  # type: ignore[arg-type]
                 art.mark_acted_on()
 

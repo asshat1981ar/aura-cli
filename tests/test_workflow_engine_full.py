@@ -292,57 +292,96 @@ def test_workflow_definition_empty_steps():
 
 def test_workflow_execution_pending_is_not_terminal():
     exc = WorkflowExecution(
-        id="1", workflow_name="x", status="pending",
-        current_step_index=0, step_outputs={}, history=[],
-        initial_inputs={}, error=None,
-        started_at=time.time(), updated_at=time.time(),
+        id="1",
+        workflow_name="x",
+        status="pending",
+        current_step_index=0,
+        step_outputs={},
+        history=[],
+        initial_inputs={},
+        error=None,
+        started_at=time.time(),
+        updated_at=time.time(),
     )
     assert exc.is_terminal() is False
 
 
 def test_workflow_execution_failed_is_terminal():
     exc = WorkflowExecution(
-        id="2", workflow_name="x", status="failed",
-        current_step_index=0, step_outputs={}, history=[],
-        initial_inputs={}, error="boom",
-        started_at=time.time(), updated_at=time.time(),
+        id="2",
+        workflow_name="x",
+        status="failed",
+        current_step_index=0,
+        step_outputs={},
+        history=[],
+        initial_inputs={},
+        error="boom",
+        started_at=time.time(),
+        updated_at=time.time(),
     )
     assert exc.is_terminal() is True
 
 
 def test_workflow_execution_cancelled_is_terminal():
     exc = WorkflowExecution(
-        id="3", workflow_name="x", status="cancelled",
-        current_step_index=0, step_outputs={}, history=[],
-        initial_inputs={}, error=None,
-        started_at=time.time(), updated_at=time.time(),
+        id="3",
+        workflow_name="x",
+        status="cancelled",
+        current_step_index=0,
+        step_outputs={},
+        history=[],
+        initial_inputs={},
+        error=None,
+        started_at=time.time(),
+        updated_at=time.time(),
     )
     assert exc.is_terminal() is True
 
 
 def test_agentic_loop_completed_is_terminal():
     loop = AgenticLoop(
-        id="1", goal="g", max_cycles=5, current_cycle=2,
-        status="completed", history=[], stop_reason=None,
-        score=0.8, started_at=time.time(), updated_at=time.time(),
+        id="1",
+        goal="g",
+        max_cycles=5,
+        current_cycle=2,
+        status="completed",
+        history=[],
+        stop_reason=None,
+        score=0.8,
+        started_at=time.time(),
+        updated_at=time.time(),
     )
     assert loop.is_terminal() is True
 
 
 def test_agentic_loop_failed_is_terminal():
     loop = AgenticLoop(
-        id="2", goal="g", max_cycles=5, current_cycle=1,
-        status="failed", history=[], stop_reason="error",
-        score=0.0, started_at=time.time(), updated_at=time.time(),
+        id="2",
+        goal="g",
+        max_cycles=5,
+        current_cycle=1,
+        status="failed",
+        history=[],
+        stop_reason="error",
+        score=0.0,
+        started_at=time.time(),
+        updated_at=time.time(),
     )
     assert loop.is_terminal() is True
 
 
 def test_agentic_loop_paused_is_not_terminal():
     loop = AgenticLoop(
-        id="3", goal="g", max_cycles=5, current_cycle=1,
-        status="paused", history=[], stop_reason=None,
-        score=0.0, started_at=time.time(), updated_at=time.time(),
+        id="3",
+        goal="g",
+        max_cycles=5,
+        current_cycle=1,
+        status="paused",
+        history=[],
+        stop_reason=None,
+        score=0.0,
+        started_at=time.time(),
+        updated_at=time.time(),
     )
     assert loop.is_terminal() is False
 

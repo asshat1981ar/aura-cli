@@ -421,6 +421,7 @@ class PromptForgeAgent:
     and the MCP skills server.
     """
 
+    name = "prompt_forge"
     capabilities = ["prompt_engineering", "prompt_assembly", "semantic_analysis"]
     description = "Semantic-aware prompt generation for coding tasks"
 

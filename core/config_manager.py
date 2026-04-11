@@ -163,6 +163,7 @@ DEFAULT_CONFIG = {
         "control": 8003,
         "agentic_loop": 8006,
         "copilot": 8007,
+        "sadd": 8020,
     },
     # R8: MCP server API keys (optional, for authenticated access)
     "mcp_server_api_keys": {
@@ -171,6 +172,7 @@ DEFAULT_CONFIG = {
         "control": None,
         "agentic_loop": None,
         "copilot": None,
+        "sadd": None,
     },
     # ASCM v2 Configuration
     "semantic_memory": {"enabled": True, "backend": "sqlite_local", "embedding_model": "text-embedding-3-small", "top_k": 10, "min_score": 0.65, "max_snippet_chars": 2000, "reindex_on_model_change": True, "eval_sampling_rate": 0.1},
@@ -516,7 +518,7 @@ class ConfigManager:
 
         Args:
             server_name: One of ``dev_tools``, ``skills``, ``control``,
-                         ``agentic_loop``, or ``copilot``.
+                         ``agentic_loop``, ``copilot``, or ``sadd``.
 
         Returns:
             TCP port number (int).
@@ -538,7 +540,7 @@ class ConfigManager:
 
         Args:
             server_name: One of ``dev_tools``, ``skills``, ``control``,
-                         ``agentic_loop``, or ``copilot``.
+                         ``agentic_loop``, ``copilot``, or ``sadd``.
 
         Returns:
             API key string or None if not configured.

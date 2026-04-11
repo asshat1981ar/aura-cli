@@ -37,10 +37,7 @@ if str(_ROOT) not in sys.path:
 
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 
-from fastapi import Depends, FastAPI, Header, HTTPException
-
-# R8: Import centralized MCP auth
-from tools.mcp_auth import require_control_auth
+from fastapi import Depends, FastAPI, HTTPException
 
 from core.config_manager import ConfigManager, DEFAULT_CONFIG
 from core.logging_utils import log_json
@@ -54,6 +51,13 @@ from core.goal_queue import GoalQueue
 from core.goal_archive import GoalArchive
 from core.runtime_paths import resolve_project_path
 from memory.brain import Brain
+from tools.mcp_server_support import (
+    auth_dependency,
+    auth_mode_label,
+    build_basic_metrics_payload,
+    resolve_server_port,
+    uptime_seconds,
+)
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -65,8 +69,8 @@ app = FastAPI(
     version="1.0.0",
 )
 
-_TOKEN = os.getenv("MCP_CONTROL_TOKEN", "")
 _SERVER_START = time.time()
+_require_auth = auth_dependency("control")
 
 # In-process call counters {tool_name: count}
 _call_counts: Dict[str, int] = {}
@@ -121,19 +125,6 @@ def _get_memories_cached(brain: Brain) -> list:
     result = brain.recall_with_budget(max_tokens=4000)
     _memory_cache["recent"] = (result, now)
     return result
-
-
-# ---------------------------------------------------------------------------
-# Auth (R8: Updated to use centralized MCP auth)
-# ---------------------------------------------------------------------------
-
-
-def _check_auth(
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
-    authorization: Optional[str] = Header(default=None),
-) -> str:
-    """Validate API key using centralized auth."""
-    return require_control_auth(x_api_key, authorization)
 
 
 # ---------------------------------------------------------------------------
@@ -391,19 +382,20 @@ _TOOL_HANDLERS = {
 
 
 @app.get("/health")
-async def health(auth: str = Depends(require_control_auth)):
+async def health(auth: str = Depends(_require_auth)):
     from tools.mcp_auth import is_auth_enabled
 
     return build_health_payload(
         server=get_registered_service("control")["name"],
         version="1.0.0",
         tool_count=len(_TOOL_HANDLERS),
+        uptime_s=uptime_seconds(_SERVER_START),
         auth_enabled=is_auth_enabled("control"),
     )
 
 
 @app.get("/discovery")
-async def discovery(auth: str = Depends(require_control_auth)) -> Dict:
+async def discovery(auth: str = Depends(_require_auth)) -> Dict:
     return build_discovery_payload(
         current_server=get_registered_service("control"),
         servers=list_registered_services(),
@@ -412,19 +404,19 @@ async def discovery(auth: str = Depends(require_control_auth)) -> Dict:
 
 
 @app.get("/tools")
-async def list_tools(auth: str = Depends(require_control_auth)) -> List[Dict]:
+async def list_tools(auth: str = Depends(_require_auth)) -> List[Dict]:
     return build_tool_descriptors_from_schemas(_TOOL_SCHEMAS)
 
 
 @app.get("/tool/{name}")
-async def get_tool(name: str, auth: str = Depends(require_control_auth)) -> Dict:
+async def get_tool(name: str, auth: str = Depends(_require_auth)) -> Dict:
     if name not in _TOOL_SCHEMAS:
         raise HTTPException(status_code=404, detail=f"Tool '{name}' not found.")
     return _build_descriptor(name)
 
 
 @app.post("/call")
-async def call_tool(request: ToolCallRequest, auth: str = Depends(require_control_auth)) -> ToolResult:
+async def call_tool(request: ToolCallRequest, auth: str = Depends(_require_auth)) -> ToolResult:
     name = request.tool_name
     handler = _TOOL_HANDLERS.get(name)
     if not handler:
@@ -450,12 +442,8 @@ async def call_tool(request: ToolCallRequest, auth: str = Depends(require_contro
 
 
 @app.get("/metrics")
-async def get_metrics(auth: str = Depends(require_control_auth)) -> Dict:
+async def get_metrics(auth: str = Depends(_require_auth)) -> Dict:
     """Return uptime, per-tool call/error counts, queue size, and memory count."""
-    uptime_s = round(time.time() - _SERVER_START, 1)
-    total_calls = sum(_call_counts.values())
-    total_errors = sum(_call_errors.values())
-
     # Live queue size (best-effort)
     queue_size: int = 0
     try:
@@ -471,23 +459,14 @@ async def get_metrics(auth: str = Depends(require_control_auth)) -> Dict:
     except Exception:
         pass
 
-    per_tool = {
-        name: {
-            "calls": _call_counts.get(name, 0),
-            "errors": _call_errors.get(name, 0),
-        }
-        for name in _TOOL_SCHEMAS
-    }
-
-    return {
-        "uptime_seconds": uptime_s,
-        "total_calls": total_calls,
-        "total_errors": total_errors,
-        "error_rate": round(total_errors / max(total_calls, 1), 4),
-        "queue_size": queue_size,
-        "memory_count": memory_count,
-        "tools": per_tool,
-    }
+    return build_basic_metrics_payload(
+        server_start=_SERVER_START,
+        tool_names=_TOOL_SCHEMAS,
+        call_counts=_call_counts,
+        call_errors=_call_errors,
+        queue_size=queue_size,
+        memory_count=memory_count,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -496,11 +475,7 @@ async def get_metrics(auth: str = Depends(require_control_auth)) -> Dict:
 
 if __name__ == "__main__":
     import uvicorn
-    from core.config_manager import config as _cfg
-    from tools.mcp_auth import is_auth_enabled
 
-    # R4: port from config registry; env var still overrides for backward-compat
-    port = int(os.getenv("MCP_CONTROL_PORT", _cfg.get_mcp_server_port("control")))
-    auth_enabled = is_auth_enabled("control")
-    print(f"[MCP control] Starting on port {port} (auth: {'enabled' if auth_enabled else 'optional'})")
+    port = resolve_server_port("control")
+    print(f"[MCP control] Starting on port {port} (auth: {auth_mode_label('control')})")
     uvicorn.run("tools.aura_control_mcp:app", host="0.0.0.0", port=port, reload=False)

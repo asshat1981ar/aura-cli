@@ -280,7 +280,84 @@ Recommended events to emit:
 
 ---
 
-## 8. Testing Agents
+## 8. Observability (Metrics & Tracing)
+
+The `aura/observability/` module provides production-grade observability:
+
+### Metrics (`aura/observability/metrics.py`)
+
+```python
+from aura.observability import get_metrics_store, record_agent_execution
+
+# Get the singleton metrics store
+store = get_metrics_store()
+
+# Register metrics
+store.counter("requests_total", "Total requests")
+store.gauge("memory_usage_mb", "Memory usage")
+store.timer("request_duration_ms", "Request latency")
+
+# Record values
+store.increment("requests_total", 1.0, labels={"status": "200"})
+store.set("memory_usage_mb", 512.0)
+
+# Time operations
+with store.time("request_duration_ms"):
+    do_work()
+
+# Or use decorator
+@store.timed("function_duration")
+def my_function():
+    pass
+
+# Convenience functions for AURA
+record_agent_execution(
+    agent_name="planner",
+    duration_ms=150.0,
+    success=True,
+    output_quality=0.95,
+)
+```
+
+### Distributed Tracing (`aura/observability/tracing.py`)
+
+```python
+from aura.observability import get_tracer, trace_agent_execution
+
+# Get the global tracer
+tracer = get_tracer(service_name="aura")
+
+# Create spans
+with tracer.start_span("operation_name") as span:
+    span.set_attribute("key", "value")
+    span.add_event("checkpoint")
+
+# Convenience context managers
+with trace_agent_execution("planner", "plan deployment"):
+    run_planner()
+
+with trace_orchestrator_cycle(cycle_number=1, goal="deploy app"):
+    run_cycle()
+
+with trace_phase_execution("plan", cycle_number=1):
+    execute_plan_phase()
+
+# Decorator
+@traced(name="my_operation")
+def my_function():
+    pass
+```
+
+### TUI Integration
+
+The observability data feeds into AURA Studio TUI panels:
+- Real-time metrics display with sparklines
+- Active trace visualization
+- Health status monitoring
+
+---
+
+## 9. Testing Agents
 
 Use `unittest` / `pytest` with stub inputs.  Do **not** call real LLM APIs in unit tests.
 
@@ -320,6 +397,94 @@ def test_missing_goal_key(agent):
 - For handler tests, test `HANDLER_MAP["<phase>"](task, context)` directly.
 
 ---
+
+## 10. Sub-Agent Integration (Phase 2 → Phase 3)
+
+Phase 2 sub-agents are now integrated into the orchestrator via `core/subagent_integration.py`:
+
+| Sub-Agent | Module | Integration Point | Purpose |
+|-----------|--------|-------------------|---------|
+| **IOTA** | `aura/error_resolution/` | Error handling | AI-powered error auto-resolution |
+| **KAPPA** | `aura/recording/` | Workflow recording | Record and replay common workflows |
+| **NU** | `aura/offline/` | Connectivity | Handle offline scenarios gracefully |
+| **PI** | `aura/encryption/` | Config loading | Secure encrypted configuration |
+| **RHO** | `aura/health/` | Health checks | Pre-flight system validation |
+| **SIGMA** | `aura/security/` | Security gate | Block commits with secrets |
+| **TAU** | `aura/scheduler/` | Background tasks | Schedule maintenance tasks |
+
+### Using Sub-Agents
+
+```python
+from core.subagent_integration import get_subagent_registry
+
+registry = get_subagent_registry()
+
+# IOTA - Resolve errors
+result = registry.resolve_error(
+    error_message="ImportError: No module named 'foo'",
+    context={"stack_trace": "..."}
+)
+
+# KAPPA - Record workflows
+registry.record_workflow("deploy", [
+    {"action": "git_pull"},
+    {"action": "run_tests"},
+    {"action": "deploy"}
+])
+
+# NU - Check connectivity
+status = registry.check_connectivity()
+if not status["online"]:
+    print("Running in offline mode")
+
+# RHO - Health checks
+health = registry.run_health_checks()
+if not health["healthy"]:
+    print("System not healthy, aborting")
+
+# SIGMA - Security gate
+result = registry.security_gate_check(changes)
+if not result["allowed"]:
+    print("Security violations found:", result["violations"])
+```
+
+### Orchestrator Mixin
+
+The `SubAgentMixin` class (`core/orchestrator_subagents.py`) wires sub-agents into the pipeline:
+
+```python
+class LoopOrchestrator(..., SubAgentMixin):
+    def _execute_phase(self, phase, goal):
+        # NU: Check connectivity before cycle
+        connectivity = self._check_connectivity_before_cycle()
+        
+        # RHO: Pre-flight health checks
+        health = self._run_preflight_health_checks()
+        if not health["healthy"]:
+            return {"status": "blocked", "reason": "unhealthy"}
+        
+        # Execute phase...
+        result = super()._execute_phase(phase, goal)
+        
+        # IOTA: Attempt error resolution on failure
+        if result.get("status") == "failed":
+            if self._should_retry_with_iota(result):
+                fix = self._attempt_error_resolution(
+                    result["error"],
+                    context={"phase": phase, "goal": goal}
+                )
+                if fix and fix.get("resolved"):
+                    # Retry with fix applied
+                    pass
+        
+        # SIGMA: Security gate on changes
+        if result.get("changes"):
+            gate = self._run_security_gate(result["changes"])
+            if not gate["allowed"]:
+                return {"status": "blocked", "reason": "security_gate"}
+        
+        return result
+```
 
 ---
 

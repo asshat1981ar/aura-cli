@@ -7,10 +7,13 @@ This repository exposes multiple MCP-compatible HTTP servers for Copilot workflo
 - `aura-control` on port `8003` for the control-plane API
 - `aura-agentic-loop` on port `8006` for loop orchestration
 - `aura-copilot` on port `8007` for GitHub/Copilot-specific workflows
+- `aura-sadd` on port `8020` for SADD session and spec tools
+- `playwright` as a stdio MCP helper for browser automation
 
 When documenting or editing MCP setup:
 
 - prefer `.vscode/mcp.json.example` and `scripts/configure_copilot_mcp.sh`
+- treat `tools/mcp_manifest.py` as the canonical AURA MCP contract
 - keep auth token values in environment variables
 - keep ports aligned with `aura.config.json` / `settings.json`
 - avoid hardcoded skill counts when the registry is the real source of truth

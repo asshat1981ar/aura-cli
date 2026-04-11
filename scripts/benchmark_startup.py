@@ -30,31 +30,32 @@ sys.path.insert(0, str(PROJECT_ROOT))
 @dataclass
 class BenchmarkResult:
     """Result of a single benchmark run."""
+
     command: str
     iterations: int
     times_ms: list[float] = field(default_factory=list)
     errors: int = 0
-    
+
     @property
     def min_ms(self) -> float:
         return min(self.times_ms) if self.times_ms else 0.0
-    
+
     @property
     def max_ms(self) -> float:
         return max(self.times_ms) if self.times_ms else 0.0
-    
+
     @property
     def mean_ms(self) -> float:
         return statistics.mean(self.times_ms) if self.times_ms else 0.0
-    
+
     @property
     def median_ms(self) -> float:
         return statistics.median(self.times_ms) if self.times_ms else 0.0
-    
+
     @property
     def stdev_ms(self) -> float | None:
         return statistics.stdev(self.times_ms) if len(self.times_ms) > 1 else None
-    
+
     def to_dict(self) -> dict[str, Any]:
         result = {
             "command": self.command,
@@ -80,7 +81,7 @@ TARGETS = {
 
 def run_command(argv: list[str], cwd: Path) -> tuple[float, bool, str]:
     """Run a command and measure execution time.
-    
+
     Returns:
         Tuple of (elapsed_time_ms, success, output)
     """
@@ -110,7 +111,7 @@ def benchmark_command(
 ) -> BenchmarkResult:
     """Benchmark a single command over multiple iterations."""
     result = BenchmarkResult(command=command, iterations=iterations)
-    
+
     # Map command names to argv
     argv_map = {
         "version": ["--version"],
@@ -120,22 +121,22 @@ def benchmark_command(
         "mcp-tools": ["mcp", "tools"],
     }
     argv = argv_map.get(command, [f"--{command}"])
-    
+
     for i in range(iterations):
         elapsed, success, output = run_command(argv, project_root)
         if success:
             result.times_ms.append(elapsed)
         else:
             result.errors += 1
-            print(f"  Warning: Run {i+1} failed: {output[:100]}")
-    
+            print(f"  Warning: Run {i + 1} failed: {output[:100]}")
+
     return result
 
 
 def benchmark_import_time(module: str, iterations: int) -> BenchmarkResult:
     """Benchmark import time for a module."""
     result = BenchmarkResult(command=f"import:{module}", iterations=iterations)
-    
+
     for _ in range(iterations):
         start = time.perf_counter()
         try:
@@ -152,7 +153,7 @@ def benchmark_import_time(module: str, iterations: int) -> BenchmarkResult:
                 result.errors += 1
         except Exception:
             result.errors += 1
-    
+
     return result
 
 
@@ -165,11 +166,11 @@ def print_results(results: list[BenchmarkResult], json_output: bool = False) -> 
         }
         print(json.dumps(output, indent=2))
         return
-    
+
     print("\n" + "=" * 80)
     print("AURA CLI STARTUP BENCHMARK RESULTS")
     print("=" * 80)
-    
+
     for result in results:
         print(f"\n📊 Command: {result.command}")
         print("-" * 40)
@@ -181,17 +182,17 @@ def print_results(results: list[BenchmarkResult], json_output: bool = False) -> 
         print(f"  Median:     {result.median_ms:.1f} ms")
         if result.stdev_ms is not None:
             print(f"  Std Dev:    {result.stdev_ms:.1f} ms")
-        
+
         # Check targets
         target = TARGETS.get(result.command, {}).get("cold_start")
         if target:
             status = "✅ PASS" if result.median_ms < target else "❌ FAIL"
             print(f"  Target:     {target} ms {status}")
-    
+
     print("\n" + "=" * 80)
     print("RECOMMENDATIONS")
     print("=" * 80)
-    
+
     # Generate recommendations
     slow_commands = [r for r in results if r.median_ms > 500]
     if slow_commands:
@@ -199,28 +200,26 @@ def print_results(results: list[BenchmarkResult], json_output: bool = False) -> 
         for r in slow_commands:
             print(f"   - {r.command}: {r.median_ms:.1f}ms")
         print("   Consider using lazy imports for heavy dependencies.")
-    
+
     failed_targets = []
     for r in results:
         target = TARGETS.get(r.command, {}).get("cold_start")
         if target and r.median_ms > target:
             failed_targets.append((r.command, r.median_ms, target))
-    
+
     if failed_targets:
         print("\n⚠️  Failed targets:")
         for cmd, actual, target in failed_targets:
             print(f"   - {cmd}: {actual:.1f}ms (target: {target}ms)")
     else:
         print("\n✅ All targets met!")
-    
+
     print()
 
 
 def main() -> int:
     """Main entry point."""
-    parser = argparse.ArgumentParser(
-        description="Benchmark AURA CLI startup performance"
-    )
+    parser = argparse.ArgumentParser(description="Benchmark AURA CLI startup performance")
     parser.add_argument(
         "--iterations",
         "-n",
@@ -248,15 +247,15 @@ def main() -> int:
         action="store_true",
         help="Output results as JSON",
     )
-    
+
     args = parser.parse_args()
-    
+
     project_root = Path(__file__).parent.parent
     commands = [c.strip() for c in args.commands.split(",") if c.strip()]
     imports = [m.strip() for m in args.imports.split(",") if m.strip()]
-    
+
     results: list[BenchmarkResult] = []
-    
+
     # Benchmark commands
     print(f"Benchmarking {len(commands)} command(s) with {args.iterations} iteration(s)...")
     for cmd in commands:
@@ -264,7 +263,7 @@ def main() -> int:
         result = benchmark_command(cmd, args.iterations, project_root)
         results.append(result)
         print(f"✓ ({result.median_ms:.1f}ms)")
-    
+
     # Benchmark imports
     print(f"\nBenchmarking {len(imports)} module import(s)...")
     for module in imports:
@@ -272,10 +271,10 @@ def main() -> int:
         result = benchmark_import_time(module, args.iterations)
         results.append(result)
         print(f"✓ ({result.median_ms:.1f}ms)")
-    
+
     # Print results
     print_results(results, args.json)
-    
+
     return 0
 
 

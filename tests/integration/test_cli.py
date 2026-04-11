@@ -18,6 +18,7 @@ import pytest
 try:
     from typer.testing import CliRunner
     from aura_cli.cli_main import main
+
     HAS_TYPER = True
 except ImportError:
     HAS_TYPER = False
@@ -75,11 +76,7 @@ class TestCLIGoalCommands:
     def test_goal_add_dry_run(self):
         """Test goal add with dry-run flag."""
         with runner.isolated_filesystem():
-            result = runner.invoke(main, [
-                "--dry-run",
-                "goal", "add",
-                "Test goal description"
-            ])
+            result = runner.invoke(main, ["--dry-run", "goal", "add", "Test goal description"])
 
             # Should complete without error in dry-run mode
             # (may fail if command structure differs)

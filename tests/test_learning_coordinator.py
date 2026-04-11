@@ -24,9 +24,7 @@ def make_cycle_entry(cycle_id="c1", goal="Add feature", goal_type="feature") -> 
     return {"cycle_id": cycle_id, "goal": goal, "goal_type": goal_type}
 
 
-def make_alert(alert_type="threshold_breach", metric="health_score",
-               current=0.3, previous=0.8, threshold=0.4,
-               severity="high", suggested_goal="Fix health score"):
+def make_alert(alert_type="threshold_breach", metric="health_score", current=0.3, previous=0.8, threshold=0.4, severity="high", suggested_goal="Fix health score"):
     """Create a mock TrendAlert-like object."""
     alert = MagicMock()
     alert.alert_type = alert_type
@@ -158,10 +156,7 @@ class TestQualityAlertArtifacts:
 class TestGoalCap:
     def test_goals_capped_at_max_per_cycle(self):
         coord = LearningCoordinator(make_store())
-        alerts = [
-            make_alert(severity="high", suggested_goal=f"Fix thing {i}")
-            for i in range(10)
-        ]
+        alerts = [make_alert(severity="high", suggested_goal=f"Fix thing {i}") for i in range(10)]
         goals = coord.on_cycle_complete(make_cycle_entry(), {}, alerts)
         assert len(goals) <= LearningCoordinator.MAX_GOALS_PER_CYCLE
 
@@ -220,21 +215,27 @@ class TestGetRecentArtifacts:
 
 class TestSyncReflectionReports:
     def _write_report(self, store: MemoryStore, ts: float, insights: list) -> None:
-        store.put("reflection_reports", {
-            "timestamp": ts,
-            "cycles_analyzed": 5,
-            "insights": insights,
-        })
+        store.put(
+            "reflection_reports",
+            {
+                "timestamp": ts,
+                "cycles_analyzed": 5,
+                "insights": insights,
+            },
+        )
 
     def test_skips_old_report(self):
         store = make_store()
         coord = LearningCoordinator(store)
         coord._last_reflection_ts = time.time()  # already "seen" this timestamp
 
-        self._write_report(store, ts=coord._last_reflection_ts - 1, insights=[
-            {"type": "phase_failure", "phase": "plan", "failure_rate": 0.8,
-             "severity": "HIGH", "message": "plan failing"},
-        ])
+        self._write_report(
+            store,
+            ts=coord._last_reflection_ts - 1,
+            insights=[
+                {"type": "phase_failure", "phase": "plan", "failure_rate": 0.8, "severity": "HIGH", "message": "plan failing"},
+            ],
+        )
         artifacts, goals = coord._sync_reflection_reports(make_cycle_entry())
         assert artifacts == []
         assert goals == []
@@ -244,10 +245,13 @@ class TestSyncReflectionReports:
         coord = LearningCoordinator(store)
         new_ts = time.time() + 10
 
-        self._write_report(store, ts=new_ts, insights=[
-            {"type": "phase_failure", "phase": "plan", "failure_rate": 0.8,
-             "severity": "HIGH", "message": "plan failing 80% of the time"},
-        ])
+        self._write_report(
+            store,
+            ts=new_ts,
+            insights=[
+                {"type": "phase_failure", "phase": "plan", "failure_rate": 0.8, "severity": "HIGH", "message": "plan failing 80% of the time"},
+            ],
+        )
         artifacts, goals = coord._sync_reflection_reports(make_cycle_entry())
         assert len(artifacts) == 1
         assert len(goals) == 1
@@ -264,10 +268,13 @@ class TestSyncReflectionReports:
     def test_medium_severity_insight_no_goal(self):
         store = make_store()
         coord = LearningCoordinator(store)
-        self._write_report(store, ts=time.time() + 1, insights=[
-            {"type": "low_value_skill", "skill": "linter", "actionable_rate": 0.1,
-             "severity": "LOW", "message": "linter low signal"},
-        ])
+        self._write_report(
+            store,
+            ts=time.time() + 1,
+            insights=[
+                {"type": "low_value_skill", "skill": "linter", "actionable_rate": 0.1, "severity": "LOW", "message": "linter low signal"},
+            ],
+        )
         artifacts, goals = coord._sync_reflection_reports(make_cycle_entry())
         assert len(artifacts) == 1
         assert goals == []  # LOW severity → no goal
@@ -292,30 +299,36 @@ class TestInsightToGoal:
         self.coord = LearningCoordinator(make_store())
 
     def test_phase_failure_insight(self):
-        goal = self.coord._insight_to_goal({
-            "type": "phase_failure",
-            "phase": "act",
-            "failure_rate": 0.72,
-        })
+        goal = self.coord._insight_to_goal(
+            {
+                "type": "phase_failure",
+                "phase": "act",
+                "failure_rate": 0.72,
+            }
+        )
         assert goal is not None
         assert "act" in goal
         assert "72%" in goal
 
     def test_goal_type_struggling_insight(self):
-        goal = self.coord._insight_to_goal({
-            "type": "goal_type_struggling",
-            "goal_type": "refactor",
-            "success_rate": 0.25,
-        })
+        goal = self.coord._insight_to_goal(
+            {
+                "type": "goal_type_struggling",
+                "goal_type": "refactor",
+                "success_rate": 0.25,
+            }
+        )
         assert goal is not None
         assert "refactor" in goal
         assert "25%" in goal
 
     def test_unknown_type_returns_message(self):
-        goal = self.coord._insight_to_goal({
-            "type": "unknown",
-            "message": "Some other insight",
-        })
+        goal = self.coord._insight_to_goal(
+            {
+                "type": "unknown",
+                "message": "Some other insight",
+            }
+        )
         assert goal == "Some other insight"
 
     def test_missing_message_returns_none(self):

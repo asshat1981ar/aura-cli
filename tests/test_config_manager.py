@@ -559,12 +559,15 @@ from unittest.mock import MagicMock, patch
 class TestIsPydanticAvailable:
     def test_returns_bool(self):
         from core.config_manager import is_pydantic_available
+
         assert isinstance(is_pydantic_available(), bool)
 
     def test_returns_true_when_available(self):
         from core.config_manager import is_pydantic_available
+
         try:
             import pydantic  # noqa: F401
+
             assert is_pydantic_available() is True
         except ImportError:
             assert is_pydantic_available() is False
@@ -879,9 +882,7 @@ class TestEnvLoadingExtended:
 class TestLoadFromFileExtended:
     def test_settings_json_context_management_key_mapped(self, tmp_path):
         config_file = tmp_path / "settings.json"
-        config_file.write_text(json.dumps({
-            "aura": {"context_management": {"enabled": False, "top_k": 5}, "model_name": "test"}
-        }))
+        config_file.write_text(json.dumps({"aura": {"context_management": {"enabled": False, "top_k": 5}, "model_name": "test"}}))
         cm = ConfigManager(config_file=str(config_file))
         sm = cm.get("semantic_memory")
         assert sm is not None

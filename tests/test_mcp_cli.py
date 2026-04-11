@@ -1307,7 +1307,7 @@ def test_parse_args_minimal(monkeypatch) -> None:
 
 
 # ── _split_target ──
-def test_split_target_server_only(monkeypatch) -> None:
+def test_split_target_server_only_no_tool(monkeypatch) -> None:
     server, tool = mcp_cli._split_target("myserver")
     assert server == "myserver"
     assert tool is None
@@ -1331,7 +1331,7 @@ def test_extract_raw_text_string_returns_as_is(monkeypatch) -> None:
     assert result == "raw string result"
 
 
-def test_extract_raw_text_dict_content_list(monkeypatch) -> None:
+def test_extract_raw_text_dict_content_list_multiline(monkeypatch) -> None:
     data = {
         "content": [
             {"type": "text", "text": "line1"},

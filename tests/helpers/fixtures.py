@@ -13,10 +13,10 @@ from typing import Any, Dict, Generator, Optional
 
 class TestFixture:
     """Test fixture for isolated test environments.
-    
+
     Provides temporary directories, configuration files, and cleanup
     for test isolation.
-    
+
     Example:
         >>> fixture = TestFixture()
         >>> config_path = fixture.create_config({"log_level": "DEBUG"})
@@ -34,10 +34,10 @@ class TestFixture:
 
     def create_config(self, overrides: dict | None = None) -> Path:
         """Create a test configuration file.
-        
+
         Args:
             overrides: Configuration values to override defaults.
-            
+
         Returns:
             Path to created config file.
         """
@@ -55,18 +55,18 @@ class TestFixture:
             "goal_queue_path": str(self.temp_dir / "memory" / "goal_queue.json"),
             "goal_archive_path": str(self.temp_dir / "memory" / "goal_archive_v2.json"),
             "brain_db_path": str(self.temp_dir / "memory" / "brain_v2.db"),
-            **(overrides or {})
+            **(overrides or {}),
         }
         self.config_path.write_text(json.dumps(config, indent=2))
         return self.config_path
 
     def create_file(self, path: str, content: str | bytes) -> Path:
         """Create a file in the temp directory.
-        
+
         Args:
             path: Relative path within temp directory.
             content: File content (string or bytes).
-            
+
         Returns:
             Path to created file.
         """
@@ -80,11 +80,11 @@ class TestFixture:
 
     def create_json_file(self, path: str, data: dict) -> Path:
         """Create a JSON file in the temp directory.
-        
+
         Args:
             path: Relative path within temp directory.
             data: Data to serialize as JSON.
-            
+
         Returns:
             Path to created file.
         """
@@ -92,10 +92,10 @@ class TestFixture:
 
     def create_pyproject(self, overrides: dict | None = None) -> Path:
         """Create a minimal pyproject.toml for testing.
-        
+
         Args:
             overrides: Configuration values to override defaults.
-            
+
         Returns:
             Path to created pyproject.toml.
         """
@@ -105,7 +105,7 @@ version = "0.1.0"
 description = "Test project"
 
 [tool.aura]
-model_name = "{overrides.get('model_name', 'test-model')}"\n"""
+model_name = "{overrides.get("model_name", "test-model")}"\n"""
         return self.create_file("pyproject.toml", content)
 
     def mock_home(self) -> None:
@@ -132,10 +132,10 @@ model_name = "{overrides.get('model_name', 'test-model')}"\n"""
 
     def get_path(self, *parts: str) -> Path:
         """Get path within temp directory.
-        
+
         Args:
             *parts: Path components.
-            
+
         Returns:
             Absolute path within temp directory.
         """
@@ -159,10 +159,10 @@ model_name = "{overrides.get('model_name', 'test-model')}"\n"""
 @contextmanager
 def temp_fixture(prefix: str = "aura-test-") -> Generator[TestFixture, None, None]:
     """Context manager for test fixtures.
-    
+
     Args:
         prefix: Prefix for temp directory name.
-        
+
     Example:
         >>> with temp_fixture() as fixture:
         ...     config_path = fixture.create_config()
@@ -185,6 +185,6 @@ class AsyncTestFixture(TestFixture):
     async def cleanup_async(self) -> None:
         """Async cleanup for pending tasks."""
         for task in self._async_tasks:
-            if hasattr(task, 'cancel') and not task.done():
+            if hasattr(task, "cancel") and not task.done():
                 task.cancel()
         self.cleanup()

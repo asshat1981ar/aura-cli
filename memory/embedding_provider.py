@@ -11,6 +11,7 @@ as well as the legacy embed(texts) shim consumed by ModelAdapter.
 from __future__ import annotations
 
 import hashlib
+import os
 from dataclasses import dataclass
 from typing import Iterable, List
 
@@ -96,6 +97,9 @@ class LocalEmbeddingProvider:
             for vec in raw
         ]
 
+    def model_id(self) -> str:
+        return self.model_name
+
     def healthcheck(self) -> bool:
         return True
 
@@ -110,13 +114,16 @@ class OpenAIEmbeddingProvider:
     model_version: str = "1"
     provider_type: str = "openai"
 
-    def __init__(self, api_key: str, model: str = "text-embedding-3-small"):
-        self._api_key = api_key
+    def __init__(self, api_key: str = "", model: str = "text-embedding-3-small"):
+        self._api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
         self._model = model
         self._api_url = "https://api.openai.com/v1/embeddings"
 
     @property
     def model_name(self) -> str:
+        return self._model
+
+    def model_id(self) -> str:
         return self._model
 
     def dimensions(self) -> int:
@@ -166,8 +173,5 @@ class OpenAIEmbeddingProvider:
         ]
 
     def healthcheck(self) -> bool:
-        try:
-            self._call_api(["health"])
-            return True
-        except Exception:
-            return False
+        """Check provider availability without making a live API call."""
+        return bool(self._api_key)

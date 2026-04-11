@@ -123,9 +123,7 @@ class TestOpenAIEmbeddingProvider:
 
     def test_custom_api_base_overrides_endpoint(self):
         """Passing api_base should override the default endpoint."""
-        provider = OpenAIEmbeddingProvider(
-            api_key="k", api_base="https://api.openai.com/v1"
-        )
+        provider = OpenAIEmbeddingProvider(api_key="k", api_base="https://api.openai.com/v1")
         assert provider._api_url == "https://api.openai.com/v1/embeddings"
 
     def test_api_key_env_var_fallback_aura(self, monkeypatch):

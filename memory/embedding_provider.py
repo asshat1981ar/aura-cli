@@ -128,12 +128,7 @@ class OpenAIEmbeddingProvider:
         api_base: str = "https://openrouter.ai/api/v1",
     ):
         # Resolve API key in priority order: explicit arg → AURA (OpenRouter) → OPENROUTER → OPENAI
-        self._api_key = (
-            api_key
-            or os.environ.get("AURA_API_KEY", "")
-            or os.environ.get("OPENROUTER_API_KEY", "")
-            or os.environ.get("OPENAI_API_KEY", "")
-        )
+        self._api_key = api_key or os.environ.get("AURA_API_KEY", "") or os.environ.get("OPENROUTER_API_KEY", "") or os.environ.get("OPENAI_API_KEY", "")
         self._model = model
         self._api_url = f"{api_base.rstrip('/')}/embeddings"
 

@@ -66,9 +66,11 @@ Known record codes:
 - [`readiness`](#readiness)
 - [`bootstrap`](#bootstrap)
 - [`config`](#config)
+  - [`aura config set`](#aura-config-set)
 - [`contract-report`](#contract-report)
 - [`diag`](#diag)
 - [`logs`](#logs)
+- [`history`](#history)
 - [`watch`](#watch)
 - [`studio`](#studio)
 - [`goal`](#goal)
@@ -187,6 +189,19 @@ Print the resolved effective runtime configuration.
 Examples:
 - `python3 main.py config`
 
+### `aura config set`
+
+Set a config value
+
+Persist a configuration key-value pair to aura.config.json.
+Use dotted model paths like 'model.code_generation' to set model routing.
+
+`action`: `config_set` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py config set model.code_generation google/gemini-2.5-pro`
+- `python3 main.py config set dry_run true`
+
 ## `contract-report`
 
 ### `aura contract-report`
@@ -230,6 +245,21 @@ Tail or follow logs from stdin or a file.
 Examples:
 - `python3 main.py logs --tail 50`
 - `python3 main.py logs --file memory/aura.log --follow`
+
+## `history`
+
+### `aura history`
+
+Show completed goal history
+
+List the last N completed goals with their scores and timestamps from the goal archive.
+
+`action`: `history` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py history`
+- `python3 main.py history --limit 20`
+- `python3 main.py history --json`
 
 ## `watch`
 

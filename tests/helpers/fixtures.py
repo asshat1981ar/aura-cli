@@ -99,13 +99,15 @@ class TestFixture:
         Returns:
             Path to created pyproject.toml.
         """
+        overrides = overrides or {}
+        model_name = overrides.get("model_name", "test-model")
         content = f"""[project]
 name = "test-project"
 version = "0.1.0"
 description = "Test project"
 
 [tool.aura]
-model_name = "{overrides.get("model_name", "test-model")}"\n"""
+model_name = "{model_name}"\n"""
         return self.create_file("pyproject.toml", content)
 
     def mock_home(self) -> None:

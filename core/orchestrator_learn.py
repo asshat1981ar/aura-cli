@@ -213,7 +213,6 @@ class LearnMixin:
         entry["cycle_id"] = cycle_id
 
         # Quality Trend Analysis
-        alerts: list = []
         try:
             alerts = self.quality_trends.record_from_cycle(
                 {
@@ -235,7 +234,9 @@ class LearnMixin:
         if getattr(self, "learning_coordinator", None) is not None:
             try:
                 reflection = phase_outputs.get("reflection", {})
-                lc_goals = self.learning_coordinator.on_cycle_complete(entry, reflection, alerts or [])
+                lc_goals = self.learning_coordinator.on_cycle_complete(
+                    entry, reflection, alerts or []
+                )
                 if self.goal_queue:
                     for g in lc_goals:
                         self.goal_queue.add(g)

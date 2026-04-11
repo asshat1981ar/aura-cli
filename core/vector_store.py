@@ -190,24 +190,7 @@ class VectorStore:
                          embedding_model, embedding_dims, content_hash, embedding, namespace)
                         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
-                        (
-                            rec.id,
-                            rec.content,
-                            rec.source_type,
-                            rec.source_ref,
-                            rec.created_at,
-                            rec.updated_at,
-                            rec.goal_id,
-                            rec.agent_name,
-                            json.dumps(rec.tags),
-                            rec.importance,
-                            rec.token_count,
-                            rec.embedding_model,
-                            rec.embedding_dims,
-                            rec.content_hash,
-                            rec.embedding,
-                            getattr(rec, "namespace", None),
-                        ),
+                        (rec.id, rec.content, rec.source_type, rec.source_ref, rec.created_at, rec.updated_at, rec.goal_id, rec.agent_name, json.dumps(rec.tags), rec.importance, rec.token_count, rec.embedding_model, rec.embedding_dims, rec.content_hash, rec.embedding, getattr(rec, "namespace", None)),
                     )
 
                     if rec.embedding:
@@ -293,17 +276,7 @@ class VectorStore:
                     score += q_obj.recency_bias * 0.1
 
             if score >= q_obj.min_score:
-                hits.append(
-                    SearchHit(
-                        record_id=row["id"],
-                        content=row["content"],
-                        score=score,
-                        source_ref=row["source_ref"] or "",
-                        metadata={"source_type": row["source_type"], "tags": json.loads(row["tags"]), "importance": row["importance"]},
-                        explanation=f"Similarity: {score:.3f}",
-                        embedding_model_version=current_model,
-                    )
-                )
+                hits.append(SearchHit(record_id=row["id"], content=row["content"], score=score, source_ref=row["source_ref"], metadata={"source_type": row["source_type"], "tags": json.loads(row["tags"])}, explanation=f"Similarity: {score:.3f}", embedding_model_version=current_model))
 
         hits.sort(key=lambda h: h.score, reverse=True)
 

@@ -37,12 +37,17 @@ def clean_env():
     # Store original values
     orig_env = {}
     env_vars = [
+        "AGENT_API_TOKEN",
+        "MCP_API_TOKEN",
+        "MCP_CONTROL_TOKEN",
+        "AGENTIC_LOOP_TOKEN",
+        "COPILOT_MCP_TOKEN",
+        "SADD_MCP_TOKEN",
         "MCP_DEV_TOOLS_API_KEY",
         "MCP_SKILLS_API_KEY",
         "MCP_CONTROL_API_KEY",
         "MCP_AGENTIC_LOOP_API_KEY",
         "MCP_COPILOT_API_KEY",
-        "MCP_API_TOKEN",  # Legacy
     ]
     for var in env_vars:
         orig_env[var] = os.environ.get(var)
@@ -77,7 +82,7 @@ class TestMCPAuthModule:
         """Test loading API key from environment variable."""
         from tools.mcp_auth import get_mcp_server_api_key
 
-        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
+        os.environ["AGENT_API_TOKEN"] = test_api_key
         result = get_mcp_server_api_key("dev_tools")
         assert result == test_api_key
 
@@ -89,10 +94,10 @@ class TestMCPAuthModule:
         assert result is None
 
     def test_get_mcp_server_api_key_legacy_fallback(self, test_api_key):
-        """Test legacy MCP_API_TOKEN fallback for dev_tools."""
+        """Test legacy alias fallback for dev_tools."""
         from tools.mcp_auth import get_mcp_server_api_key
 
-        os.environ["MCP_API_TOKEN"] = test_api_key
+        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
         result = get_mcp_server_api_key("dev_tools")
         assert result == test_api_key
 
@@ -100,8 +105,8 @@ class TestMCPAuthModule:
         """Test that new env var takes priority over legacy."""
         from tools.mcp_auth import get_mcp_server_api_key
 
-        os.environ["MCP_API_TOKEN"] = "legacy-key"
-        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
+        os.environ["MCP_DEV_TOOLS_API_KEY"] = "legacy-key"
+        os.environ["AGENT_API_TOKEN"] = test_api_key
         result = get_mcp_server_api_key("dev_tools")
         assert result == test_api_key
 
@@ -109,7 +114,7 @@ class TestMCPAuthModule:
         """Test valid API key validation."""
         from tools.mcp_auth import validate_api_key
 
-        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
+        os.environ["AGENT_API_TOKEN"] = test_api_key
         result = validate_api_key("dev_tools", test_api_key)
         assert result is True
 
@@ -117,7 +122,7 @@ class TestMCPAuthModule:
         """Test invalid API key validation."""
         from tools.mcp_auth import validate_api_key
 
-        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
+        os.environ["AGENT_API_TOKEN"] = test_api_key
         result = validate_api_key("dev_tools", "wrong-key")
         assert result is False
 
@@ -125,7 +130,7 @@ class TestMCPAuthModule:
         """Test that missing key fails when auth is required."""
         from tools.mcp_auth import validate_api_key
 
-        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
+        os.environ["AGENT_API_TOKEN"] = test_api_key
         result = validate_api_key("dev_tools", None)
         assert result is False
 
@@ -140,7 +145,7 @@ class TestMCPAuthModule:
         """Test is_auth_enabled returns True when key is configured."""
         from tools.mcp_auth import is_auth_enabled
 
-        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
+        os.environ["AGENT_API_TOKEN"] = test_api_key
         result = is_auth_enabled("dev_tools")
         assert result is True
 
@@ -184,35 +189,35 @@ class TestDevToolsServerAuth:
 
     def test_health_with_valid_api_key(self, client, test_api_key):
         """Test health endpoint with valid X-API-Key header."""
-        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
+        os.environ["AGENT_API_TOKEN"] = test_api_key
 
         response = client.get("/health", headers={"X-API-Key": test_api_key})
         assert response.status_code == 200
 
     def test_health_with_invalid_api_key(self, client, test_api_key):
         """Test health endpoint with invalid X-API-Key header."""
-        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
+        os.environ["AGENT_API_TOKEN"] = test_api_key
 
         response = client.get("/health", headers={"X-API-Key": "wrong-key"})
         assert response.status_code == 403
 
     def test_health_with_missing_api_key(self, client, test_api_key):
         """Test health endpoint with missing API key when required."""
-        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
+        os.environ["AGENT_API_TOKEN"] = test_api_key
 
         response = client.get("/health")
         assert response.status_code == 401
 
     def test_health_with_valid_bearer_token(self, client, test_api_key):
         """Test health endpoint with valid Authorization: Bearer header."""
-        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
+        os.environ["AGENT_API_TOKEN"] = test_api_key
 
         response = client.get("/health", headers={"Authorization": f"Bearer {test_api_key}"})
         assert response.status_code == 200
 
     def test_health_with_invalid_bearer_token(self, client, test_api_key):
         """Test health endpoint with invalid Authorization: Bearer header."""
-        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
+        os.environ["AGENT_API_TOKEN"] = test_api_key
 
         response = client.get("/health", headers={"Authorization": "Bearer wrong-key"})
         assert response.status_code == 403
@@ -245,14 +250,14 @@ class TestSkillsServerAuth:
 
     def test_health_with_valid_api_key(self, client, test_api_key):
         """Test health endpoint with valid X-API-Key header."""
-        os.environ["MCP_SKILLS_API_KEY"] = test_api_key
+        os.environ["MCP_API_TOKEN"] = test_api_key
 
         response = client.get("/health", headers={"X-API-Key": test_api_key})
         assert response.status_code == 200
 
     def test_health_with_invalid_api_key(self, client, test_api_key):
         """Test health endpoint with invalid X-API-Key header."""
-        os.environ["MCP_SKILLS_API_KEY"] = test_api_key
+        os.environ["MCP_API_TOKEN"] = test_api_key
 
         response = client.get("/health", headers={"X-API-Key": "wrong-key"})
         assert response.status_code == 403
@@ -285,14 +290,14 @@ class TestControlServerAuth:
 
     def test_health_with_valid_api_key(self, client, test_api_key):
         """Test health endpoint with valid X-API-Key header."""
-        os.environ["MCP_CONTROL_API_KEY"] = test_api_key
+        os.environ["MCP_CONTROL_TOKEN"] = test_api_key
 
         response = client.get("/health", headers={"X-API-Key": test_api_key})
         assert response.status_code == 200
 
     def test_health_with_invalid_api_key(self, client, test_api_key):
         """Test health endpoint with invalid X-API-Key header."""
-        os.environ["MCP_CONTROL_API_KEY"] = test_api_key
+        os.environ["MCP_CONTROL_TOKEN"] = test_api_key
 
         response = client.get("/health", headers={"X-API-Key": "wrong-key"})
         assert response.status_code == 403
@@ -325,14 +330,14 @@ class TestAgenticLoopServerAuth:
 
     def test_health_with_valid_api_key(self, client, test_api_key):
         """Test health endpoint with valid X-API-Key header."""
-        os.environ["MCP_AGENTIC_LOOP_API_KEY"] = test_api_key
+        os.environ["AGENTIC_LOOP_TOKEN"] = test_api_key
 
         response = client.get("/health", headers={"X-API-Key": test_api_key})
         assert response.status_code == 200
 
     def test_health_with_invalid_api_key(self, client, test_api_key):
         """Test health endpoint with invalid X-API-Key header."""
-        os.environ["MCP_AGENTIC_LOOP_API_KEY"] = test_api_key
+        os.environ["AGENTIC_LOOP_TOKEN"] = test_api_key
 
         response = client.get("/health", headers={"X-API-Key": "wrong-key"})
         assert response.status_code == 403
@@ -365,14 +370,14 @@ class TestCopilotServerAuth:
 
     def test_health_with_valid_api_key(self, client, test_api_key):
         """Test health endpoint with valid X-API-Key header."""
-        os.environ["MCP_COPILOT_API_KEY"] = test_api_key
+        os.environ["COPILOT_MCP_TOKEN"] = test_api_key
 
         response = client.get("/health", headers={"X-API-Key": test_api_key})
         assert response.status_code == 200
 
     def test_health_with_invalid_api_key(self, client, test_api_key):
         """Test health endpoint with invalid X-API-Key header."""
-        os.environ["MCP_COPILOT_API_KEY"] = test_api_key
+        os.environ["COPILOT_MCP_TOKEN"] = test_api_key
 
         response = client.get("/health", headers={"X-API-Key": "wrong-key"})
         assert response.status_code == 403
@@ -390,7 +395,7 @@ class TestMCPClient:
         """Test client loads API key from environment."""
         from aura_cli.mcp_client import _get_mcp_server_api_key
 
-        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
+        os.environ["AGENT_API_TOKEN"] = test_api_key
         result = _get_mcp_server_api_key("dev_tools")
         assert result == test_api_key
 
@@ -405,7 +410,7 @@ class TestMCPClient:
         """Test client includes X-API-Key in headers."""
         from aura_cli.mcp_client import _mcp_headers
 
-        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
+        os.environ["AGENT_API_TOKEN"] = test_api_key
         headers = _mcp_headers("dev_tools")
         assert "X-API-Key" in headers
         assert headers["X-API-Key"] == test_api_key
@@ -474,7 +479,7 @@ class TestSecurity:
         from unittest.mock import patch
         from tools.mcp_auth import validate_api_key
 
-        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
+        os.environ["AGENT_API_TOKEN"] = test_api_key
 
         with patch("tools.mcp_auth.hmac.compare_digest") as mock_compare:
             mock_compare.return_value = True
@@ -487,7 +492,7 @@ class TestSecurity:
         from fastapi.testclient import TestClient
 
         client = TestClient(app)
-        os.environ["MCP_DEV_TOOLS_API_KEY"] = test_api_key
+        os.environ["AGENT_API_TOKEN"] = test_api_key
 
         # Both invalid key and missing key should give same level of info
         invalid_response = client.get("/health", headers={"X-API-Key": "wrong"})

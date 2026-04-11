@@ -55,9 +55,11 @@ class TestAssembleBudget:
 
     def test_truncates_oversized_item(self):
         # First hit fits. Second hit is far too large for the remaining budget.
-        first = make_hit("r1", "a" * 40, score=0.95)  # ~10 tokens
+        first = make_hit("r1", "a" * 40, score=0.95)   # ~10 tokens
         second = make_hit("r2", "b" * 2000, score=0.90)  # ~500 tokens — over budget
-        result = ContextBudgetManager().assemble([first, second], budget_tokens=20, format="plain")
+        result = ContextBudgetManager().assemble(
+            [first, second], budget_tokens=20, format="plain"
+        )
         # Second item should be present but truncated with ellipsis
         assert "…" in result
         assert "b" in result
@@ -114,15 +116,25 @@ class TestAssembleSorting:
 
 class TestAssemblePerSourceCap:
     def test_per_source_cap_limits_duplicates(self):
-        hits = [make_hit(f"r{i}", f"content{i}", score=0.9 - i * 0.01, source_ref="same_source.py:1") for i in range(5)]
-        result = ContextBudgetManager().assemble(hits, budget_tokens=1000, format="plain", per_source_cap=2)
+        hits = [
+            make_hit(f"r{i}", f"content{i}", score=0.9 - i * 0.01, source_ref="same_source.py:1")
+            for i in range(5)
+        ]
+        result = ContextBudgetManager().assemble(
+            hits, budget_tokens=1000, format="plain", per_source_cap=2
+        )
         # Only 2 items from same source should be included
         lines = [l for l in result.split("\n") if l.strip()]
         assert len(lines) <= 2
 
     def test_per_source_cap_zero_means_unlimited(self):
-        hits = [make_hit(f"r{i}", f"content {i}", score=0.9 - i * 0.01, source_ref="same.py:1") for i in range(4)]
-        result = ContextBudgetManager().assemble(hits, budget_tokens=1000, format="plain", per_source_cap=0)
+        hits = [
+            make_hit(f"r{i}", f"content {i}", score=0.9 - i * 0.01, source_ref="same.py:1")
+            for i in range(4)
+        ]
+        result = ContextBudgetManager().assemble(
+            hits, budget_tokens=1000, format="plain", per_source_cap=0
+        )
         # All 4 should be included (cap=0 means no limit)
         for i in range(4):
             assert f"content {i}" in result
@@ -133,7 +145,9 @@ class TestAssemblePerSourceCap:
             make_hit("r2", "from_a_2", score=0.90, source_ref="a.py:1"),
             make_hit("r3", "from_b_1", score=0.85, source_ref="b.py:1"),
         ]
-        result = ContextBudgetManager().assemble(hits, budget_tokens=1000, format="plain", per_source_cap=1)
+        result = ContextBudgetManager().assemble(
+            hits, budget_tokens=1000, format="plain", per_source_cap=1
+        )
         assert "from_a_1" in result
         assert "from_a_2" not in result  # capped
         assert "from_b_1" in result
@@ -144,7 +158,10 @@ class TestAssembleMandatoryIds:
         # mandatory hit has a very low score — would normally be last
         mandatory = make_hit("must", "mandatory content", score=0.1)
         optional = make_hit("opt", "optional content", score=0.99)
-        result = ContextBudgetManager().assemble([optional, mandatory], budget_tokens=500, format="plain", mandatory_ids=["must"])
+        result = ContextBudgetManager().assemble(
+            [optional, mandatory], budget_tokens=500, format="plain",
+            mandatory_ids=["must"]
+        )
         # Both present
         assert "mandatory content" in result
         assert "optional content" in result
@@ -153,7 +170,10 @@ class TestAssembleMandatoryIds:
 
     def test_mandatory_ids_included_even_with_tiny_budget(self):
         mandatory = make_hit("must", "I must appear", score=0.5)
-        result = ContextBudgetManager().assemble([mandatory], budget_tokens=1, format="plain", mandatory_ids=["must"])
+        result = ContextBudgetManager().assemble(
+            [mandatory], budget_tokens=1, format="plain",
+            mandatory_ids=["must"]
+        )
         assert "I must appear" in result
 
     def test_mandatory_ids_none_is_safe(self):

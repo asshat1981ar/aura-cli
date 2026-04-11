@@ -139,6 +139,59 @@ class TestLearningArtifactSerialization:
         assert expected_keys == set(d.keys())
 
 
+class TestLearningArtifactSeverityValues:
+    def test_low_severity_accepted(self):
+        art = LearningArtifact(severity="low")
+        assert art.severity == "low"
+
+    def test_high_severity_accepted(self):
+        art = LearningArtifact(severity="high")
+        assert art.severity == "high"
+
+    def test_critical_severity_accepted(self):
+        art = LearningArtifact(severity="critical")
+        assert art.severity == "critical"
+
+    def test_severity_affects_is_actionable(self):
+        # severity alone doesn't affect is_actionable — needs a goal
+        art = LearningArtifact(severity="critical", suggested_goal=None)
+        assert art.is_actionable() is False
+
+    def test_multiple_artifacts_independent(self):
+        a1 = LearningArtifact(cycle_id="c1", severity="high")
+        a2 = LearningArtifact(cycle_id="c2", severity="low")
+        assert a1.severity != a2.severity
+        assert a1.cycle_id != a2.cycle_id
+
+
+class TestLearningArtifactBulk:
+    def test_ten_artifacts_all_unique_ids(self):
+        arts = [LearningArtifact() for _ in range(10)]
+        ids = [a.artifact_id for a in arts]
+        assert len(set(ids)) == 10
+
+    def test_mark_acted_on_does_not_affect_others(self):
+        a1 = LearningArtifact(suggested_goal="g1")
+        a2 = LearningArtifact(suggested_goal="g2")
+        a1.mark_acted_on()
+        assert a2.acted_on is False
+
+    def test_filter_actionable_from_list(self):
+        arts = [
+            LearningArtifact(suggested_goal="fix x"),
+            LearningArtifact(suggested_goal=None),
+            LearningArtifact(suggested_goal="fix y", acted_on=True),
+            LearningArtifact(suggested_goal="fix z"),
+        ]
+        actionable = [a for a in arts if a.is_actionable()]
+        assert len(actionable) == 2
+
+    def test_artifact_type_frozenset_immutable(self):
+        import pytest
+        with pytest.raises((AttributeError, TypeError)):
+            ARTIFACT_TYPES.add("new_type")  # type: ignore[union-attr]
+
+
 class TestConstants:
     def test_artifact_types_contains_expected(self):
         assert "phase_failure" in ARTIFACT_TYPES
@@ -149,3 +202,18 @@ class TestConstants:
 
     def test_severities_ordered(self):
         assert SEVERITIES == ("low", "medium", "high", "critical")
+
+    def test_artifact_types_exact_count(self):
+        assert len(ARTIFACT_TYPES) == 5
+
+    def test_severities_exact_count(self):
+        assert len(SEVERITIES) == 4
+
+    def test_low_is_first_severity(self):
+        assert SEVERITIES[0] == "low"
+
+    def test_critical_is_last_severity(self):
+        assert SEVERITIES[-1] == "critical"
+
+    def test_medium_severity_in_severities(self):
+        assert "medium" in SEVERITIES

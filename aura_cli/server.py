@@ -18,6 +18,16 @@ import re
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from aura_cli.api import state as _state
+from aura_cli.api.runtime_bootstrap import (
+    RuntimeBootstrapState,
+    apply_runtime_state as _bootstrap_apply_runtime_state,
+    current_project_root as _bootstrap_current_project_root,
+    ensure_runtime_initialized as _bootstrap_ensure_runtime_initialized,
+    load_model_config_status,
+    resolve_runtime_component as _bootstrap_resolve_runtime_component,
+    run_db_migrations as _bootstrap_run_db_migrations,
+    runtime_metrics_snapshot as _bootstrap_runtime_metrics_snapshot,
+)
 from core.logging_utils import log_json
 from core.mcp_contracts import (
     build_discovery_payload,
@@ -28,6 +38,7 @@ from core.ai_environment_registry import list_ai_environments
 from core.mcp_architecture import default_routing_profile
 from core.operator_runtime import build_run_tool_audit_summary
 from core.running_runs import register_run, deregister_run
+from tools.mcp_auth import require_dev_tools_auth
 
 # ---------------------------------------------------------------------------
 # Prometheus metrics — prometheus_client is a required dependency.
@@ -99,6 +110,7 @@ orchestrator = None
 model_adapter = None
 memory_store = None
 _runtime_init_error: str | None = None
+_bootstrap_state = RuntimeBootstrapState()
 
 RUN_TOOL_TIMEOUT_S = float(os.getenv("AURA_RUN_TOOL_TIMEOUT_S", "15"))
 RUN_TOOL_MAX_OUTPUT_BYTES = int(os.getenv("AURA_RUN_TOOL_MAX_OUTPUT_BYTES", str(64 * 1024)))
@@ -133,34 +145,25 @@ def _beads_runtime_snapshot():
     return {"enabled": False, "required": False, "scope": "none"}
 
 
+def _sync_runtime_state_from_exports() -> None:
+    _bootstrap_state.runtime = runtime
+    _bootstrap_state.orchestrator = orchestrator
+    _bootstrap_state.model_adapter = model_adapter
+    _bootstrap_state.memory_store = memory_store
+    _bootstrap_state.runtime_init_error = _runtime_init_error
+
+
+def _sync_runtime_exports() -> None:
+    global runtime, orchestrator, model_adapter, memory_store, _runtime_init_error
+    runtime = _bootstrap_state.runtime
+    orchestrator = _bootstrap_state.orchestrator
+    model_adapter = _bootstrap_state.model_adapter
+    memory_store = _bootstrap_state.memory_store
+    _runtime_init_error = _bootstrap_state.runtime_init_error
+
+
 def _run_db_migrations() -> None:
-    """Run auth and brain DB migrations idempotently before accepting requests."""
-    try:
-        from core.db_migrations import migrate_auth_db, migrate_brain_db  # noqa: PLC0415
-    except ImportError:  # pragma: no cover
-        log_json("WARN", "aura_db_migrations_unavailable", details={"reason": "core.db_migrations not importable"})
-        return
-
-    try:
-        from core.auth import _default_auth_db_path  # noqa: PLC0415
-    except ImportError:  # pragma: no cover
-
-        def _default_auth_db_path() -> Path:  # type: ignore[misc]
-            custom = os.environ.get("AURA_AUTH_DB_PATH")
-            if custom:
-                return Path(custom)
-            return Path.home() / ".local" / "share" / "aura" / "auth.db"
-
-    auth_db_path = Path(os.environ["AURA_AUTH_DB_PATH"]) if os.environ.get("AURA_AUTH_DB_PATH") else _default_auth_db_path()
-    brain_db_path = Path(os.environ.get("AURA_BRAIN_DB_PATH", "memory/brain_v2.db"))
-
-    auth_versions = migrate_auth_db(auth_db_path)
-    brain_versions = migrate_brain_db(brain_db_path)
-    log_json(
-        "INFO",
-        "aura_db_migrations_applied",
-        details={"auth_versions": auth_versions, "brain_versions": brain_versions},
-    )
+    _bootstrap_run_db_migrations(log_json)
 
 
 @asynccontextmanager
@@ -281,68 +284,49 @@ class WebhookPlanReviewRequest(BaseModel):
 
 
 def _current_project_root() -> Path:
-    configured_root = os.getenv("AURA_PROJECT_ROOT")
-    return Path(configured_root).resolve() if configured_root else PROJECT_ROOT.resolve()
+    return _bootstrap_current_project_root(PROJECT_ROOT)
 
 
 def _apply_runtime_state(runtime_state: Dict[str, Any]) -> None:
-    global runtime, orchestrator, model_adapter, memory_store
-    runtime = runtime_state
-    orchestrator = runtime_state.get("orchestrator")
-    model_adapter = runtime_state.get("model_adapter")
-    memory_store = runtime_state.get("memory_store")
-    # Sync to shared state module so routers always see the latest values.
-    _state.runtime = runtime
-    _state.orchestrator = orchestrator
-    _state.model_adapter = model_adapter
-    _state.memory_store = memory_store
+    _bootstrap_apply_runtime_state(_bootstrap_state, runtime_state, _state)
+    _sync_runtime_exports()
 
 
 async def _ensure_runtime_initialized() -> Dict[str, Any]:
-    global _runtime_init_error
-    if runtime:
-        return runtime
-    try:
-        from aura_cli.cli_main import create_runtime
+    _sync_runtime_state_from_exports()
+    from aura_cli.cli_main import create_runtime
 
-        runtime_state = await asyncio.to_thread(create_runtime, _current_project_root(), None)
-        _apply_runtime_state(runtime_state)
-        _runtime_init_error = None
-        return runtime_state
-    except Exception as exc:
-        _runtime_init_error = str(exc)
-        log_json("WARN", "aura_server_runtime_init_failed", details={"error": _runtime_init_error})
-        return {}
+    runtime_state = await _bootstrap_ensure_runtime_initialized(
+        state=_bootstrap_state,
+        project_root=_current_project_root(),
+        create_runtime_func=create_runtime,
+        shared_state_module=_state,
+        log_json=log_json,
+    )
+    _sync_runtime_exports()
+    return runtime_state
 
 
 async def _resolve_runtime_component(name: str) -> Any:
-    component = globals().get(name)
-    if component is not None:
-        return component
-    if not runtime:
-        await _ensure_runtime_initialized()
-        component = globals().get(name)
-        if component is not None:
-            return component
-    detail = f"{name} is not configured"
-    if _runtime_init_error and not runtime:
-        detail = f"{detail}: {_runtime_init_error}"
-    raise HTTPException(status_code=503, detail=detail)
+    _sync_runtime_state_from_exports()
+    result = await _bootstrap_resolve_runtime_component(
+        state=_bootstrap_state,
+        name=name,
+        ensure_runtime_initialized_func=_ensure_runtime_initialized,
+    )
+    _sync_runtime_exports()
+    return result
 
 
 def _runtime_metrics_snapshot() -> Dict[str, Any]:
-    entries: list[Any] = []
-    if memory_store is not None and hasattr(memory_store, "read_log"):
-        try:
-            entries = list(memory_store.read_log(limit=1000) or [])
-        except Exception:
-            entries = []
-    return {
-        "total_calls": len(entries),
-        "registered_services": len(list_registered_services()),
-        "environment_count": len(list_ai_environments(PROJECT_ROOT)),
-        "run_tool_audit": build_run_tool_audit_summary(memory_store),
-    }
+    _sync_runtime_state_from_exports()
+    return _bootstrap_runtime_metrics_snapshot(
+        state=_bootstrap_state,
+        project_root=PROJECT_ROOT,
+        list_registered_services_func=list_registered_services,
+        list_ai_environments_func=list_ai_environments,
+        build_run_tool_audit_summary_func=build_run_tool_audit_summary,
+    )
 
 
 def _clamped_run_tool_timeout_s() -> float:
@@ -696,14 +680,11 @@ async def _execute_goal(req: ExecuteRequest):
     return StreamingResponse(goal_generator(), media_type="text/event-stream")
 
 
-def require_auth(authorization: Optional[str] = Header(default=None)) -> None:
-    token = os.getenv("AGENT_API_TOKEN")
-    if not token:
-        return
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing Authorization header")
-    if not secrets.compare_digest(authorization, f"Bearer {token}"):
-        raise HTTPException(status_code=403, detail="Invalid token")
+def require_auth(
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(default=None),
+) -> None:
+    require_dev_tools_auth(x_api_key, authorization)
 
 
 @app.get("/health")
@@ -791,15 +772,7 @@ async def ready():
         components["mcp_server"] = {"status": "unavailable", "latency_ms": None}
 
     # --- model_config ---
-    config_path = _current_project_root() / "aura.config.json"
-    model_configured = False
-    try:
-        if config_path.exists():
-            with open(config_path) as f:
-                cfg = json.load(f)
-            model_configured = bool(cfg.get("model_name") or cfg.get("api_key") or cfg.get("openai_api_key") or cfg.get("local_model_profiles"))
-    except Exception:
-        pass
+    model_configured = load_model_config_status(PROJECT_ROOT)
     components["model_config"] = {"status": "configured" if model_configured else "unconfigured"}
 
     # --- sandbox ---

@@ -35,6 +35,20 @@
         "Authorization": "Bearer ${env:COPILOT_MCP_TOKEN}"
       }
     },
+    "aura-sadd": {
+      "type": "http",
+      "url": "http://127.0.0.1:8020",
+      "headers": {
+        "Authorization": "Bearer ${env:SADD_MCP_TOKEN}"
+      }
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ]
+    },
     "n8n-mcp": {
       "type": "http",
       "url": "http://localhost:5678/mcp-server/http",

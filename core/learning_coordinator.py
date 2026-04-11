@@ -187,7 +187,6 @@ class LearningCoordinator:
                 self.memory.put("learning_artifacts", dataclasses.asdict(art))
             except Exception as exc:
                 log_json("WARN", "learning_artifact_persist_failed", details={"error": str(exc)})
-
         log_json(
             "INFO",
             "learning_coordinator_cycle_complete",

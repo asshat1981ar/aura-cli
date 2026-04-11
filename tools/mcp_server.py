@@ -1,4 +1,4 @@
-"""Comprehensive MCP tool server for AURA CLI.
+"""Legacy compatibility MCP tool server for AURA CLI.
 
 Exposes a FastAPI application with a /call endpoint that dispatches to a
 rich set of developer tools: file I/O, linting, formatting, searching,
@@ -6,6 +6,9 @@ compression, git utilities, and more.
 
 Module-level flags (``ENABLE_WRITE``, ``ENABLE_RUN``, ``RUN_ALLOW``, etc.)
 can be overridden at runtime by tests via ``monkeypatch.setattr``.
+
+This module is a compatibility surface for older MCP utility workflows.
+The canonical dev-tools HTTP runtime is ``aura_cli.server``.
 """
 
 from __future__ import annotations
@@ -29,7 +32,8 @@ from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
 
 # R8: Import centralized MCP auth
-from tools.mcp_auth import require_dev_tools_auth
+from tools.mcp_auth import is_auth_enabled, require_dev_tools_auth
+from tools.mcp_server_support import auth_mode_label, resolve_server_port
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -124,13 +128,10 @@ def _check_rate_limit(token: str) -> None:
 
 @asynccontextmanager
 async def _lifespan(application: FastAPI):
-    token = os.getenv("MCP_API_TOKEN", "").strip()
-    if not token:
-        raise RuntimeError("MCP_API_TOKEN must be set before starting the MCP server")
     yield
 
 
-app = FastAPI(title="AURA MCP Server", version="0.2.0", lifespan=_lifespan)
+app = FastAPI(title="AURA MCP Compatibility Server", version="0.2.0", lifespan=_lifespan)
 
 
 # ---------------------------------------------------------------------------
@@ -261,23 +262,12 @@ TOOLS_MANIFEST: List[Dict[str, str]] = [
 @app.get("/health")
 async def health(auth: str = Depends(require_dev_tools_auth)):
     """Return server health, current limits, and runtime metrics."""
-    auth_status = "enabled" if os.getenv("MCP_DEV_TOOLS_API_KEY") or os.getenv("MCP_API_TOKEN") else "disabled"
+    auth_status = "enabled" if is_auth_enabled("dev_tools") else "disabled"
     return {
         "status": "ok",
+        "role": "compatibility",
+        "canonical_server": "aura_cli.server",
         "auth": auth_status,
-        "limits": {
-            "max_read_bytes": MAX_READ_BYTES,
-            "rate_limit_per_min": RATE_LIMIT_PER_MIN,
-            "compress_max_bytes": COMPRESS_MAX_BYTES,
-        },
-        "metrics": {
-            "enable_write": ENABLE_WRITE,
-            "enable_run": ENABLE_RUN,
-        },
-    }
-    """Return server health, current limits, and runtime metrics."""
-    return {
-        "status": "ok",
         "limits": {
             "max_read_bytes": MAX_READ_BYTES,
             "rate_limit_per_min": RATE_LIMIT_PER_MIN,
@@ -765,15 +755,7 @@ async def call_tool(req: CallRequest, auth: str = Depends(require_dev_tools_auth
 
 if __name__ == "__main__":
     import uvicorn
-    from core.config_manager import config as _cfg
-
-    # R4: port from config registry; env var PORT still overrides for backward-compat
-    port = int(os.getenv("PORT", _cfg.get_mcp_server_port("dev_tools")))
-
-    # R8: Log auth status on startup
-    from tools.mcp_auth import is_auth_enabled
-
-    auth_enabled = is_auth_enabled("dev_tools")
-    print(f"[MCP dev_tools] Starting on port {port} (auth: {'enabled' if auth_enabled else 'optional'})")
+    port = resolve_server_port("dev_tools")
+    print(f"[MCP dev_tools compatibility] Starting on port {port} (auth: {auth_mode_label('dev_tools')}); canonical server is aura_cli.server")
 
     uvicorn.run(app, host="0.0.0.0", port=port)

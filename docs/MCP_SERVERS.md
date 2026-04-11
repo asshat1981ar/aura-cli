@@ -1,8 +1,8 @@
 # AURA MCP Servers Reference
 
-AURA exposes **5 Model Context Protocol (MCP) HTTP servers** plus an n8n
-workflow-automation integration. Together they form the full AURA tool surface,
-accessible to Copilot CLI, VS Code, or any MCP-capable client.
+AURA exposes **6 Model Context Protocol (MCP) HTTP servers** plus the
+`playwright` stdio MCP helper. An optional `n8n-mcp` integration can be merged
+into local configs alongside the AURA-managed servers.
 
 ---
 
@@ -18,7 +18,8 @@ accessible to Copilot CLI, VS Code, or any MCP-capable client.
    - [aura-control (port 8003)](#3-aura-control--port-8003)
    - [aura-agentic-loop (port 8006)](#4-aura-agentic-loop--port-8006)
    - [aura-copilot (port 8007)](#5-aura-copilot--port-8007)
-   - [n8n-mcp (port 5678)](#6-n8n-mcp--port-5678)
+   - [aura-sadd (port 8020)](#6-aura-sadd--port-8020)
+   - [n8n-mcp (port 5678)](#7-n8n-mcp--port-5678)
 6. [aura-skills: All 35 Skills](#aura-skills-all-35-skills)
 
 ---
@@ -27,7 +28,7 @@ accessible to Copilot CLI, VS Code, or any MCP-capable client.
 
 ```bash
 # 1. Load auth tokens
-source .env.n8n          # sets AGENT_API_TOKEN, MCP_API_TOKEN, etc.
+source .env.n8n          # sets AGENT_API_TOKEN, MCP_API_TOKEN, SADD_MCP_TOKEN, etc.
 
 # 2. Start servers (each in its own terminal, or use the docker-compose stack)
 uvicorn aura_cli.server:app --host 127.0.0.1 --port 8001 &
@@ -35,9 +36,10 @@ uvicorn tools.aura_mcp_skills_server:app --host 127.0.0.1 --port 8002 &
 uvicorn tools.aura_control_mcp:app --host 127.0.0.1 --port 8003 &
 uvicorn tools.agentic_loop_mcp:app --host 127.0.0.1 --port 8006 &
 uvicorn tools.github_copilot_mcp:app --host 127.0.0.1 --port 8007 &
+uvicorn tools.sadd_mcp_server:app --host 127.0.0.1 --port 8020 &
 
 # 3. Verify all are running
-for port in 8001 8002 8003 8006 8007; do
+for port in 8001 8002 8003 8006 8007 8020; do
   curl -sf http://localhost:$port/health \
     && echo "port $port OK" \
     || echo "port $port DOWN"
@@ -54,7 +56,7 @@ docker compose up -d
 
 ## Authentication
 
-All five AURA MCP servers use **Bearer token** authentication. Each server reads
+All six AURA MCP servers use **Bearer token** authentication. Each server reads
 its token from a dedicated environment variable. If the variable is empty, auth
 is skipped (development / local mode).
 
@@ -65,6 +67,7 @@ is skipped (development / local mode).
 | aura-control     | 8003 | `MCP_CONTROL_TOKEN`   | `Authorization: Bearer <token>` **or** `X-API-Key: <token>` |
 | aura-agentic-loop| 8006 | `AGENTIC_LOOP_TOKEN`  | `Authorization: Bearer <token>` **or** `X-API-Key: <token>` |
 | aura-copilot     | 8007 | `COPILOT_MCP_TOKEN`   | `Authorization: Bearer <token>` **or** `X-API-Key: <token>` |
+| aura-sadd        | 8020 | `SADD_MCP_TOKEN`      | `Authorization: Bearer <token>`   |
 | n8n-mcp          | 5678 | `N8N_MCP_TOKEN`       | `Authorization: Bearer <token>`   |
 
 Define tokens in `.env.n8n` (never commit this file):
@@ -75,6 +78,7 @@ MCP_API_TOKEN=your-skills-token
 MCP_CONTROL_TOKEN=your-control-token
 AGENTIC_LOOP_TOKEN=your-loop-token
 COPILOT_MCP_TOKEN=your-copilot-token
+SADD_MCP_TOKEN=your-sadd-token
 N8N_MCP_TOKEN=your-n8n-token
 ```
 
@@ -120,8 +124,8 @@ cp .vscode/mcp.json.example .vscode/mcp.json
 # OR ensure the env vars are exported in your shell before launching VS Code.
 ```
 
-The live config (`.vscode/mcp.json`) registers all six MCP endpoints and
-references tokens via `${env:VAR_NAME}` so secrets are never hardcoded:
+The generated config registers all six AURA HTTP endpoints plus `playwright`
+and references tokens via `${env:VAR_NAME}` so secrets are never hardcoded:
 
 ```jsonc
 {
@@ -135,16 +139,31 @@ references tokens via `${env:VAR_NAME}` so secrets are never hardcoded:
     "aura-agentic-loop": { "type": "http", "url": "http://127.0.0.1:8006",
                            "headers": { "Authorization": "Bearer ${env:AGENTIC_LOOP_TOKEN}" } },
     "aura-copilot":      { "type": "http", "url": "http://127.0.0.1:8007",
-                           "headers": { "Authorization": "Bearer ${env:COPILOT_MCP_TOKEN}" } },
-    "n8n-mcp":           { "type": "http", "url": "http://localhost:5678/mcp-server/http",
-                           "headers": { "Authorization": "Bearer ${env:N8N_MCP_TOKEN}",
-                                        "Accept": "application/json, text/event-stream" } }
+                            "headers": { "Authorization": "Bearer ${env:COPILOT_MCP_TOKEN}" } },
+    "aura-sadd":         { "type": "http", "url": "http://127.0.0.1:8020",
+                            "headers": { "Authorization": "Bearer ${env:SADD_MCP_TOKEN}" } },
+    "playwright":        { "type": "stdio", "command": "npx",
+                            "args": ["@playwright/mcp@latest"] }
   }
 }
 ```
 
 > **Tip:** Reload the MCP config in Copilot CLI after editing: run
 > `/mcp reload` or restart VS Code.
+
+If you also use n8n locally, merge this additional unmanaged entry into your
+config:
+
+```jsonc
+"n8n-mcp": {
+  "type": "http",
+  "url": "http://localhost:5678/mcp-server/http",
+  "headers": {
+    "Authorization": "Bearer ${env:N8N_MCP_TOKEN}",
+    "Accept": "application/json, text/event-stream"
+  }
+}
+```
 
 ---
 
@@ -503,7 +522,46 @@ curl -X POST http://localhost:8007/call \
 
 ---
 
-### 6. n8n-mcp — Port 5678
+### 6. aura-sadd — Port 8020
+
+**Source:** `tools/sadd_mcp_server.py`  
+**Token:** `SADD_MCP_TOKEN`  
+**Title:** SADD MCP  
+**Purpose:** Exposes SADD design-spec parsing and session-tracking operations as
+MCP tools.
+
+#### Endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `GET`  | `/health` | ✅ | Health check |
+| `GET`  | `/tools` | ✅ | List all SADD tools |
+| `POST` | `/call` | ✅ | Invoke a SADD tool by name |
+| `GET`  | `/tool/{name}` | ✅ | Descriptor for a single tool |
+| `GET`  | `/metrics` | ✅ | Per-tool call/error counts |
+
+#### Tools (`POST /call`)
+
+| Tool | Required args | Description |
+|------|---------------|-------------|
+| `sadd_parse_spec` | `spec_markdown` | Parse markdown spec text into workstreams |
+| `sadd_session_status` | `session_id` | Get status for one SADD session |
+| `sadd_list_sessions` | *(none)* | List recent SADD sessions |
+| `sadd_session_events` | `session_id` | Fetch a session event log |
+| `sadd_session_artifacts` | `session_id` | Fetch workstream artifacts |
+
+**Example — parse a spec:**
+
+```bash
+curl -X POST http://localhost:8020/call \
+  -H "Authorization: Bearer $SADD_MCP_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"tool_name": "sadd_parse_spec", "args": {"spec_markdown": "# Spec\n\nBuild a queue worker."}}'
+```
+
+---
+
+### 7. n8n-mcp — Port 5678
 
 **Source:** n8n workflow automation platform (see `docker-compose.n8n.yml`)  
 **Token:** `N8N_MCP_TOKEN`  

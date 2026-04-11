@@ -27,6 +27,8 @@ from fastapi import Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from tools.mcp_manifest import get_mcp_server_spec
+
 # ---------------------------------------------------------------------------
 # Key loading and validation
 # ---------------------------------------------------------------------------
@@ -36,22 +38,30 @@ def get_mcp_server_api_key(server_name: str) -> Optional[str]:
     """Load API key for a named MCP server from configuration.
 
     Priority:
-    1. Environment variable: MCP_<SERVER_NAME>_API_KEY (uppercase)
-    2. Config manager: mcp_server_api_keys.<server_name>
-    3. Legacy fallback: MCP_API_TOKEN (for dev_tools only)
+    1. Canonical env var from the MCP manifest (for example ``AGENT_API_TOKEN``)
+    2. Manifest-defined legacy aliases (for backward compatibility)
+    3. Config manager: mcp_server_api_keys.<server_name>
 
     Args:
-        server_name: One of "dev_tools", "skills", "control",
-                     "agentic_loop", "copilot"
+        server_name: One of the manifest-defined MCP server names.
 
     Returns:
         API key string or None if not configured
     """
-    # 1. Check environment variable first
-    env_var = f"MCP_{server_name.upper()}_API_KEY"
-    env_key = os.getenv(env_var, "").strip()
-    if env_key:
-        return env_key
+    try:
+        spec = get_mcp_server_spec(server_name)
+        candidate_envs = tuple(
+            env_name
+            for env_name in (spec.token_env, *spec.legacy_token_envs)
+            if env_name
+        )
+    except KeyError:
+        candidate_envs = (f"MCP_{server_name.upper()}_API_KEY",)
+
+    for env_name in candidate_envs:
+        env_key = os.getenv(env_name, "").strip()
+        if env_key:
+            return env_key
 
     # 2. Check config manager
     try:
@@ -62,12 +72,6 @@ def get_mcp_server_api_key(server_name: str) -> Optional[str]:
             return cfg_key
     except Exception:
         pass
-
-    # 3. Legacy fallback for dev_tools
-    if server_name == "dev_tools":
-        legacy_token = os.getenv("MCP_API_TOKEN", "").strip()
-        if legacy_token:
-            return legacy_token
 
     return None
 
@@ -340,4 +344,13 @@ def require_copilot_auth(
 ) -> str:
     """Dependency for copilot server auth."""
     validator = get_api_key_validator("copilot")
+    return validator(x_api_key, authorization)
+
+
+def require_sadd_auth(
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(default=None),
+) -> str:
+    """Dependency for SADD server auth."""
+    validator = get_api_key_validator("sadd")
     return validator(x_api_key, authorization)

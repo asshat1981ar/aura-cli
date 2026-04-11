@@ -44,10 +44,7 @@ if str(_ROOT) not in sys.path:
 
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 
-from fastapi import Depends, FastAPI, Header, HTTPException
-
-# R8: Import centralized MCP auth
-from tools.mcp_auth import require_copilot_auth
+from fastapi import Depends, FastAPI, HTTPException
 
 from core.logging_utils import log_json
 from core.mcp_contracts import (
@@ -56,6 +53,11 @@ from core.mcp_contracts import (
     build_tool_descriptors_from_schemas,
 )
 from core.mcp_registry import get_registered_service, list_registered_services
+from tools.mcp_server_support import (
+    auth_dependency,
+    auth_mode_label,
+    resolve_server_port,
+)
 
 # ---------------------------------------------------------------------------
 # Lazy-loaded singletons
@@ -93,47 +95,11 @@ app = FastAPI(
     version="1.0.0",
 )
 
-_TOKEN = os.getenv("COPILOT_MCP_TOKEN", "")
-
-
-def _check_auth(
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
-    authorization: Optional[str] = Header(default=None),
-) -> str:
-    """Validate API key using centralized auth (with legacy fallback)."""
-    from tools.mcp_auth import get_mcp_server_api_key
-
-    # Check if new centralized auth is configured
-    expected_key = get_mcp_server_api_key("copilot")
-
-    # Fall back to legacy token
-    if not expected_key and _TOKEN:
-        expected_key = _TOKEN
-
-    # If no key configured, allow through
-    if not expected_key:
-        return "optional"
-
-    # Get provided key
-    provided_key = x_api_key
-    if not provided_key and authorization and authorization.startswith("Bearer "):
-        provided_key = authorization[7:].strip()
-
-    if not provided_key:
-        raise HTTPException(status_code=401, detail="Missing API key")
-
-    import hmac
-
-    if not hmac.compare_digest(provided_key, expected_key):
-        raise HTTPException(status_code=403, detail="Invalid API key")
-
-    return provided_key
+_require_auth = auth_dependency("copilot")
 
 
 def _get_copilot_port() -> int:
-    from core.config_manager import config as _cfg
-
-    return int(os.getenv("COPILOT_MCP_PORT", _cfg.get_mcp_server_port("copilot")))
+    return resolve_server_port("copilot")
 
 
 # ---------------------------------------------------------------------------
@@ -751,7 +717,7 @@ from tools.mcp_types import ToolCallRequest, ToolResult  # noqa: F401, E402
 
 
 @app.get("/health")
-async def health(auth: str = Depends(require_copilot_auth)):
+async def health(auth: str = Depends(_require_auth)):
     github_ok = bool(os.getenv("GITHUB_PAT"))
     model_ok = bool(os.getenv("AURA_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY"))
     return build_health_payload(
@@ -765,7 +731,7 @@ async def health(auth: str = Depends(require_copilot_auth)):
 
 
 @app.get("/discovery")
-async def discovery(auth: str = Depends(require_copilot_auth)) -> Dict:
+async def discovery(auth: str = Depends(_require_auth)) -> Dict:
     return build_discovery_payload(
         current_server=get_registered_service("copilot"),
         servers=list_registered_services(),
@@ -774,19 +740,19 @@ async def discovery(auth: str = Depends(require_copilot_auth)) -> Dict:
 
 
 @app.get("/tools")
-async def list_tools(auth: str = Depends(require_copilot_auth)) -> List[Dict]:
+async def list_tools(auth: str = Depends(_require_auth)) -> List[Dict]:
     return build_tool_descriptors_from_schemas(_TOOL_SCHEMAS)
 
 
 @app.get("/tool/{name}")
-async def get_tool(name: str, auth: str = Depends(require_copilot_auth)):
+async def get_tool(name: str, auth: str = Depends(_require_auth)):
     if name not in _TOOL_SCHEMAS:
         raise HTTPException(status_code=404, detail=f"Tool '{name}' not found.")
     return _build_descriptor(name)
 
 
 @app.post("/call")
-async def call_tool(request: ToolCallRequest, auth: str = Depends(require_copilot_auth)) -> ToolResult:
+async def call_tool(request: ToolCallRequest, auth: str = Depends(_require_auth)) -> ToolResult:
     handler = _HANDLERS.get(request.tool_name)
     if not handler:
         raise HTTPException(status_code=404, detail=f"Tool '{request.tool_name}' not found.")
@@ -809,10 +775,7 @@ async def call_tool(request: ToolCallRequest, auth: str = Depends(require_copilo
 
 if __name__ == "__main__":
     import uvicorn
-    from tools.mcp_auth import is_auth_enabled
 
-    # R4: port from config registry; env var still overrides for backward-compat
     port = _get_copilot_port()
-    auth_enabled = is_auth_enabled("copilot")
-    print(f"[MCP copilot] Starting on port {port} (auth: {'enabled' if auth_enabled else 'optional'})")
+    print(f"[MCP copilot] Starting on port {port} (auth: {auth_mode_label('copilot')})")
     uvicorn.run("tools.github_copilot_mcp:app", host="0.0.0.0", port=port, reload=False)

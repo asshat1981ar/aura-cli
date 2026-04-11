@@ -6,14 +6,16 @@ import urllib.error
 import urllib.request
 from typing import Optional
 
+from tools.mcp_auth import get_mcp_server_api_key
+from tools.mcp_manifest import get_mcp_server_spec
 
 def _get_mcp_server_api_key(server_name: str = "dev_tools") -> Optional[str]:
     """Get API key for an MCP server from config or environment.
 
     Priority:
-    1. Environment variable: MCP_<SERVER_NAME>_API_KEY
-    2. Config manager: mcp_server_api_keys.<server_name>
-    3. Legacy: MCP_API_TOKEN for dev_tools
+    1. Canonical env var from the MCP manifest
+    2. Legacy aliases supported by the shared auth helper
+    3. Config manager: mcp_server_api_keys.<server_name>
 
     Args:
         server_name: Name of the MCP server (default: "dev_tools")
@@ -21,29 +23,7 @@ def _get_mcp_server_api_key(server_name: str = "dev_tools") -> Optional[str]:
     Returns:
         API key string or None if not configured
     """
-    # 1. Check environment variable
-    env_var = f"MCP_{server_name.upper()}_API_KEY"
-    env_key = os.getenv(env_var, "").strip()
-    if env_key:
-        return env_key
-
-    # 2. Check config manager
-    try:
-        from core.config_manager import config as _cfg
-
-        cfg_key = _cfg.get_mcp_server_api_key(server_name)
-        if cfg_key:
-            return cfg_key
-    except Exception:
-        pass
-
-    # 3. Legacy fallback for dev_tools
-    if server_name == "dev_tools":
-        legacy_token = os.getenv("MCP_API_TOKEN", "").strip()
-        if legacy_token:
-            return legacy_token
-
-    return None
+    return get_mcp_server_api_key(server_name)
 
 
 def _mcp_headers(server_name: str = "dev_tools") -> dict[str, str]:
@@ -92,14 +72,12 @@ def _mcp_base_url(server_name: str = "dev_tools") -> str:
         pass
 
     # Default fallback
-    default_ports = {
-        "dev_tools": 8001,
-        "skills": 8002,
-        "control": 8003,
-        "agentic_loop": 8006,
-        "copilot": 8007,
-    }
-    port = default_ports.get(server_name, 8001)
+    try:
+        spec = get_mcp_server_spec(server_name)
+    except KeyError:
+        port = 8001
+    else:
+        port = spec.default_port or 8001
     return f"http://localhost:{port}"
 
 
@@ -130,7 +108,7 @@ def _mcp_request(
     except urllib.error.HTTPError as exc:
         # Handle auth errors specifically
         if exc.code == 401:
-            return exc.code, {"error": "Authentication required. Set MCP_API_TOKEN or configure mcp_server_api_keys."}
+            return exc.code, {"error": "Authentication required. Set the canonical server token env var or configure mcp_server_api_keys."}
         if exc.code == 403:
             return exc.code, {"error": "Invalid API key"}
         try:

@@ -24,7 +24,15 @@ def make_cycle_entry(cycle_id="c1", goal="Add feature", goal_type="feature") -> 
     return {"cycle_id": cycle_id, "goal": goal, "goal_type": goal_type}
 
 
-def make_alert(alert_type="threshold_breach", metric="health_score", current=0.3, previous=0.8, threshold=0.4, severity="high", suggested_goal="Fix health score"):
+def make_alert(
+    alert_type="threshold_breach",
+    metric="health_score",
+    current=0.3,
+    previous=0.8,
+    threshold=0.4,
+    severity="high",
+    suggested_goal="Fix health score",
+):
     """Create a mock TrendAlert-like object."""
     alert = MagicMock()
     alert.alert_type = alert_type
@@ -156,12 +164,26 @@ class TestQualityAlertArtifacts:
 class TestGoalCap:
     def test_goals_capped_at_max_per_cycle(self):
         coord = LearningCoordinator(make_store())
-        alerts = [make_alert(severity="high", suggested_goal=f"Fix thing {i}") for i in range(10)]
+        alerts = [
+            make_alert(severity="high", suggested_goal=f"Fix thing {i}")
+            for i in range(10)
+        ]
         goals = coord.on_cycle_complete(make_cycle_entry(), {}, alerts)
         assert len(goals) <= LearningCoordinator.MAX_GOALS_PER_CYCLE
 
     def test_cap_is_three_by_default(self):
         assert LearningCoordinator.MAX_GOALS_PER_CYCLE == 3
+
+    def test_overflow_goals_are_deferred_to_backlog(self):
+        coord = LearningCoordinator(make_store())
+        alerts = [
+            make_alert(severity="high", suggested_goal=f"Fix thing {i}")
+            for i in range(5)
+        ]
+        goals = coord.on_cycle_complete(make_cycle_entry(), {}, alerts)
+        backlog = coord.generate_backlog(limit=10)
+        assert goals == ["Fix thing 0", "Fix thing 1", "Fix thing 2"]
+        assert backlog == ["Fix thing 3", "Fix thing 4"]
 
 
 class TestGenerateBacklog:
@@ -278,6 +300,26 @@ class TestSyncReflectionReports:
         artifacts, goals = coord._sync_reflection_reports(make_cycle_entry())
         assert len(artifacts) == 1
         assert goals == []  # LOW severity → no goal
+
+    def test_critical_severity_is_normalized_and_actionable(self):
+        store = make_store()
+        coord = LearningCoordinator(store)
+        self._write_report(
+            store,
+            ts=time.time() + 1,
+            insights=[
+                {
+                    "type": "phase_failure",
+                    "phase": "verify",
+                    "failure_rate": 0.95,
+                    "severity": "CRITICAL",
+                    "message": "verify failing badly",
+                }
+            ],
+        )
+        artifacts, goals = coord._sync_reflection_reports(make_cycle_entry())
+        assert artifacts[0].severity == "critical"
+        assert len(goals) == 1
 
     def test_empty_report(self):
         store = make_store()

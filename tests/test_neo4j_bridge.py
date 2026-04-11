@@ -9,7 +9,7 @@ import time
 from unittest.mock import Mock, patch, MagicMock, call
 from types import SimpleNamespace
 
-from memory.neo4j_bridge import _CircuitBreaker, Neo4jBridge
+from memory.neo4j_bridge import _CircuitBreaker, Neo4jBridge, _props_clause
 
 # Circuit-breaker reset tests use real time.sleep(0.15) calls; mark slow.
 pytestmark = pytest.mark.slow
@@ -350,3 +350,335 @@ class TestEdgeCases:
         """Test bridge with special characters in URI."""
         bridge = Neo4jBridge(uri="bolt://user:pass@host:7687")
         assert "user:pass@" in bridge._uri
+
+
+class TestNeo4jBridgeQueryKnowledge:
+    """Tests for query_knowledge method."""
+
+    @pytest.fixture
+    def bridge(self):
+        return Neo4jBridge()
+
+    @patch.object(Neo4jBridge, "_get_driver")
+    def test_query_knowledge_success(self, mock_get_driver, bridge):
+        """Test query_knowledge with successful result."""
+        mock_session = Mock()
+        mock_record1 = {"name": "test1"}
+        mock_record2 = {"name": "test2"}
+        mock_result = Mock()
+        mock_result.__iter__ = Mock(return_value=iter([mock_record1, mock_record2]))
+        mock_session.run.return_value = mock_result
+        
+        mock_driver = Mock()
+        mock_driver.session.return_value.__enter__ = Mock(return_value=mock_session)
+        mock_driver.session.return_value.__exit__ = Mock(return_value=False)
+        mock_get_driver.return_value = mock_driver
+
+        result = bridge.query_knowledge("MATCH (n) RETURN n.name as name", {"param": "value"})
+
+        assert len(result) == 2
+        assert result[0] == mock_record1
+        mock_session.run.assert_called_once_with("MATCH (n) RETURN n.name as name", {"param": "value"})
+
+    @patch.object(Neo4jBridge, "_get_driver")
+    def test_query_knowledge_empty_params(self, mock_get_driver, bridge):
+        """Test query_knowledge with None params."""
+        mock_session = Mock()
+        mock_result = Mock()
+        mock_result.__iter__ = Mock(return_value=iter([]))
+        mock_session.run.return_value = mock_result
+        
+        mock_driver = Mock()
+        mock_driver.session.return_value.__enter__ = Mock(return_value=mock_session)
+        mock_driver.session.return_value.__exit__ = Mock(return_value=False)
+        mock_get_driver.return_value = mock_driver
+
+        result = bridge.query_knowledge("MATCH (n) RETURN n")
+
+        assert result == []
+        mock_session.run.assert_called_once_with("MATCH (n) RETURN n", {})
+
+    def test_query_knowledge_circuit_open(self, bridge):
+        """Test query_knowledge returns empty when circuit is open."""
+        bridge._breaker._state = "open"
+        bridge._breaker._last_failure_time = time.time()
+
+        result = bridge.query_knowledge("MATCH (n) RETURN n")
+
+        assert result == []
+
+    @patch.object(Neo4jBridge, "_get_driver")
+    def test_query_knowledge_exception(self, mock_get_driver, bridge):
+        """Test query_knowledge handles exceptions."""
+        mock_get_driver.side_effect = Exception("Connection lost")
+
+        result = bridge.query_knowledge("MATCH (n) RETURN n")
+
+        assert result == []
+
+
+class TestNeo4jBridgeExecuteWrite:
+    """Tests for execute_write method."""
+
+    @pytest.fixture
+    def bridge(self):
+        return Neo4jBridge()
+
+    @patch.object(Neo4jBridge, "_get_driver")
+    def test_execute_write_success(self, mock_get_driver, bridge):
+        """Test execute_write with successful creation."""
+        mock_session = Mock()
+        mock_summary = Mock()
+        mock_summary.counters.nodes_created = 5
+        mock_summary.counters.relationships_created = 3
+        mock_summary.counters.properties_set = 10
+        mock_result = Mock()
+        mock_result.consume.return_value = mock_summary
+        mock_session.run.return_value = mock_result
+        
+        mock_driver = Mock()
+        mock_driver.session.return_value.__enter__ = Mock(return_value=mock_session)
+        mock_driver.session.return_value.__exit__ = Mock(return_value=False)
+        mock_get_driver.return_value = mock_driver
+
+        result = bridge.execute_write("CREATE (n:Node {name: $name})", {"name": "test"})
+
+        assert result["nodes_created"] == 5
+        assert result["relationships_created"] == 3
+        assert result["properties_set"] == 10
+
+    def test_execute_write_circuit_open(self, bridge):
+        """Test execute_write returns error when circuit is open."""
+        bridge._breaker._state = "open"
+        bridge._breaker._last_failure_time = time.time()
+
+        result = bridge.execute_write("CREATE (n:Node)")
+
+        assert result == {"error": "circuit_breaker_open"}
+
+    @patch.object(Neo4jBridge, "_get_driver")
+    def test_execute_write_exception(self, mock_get_driver, bridge):
+        """Test execute_write handles exceptions."""
+        mock_get_driver.side_effect = Exception("Write failed")
+
+        result = bridge.execute_write("CREATE (n:Node)")
+
+        assert "error" in result
+        assert "Write failed" in result["error"]
+
+
+class TestNeo4jBridgeImportCodebaseGraph:
+    """Tests for import_codebase_graph method."""
+
+    @pytest.fixture
+    def bridge(self):
+        return Neo4jBridge()
+
+    @patch.object(Neo4jBridge, "_get_driver")
+    def test_import_codebase_graph_success(self, mock_get_driver, bridge):
+        """Test import_codebase_graph with valid nodes and relationships."""
+        mock_session = Mock()
+        mock_driver = Mock()
+        mock_driver.session.return_value.__enter__ = Mock(return_value=mock_session)
+        mock_driver.session.return_value.__exit__ = Mock(return_value=False)
+        mock_get_driver.return_value = mock_driver
+
+        nodes = [
+            {"label": "Module", "properties": {"name": "utils", "path": "/src/utils.py"}},
+            {"label": "Function", "properties": {"name": "helper", "signature": "def helper()"}},
+        ]
+        relationships = [
+            {
+                "from_label": "Module",
+                "from_key": "name",
+                "from_value": "utils",
+                "to_label": "Function",
+                "to_key": "name",
+                "to_value": "helper",
+                "rel_type": "CONTAINS",
+                "properties": {"order": 1},
+            }
+        ]
+
+        result = bridge.import_codebase_graph(nodes, relationships)
+
+        assert result["nodes_created"] == 2
+        assert result["relationships_created"] == 1
+        assert mock_session.run.call_count == 3  # 2 nodes + 1 relationship
+
+    def test_import_codebase_graph_circuit_open(self, bridge):
+        """Test import_codebase_graph returns error when circuit is open."""
+        bridge._breaker._state = "open"
+        bridge._breaker._last_failure_time = time.time()
+
+        result = bridge.import_codebase_graph([], [])
+
+        assert result == {"error": "circuit_breaker_open"}
+
+    @patch.object(Neo4jBridge, "_get_driver")
+    def test_import_codebase_graph_exception(self, mock_get_driver, bridge):
+        """Test import_codebase_graph handles exceptions."""
+        mock_get_driver.side_effect = Exception("Graph import failed")
+
+        nodes = [{"label": "Node", "properties": {}}]
+        result = bridge.import_codebase_graph(nodes, [])
+
+        assert "error" in result
+        assert "Graph import failed" in result["error"]
+
+    @patch.object(Neo4jBridge, "_get_driver")
+    def test_import_codebase_graph_empty(self, mock_get_driver, bridge):
+        """Test import_codebase_graph with empty nodes and relationships."""
+        mock_session = Mock()
+        mock_driver = Mock()
+        mock_driver.session.return_value.__enter__ = Mock(return_value=mock_session)
+        mock_driver.session.return_value.__exit__ = Mock(return_value=False)
+        mock_get_driver.return_value = mock_driver
+
+        result = bridge.import_codebase_graph([], [])
+
+        assert result["nodes_created"] == 0
+        assert result["relationships_created"] == 0
+
+
+class TestNeo4jBridgeSyncFromBrain:
+    """Tests for sync_from_brain method."""
+
+    @pytest.fixture
+    def bridge(self):
+        return Neo4jBridge()
+
+    def test_sync_from_brain_circuit_open(self, bridge):
+        """Test sync_from_brain returns error when circuit is open."""
+        bridge._breaker._state = "open"
+        bridge._breaker._last_failure_time = time.time()
+
+        mock_brain = Mock()
+        result = bridge.sync_from_brain(mock_brain)
+
+        assert result == {"error": "circuit_breaker_open"}
+
+    @patch.object(Neo4jBridge, "execute_write")
+    @patch.object(Neo4jBridge, "_get_driver")
+    def test_sync_from_brain_success(self, mock_get_driver, mock_execute_write, bridge):
+        """Test sync_from_brain with valid brain."""
+        mock_brain = Mock()
+        mock_brain.recall_with_budget.return_value = ["mem1", "mem2", "mem3"]
+        
+        result = bridge.sync_from_brain(mock_brain)
+
+        assert result["synced_memories"] == 3
+        mock_brain.recall_with_budget.assert_called_once_with(max_tokens=10000)
+
+    @patch.object(Neo4jBridge, "execute_write")
+    @patch.object(Neo4jBridge, "_get_driver")
+    def test_sync_from_brain_empty(self, mock_get_driver, mock_execute_write, bridge):
+        """Test sync_from_brain with no memories."""
+        mock_brain = Mock()
+        mock_brain.recall_with_budget.return_value = []
+        
+        result = bridge.sync_from_brain(mock_brain)
+
+        assert result["synced_memories"] == 0
+
+    @patch.object(Neo4jBridge, "_get_driver")
+    def test_sync_from_brain_exception(self, mock_get_driver, bridge):
+        """Test sync_from_brain handles exceptions."""
+        mock_brain = Mock()
+        mock_brain.recall_with_budget.side_effect = Exception("Recall failed")
+
+        result = bridge.sync_from_brain(mock_brain)
+
+        assert "error" in result
+        assert "Recall failed" in result["error"]
+
+
+class TestNeo4jBridgeSchemaInfo:
+    """Tests for schema_info method."""
+
+    @pytest.fixture
+    def bridge(self):
+        return Neo4jBridge()
+
+    @patch.object(Neo4jBridge, "query_knowledge")
+    def test_schema_info_success(self, mock_query, bridge):
+        """Test schema_info retrieves schema information."""
+        mock_query.side_effect = [
+            [{"label": "Node"}, {"label": "Memory"}],
+            [{"relationshipType": "KNOWS"}, {"relationshipType": "CONTAINS"}],
+            [{"constraint": "unique"}, {"constraint": "exists"}],
+        ]
+
+        result = bridge.schema_info()
+
+        assert result["labels"] == ["Node", "Memory"]
+        assert result["relationship_types"] == ["KNOWS", "CONTAINS"]
+        assert len(result["constraints"]) == 2
+        assert mock_query.call_count == 3
+
+    @patch.object(Neo4jBridge, "query_knowledge")
+    def test_schema_info_empty(self, mock_query, bridge):
+        """Test schema_info with empty results."""
+        mock_query.side_effect = [[], [], []]
+
+        result = bridge.schema_info()
+
+        assert result["labels"] == []
+        assert result["relationship_types"] == []
+        assert result["constraints"] == []
+
+
+class TestNeo4jBridgeClose:
+    """Tests for close method."""
+
+    def test_close_with_no_driver(self):
+        """Test close when driver is None."""
+        bridge = Neo4jBridge()
+        assert bridge._driver is None
+        bridge.close()  # Should not raise
+
+    def test_close_with_driver(self):
+        """Test close closes the driver."""
+        bridge = Neo4jBridge()
+        mock_driver = Mock()
+        bridge._driver = mock_driver
+
+        bridge.close()
+
+        mock_driver.close.assert_called_once()
+        assert bridge._driver is None
+
+    def test_close_multiple_times(self):
+        """Test close can be called multiple times safely."""
+        bridge = Neo4jBridge()
+        mock_driver = Mock()
+        bridge._driver = mock_driver
+
+        bridge.close()
+        assert bridge._driver is None
+
+        bridge.close()  # Should not raise
+
+
+class TestPropsClause:
+    """Tests for _props_clause helper function."""
+
+    def test_props_clause_single(self):
+        """Test _props_clause with single property."""
+        result = _props_clause({"name": None})
+        assert result == "name: $name"
+
+    def test_props_clause_multiple(self):
+        """Test _props_clause with multiple properties."""
+        result = _props_clause({"name": None, "id": None, "value": None})
+        # Order may vary in dict, check for all parts
+        parts = result.split(", ")
+        assert len(parts) == 3
+        assert "name: $name" in result
+        assert "id: $id" in result
+        assert "value: $value" in result
+
+    def test_props_clause_empty(self):
+        """Test _props_clause with empty dict."""
+        result = _props_clause({})
+        assert result == ""

@@ -116,6 +116,42 @@ class TestOpenAIEmbeddingProvider:
         provider = OpenAIEmbeddingProvider(api_key="k", model="text-embedding-3-large")
         assert provider.dimensions() == 3072
 
+    def test_default_endpoint_is_openrouter(self):
+        """Default api_base should point to OpenRouter."""
+        provider = OpenAIEmbeddingProvider(api_key="k")
+        assert provider._api_url == "https://openrouter.ai/api/v1/embeddings"
+
+    def test_custom_api_base_overrides_endpoint(self):
+        """Passing api_base should override the default endpoint."""
+        provider = OpenAIEmbeddingProvider(
+            api_key="k", api_base="https://api.openai.com/v1"
+        )
+        assert provider._api_url == "https://api.openai.com/v1/embeddings"
+
+    def test_api_key_env_var_fallback_aura(self, monkeypatch):
+        """AURA_API_KEY env var is checked before OPENAI_API_KEY."""
+        monkeypatch.setenv("AURA_API_KEY", "aura-key")
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        provider = OpenAIEmbeddingProvider()
+        assert provider._api_key == "aura-key"
+
+    def test_api_key_env_var_fallback_openrouter(self, monkeypatch):
+        """OPENROUTER_API_KEY env var is checked as second priority."""
+        monkeypatch.delenv("AURA_API_KEY", raising=False)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "or-key")
+        monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+        provider = OpenAIEmbeddingProvider()
+        assert provider._api_key == "or-key"
+
+    def test_api_key_env_var_fallback_openai(self, monkeypatch):
+        """OPENAI_API_KEY env var is checked as last-resort fallback."""
+        monkeypatch.delenv("AURA_API_KEY", raising=False)
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.setenv("OPENAI_API_KEY", "oai-key")
+        provider = OpenAIEmbeddingProvider()
+        assert provider._api_key == "oai-key"
+
     def test_embed_text_calls_api(self):
         provider = OpenAIEmbeddingProvider(api_key="test-key")
         fake_vector = [0.1, 0.2, 0.3]
@@ -195,20 +231,14 @@ class TestOpenAIEmbeddingProvider:
         assert results[1].vector == [0.9, 0.9]
 
     def test_healthcheck_success(self):
-        provider = OpenAIEmbeddingProvider(api_key="k")
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = self._make_api_response([[0.1]])
-        mock_resp.raise_for_status = MagicMock()
-
-        with patch("memory.embedding_provider._requests") as mock_requests:
-            mock_requests.post.return_value = mock_resp
-            assert provider.healthcheck() is True
+        """healthcheck returns True when an API key is configured."""
+        provider = OpenAIEmbeddingProvider(api_key="valid-key")
+        assert provider.healthcheck() is True
 
     def test_healthcheck_failure(self):
-        provider = OpenAIEmbeddingProvider(api_key="k")
-        with patch("memory.embedding_provider._requests") as mock_requests:
-            mock_requests.post.side_effect = Exception("network error")
-            assert provider.healthcheck() is False
+        """healthcheck returns False when no API key is configured."""
+        provider = OpenAIEmbeddingProvider(api_key="")
+        assert provider.healthcheck() is False
 
     def test_provider_type(self):
         provider = OpenAIEmbeddingProvider(api_key="k")

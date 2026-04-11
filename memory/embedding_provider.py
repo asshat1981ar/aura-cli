@@ -105,19 +105,38 @@ class LocalEmbeddingProvider:
 
 
 class OpenAIEmbeddingProvider:
-    """Hosted embeddings via the OpenAI API.
+    """Hosted embeddings via an OpenAI-compatible API endpoint.
 
-    Uses ``requests`` (lazy-imported) to POST to the embeddings endpoint.
-    Pass ``api_key`` explicitly or set the ``OPENAI_API_KEY`` environment variable.
+    Defaults to OpenRouter (``https://openrouter.ai/api/v1``) so that AURA
+    can route embeddings through the same gateway used for chat completions.
+    Pass a custom ``api_base`` to target the native OpenAI endpoint or any
+    other compatible service.
+
+    The API key is resolved in priority order:
+    1. ``api_key`` constructor argument (if non-empty).
+    2. ``AURA_API_KEY`` environment variable (OpenRouter key used by AURA).
+    3. ``OPENROUTER_API_KEY`` environment variable.
+    4. ``OPENAI_API_KEY`` environment variable (direct OpenAI fallback).
     """
 
     model_version: str = "1"
     provider_type: str = "openai"
 
-    def __init__(self, api_key: str = "", model: str = "text-embedding-3-small"):
-        self._api_key = api_key or os.environ.get("OPENAI_API_KEY", "")
+    def __init__(
+        self,
+        api_key: str = "",
+        model: str = "text-embedding-3-small",
+        api_base: str = "https://openrouter.ai/api/v1",
+    ):
+        # Resolve API key in priority order: explicit arg → AURA (OpenRouter) → OPENROUTER → OPENAI
+        self._api_key = (
+            api_key
+            or os.environ.get("AURA_API_KEY", "")
+            or os.environ.get("OPENROUTER_API_KEY", "")
+            or os.environ.get("OPENAI_API_KEY", "")
+        )
         self._model = model
-        self._api_url = "https://api.openai.com/v1/embeddings"
+        self._api_url = f"{api_base.rstrip('/')}/embeddings"
 
     @property
     def model_name(self) -> str:

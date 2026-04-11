@@ -153,6 +153,7 @@ class TestOpenAIEmbeddingProvider:
     def test_model_id_matches_model_name(self):
         provider = OpenAIEmbeddingProvider(api_key="k", model="text-embedding-3-small")
         assert provider.model_id() == provider.model_name
+
     def test_embed_text_calls_api(self):
         provider = OpenAIEmbeddingProvider(api_key="test-key")
         fake_vector = [0.1, 0.2, 0.3]

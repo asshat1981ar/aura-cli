@@ -17,6 +17,7 @@ import ast
 # _normalize_ast
 # ---------------------------------------------------------------------------
 
+
 class TestNormalizeAst:
     def test_returns_string(self):
         tree = ast.parse("x = 1")
@@ -45,6 +46,7 @@ class TestNormalizeAst:
 # ---------------------------------------------------------------------------
 # _extract_functions
 # ---------------------------------------------------------------------------
+
 
 class TestExtractFunctions:
     def test_empty_source_returns_empty(self):
@@ -89,6 +91,7 @@ class TestExtractFunctions:
 # _jaccard
 # ---------------------------------------------------------------------------
 
+
 class TestJaccard:
     def test_identical_strings_score_1(self):
         assert _jaccard("a,b,c", "a,b,c") == 1.0
@@ -108,6 +111,7 @@ class TestJaccard:
 # ---------------------------------------------------------------------------
 # CodeCloneDetectorSkill._run
 # ---------------------------------------------------------------------------
+
 
 class TestCodeCloneDetectorSkill:
     @pytest.fixture

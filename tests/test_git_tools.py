@@ -8,9 +8,11 @@ from unittest.mock import MagicMock, patch, PropertyMock
 # _require_gitpython
 # ---------------------------------------------------------------------------
 
+
 class TestRequireGitpython:
     def test_raises_import_error_when_repo_is_none(self):
         import core.git_tools as gt
+
         original_repo = gt.Repo
         gt.Repo = None
         try:
@@ -21,6 +23,7 @@ class TestRequireGitpython:
 
     def test_no_error_when_repo_available(self):
         import core.git_tools as gt
+
         if gt.Repo is not None:
             gt._require_gitpython()  # Should not raise
 
@@ -28,6 +31,7 @@ class TestRequireGitpython:
 # ---------------------------------------------------------------------------
 # GitTools init
 # ---------------------------------------------------------------------------
+
 
 class TestGitToolsInit:
     def _make_mock_repo(self, working_tree_dir="/tmp/repo"):
@@ -37,6 +41,7 @@ class TestGitToolsInit:
 
     def test_init_stores_repo_root(self):
         from core.git_tools import GitTools
+
         mock_repo = self._make_mock_repo("/fake/repo")
         with patch("core.git_tools.Repo", return_value=mock_repo):
             tools = GitTools(repo_path="/fake/repo")
@@ -45,12 +50,14 @@ class TestGitToolsInit:
     def test_init_raises_git_repo_error_on_invalid_repo(self):
         from core.git_tools import GitTools
         from core.exceptions import GitRepoError
+
         with patch("core.git_tools.Repo", side_effect=Exception("not a repo")):
             with pytest.raises((GitRepoError, Exception)):
                 GitTools(repo_path="/not/a/repo")
 
     def test_init_no_repo_path_uses_cwd(self):
         from core.git_tools import GitTools
+
         mock_repo = self._make_mock_repo(".")
         with patch("core.git_tools.Repo", return_value=mock_repo):
             tools = GitTools()
@@ -61,10 +68,12 @@ class TestGitToolsInit:
 # commit_all
 # ---------------------------------------------------------------------------
 
+
 class TestCommitAll:
     @pytest.fixture
     def tools(self):
         from core.git_tools import GitTools
+
         mock_repo = MagicMock()
         mock_repo.working_tree_dir = "/fake"
         mock_repo.untracked_files = []
@@ -98,6 +107,7 @@ class TestCommitAll:
 
     def test_git_command_error_raises_git_commit_error(self, tools):
         from core.exceptions import GitCommitError
+
         t, repo = tools
         repo.index.commit.side_effect = Exception("git error")
         with pytest.raises(Exception):
@@ -108,10 +118,12 @@ class TestCommitAll:
 # rollback_last_commit
 # ---------------------------------------------------------------------------
 
+
 class TestRollbackLastCommit:
     @pytest.fixture
     def tools(self):
         from core.git_tools import GitTools
+
         mock_repo = MagicMock()
         mock_repo.working_tree_dir = "/fake"
         mock_repo.untracked_files = []
@@ -130,6 +142,7 @@ class TestRollbackLastCommit:
 
     def test_rollback_no_parents_raises(self, tools):
         from core.exceptions import GitRollbackError
+
         t, repo = tools
         repo.head.commit.parents = []
         with pytest.raises((GitRollbackError, Exception)):
@@ -140,10 +153,12 @@ class TestRollbackLastCommit:
 # stash / stash_pop
 # ---------------------------------------------------------------------------
 
+
 class TestStash:
     @pytest.fixture
     def tools(self):
         from core.git_tools import GitTools
+
         mock_repo = MagicMock()
         mock_repo.working_tree_dir = "/fake"
         mock_repo.untracked_files = []

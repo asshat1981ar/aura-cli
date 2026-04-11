@@ -240,8 +240,9 @@ class TestSemanticQuerier:
             intent_summary=None,  # No intent summary
         )
         db.close()
-        
+
         from core.agent_sdk.semantic_querier import SemanticQuerier
+
         querier = SemanticQuerier(db_path)
         summary = querier.summarize("fallback_sym")
         assert "docstring" in summary.lower()
@@ -321,8 +322,9 @@ class TestSemanticQuerier:
     def test_recent_changes_git_failure_handling(self, querier) -> None:
         """Test recent_changes gracefully handles git failures."""
         from unittest.mock import patch
+
         # Mock subprocess to simulate git failure
-        with patch('subprocess.run') as mock_run:
+        with patch("subprocess.run") as mock_run:
             mock_run.side_effect = FileNotFoundError("git not found")
             results = querier.recent_changes(n_commits=5)
             assert results == []
@@ -331,8 +333,9 @@ class TestSemanticQuerier:
         """Test recent_changes handles subprocess timeout."""
         from unittest.mock import patch
         import subprocess as sp
+
         # Mock subprocess to simulate timeout
-        with patch('subprocess.run') as mock_run:
+        with patch("subprocess.run") as mock_run:
             mock_run.side_effect = sp.TimeoutExpired("git", 10)
             results = querier.recent_changes(n_commits=5)
             assert results == []
@@ -340,8 +343,9 @@ class TestSemanticQuerier:
     def test_recent_changes_git_error_returncode(self, querier) -> None:
         """Test recent_changes handles git errors (non-zero returncode)."""
         from unittest.mock import patch, MagicMock
+
         # Mock subprocess to return error code
-        with patch('subprocess.run') as mock_run:
+        with patch("subprocess.run") as mock_run:
             mock_result = MagicMock()
             mock_result.returncode = 1
             mock_result.stderr = "error message"
@@ -352,4 +356,3 @@ class TestSemanticQuerier:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

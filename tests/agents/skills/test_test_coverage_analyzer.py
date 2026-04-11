@@ -16,6 +16,7 @@ from agents.skills.test_coverage_analyzer import (
 # _run_cmd
 # ---------------------------------------------------------------------------
 
+
 class TestRunCmd:
     def test_returns_string_output(self, tmp_path):
         result = _run_cmd(["echo", "hello"], tmp_path)
@@ -35,6 +36,7 @@ class TestRunCmd:
 # ---------------------------------------------------------------------------
 # _heuristic_coverage
 # ---------------------------------------------------------------------------
+
 
 class TestHeuristicCoverage:
     def test_empty_dir_returns_dict(self, tmp_path):
@@ -66,9 +68,7 @@ class TestHeuristicCoverage:
         assert not any(u["function"] == "_private" for u in result["untested_functions"])
 
     def test_meets_target_false_when_low_coverage(self, tmp_path):
-        (tmp_path / "big.py").write_text(
-            "\n".join(f"def func_{i}():\n    pass" for i in range(20))
-        )
+        (tmp_path / "big.py").write_text("\n".join(f"def func_{i}():\n    pass" for i in range(20)))
         result = _heuristic_coverage(tmp_path)
         assert result["meets_target"] is False
 
@@ -89,18 +89,14 @@ class TestHeuristicCoverage:
 # TestCoverageAnalyzerSkill._run — coverage.py path
 # ---------------------------------------------------------------------------
 
+
 class TestCoverageAnalyzerSkillWithCoveragePy:
     @pytest.fixture
     def skill(self):
         return TestCoverageAnalyzerSkill()
 
     def _make_coverage_json(self, tmp_path, pct=85.0):
-        data = {
-            "totals": {"percent_covered": pct},
-            "files": {
-                "module.py": {"summary": {"percent_covered": pct}}
-            }
-        }
+        data = {"totals": {"percent_covered": pct}, "files": {"module.py": {"summary": {"percent_covered": pct}}}}
         (tmp_path / "coverage.json").write_text(json.dumps(data))
 
     def test_reads_coverage_json_when_present(self, skill, tmp_path):
@@ -138,6 +134,7 @@ class TestCoverageAnalyzerSkillWithCoveragePy:
 # TestCoverageAnalyzerSkill._run — heuristic fallback
 # ---------------------------------------------------------------------------
 
+
 class TestCoverageAnalyzerSkillHeuristicFallback:
     @pytest.fixture
     def skill(self):
@@ -157,6 +154,7 @@ class TestCoverageAnalyzerSkillHeuristicFallback:
 # ---------------------------------------------------------------------------
 # TestCoverageAnalyzerSkill.run_incremental
 # ---------------------------------------------------------------------------
+
 
 class TestRunIncremental:
     @pytest.fixture

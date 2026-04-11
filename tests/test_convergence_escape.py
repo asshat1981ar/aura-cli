@@ -15,6 +15,7 @@ from core.convergence_escape import (
 # OscillationDetector
 # ---------------------------------------------------------------------------
 
+
 class TestOscillationDetectorRecord:
     def test_no_oscillation_empty(self):
         od = OscillationDetector()
@@ -80,6 +81,7 @@ class TestOscillationDetectorSuggestStrategy:
 # ConvergenceEscapeLoop helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_cycle_entry(goal: str, failure_sig: str = "some_failure") -> dict:
     return {
         "goal": goal,
@@ -102,6 +104,7 @@ def _make_escape_loop(entries: list) -> ConvergenceEscapeLoop:
 # ---------------------------------------------------------------------------
 # ConvergenceEscapeLoop._check
 # ---------------------------------------------------------------------------
+
 
 class TestConvergenceEscapeCheck:
     def test_returns_none_too_few_cycles(self):
@@ -142,6 +145,7 @@ class TestConvergenceEscapeCheck:
 # ConvergenceEscapeLoop._select_strategy
 # ---------------------------------------------------------------------------
 
+
 class TestSelectStrategy:
     def setup_method(self):
         self.loop = _make_escape_loop([])
@@ -171,6 +175,7 @@ class TestSelectStrategy:
 # ---------------------------------------------------------------------------
 # ConvergenceEscapeLoop._apply_strategy
 # ---------------------------------------------------------------------------
+
 
 class TestApplyStrategy:
     def setup_method(self):

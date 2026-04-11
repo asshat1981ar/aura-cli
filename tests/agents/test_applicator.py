@@ -26,6 +26,7 @@ def _wrap(code: str) -> str:
 # ApplyResult.__str__
 # ---------------------------------------------------------------------------
 
+
 class TestApplyResultStr:
     def test_success_str_includes_ok(self):
         r = ApplyResult(success=True, target_path="x.py", backup_path=None, code="pass")
@@ -40,6 +41,7 @@ class TestApplyResultStr:
 # ---------------------------------------------------------------------------
 # _extract_code
 # ---------------------------------------------------------------------------
+
 
 class TestExtractCode:
     def test_extracts_python_block(self, agent):
@@ -66,6 +68,7 @@ class TestExtractCode:
 # _detect_target
 # ---------------------------------------------------------------------------
 
+
 class TestDetectTarget:
     def test_finds_aura_target_directive(self, agent):
         code = "# AURA_TARGET: agents/new_agent.py\ndef foo(): pass"
@@ -83,6 +86,7 @@ class TestDetectTarget:
 # apply — no code block
 # ---------------------------------------------------------------------------
 
+
 class TestApplyNoCode:
     def test_no_fence_returns_failure(self, agent):
         result = agent.apply("no code block here")
@@ -98,6 +102,7 @@ class TestApplyNoCode:
 # apply — no target path
 # ---------------------------------------------------------------------------
 
+
 class TestApplyNoTarget:
     def test_no_target_returns_failure(self, agent):
         result = agent.apply(_wrap("def foo(): pass"))
@@ -112,6 +117,7 @@ class TestApplyNoTarget:
 # ---------------------------------------------------------------------------
 # apply — successful write
 # ---------------------------------------------------------------------------
+
 
 class TestApplySuccess:
     def test_writes_to_explicit_target(self, agent, tmp_path):
@@ -153,6 +159,7 @@ class TestApplySuccess:
 # apply — overwrite policy
 # ---------------------------------------------------------------------------
 
+
 class TestApplyOverwrite:
     def test_allow_overwrite_false_blocks_existing(self, agent, tmp_path):
         target = tmp_path / "existing.py"
@@ -184,6 +191,7 @@ class TestApplyOverwrite:
 # ---------------------------------------------------------------------------
 # rollback
 # ---------------------------------------------------------------------------
+
 
 class TestRollback:
     def test_rollback_restores_backup(self, agent, tmp_path):

@@ -4,21 +4,21 @@ import json
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from .models import CommandPriority, CommandStatus, QueuedCommand
 
 
 class CommandQueue:
     """File-backed command queue using SQLite."""
-    
+
     DEFAULT_DB_PATH = "~/.aura/offline_queue.db"
-    
+
     def __init__(self, db_path: Optional[str] = None):
         self.db_path = Path(db_path or self.DEFAULT_DB_PATH).expanduser()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
-    
+
     def _init_db(self):
         """Initialize database schema."""
         with sqlite3.connect(str(self.db_path)) as conn:
@@ -39,7 +39,7 @@ class CommandQueue:
                 ON command_queue(status, priority, created_at)
             """)
             conn.commit()
-    
+
     async def add(self, command: QueuedCommand) -> str:
         """Add a command to the queue."""
         with sqlite3.connect(str(self.db_path)) as conn:
@@ -62,7 +62,7 @@ class CommandQueue:
             )
             conn.commit()
         return command.id
-    
+
     async def get_pending(self, limit: int = 100) -> list[QueuedCommand]:
         """Get pending commands ordered by priority."""
         with sqlite3.connect(str(self.db_path)) as conn:
@@ -76,7 +76,7 @@ class CommandQueue:
                 (CommandStatus.PENDING.value, limit),
             )
             return [self._row_to_command(row) for row in cursor.fetchall()]
-    
+
     async def update_status(self, command_id: str, status: CommandStatus):
         """Update command status."""
         with sqlite3.connect(str(self.db_path)) as conn:
@@ -85,7 +85,7 @@ class CommandQueue:
                 (status.value, command_id),
             )
             conn.commit()
-    
+
     async def remove(self, command_id: str) -> bool:
         """Remove a command from the queue."""
         with sqlite3.connect(str(self.db_path)) as conn:
@@ -95,13 +95,13 @@ class CommandQueue:
             )
             conn.commit()
             return cursor.rowcount > 0
-    
+
     async def clear(self):
         """Clear all commands from queue."""
         with sqlite3.connect(str(self.db_path)) as conn:
             conn.execute("DELETE FROM command_queue")
             conn.commit()
-    
+
     async def size(self) -> int:
         """Get number of pending commands."""
         with sqlite3.connect(str(self.db_path)) as conn:
@@ -110,7 +110,7 @@ class CommandQueue:
                 (CommandStatus.PENDING.value,),
             )
             return cursor.fetchone()[0]
-    
+
     def _row_to_command(self, row) -> QueuedCommand:
         """Convert database row to QueuedCommand."""
         return QueuedCommand(

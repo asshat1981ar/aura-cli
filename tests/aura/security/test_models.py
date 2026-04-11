@@ -39,13 +39,13 @@ class TestSecurityFinding:
             title="API Key exposed",
             description="Found in file.py line 10",
         )
-        
+
         assert finding.category == FindingCategory.SECRETS
         assert finding.severity == Severity.HIGH
         assert finding.title == "API Key exposed"
         assert finding.file_path is None
         assert finding.line_number is None
-    
+
     def test_finding_with_location(self):
         finding = SecurityFinding(
             category=FindingCategory.CODE,
@@ -57,12 +57,12 @@ class TestSecurityFinding:
             remediation="Fix it",
             references=["https://example.com"],
         )
-        
+
         assert finding.file_path == "/path/to/file.py"
         assert finding.line_number == 42
         assert finding.remediation == "Fix it"
         assert finding.references == ["https://example.com"]
-    
+
     def test_to_dict(self):
         finding = SecurityFinding(
             category=FindingCategory.SECRETS,
@@ -70,9 +70,9 @@ class TestSecurityFinding:
             title="Password",
             description="Hardcoded password",
         )
-        
+
         data = finding.to_dict()
-        
+
         assert data["category"] == "secrets"
         assert data["severity"] == "critical"
         assert data["title"] == "Password"
@@ -82,28 +82,28 @@ class TestSecurityFinding:
 class TestAuditConfig:
     def test_default_config(self):
         config = AuditConfig()
-        
+
         assert config.scan_secrets is True
         assert config.scan_permissions is True
         assert config.scan_dependencies is True
         assert config.scan_configuration is True
         assert config.severity_threshold == Severity.LOW
         assert config.exclude_patterns == []
-    
+
     def test_custom_config(self):
         config = AuditConfig(
             scan_secrets=False,
             severity_threshold=Severity.HIGH,
             exclude_patterns=["node_modules", ".git"],
         )
-        
+
         assert config.scan_secrets is False
         assert config.severity_threshold == Severity.HIGH
         assert "node_modules" in config.exclude_patterns
-    
+
     def test_should_scan(self):
         config = AuditConfig(severity_threshold=Severity.MEDIUM)
-        
+
         assert config.should_scan(Severity.CRITICAL) is True
         assert config.should_scan(Severity.HIGH) is True
         assert config.should_scan(Severity.MEDIUM) is True
@@ -121,54 +121,54 @@ class TestAuditReport:
             SecurityFinding(FindingCategory.PERMISSIONS, Severity.MEDIUM, "M1", "Desc"),
             SecurityFinding(FindingCategory.CONFIGURATION, Severity.LOW, "L1", "Desc"),
         ]
-    
+
     def test_report_creation(self, sample_findings):
         report = AuditReport(
             findings=sample_findings,
             scan_duration_ms=100.0,
             scanned_files=10,
         )
-        
+
         assert report.total_count == 5
         assert report.critical_count == 1
         assert report.high_count == 2
         assert report.medium_count == 1
         assert report.low_count == 1
         assert report.scanned_files == 10
-    
+
     def test_has_critical(self, sample_findings):
         report = AuditReport(findings=sample_findings, scan_duration_ms=1.0)
         assert report.has_critical is True
-    
+
     def test_no_critical(self):
         findings = [SecurityFinding(FindingCategory.CODE, Severity.LOW, "L1", "Desc")]
         report = AuditReport(findings=findings, scan_duration_ms=1.0)
         assert report.has_critical is False
-    
+
     def test_has_issues(self):
         report = AuditReport(findings=[], scan_duration_ms=1.0)
         assert report.has_issues is False
-        
+
         report = AuditReport(findings=[SecurityFinding(FindingCategory.CODE, Severity.INFO, "I1", "Desc")], scan_duration_ms=1.0)
         assert report.has_issues is True
-    
+
     def test_get_by_severity(self, sample_findings):
         report = AuditReport(findings=sample_findings, scan_duration_ms=1.0)
-        
+
         high_findings = report.get_by_severity(Severity.HIGH)
         assert len(high_findings) == 2
-    
+
     def test_get_by_category(self, sample_findings):
         report = AuditReport(findings=sample_findings, scan_duration_ms=1.0)
-        
+
         secret_findings = report.get_by_category(FindingCategory.SECRETS)
         assert len(secret_findings) == 2
-    
+
     def test_to_dict(self, sample_findings):
         report = AuditReport(findings=sample_findings, scan_duration_ms=50.0, scanned_files=5)
-        
+
         data = report.to_dict()
-        
+
         assert data["scan_duration_ms"] == 50.0
         assert data["scanned_files"] == 5
         assert data["summary"]["total"] == 5

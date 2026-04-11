@@ -526,4 +526,3 @@ def test_get_key_miss():
         result = adapter.get("missing_key")
 
     assert result is None
-

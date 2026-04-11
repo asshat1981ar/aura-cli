@@ -54,11 +54,11 @@ def _parse_provider_response(raw: str) -> tuple[str, str, ResolutionConfidence]:
     for line in raw.splitlines():
         line = line.strip()
         if line.startswith("EXPLANATION:"):
-            explanation = line[len("EXPLANATION:"):].strip()
+            explanation = line[len("EXPLANATION:") :].strip()
         elif line.startswith("FIX:"):
-            fix = line[len("FIX:"):].strip()
+            fix = line[len("FIX:") :].strip()
         elif line.startswith("CONFIDENCE:"):
-            level = line[len("CONFIDENCE:"):].strip().lower()
+            level = line[len("CONFIDENCE:") :].strip().lower()
             confidence = ResolutionConfidence(level) if level in ("high", "medium", "low") else ResolutionConfidence.LOW
 
     return explanation, fix, confidence
@@ -67,6 +67,7 @@ def _parse_provider_response(raw: str) -> tuple[str, str, ResolutionConfidence]:
 # ---------------------------------------------------------------------------
 # Provider registry stub
 # ---------------------------------------------------------------------------
+
 
 class _ProviderRegistry:
     """Minimal provider registry; real AI providers are injected at runtime."""
@@ -78,6 +79,7 @@ class _ProviderRegistry:
 # ---------------------------------------------------------------------------
 # Engine
 # ---------------------------------------------------------------------------
+
 
 class ErrorResolutionEngine:
     """Resolve errors via cache → known-fix → AI provider pipeline."""
@@ -138,11 +140,7 @@ class ErrorResolutionEngine:
             try:
                 raw = await provider.suggest_fix(error, context)
                 explanation, fix, confidence = _parse_provider_response(raw)
-                should_apply = (
-                    auto_apply
-                    and confidence == ResolutionConfidence.HIGH
-                    and self.safety.is_safe_to_apply(fix)
-                )
+                should_apply = auto_apply and confidence == ResolutionConfidence.HIGH and self.safety.is_safe_to_apply(fix)
                 result = ResolutionResult(
                     original_error=str(error),
                     explanation=explanation,

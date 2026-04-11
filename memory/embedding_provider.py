@@ -99,6 +99,7 @@ class LocalEmbeddingProvider:
 
     def model_id(self) -> str:
         return self.model_name
+
     def healthcheck(self) -> bool:
         return True
 
@@ -138,6 +139,7 @@ class OpenAIEmbeddingProvider:
 
     def model_id(self) -> str:
         return self._model
+
     def dimensions(self) -> int:
         # text-embedding-3-small → 1536; text-embedding-3-large → 3072
         return 3072 if "large" in self._model else 1536

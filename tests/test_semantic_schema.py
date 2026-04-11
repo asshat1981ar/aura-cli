@@ -356,7 +356,7 @@ class TestSemanticDB(unittest.TestCase):
         self.db.insert_import(file_id, "sys", None, False)
         self.db.insert_import(file_id, "os", "path", True)
         self.db.insert_import(file_id, "json", "loads", True)
-        
+
         imports = self.db.get_imports_for_file(file_id)
         self.assertEqual(len(imports), 3)
 
@@ -419,7 +419,7 @@ class TestSemanticDB(unittest.TestCase):
         self.db.insert_call_site(symbol_id, "func_a", 10)
         self.db.insert_call_site(symbol_id, "func_b", 12)
         self.db.insert_call_site(symbol_id, "func_c", 15)
-        
+
         call_sites = self.db.get_call_sites_for_symbol(symbol_id)
         self.assertEqual(len(call_sites), 3)
 
@@ -444,7 +444,7 @@ class TestSemanticDB(unittest.TestCase):
             decorators="",
         )
         self.db.insert_call_site(symbol_id, "target", 10)
-        
+
         call_sites = self.db.get_call_sites_with_callers()
         self.assertGreater(len(call_sites), 0)
         for cs in call_sites:
@@ -513,7 +513,7 @@ class TestSemanticDB(unittest.TestCase):
             last_scan_sha=None,
         )
         self.db.upsert_relationship(file_a, file_b, "imports", 0.8)
-        
+
         rels = self.db.get_relationships_to(file_b)
         self.assertEqual(len(rels), 1)
         self.assertEqual(rels[0]["from_file_id"], file_a)
@@ -523,10 +523,10 @@ class TestSemanticDB(unittest.TestCase):
         f1 = self.db.upsert_file("p1.py", "p1", "c", 10, "2026-01-01T00:00:00", None)
         f2 = self.db.upsert_file("p2.py", "p2", "c", 10, "2026-01-01T00:00:00", None)
         f3 = self.db.upsert_file("p3.py", "p3", "c", 10, "2026-01-01T00:00:00", None)
-        
+
         self.db.upsert_relationship(f1, f2, "imports", 0.8)
         self.db.upsert_relationship(f2, f3, "imports", 0.6)
-        
+
         rels = self.db.get_all_relationships()
         self.assertEqual(len(rels), 2)
 
@@ -535,10 +535,10 @@ class TestSemanticDB(unittest.TestCase):
         f1 = self.db.upsert_file("p1.py", "p1", "c", 10, "2026-01-01T00:00:00", None)
         f2 = self.db.upsert_file("p2.py", "p2", "c", 10, "2026-01-01T00:00:00", None)
         f3 = self.db.upsert_file("p3.py", "p3", "c", 10, "2026-01-01T00:00:00", None)
-        
+
         self.db.upsert_relationship(f1, f2, "imports", 0.8)
         self.db.upsert_relationship(f1, f3, "calls", 0.6)
-        
+
         self.db.delete_relationships_by_type("imports")
         rels = self.db.get_all_relationships()
         self.assertEqual(len(rels), 1)
@@ -588,10 +588,10 @@ class TestSemanticDB(unittest.TestCase):
         f1 = self.db.upsert_file("keep.py", "keep", "c", 10, "2026-01-01T00:00:00", None)
         f2 = self.db.upsert_file("delete.py", "delete", "c", 10, "2026-01-01T00:00:00", None)
         f3 = self.db.upsert_file("also_delete.py", "also_delete", "c", 10, "2026-01-01T00:00:00", None)
-        
+
         # Keep only f1
         self.db.delete_missing_paths(["keep.py"])
-        
+
         self.assertIsNotNone(self.db.get_file_by_path("keep.py"))
         self.assertIsNone(self.db.get_file_by_path("delete.py"))
         self.assertIsNone(self.db.get_file_by_path("also_delete.py"))
@@ -600,9 +600,9 @@ class TestSemanticDB(unittest.TestCase):
         """Test delete_missing_paths with empty keep list clears all."""
         self.db.upsert_file("f1.py", "f1", "c", 10, "2026-01-01T00:00:00", None)
         self.db.upsert_file("f2.py", "f2", "c", 10, "2026-01-01T00:00:00", None)
-        
+
         self.db.delete_missing_paths([])
-        
+
         files = self.db.get_all_files()
         self.assertEqual(len(files), 0)
 
@@ -611,9 +611,9 @@ class TestSemanticDB(unittest.TestCase):
         f1 = self.db.upsert_file("f1.py", "f1", "c", 10, "2026-01-01T00:00:00", None)
         self.db.insert_symbol(f1, "sym", "function", 1, 10, "def sym():", None, "")
         self.db.record_scan("sha", 1, 1, 0, 0.0, "full", "2026-01-01T00:00:00")
-        
+
         self.db.clear_all()
-        
+
         self.assertEqual(len(self.db.get_all_files()), 0)
         last = self.db.get_last_scan()
         self.assertIsNone(last)
@@ -622,14 +622,14 @@ class TestSemanticDB(unittest.TestCase):
         """Test clear_file_data removes file-related data."""
         f1 = self.db.upsert_file("f1.py", "f1", "c", 10, "2026-01-01T00:00:00", None)
         f2 = self.db.upsert_file("f2.py", "f2", "c", 10, "2026-01-01T00:00:00", None)
-        
+
         sym_id = self.db.insert_symbol(f1, "sym", "function", 1, 10, "def sym():", None, "")
         self.db.insert_call_site(sym_id, "other", 5)
         self.db.insert_import(f1, "os", None, False)
         self.db.upsert_relationship(f1, f2, "imports", 0.8)
-        
+
         self.db.clear_file_data(f1)
-        
+
         # f1 data should be gone
         symbols = self.db.get_symbols_for_file(f1)
         self.assertEqual(len(symbols), 0)
@@ -666,7 +666,7 @@ class TestSemanticDB(unittest.TestCase):
         """Test get_last_scan returns the most recent one."""
         self.db.record_scan("sha1", 10, 20, 1, 0.05, "full", "2026-01-01T00:00:00")
         self.db.record_scan("sha2", 20, 30, 2, 0.10, "full", "2026-01-02T00:00:00")
-        
+
         last = self.db.get_last_scan()
         self.assertEqual(last["scan_sha"], "sha2")
         self.assertEqual(last["files_scanned"], 20)
@@ -776,4 +776,3 @@ class TestSemanticDB(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

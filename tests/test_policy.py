@@ -14,6 +14,7 @@ from core.policies.resource_bound import ResourceBoundPolicy
 # SlidingWindowPolicy
 # ---------------------------------------------------------------------------
 
+
 class TestSlidingWindowPolicy:
     def test_pass_when_verification_passes(self):
         p = SlidingWindowPolicy(max_cycles=5)
@@ -44,6 +45,7 @@ class TestSlidingWindowPolicy:
 # TimeBoundPolicy
 # ---------------------------------------------------------------------------
 
+
 class TestTimeBoundPolicy:
     def test_pass_when_verification_passes(self):
         p = TimeBoundPolicy(max_seconds=60)
@@ -73,6 +75,7 @@ class TestTimeBoundPolicy:
 # ---------------------------------------------------------------------------
 # ResourceBoundPolicy
 # ---------------------------------------------------------------------------
+
 
 class TestResourceBoundPolicy:
     def test_pass_when_verification_passes(self):
@@ -105,6 +108,7 @@ class TestResourceBoundPolicy:
 # ---------------------------------------------------------------------------
 # Policy (facade)
 # ---------------------------------------------------------------------------
+
 
 class TestPolicyFacade:
     def test_default_uses_sliding_window(self):

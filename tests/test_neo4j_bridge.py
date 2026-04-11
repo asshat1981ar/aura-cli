@@ -368,7 +368,7 @@ class TestNeo4jBridgeQueryKnowledge:
         mock_result = Mock()
         mock_result.__iter__ = Mock(return_value=iter([mock_record1, mock_record2]))
         mock_session.run.return_value = mock_result
-        
+
         mock_driver = Mock()
         mock_driver.session.return_value.__enter__ = Mock(return_value=mock_session)
         mock_driver.session.return_value.__exit__ = Mock(return_value=False)
@@ -387,7 +387,7 @@ class TestNeo4jBridgeQueryKnowledge:
         mock_result = Mock()
         mock_result.__iter__ = Mock(return_value=iter([]))
         mock_session.run.return_value = mock_result
-        
+
         mock_driver = Mock()
         mock_driver.session.return_value.__enter__ = Mock(return_value=mock_session)
         mock_driver.session.return_value.__exit__ = Mock(return_value=False)
@@ -435,7 +435,7 @@ class TestNeo4jBridgeExecuteWrite:
         mock_result = Mock()
         mock_result.consume.return_value = mock_summary
         mock_session.run.return_value = mock_result
-        
+
         mock_driver = Mock()
         mock_driver.session.return_value.__enter__ = Mock(return_value=mock_session)
         mock_driver.session.return_value.__exit__ = Mock(return_value=False)
@@ -564,7 +564,7 @@ class TestNeo4jBridgeSyncFromBrain:
         """Test sync_from_brain with valid brain."""
         mock_brain = Mock()
         mock_brain.recall_with_budget.return_value = ["mem1", "mem2", "mem3"]
-        
+
         result = bridge.sync_from_brain(mock_brain)
 
         assert result["synced_memories"] == 3
@@ -576,7 +576,7 @@ class TestNeo4jBridgeSyncFromBrain:
         """Test sync_from_brain with no memories."""
         mock_brain = Mock()
         mock_brain.recall_with_budget.return_value = []
-        
+
         result = bridge.sync_from_brain(mock_brain)
 
         assert result["synced_memories"] == 0

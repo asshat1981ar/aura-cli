@@ -231,7 +231,7 @@ class TestExtractSymbols(unittest.TestCase):
         self.assertEqual(kinds["prop"], "property")
 
     def test_extract_decorators(self):
-        src = '''
+        src = """
             def outer(f):
                 return f
 
@@ -239,7 +239,7 @@ class TestExtractSymbols(unittest.TestCase):
             @staticmethod
             def decorated():
                 pass
-        '''
+        """
         f = self.tmpdir / "deco.py"
         _write(f, src)
         syms = extract_symbols(f)
@@ -248,10 +248,10 @@ class TestExtractSymbols(unittest.TestCase):
         self.assertIn("outer", decorated["decorators"])
 
     def test_extract_async_function(self):
-        src = '''
+        src = """
             async def async_func():
                 await something()
-        '''
+        """
         f = self.tmpdir / "async_func.py"
         _write(f, src)
         syms = extract_symbols(f)
@@ -260,11 +260,11 @@ class TestExtractSymbols(unittest.TestCase):
         self.assertEqual(syms[0]["kind"], "function")
 
     def test_extract_async_method(self):
-        src = '''
+        src = """
             class MyClass:
                 async def async_method(self):
                     pass
-        '''
+        """
         f = self.tmpdir / "async_method.py"
         _write(f, src)
         syms = extract_symbols(f)
@@ -273,10 +273,10 @@ class TestExtractSymbols(unittest.TestCase):
         self.assertEqual(async_method["kind"], "method")
 
     def test_extract_function_with_defaults(self):
-        src = '''
+        src = """
             def func(a, b=10, c=None):
                 pass
-        '''
+        """
         f = self.tmpdir / "defaults.py"
         _write(f, src)
         syms = extract_symbols(f)
@@ -285,10 +285,10 @@ class TestExtractSymbols(unittest.TestCase):
         self.assertIn("b", sig) and self.assertIn("10", sig)
 
     def test_extract_function_with_varargs(self):
-        src = '''
+        src = """
             def func(*args, **kwargs):
                 pass
-        '''
+        """
         f = self.tmpdir / "varargs.py"
         _write(f, src)
         syms = extract_symbols(f)
@@ -298,10 +298,10 @@ class TestExtractSymbols(unittest.TestCase):
         self.assertIn("**kwargs", sig)
 
     def test_extract_function_with_kwonly_args(self):
-        src = '''
+        src = """
             def func(a, *, b, c=10):
                 pass
-        '''
+        """
         f = self.tmpdir / "kwonly.py"
         _write(f, src)
         syms = extract_symbols(f)
@@ -310,10 +310,10 @@ class TestExtractSymbols(unittest.TestCase):
         self.assertIn("b", sig)
 
     def test_extract_function_with_return_type(self):
-        src = '''
+        src = """
             def func() -> int:
                 return 42
-        '''
+        """
         f = self.tmpdir / "return_type.py"
         _write(f, src)
         syms = extract_symbols(f)
@@ -323,17 +323,17 @@ class TestExtractSymbols(unittest.TestCase):
         self.assertIn("int", sig)
 
     def test_extract_posonly_args(self):
-        src = '''
+        src = """
             def func(a, /, b):
                 pass
-        '''
+        """
         f = self.tmpdir / "posonly.py"
         _write(f, src)
         syms = extract_symbols(f)
         self.assertEqual(len(syms), 1)
 
     def test_extract_base_classes(self):
-        src = '''
+        src = """
             class Base:
                 pass
 
@@ -342,7 +342,7 @@ class TestExtractSymbols(unittest.TestCase):
 
             class MultiChild(Base, object):
                 pass
-        '''
+        """
         f = self.tmpdir / "inherit.py"
         _write(f, src)
         syms = extract_symbols(f)
@@ -353,12 +353,12 @@ class TestExtractSymbols(unittest.TestCase):
         self.assertIn("Base", multi_bases)
 
     def test_extract_nested_classes(self):
-        src = '''
+        src = """
             class Outer:
                 class Inner:
                     def method(self):
                         pass
-        '''
+        """
         f = self.tmpdir / "nested.py"
         _write(f, src)
         syms = extract_symbols(f)
@@ -368,13 +368,13 @@ class TestExtractSymbols(unittest.TestCase):
         self.assertIn("method", names)
 
     def test_extract_multiple_decorators(self):
-        src = '''
+        src = """
             @dec1
             @dec2
             @dec3
             def func():
                 pass
-        '''
+        """
         f = self.tmpdir / "multi_dec.py"
         _write(f, src)
         syms = extract_symbols(f)
@@ -399,11 +399,11 @@ class TestExtractImports(unittest.TestCase):
         self.tmpdir = Path(tempfile.mkdtemp())
 
     def test_extract_imports(self):
-        src = '''
+        src = """
             import os
             from pathlib import Path
             from typing import Any, Dict
-        '''
+        """
         f = self.tmpdir / "imps.py"
         _write(f, src)
         imps = extract_imports(f)
@@ -416,10 +416,10 @@ class TestExtractImports(unittest.TestCase):
         self.assertIn("Path", names)
 
     def test_extract_imports_with_aliases(self):
-        src = '''
+        src = """
             import os as operating_system
             from pathlib import Path as PathlibPath
-        '''
+        """
         f = self.tmpdir / "alias_imports.py"
         _write(f, src)
         imps = extract_imports(f)
@@ -428,19 +428,19 @@ class TestExtractImports(unittest.TestCase):
         self.assertEqual(alias_imp["imported_name"], "operating_system")
 
     def test_extract_imports_from_without_module(self):
-        src = '''
+        src = """
             from . import sibling
             from .. import parent_mod
-        '''
+        """
         f = self.tmpdir / "relative_imports.py"
         _write(f, src)
         imps = extract_imports(f)
         self.assertEqual(len(imps), 2)
 
     def test_extract_imports_star(self):
-        src = '''
+        src = """
             from module import *
-        '''
+        """
         f = self.tmpdir / "star_import.py"
         _write(f, src)
         imps = extract_imports(f)
@@ -455,12 +455,12 @@ class TestExtractCallSites(unittest.TestCase):
         self.tmpdir = Path(tempfile.mkdtemp())
 
     def test_extract_call_sites(self):
-        src = '''
+        src = """
             def caller():
                 result = len([1, 2, 3])
                 print(result)
                 return result
-        '''
+        """
         f = self.tmpdir / "calls.py"
         _write(f, src)
         syms = extract_symbols(f)
@@ -471,11 +471,11 @@ class TestExtractCallSites(unittest.TestCase):
         self.assertIn("print", callee_names)
 
     def test_extract_call_sites_nested_calls(self):
-        src = '''
+        src = """
             def caller():
                 result = len(list(range(10)))
                 return result
-        '''
+        """
         f = self.tmpdir / "nested_calls.py"
         _write(f, src)
         syms = extract_symbols(f)
@@ -585,10 +585,7 @@ class TestComputeCouplingScores(unittest.TestCase):
         self.assertEqual(files[f_id]["coupling_score"], 0.0)
 
     def test_compute_coupling_scores_capped_at_one(self):
-        ids = [
-            self.db.upsert_file(f"f{i}.py", f"f{i}", "", 1, "2024-01-01", None)
-            for i in range(3)
-        ]
+        ids = [self.db.upsert_file(f"f{i}.py", f"f{i}", "", 1, "2024-01-01", None) for i in range(3)]
 
         for i in range(len(ids)):
             for j in range(len(ids)):
@@ -923,12 +920,12 @@ class TestFullScan(unittest.TestCase):
         )
         self._make_py(
             "pkg/beta.py",
-            '''
+            """
             from pkg.alpha import alpha_func
 
             def beta_func():
                 return alpha_func(10)
-        ''',
+        """,
         )
 
         scanner = SemanticScanner(
@@ -956,10 +953,10 @@ class TestFullScan(unittest.TestCase):
     def test_scan_respects_exclude_patterns(self):
         self._make_py(
             "good.py",
-            '''
+            """
             def good():
                 pass
-        ''',
+        """,
         )
         bad_dir = self.tmpdir / "__pycache__"
         bad_dir.mkdir(exist_ok=True)

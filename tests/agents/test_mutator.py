@@ -22,6 +22,7 @@ def agent(project_root):
 # Initialisation
 # ---------------------------------------------------------------------------
 
+
 class TestMutatorInit:
     def test_project_root_stored(self, agent, project_root):
         assert agent.project_root == project_root
@@ -33,6 +34,7 @@ class TestMutatorInit:
 # ---------------------------------------------------------------------------
 # _validate_file_path
 # ---------------------------------------------------------------------------
+
 
 class TestValidateFilePath:
     def test_valid_relative_path(self, agent, project_root):
@@ -67,6 +69,7 @@ class TestValidateFilePath:
 # apply_mutation — ADD_FILE block
 # ---------------------------------------------------------------------------
 
+
 class TestApplyMutationAddFile:
     def test_add_file_creates_file(self, agent, project_root):
         proposal = "ADD_FILE new_module.py\nprint('hello')\n"
@@ -100,17 +103,10 @@ class TestApplyMutationAddFile:
 # apply_mutation — REPLACE_IN_FILE block
 # ---------------------------------------------------------------------------
 
+
 class TestApplyMutationReplaceInFile:
     def _make_replace_block(self, filepath, old, new):
-        return (
-            f"REPLACE_IN_FILE {filepath}\n"
-            "---OLD_CONTENT_START---\n"
-            f"{old}\n"
-            "---OLD_CONTENT_END---\n"
-            "---NEW_CONTENT_START---\n"
-            f"{new}\n"
-            "---NEW_CONTENT_END---\n"
-        )
+        return f"REPLACE_IN_FILE {filepath}\n---OLD_CONTENT_START---\n{old}\n---OLD_CONTENT_END---\n---NEW_CONTENT_START---\n{new}\n---NEW_CONTENT_END---\n"
 
     def test_replace_content_in_existing_file(self, agent, project_root):
         target = project_root / "target.py"
@@ -135,24 +131,17 @@ class TestApplyMutationReplaceInFile:
 # apply_mutation — JSON mutation plan
 # ---------------------------------------------------------------------------
 
+
 class TestApplyMutationJson:
     def test_json_add_file(self, agent, project_root):
-        plan = {
-            "mutations": [
-                {"type": "add_file", "file_path": "gen.py", "new_content": "# generated\n", "old_code": ""}
-            ]
-        }
+        plan = {"mutations": [{"type": "add_file", "file_path": "gen.py", "new_content": "# generated\n", "old_code": ""}]}
         agent.apply_mutation(json.dumps(plan))
         assert (project_root / "gen.py").exists()
 
     def test_json_file_change(self, agent, project_root):
         target = project_root / "existing.py"
         target.write_text("x = 1\n")
-        plan = {
-            "mutations": [
-                {"type": "file_change", "file_path": "existing.py", "new_content": "x = 2\n", "old_code": "x = 1\n"}
-            ]
-        }
+        plan = {"mutations": [{"type": "file_change", "file_path": "existing.py", "new_content": "x = 2\n", "old_code": "x = 1\n"}]}
         agent.apply_mutation(json.dumps(plan))
         assert "x = 2" in target.read_text()
 
@@ -165,11 +154,7 @@ class TestApplyMutationJson:
         agent.apply_mutation(json.dumps(plan))  # Should not raise
 
     def test_json_traversal_rejected(self, agent, project_root):
-        plan = {
-            "mutations": [
-                {"type": "add_file", "file_path": "../escape.py", "new_content": "evil", "old_code": ""}
-            ]
-        }
+        plan = {"mutations": [{"type": "add_file", "file_path": "../escape.py", "new_content": "evil", "old_code": ""}]}
         agent.apply_mutation(json.dumps(plan))
         assert not (project_root.parent / "escape.py").exists()
 
@@ -189,6 +174,7 @@ class TestApplyMutationJson:
 # apply_mutation — empty / unrecognised input
 # ---------------------------------------------------------------------------
 
+
 class TestApplyMutationEdgeCases:
     def test_empty_proposal(self, agent):
         agent.apply_mutation("")  # Should not raise
@@ -200,10 +186,7 @@ class TestApplyMutationEdgeCases:
         agent.apply_mutation("UNKNOWN_COMMAND some args\ncontent\n")  # Should not raise
 
     def test_multiple_blocks(self, agent, project_root):
-        proposal = (
-            "ADD_FILE first.py\n# first file\n\n"
-            "ADD_FILE second.py\n# second file\n"
-        )
+        proposal = "ADD_FILE first.py\n# first file\n\nADD_FILE second.py\n# second file\n"
         agent.apply_mutation(proposal)
         assert (project_root / "first.py").exists()
         assert (project_root / "second.py").exists()

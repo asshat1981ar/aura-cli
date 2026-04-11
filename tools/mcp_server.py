@@ -755,6 +755,7 @@ async def call_tool(req: CallRequest, auth: str = Depends(require_dev_tools_auth
 
 if __name__ == "__main__":
     import uvicorn
+
     port = resolve_server_port("dev_tools")
     print(f"[MCP dev_tools compatibility] Starting on port {port} (auth: {auth_mode_label('dev_tools')}); canonical server is aura_cli.server")
 

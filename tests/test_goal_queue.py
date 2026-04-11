@@ -22,6 +22,7 @@ def q(queue_path):
 # Init and persistence
 # ---------------------------------------------------------------------------
 
+
 class TestGoalQueueInit:
     def test_empty_on_fresh_file(self, q):
         assert not q.has_goals()
@@ -55,6 +56,7 @@ class TestGoalQueueInit:
 # ---------------------------------------------------------------------------
 # add / batch_add / prepend_batch
 # ---------------------------------------------------------------------------
+
 
 class TestGoalQueueAdd:
     def test_add_single_goal(self, q):
@@ -91,6 +93,7 @@ class TestGoalQueueAdd:
 # next / has_goals / clear
 # ---------------------------------------------------------------------------
 
+
 class TestGoalQueueNext:
     def test_next_returns_none_when_empty(self, q):
         assert q.next() is None
@@ -123,6 +126,7 @@ class TestGoalQueueNext:
 # ---------------------------------------------------------------------------
 # complete / fail / recover
 # ---------------------------------------------------------------------------
+
 
 class TestGoalQueueLifecycle:
     def test_complete_removes_from_in_flight(self, q):
@@ -160,10 +164,7 @@ class TestGoalQueueLifecycle:
 
     def test_recover_orders_by_timestamp_oldest_first(self, tmp_path):
         qp = tmp_path / "q.json"
-        qp.write_text(json.dumps({
-            "queue": [],
-            "in_flight": {"newer_goal": 2000.0, "older_goal": 1000.0}
-        }))
+        qp.write_text(json.dumps({"queue": [], "in_flight": {"newer_goal": 2000.0, "older_goal": 1000.0}}))
         q = GoalQueue(queue_path=str(qp))
         q.recover()
         # oldest should come first
@@ -174,6 +175,7 @@ class TestGoalQueueLifecycle:
 # ---------------------------------------------------------------------------
 # cancel / promote
 # ---------------------------------------------------------------------------
+
 
 class TestGoalQueueManagement:
     def test_cancel_removes_by_index(self, q):
@@ -205,6 +207,7 @@ class TestGoalQueueManagement:
 # _goal_key
 # ---------------------------------------------------------------------------
 
+
 class TestGoalKey:
     def test_string_goal_key(self, q):
         assert GoalQueue._goal_key("my goal") == "my goal"
@@ -218,6 +221,7 @@ class TestGoalKey:
         class Weird:
             def __str__(self):
                 return "weird_repr"
+
         key = GoalQueue._goal_key(Weird())
         assert "weird_repr" in key
 
@@ -225,6 +229,7 @@ class TestGoalKey:
 # ---------------------------------------------------------------------------
 # in_flight_keys
 # ---------------------------------------------------------------------------
+
 
 class TestInFlightKeys:
     def test_in_flight_keys_empty_initially(self, q):

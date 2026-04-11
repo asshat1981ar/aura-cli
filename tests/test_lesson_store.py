@@ -122,7 +122,7 @@ class TestLessonStoreEdgeCases:
         """Test that record_cycle includes timestamp."""
         store = LessonStore(store_path=tmp_path / "l.jsonl")
         store.record_cycle({"goal": "test"})
-        
+
         path = tmp_path / "l.jsonl"
         entry = json.loads(path.read_text().strip())
         assert "timestamp" in entry
@@ -131,19 +131,9 @@ class TestLessonStoreEdgeCases:
     def test_record_cycle_extracts_all_fields(self, tmp_path):
         """Test that record_cycle extracts all expected fields."""
         store = LessonStore(store_path=tmp_path / "l.jsonl")
-        cycle_result = {
-            "goal": "test goal",
-            "goal_type": "bug_fix",
-            "stop_reason": "MAX_CYCLES",
-            "status": "failed",
-            "phase_outputs": {
-                "verify": {"status": "fail"},
-                "cycle_confidence": 0.5,
-                "_failure_context": "timeout"
-            }
-        }
+        cycle_result = {"goal": "test goal", "goal_type": "bug_fix", "stop_reason": "MAX_CYCLES", "status": "failed", "phase_outputs": {"verify": {"status": "fail"}, "cycle_confidence": 0.5, "_failure_context": "timeout"}}
         store.record_cycle(cycle_result)
-        
+
         path = tmp_path / "l.jsonl"
         entry = json.loads(path.read_text().strip())
         assert entry["goal"] == "test goal"
@@ -174,7 +164,7 @@ class TestLessonStoreEdgeCases:
         store = LessonStore(store_path=tmp_path / "l.jsonl", max_injectable=2)
         for i in range(5):
             store.record_cycle({"goal": f"goal-{i}"})
-        
+
         lessons = store.injectable_lessons()
         assert len(lessons) == 2
         assert lessons[0]["goal"] == "goal-3"
@@ -183,10 +173,7 @@ class TestLessonStoreEdgeCases:
     def test_lesson_confidence_default(self, tmp_path):
         """Test that injectable lessons have confidence."""
         store = LessonStore(store_path=tmp_path / "l.jsonl")
-        store.record_cycle({
-            "goal": "test",
-            "phase_outputs": {"cycle_confidence": 0.75}
-        })
+        store.record_cycle({"goal": "test", "phase_outputs": {"cycle_confidence": 0.75}})
         lessons = store.injectable_lessons()
         assert lessons[0]["confidence"] == 0.75
 
@@ -196,7 +183,7 @@ class TestLessonStoreEdgeCases:
         store1 = LessonStore(store_path=path)
         for i in range(3):
             store1.record_cycle({"goal": f"goal-{i}"})
-        
+
         # New store loads existing
         store2 = LessonStore(store_path=path)
         assert store2.count() == 3
@@ -265,7 +252,7 @@ class TestLessonStoreFileHandling:
         nested_path = tmp_path / "a" / "b" / "c" / "lessons.jsonl"
         store = LessonStore(store_path=nested_path)
         store.record_cycle({"goal": "test"})
-        
+
         assert nested_path.exists()
         assert nested_path.parent.exists()
 
@@ -273,10 +260,10 @@ class TestLessonStoreFileHandling:
         """Test that multiple records are appended."""
         path = tmp_path / "l.jsonl"
         store = LessonStore(store_path=path)
-        
+
         store.record_cycle({"goal": "first"})
         store.record_cycle({"goal": "second"})
-        
+
         content = path.read_text()
         lines = [l for l in content.splitlines() if l.strip()]
         assert len(lines) == 2
@@ -284,17 +271,17 @@ class TestLessonStoreFileHandling:
     def test_json_serialization_error_safe(self, tmp_path):
         """Test handling of objects that can't be serialized to JSON."""
         from datetime import datetime
-        
+
         store = LessonStore(store_path=tmp_path / "l.jsonl")
         cycle_result = {
             "goal": "test",
             "phase_outputs": {
                 "cycle_confidence": 0.5,
                 # datetime objects should be converted via default=str
-            }
+            },
         }
         store.record_cycle(cycle_result)
-        
+
         path = tmp_path / "l.jsonl"
         content = path.read_text()
         assert len(content) > 0
@@ -303,7 +290,7 @@ class TestLessonStoreFileHandling:
         """Test that malformed JSON doesn't crash load."""
         path = tmp_path / "l.jsonl"
         path.write_text('{"goal": "good"}\nBAD JSON HERE\n{"goal": "also good"}')
-        
+
         # Should skip bad lines gracefully
         store = LessonStore(store_path=path)
         # Count should only include valid entries

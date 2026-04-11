@@ -138,11 +138,6 @@ def load_model_config_status(project_root: Path) -> bool:
             return False
         with open(config_path, encoding="utf-8") as handle:
             cfg = json.load(handle)
-        return bool(
-            cfg.get("model_name")
-            or cfg.get("api_key")
-            or cfg.get("openai_api_key")
-            or cfg.get("local_model_profiles")
-        )
+        return bool(cfg.get("model_name") or cfg.get("api_key") or cfg.get("openai_api_key") or cfg.get("local_model_profiles"))
     except Exception:
         return False

@@ -15,12 +15,14 @@ def mock_brain():
 @pytest.fixture
 def agent(mock_brain):
     from agents.ingest import IngestAgent
+
     return IngestAgent(brain=mock_brain)
 
 
 @pytest.fixture
 def agent_with_cm(mock_brain):
     from agents.ingest import IngestAgent
+
     cm = MagicMock()
     cm.get_context_bundle.return_value = {
         "memory": ["m1", "m2"],

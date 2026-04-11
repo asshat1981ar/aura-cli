@@ -272,6 +272,7 @@ class TestLocalCacheAdapterErrorHandling(unittest.TestCase):
     def test_init_db_with_invalid_path(self):
         """Test _init_db gracefully handles errors."""
         from memory.local_cache_adapter import LocalCacheAdapter
+
         # Try to create db in impossible location
         bad_adapter = LocalCacheAdapter(db_path="/root/impossible/db.db")
         # Should still be usable for in-memory operations
@@ -319,7 +320,7 @@ class TestLocalCacheAdapterErrorHandling(unittest.TestCase):
         for i in range(3):
             ok = self.adapter.publish("topic", f"msg-{i}")
             self.assertTrue(ok)
-        
+
         # Read all events
         events = self.adapter.read_events("topic", since_ts=0.0)
         self.assertEqual(len(events), 3)
@@ -331,7 +332,7 @@ class TestLocalCacheAdapterErrorHandling(unittest.TestCase):
         """Test read_events respects limit parameter."""
         for i in range(10):
             self.adapter.publish("topic", f"msg-{i}")
-        
+
         events = self.adapter.read_events("topic", limit=3)
         self.assertEqual(len(events), 3)
 
@@ -353,6 +354,7 @@ class TestLocalCacheAdapterErrorHandling(unittest.TestCase):
     def test_namespace_helper(self):
         """Test the _ns helper function."""
         from memory.local_cache_adapter import _ns
+
         result = _ns("myCache", "myKey")
         self.assertEqual(result, "myCache:myKey")
 

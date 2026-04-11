@@ -36,12 +36,12 @@ class TestThresholdConfig:
         config = ThresholdConfig(warning_threshold=70.0, critical_threshold=90.0)
         assert config.evaluate(50.0) == HealthStatus.HEALTHY
         assert config.evaluate(69.9) == HealthStatus.HEALTHY
-    
+
     def test_evaluate_degraded(self):
         config = ThresholdConfig(warning_threshold=70.0, critical_threshold=90.0)
         assert config.evaluate(70.0) == HealthStatus.DEGRADED
         assert config.evaluate(89.9) == HealthStatus.DEGRADED
-    
+
     def test_evaluate_unhealthy(self):
         config = ThresholdConfig(warning_threshold=70.0, critical_threshold=90.0)
         assert config.evaluate(90.0) == HealthStatus.UNHEALTHY
@@ -56,11 +56,11 @@ class TestCheckResult:
             status=HealthStatus.HEALTHY,
             response_time_ms=10.5,
         )
-        
+
         assert result.is_healthy is True
         assert result.name == "test"
         assert result.response_time_ms == 10.5
-    
+
     def test_unhealthy_result(self):
         result = CheckResult(
             name="test",
@@ -69,10 +69,10 @@ class TestCheckResult:
             response_time_ms=0,
             message="Connection failed",
         )
-        
+
         assert result.is_healthy is False
         assert result.message == "Connection failed"
-    
+
     def test_default_timestamp(self):
         before = datetime.utcnow()
         result = CheckResult(
@@ -82,7 +82,7 @@ class TestCheckResult:
             response_time_ms=1.0,
         )
         after = datetime.utcnow()
-        
+
         assert before <= result.timestamp <= after
 
 
@@ -94,38 +94,38 @@ class TestHealthReport:
             CheckResult("check2", CheckType.DISK, HealthStatus.DEGRADED, 20.0),
             CheckResult("check3", CheckType.MEMORY, HealthStatus.UNHEALTHY, 5.0),
         ]
-    
+
     def test_report_creation(self, sample_checks):
         report = HealthReport(
             status=HealthStatus.DEGRADED,
             checks=sample_checks,
             duration_ms=100.0,
         )
-        
+
         assert report.status == HealthStatus.DEGRADED
         assert report.total_count == 3
         assert report.healthy_count == 1
         assert len(report.failed_checks) == 2
-    
+
     def test_all_healthy(self):
         checks = [
             CheckResult("c1", CheckType.SYSTEM, HealthStatus.HEALTHY, 1.0),
             CheckResult("c2", CheckType.DISK, HealthStatus.HEALTHY, 2.0),
         ]
         report = HealthReport(status=HealthStatus.HEALTHY, checks=checks)
-        
+
         assert report.healthy_count == 2
         assert report.failed_checks == []
-    
+
     def test_to_dict(self, sample_checks):
         report = HealthReport(
             status=HealthStatus.DEGRADED,
             checks=sample_checks,
             duration_ms=50.0,
         )
-        
+
         data = report.to_dict()
-        
+
         assert data["status"] == "degraded"
         assert data["duration_ms"] == 50.0
         assert data["summary"]["total"] == 3

@@ -9,6 +9,7 @@ from typing import Optional
 from tools.mcp_auth import get_mcp_server_api_key
 from tools.mcp_manifest import get_mcp_server_spec
 
+
 def _get_mcp_server_api_key(server_name: str = "dev_tools") -> Optional[str]:
     """Get API key for an MCP server from config or environment.
 

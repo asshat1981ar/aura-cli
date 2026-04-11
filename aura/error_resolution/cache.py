@@ -58,9 +58,7 @@ class SQLiteCache:
         self._conn.commit()
 
     def get(self, key: str) -> Optional[ResolutionResult]:
-        row = self._conn.execute(
-            "SELECT value, created_at FROM cache WHERE key = ?", (key,)
-        ).fetchone()
+        row = self._conn.execute("SELECT value, created_at FROM cache WHERE key = ?", (key,)).fetchone()
         if row is None:
             return None
         value_json, created_at = row

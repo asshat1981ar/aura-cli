@@ -7,9 +7,9 @@ from typing import Any, Dict, List, Optional
 try:
     from rich.panel import Panel
     from rich.table import Table
-    from rich.text import Text
+    from rich.text import Text  # noqa: F401
     from rich import box
-    from rich.columns import Columns
+    from rich.columns import Columns  # noqa: F401
     from rich.tree import Tree
 
     _RICH_AVAILABLE = True
@@ -47,10 +47,10 @@ def build_observability_panel(
     max_traces: int = 5,
 ) -> "Panel":
     """Build the observability panel showing metrics and traces.
-    
+
     Args:
         metrics_store: MetricsStore instance
-        tracer: Tracer instance  
+        tracer: Tracer instance
         max_metrics: Max number of metrics to display
         max_traces: Max number of recent traces to display
     """
@@ -64,10 +64,10 @@ def build_observability_panel(
 
     # Left: Metrics
     metrics_panel = _build_metrics_section(metrics_store, max_metrics)
-    
+
     # Right: Active Traces
     traces_panel = _build_traces_section(tracer, max_traces)
-    
+
     layout.add_row(metrics_panel, traces_panel)
 
     return Panel(
@@ -107,7 +107,7 @@ def _build_metrics_section(
             metric_type = data.get("type", "GAUGE")
             stats = data.get("stats", {})
             latest = data.get("latest")
-            
+
             # Format value based on type
             if metric_type == "COUNTER":
                 value_str = f"{stats.get('sum', 0):.0f}"
@@ -115,7 +115,7 @@ def _build_metrics_section(
                 value_str = _format_duration(latest)
             else:
                 value_str = f"{latest:.2f}" if latest is not None else "N/A"
-            
+
             # Get trend sparkline for timers/gauges
             trend = ""
             if metric_type in ("TIMER", "HISTOGRAM", "GAUGE") and stats.get("count", 0) > 1:
@@ -124,7 +124,7 @@ def _build_metrics_section(
                 if series and len(series.values) > 1:
                     values = [v.value for v in list(series.values)[-15:]]
                     trend = f"[cyan]{_sparkline(values)}[/cyan]"
-            
+
             table.add_row(name[:20], metric_type[:8], value_str, trend)
 
     except Exception as e:
@@ -155,22 +155,22 @@ def _build_traces_section(
 
     # Build trace tree
     tree = Tree(f"[bold]{current_span.name}[/bold]")
-    
+
     # Add span details
     duration = current_span.duration_ms
     if duration is not None:
         tree.add(f"Duration: {_format_duration(duration)}")
-    
-    status = current_span.status.name if hasattr(current_span.status, 'name') else str(current_span.status)
+
+    status = current_span.status.name if hasattr(current_span.status, "name") else str(current_span.status)
     status_color = "green" if status == "OK" else "red" if status == "ERROR" else "yellow"
     tree.add(f"Status: [{status_color}]{status}[/{status_color}]")
-    
+
     # Add attributes (limited)
     if current_span.attributes:
         attrs_tree = tree.add("Attributes")
         for key, value in list(current_span.attributes.items())[:5]:
             attrs_tree.add(f"{key}: {str(value)[:30]}")
-    
+
     # Add recent events
     if current_span.events:
         events_tree = tree.add("Recent Events")
@@ -184,7 +184,7 @@ def build_health_panel(
     health_status: Optional[Dict[str, Any]] = None,
 ) -> Panel:
     """Build a health status panel.
-    
+
     Args:
         health_status: Dict with component health info
     """
@@ -205,7 +205,7 @@ def build_health_panel(
 
     status_colors = {
         "healthy": "green",
-        "degraded": "yellow", 
+        "degraded": "yellow",
         "unhealthy": "red",
         "unknown": "dim",
     }
@@ -214,7 +214,7 @@ def build_health_panel(
         status = info.get("status", "unknown")
         color = status_colors.get(status, "white")
         details = info.get("message", "")
-        
+
         table.add_row(
             component,
             f"[{color}]{status}[/{color}]",

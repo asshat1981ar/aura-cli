@@ -525,9 +525,7 @@ class TestMemoryConsolidator:
 
     def test_consolidate_duration_tracked(self, consolidator):
         """consolidate should track duration."""
-        memories = [
-            MemoryEntry(id="m1", content="Test", memory_type="pattern")
-        ]
+        memories = [MemoryEntry(id="m1", content="Test", memory_type="pattern")]
         retained, result = consolidator.consolidate(memories)
         assert result.duration_seconds >= 0
 
@@ -546,16 +544,18 @@ class TestMemoryConsolidator:
             ),
         ]
         # Add old memories that will be summarized
-        memories.extend([
-            MemoryEntry(
-                id=f"m{i}",
-                content=f"Old memory {i}",
-                memory_type="pattern",
-                confidence=0.8,
-                created_at=old_time,
-            )
-            for i in range(1, 7)
-        ])
+        memories.extend(
+            [
+                MemoryEntry(
+                    id=f"m{i}",
+                    content=f"Old memory {i}",
+                    memory_type="pattern",
+                    confidence=0.8,
+                    created_at=old_time,
+                )
+                for i in range(1, 7)
+            ]
+        )
 
         retained, result = consolidator.consolidate(memories, summarizer)
         assert result.pruned >= 1  # At least the low confidence one

@@ -65,7 +65,7 @@ def sample_entries():
             category=list(KnowledgeCategory)[i % len(list(KnowledgeCategory))],
             confidence=0.7 + (i * 0.01),
             tags=[f"tag-{i}", f"tag-{i % 3}"],
-            related_entries=[f"entry-{(i+1) % 10}"],
+            related_entries=[f"entry-{(i + 1) % 10}"],
             context={"index": i},
             created_at=base_time - (i * 100),
             access_count=i,
@@ -109,10 +109,8 @@ class TestKnowledgeStoreInit:
         """Test that knowledge_entries table is created."""
         store = KnowledgeStore(db_path=tmp_db_path)
         conn = store._get_connection()
-        
-        tables = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='knowledge_entries'"
-        ).fetchall()
+
+        tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='knowledge_entries'").fetchall()
         assert len(tables) > 0
         store.close()
 
@@ -120,10 +118,8 @@ class TestKnowledgeStoreInit:
         """Test that FTS5 virtual table is created."""
         store = KnowledgeStore(db_path=tmp_db_path)
         conn = store._get_connection()
-        
-        tables = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='knowledge_fts'"
-        ).fetchall()
+
+        tables = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='knowledge_fts'").fetchall()
         assert len(tables) > 0
         store.close()
 
@@ -131,7 +127,7 @@ class TestKnowledgeStoreInit:
         """Test that schema_version table is created and populated."""
         store = KnowledgeStore(db_path=tmp_db_path)
         conn = store._get_connection()
-        
+
         version = conn.execute("SELECT version FROM schema_version").fetchone()
         assert version is not None
         assert version[0] == KnowledgeStore.SCHEMA_VERSION
@@ -141,12 +137,10 @@ class TestKnowledgeStoreInit:
         """Test that all required indexes are created."""
         store = KnowledgeStore(db_path=tmp_db_path)
         conn = store._get_connection()
-        
-        indexes = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='knowledge_entries'"
-        ).fetchall()
+
+        indexes = conn.execute("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='knowledge_entries'").fetchall()
         index_names = {idx[0] for idx in indexes}
-        
+
         expected = {
             "idx_entries_category",
             "idx_entries_created",
@@ -160,7 +154,7 @@ class TestKnowledgeStoreInit:
         """Test that WAL mode is enabled for better concurrency."""
         store = KnowledgeStore(db_path=tmp_db_path)
         conn = store._get_connection()
-        
+
         mode = conn.execute("PRAGMA journal_mode").fetchone()
         assert mode[0].upper() == "WAL"
         store.close()
@@ -169,7 +163,7 @@ class TestKnowledgeStoreInit:
         """Test that synchronous mode is set to NORMAL."""
         store = KnowledgeStore(db_path=tmp_db_path)
         conn = store._get_connection()
-        
+
         sync = conn.execute("PRAGMA synchronous").fetchone()
         assert sync[0] == 1  # NORMAL = 1
         store.close()
@@ -177,19 +171,19 @@ class TestKnowledgeStoreInit:
     def test_thread_local_connection(self, tmp_db_path):
         """Test that each thread gets its own database connection."""
         store = KnowledgeStore(db_path=tmp_db_path)
-        
+
         connections = []
-        
+
         def get_conn():
             conn = store._get_connection()
             connections.append(id(conn))
-        
+
         threads = [threading.Thread(target=get_conn) for _ in range(3)]
         for thread in threads:
             thread.start()
         for thread in threads:
             thread.join()
-        
+
         # Each thread should have a different connection object
         assert len(set(connections)) == 3
         store.close()
@@ -208,7 +202,7 @@ class TestKnowledgeStoreCRUD:
         """Test saving a single knowledge entry."""
         result = await knowledge_store.save(sample_entry)
         assert result is True
-        
+
         # Verify it was saved
         retrieved = await knowledge_store.get(sample_entry.entry_id)
         assert retrieved is not None
@@ -221,7 +215,7 @@ class TestKnowledgeStoreCRUD:
         for entry in sample_entries:
             result = await knowledge_store.save(entry)
             assert result is True
-        
+
         # Verify all were saved
         all_entries = await knowledge_store.get_all()
         assert len(all_entries) == len(sample_entries)
@@ -230,12 +224,12 @@ class TestKnowledgeStoreCRUD:
     async def test_save_replaces_existing(self, knowledge_store, sample_entry):
         """Test that save replaces existing entries with same ID."""
         await knowledge_store.save(sample_entry)
-        
+
         # Modify and save again
         sample_entry.content = "Updated content"
         sample_entry.confidence = 0.5
         await knowledge_store.save(sample_entry)
-        
+
         # Verify the update
         retrieved = await knowledge_store.get(sample_entry.entry_id)
         assert retrieved.content == "Updated content"
@@ -247,7 +241,7 @@ class TestKnowledgeStoreCRUD:
         sample_entry.embedding = None
         result = await knowledge_store.save(sample_entry)
         assert result is True
-        
+
         retrieved = await knowledge_store.get(sample_entry.entry_id)
         assert retrieved.embedding is None
 
@@ -257,7 +251,7 @@ class TestKnowledgeStoreCRUD:
         sample_entry.tags = []
         result = await knowledge_store.save(sample_entry)
         assert result is True
-        
+
         retrieved = await knowledge_store.get(sample_entry.entry_id)
         assert retrieved.tags == []
 
@@ -267,7 +261,7 @@ class TestKnowledgeStoreCRUD:
         sample_entry.related_entries = []
         result = await knowledge_store.save(sample_entry)
         assert result is True
-        
+
         retrieved = await knowledge_store.get(sample_entry.entry_id)
         assert retrieved.related_entries == []
 
@@ -276,7 +270,7 @@ class TestKnowledgeStoreCRUD:
         """Test error handling during save."""
         with patch.object(knowledge_store, "_transaction") as mock_transaction:
             mock_transaction.side_effect = Exception("Database error")
-            
+
             result = await knowledge_store.save(sample_entry)
             assert result is False
 
@@ -284,7 +278,7 @@ class TestKnowledgeStoreCRUD:
     async def test_get_existing_entry(self, knowledge_store, sample_entry):
         """Test getting an existing entry."""
         await knowledge_store.save(sample_entry)
-        
+
         retrieved = await knowledge_store.get(sample_entry.entry_id)
         assert retrieved is not None
         assert retrieved.entry_id == sample_entry.entry_id
@@ -303,7 +297,7 @@ class TestKnowledgeStoreCRUD:
         """Test error handling during get."""
         with patch.object(knowledge_store, "_transaction") as mock_transaction:
             mock_transaction.side_effect = Exception("Database error")
-            
+
             result = await knowledge_store.get("any-id")
             assert result is None
 
@@ -311,12 +305,12 @@ class TestKnowledgeStoreCRUD:
     async def test_update_existing_entry(self, knowledge_store, sample_entry):
         """Test updating an existing entry."""
         await knowledge_store.save(sample_entry)
-        
+
         sample_entry.content = "New content"
         sample_entry.confidence = 0.6
         result = await knowledge_store.update(sample_entry)
         assert result is True
-        
+
         retrieved = await knowledge_store.get(sample_entry.entry_id)
         assert retrieved.content == "New content"
         assert retrieved.confidence == 0.6
@@ -326,7 +320,7 @@ class TestKnowledgeStoreCRUD:
         """Test that update delegates to save."""
         with patch.object(knowledge_store, "save", new_callable=AsyncMock) as mock_save:
             mock_save.return_value = True
-            
+
             await knowledge_store.update(sample_entry)
             mock_save.assert_called_once_with(sample_entry)
 
@@ -334,10 +328,10 @@ class TestKnowledgeStoreCRUD:
     async def test_delete_existing_entry(self, knowledge_store, sample_entry):
         """Test deleting an existing entry."""
         await knowledge_store.save(sample_entry)
-        
+
         result = await knowledge_store.delete(sample_entry.entry_id)
         assert result is True
-        
+
         # Verify it was deleted
         retrieved = await knowledge_store.get(sample_entry.entry_id)
         assert retrieved is None
@@ -354,9 +348,9 @@ class TestKnowledgeStoreCRUD:
     async def test_delete_removes_from_fts(self, knowledge_store, sample_entry):
         """Test that delete also removes from FTS index."""
         await knowledge_store.save(sample_entry)
-        
+
         await knowledge_store.delete(sample_entry.entry_id)
-        
+
         # Search should return nothing
         results = await knowledge_store.search(query_text=sample_entry.content[:20])
         assert len(results) == 0
@@ -366,7 +360,7 @@ class TestKnowledgeStoreCRUD:
         """Test error handling during delete."""
         with patch.object(knowledge_store, "_transaction") as mock_transaction:
             mock_transaction.side_effect = Exception("Database error")
-            
+
             result = await knowledge_store.delete("any-id")
             assert result is False
 
@@ -384,7 +378,7 @@ class TestKnowledgeStoreSearch:
         """Test full-text search by query text."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         results = await knowledge_store.search(query_text="Content 0")
         assert len(results) > 0
         assert results[0].entry_id == "entry-0"
@@ -394,10 +388,8 @@ class TestKnowledgeStoreSearch:
         """Test search filtered by category."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
-        results = await knowledge_store.search(
-            categories=[KnowledgeCategory.LESSON_LEARNED]
-        )
+
+        results = await knowledge_store.search(categories=[KnowledgeCategory.LESSON_LEARNED])
         assert all(e.category == KnowledgeCategory.LESSON_LEARNED for e in results)
 
     @pytest.mark.asyncio
@@ -405,7 +397,7 @@ class TestKnowledgeStoreSearch:
         """Test search with multiple categories."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         categories = [KnowledgeCategory.LESSON_LEARNED, KnowledgeCategory.PATTERN]
         results = await knowledge_store.search(categories=categories)
         assert all(e.category in categories for e in results)
@@ -415,7 +407,7 @@ class TestKnowledgeStoreSearch:
         """Test search with minimum confidence filter."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         results = await knowledge_store.search(min_confidence=0.8)
         assert all(e.confidence >= 0.8 for e in results)
 
@@ -424,7 +416,7 @@ class TestKnowledgeStoreSearch:
         """Test search with recency filter."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         # Get entries from last 0.1 days (should be recent ones)
         results = await knowledge_store.search(min_recency_days=0)
         # Since entries were just created, they should all be recent
@@ -435,7 +427,7 @@ class TestKnowledgeStoreSearch:
         """Test search filtered by tags."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         results = await knowledge_store.search(tags=["tag-0"])
         assert all(any(t in e.tags for t in ["tag-0"]) for e in results)
 
@@ -444,7 +436,7 @@ class TestKnowledgeStoreSearch:
         """Test search with result limit."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         results = await knowledge_store.search(limit=3)
         assert len(results) <= 3
 
@@ -453,7 +445,7 @@ class TestKnowledgeStoreSearch:
         """Test that default limit of 100 is respected."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         results = await knowledge_store.search()
         assert len(results) <= 100
 
@@ -462,7 +454,7 @@ class TestKnowledgeStoreSearch:
         """Test search with empty query text returns all."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         results = await knowledge_store.search(query_text="")
         assert len(results) > 0
 
@@ -471,7 +463,7 @@ class TestKnowledgeStoreSearch:
         """Test that short query text (<=2 chars) is ignored."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         results = await knowledge_store.search(query_text="ab")
         assert len(results) > 0  # Should return all, not filtered by short query
 
@@ -480,7 +472,7 @@ class TestKnowledgeStoreSearch:
         """Test search with multiple filters combined."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         results = await knowledge_store.search(
             query_text="Content",
             categories=[KnowledgeCategory.LESSON_LEARNED],
@@ -495,7 +487,7 @@ class TestKnowledgeStoreSearch:
         """Test error handling during search."""
         with patch.object(knowledge_store, "_transaction") as mock_transaction:
             mock_transaction.side_effect = Exception("Database error")
-            
+
             results = await knowledge_store.search(query_text="test")
             assert results == []
 
@@ -513,7 +505,7 @@ class TestKnowledgeStoreRetrieval:
         """Test get_recent returns recent entries across all categories."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         results = await knowledge_store.get_recent(limit=5)
         assert len(results) <= 5
         assert len(results) > 0
@@ -523,10 +515,8 @@ class TestKnowledgeStoreRetrieval:
         """Test get_recent filtered by category."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
-        results = await knowledge_store.get_recent(
-            category=KnowledgeCategory.LESSON_LEARNED, limit=10
-        )
+
+        results = await knowledge_store.get_recent(category=KnowledgeCategory.LESSON_LEARNED, limit=10)
         assert all(e.category == KnowledgeCategory.LESSON_LEARNED for e in results)
 
     @pytest.mark.asyncio
@@ -534,7 +524,7 @@ class TestKnowledgeStoreRetrieval:
         """Test get_recent with days filter."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         results = await knowledge_store.get_recent(days=0)
         assert len(results) >= 0
 
@@ -543,7 +533,7 @@ class TestKnowledgeStoreRetrieval:
         """Test that get_recent orders by created_at DESC."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         results = await knowledge_store.get_recent(limit=10)
         if len(results) > 1:
             # Most recent should be first
@@ -554,7 +544,7 @@ class TestKnowledgeStoreRetrieval:
         """Test that get_all returns all stored entries."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         results = await knowledge_store.get_all()
         assert len(results) == len(sample_entries)
 
@@ -569,7 +559,7 @@ class TestKnowledgeStoreRetrieval:
         """Test that get_all orders by created_at DESC."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         results = await knowledge_store.get_all()
         if len(results) > 1:
             assert results[0].created_at >= results[1].created_at
@@ -579,7 +569,7 @@ class TestKnowledgeStoreRetrieval:
         """Test error handling in get_recent."""
         with patch.object(knowledge_store, "_transaction") as mock_transaction:
             mock_transaction.side_effect = Exception("Database error")
-            
+
             results = await knowledge_store.get_recent()
             assert results == []
 
@@ -588,7 +578,7 @@ class TestKnowledgeStoreRetrieval:
         """Test error handling in get_all."""
         with patch.object(knowledge_store, "_transaction") as mock_transaction:
             mock_transaction.side_effect = Exception("Database error")
-            
+
             results = await knowledge_store.get_all()
             assert results == []
 
@@ -614,7 +604,7 @@ class TestKnowledgeStoreStatistics:
         """Test statistics with entries in store."""
         for entry in sample_entries:
             await knowledge_store.save(entry)
-        
+
         stats = knowledge_store.get_statistics()
         assert stats["total_entries"] == len(sample_entries)
         assert sum(stats["by_category"].values()) == len(sample_entries)
@@ -634,10 +624,10 @@ class TestKnowledgeStoreStatistics:
             content="Entry 2",
             source="test",
         )
-        
+
         await knowledge_store.save(entry1)
         await knowledge_store.save(entry2)
-        
+
         stats = knowledge_store.get_statistics()
         assert stats["by_category"]["lesson_learned"] == 1
         assert stats["by_category"]["pattern"] == 1
@@ -657,26 +647,22 @@ class TestKnowledgeStoreStatistics:
             content="Entry 2",
             source="test",
         )
-        
+
         await knowledge_store.save(entry1)
         await knowledge_store.save(entry2)
-        
+
         stats = knowledge_store.get_statistics()
         assert stats["avg_confidence"] == pytest.approx(0.7, abs=0.01)
 
     @pytest.mark.asyncio
     async def test_get_statistics_access_count(self, knowledge_store):
         """Test that total access count is summed correctly."""
-        entry1 = KnowledgeEntry(
-            entry_id="e1", access_count=5, content="Entry 1", source="test"
-        )
-        entry2 = KnowledgeEntry(
-            entry_id="e2", access_count=3, content="Entry 2", source="test"
-        )
-        
+        entry1 = KnowledgeEntry(entry_id="e1", access_count=5, content="Entry 1", source="test")
+        entry2 = KnowledgeEntry(entry_id="e2", access_count=3, content="Entry 2", source="test")
+
         await knowledge_store.save(entry1)
         await knowledge_store.save(entry2)
-        
+
         stats = knowledge_store.get_statistics()
         assert stats["total_accesses"] == 8
 
@@ -684,7 +670,7 @@ class TestKnowledgeStoreStatistics:
         """Test error handling in get_statistics."""
         with patch.object(knowledge_store, "_transaction") as mock_transaction:
             mock_transaction.side_effect = Exception("Database error")
-            
+
             stats = knowledge_store.get_statistics()
             assert "error" in stats
 
@@ -710,7 +696,7 @@ class TestKnowledgeStoreTransactions:
                     sample_entry.created_at,
                 ),
             )
-        
+
         # Verify data was committed
         conn = knowledge_store._get_connection()
         result = conn.execute(
@@ -736,7 +722,7 @@ class TestKnowledgeStoreTransactions:
                 raise Exception("Simulated error")
         except Exception:
             pass
-        
+
         # Verify data was rolled back
         conn = knowledge_store._get_connection()
         result = conn.execute(
@@ -757,9 +743,9 @@ class TestKnowledgeStoreTransactions:
         """Test concurrent save operations."""
         tasks = [knowledge_store.save(entry) for entry in sample_entries]
         results = await asyncio.gather(*tasks)
-        
+
         assert all(results)
-        
+
         all_entries = await knowledge_store.get_all()
         assert len(all_entries) == len(sample_entries)
 
@@ -769,17 +755,13 @@ class TestKnowledgeStoreTransactions:
         # Save first half
         save_tasks = [knowledge_store.save(entry) for entry in sample_entries[:5]]
         await asyncio.gather(*save_tasks)
-        
+
         # Get operations concurrent with remaining saves
-        get_tasks = [
-            knowledge_store.get(entry.entry_id) for entry in sample_entries[:5]
-        ]
-        save_remaining = [
-            knowledge_store.save(entry) for entry in sample_entries[5:]
-        ]
-        
+        get_tasks = [knowledge_store.get(entry.entry_id) for entry in sample_entries[:5]]
+        save_remaining = [knowledge_store.save(entry) for entry in sample_entries[5:]]
+
         results = await asyncio.gather(*get_tasks, *save_remaining)
-        
+
         # All should complete without error
         assert len(results) == 10
 
@@ -796,7 +778,7 @@ class TestKnowledgeStoreRowConversion:
     async def test_row_to_entry_conversion(self, knowledge_store, sample_entry):
         """Test that database rows are correctly converted to KnowledgeEntry."""
         await knowledge_store.save(sample_entry)
-        
+
         retrieved = await knowledge_store.get(sample_entry.entry_id)
         assert retrieved.entry_id == sample_entry.entry_id
         assert retrieved.content == sample_entry.content
@@ -818,7 +800,7 @@ class TestKnowledgeStoreRowConversion:
             last_accessed=None,
         )
         await knowledge_store.save(entry)
-        
+
         retrieved = await knowledge_store.get("test-null")
         assert retrieved.embedding is None
         assert retrieved.last_accessed is None
@@ -838,7 +820,7 @@ class TestKnowledgeStoreRowConversion:
             context=complex_context,
         )
         await knowledge_store.save(entry)
-        
+
         retrieved = await knowledge_store.get("complex")
         assert retrieved.context == complex_context
 
@@ -855,7 +837,7 @@ class TestKnowledgeStoreClose:
         """Test that close() closes the database connection."""
         store = KnowledgeStore(db_path=tmp_db_path)
         store.close()
-        
+
         # After close, _local.conn should be None
         assert store._local.conn is None
 
@@ -863,6 +845,6 @@ class TestKnowledgeStoreClose:
         """Test that close() handles case where no connection exists."""
         store = KnowledgeStore(db_path=tmp_db_path)
         store._local.conn = None
-        
+
         # Should not raise
         store.close()

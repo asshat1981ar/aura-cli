@@ -260,19 +260,19 @@ class TestMetricsStore:
     def test_persistence(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "metrics.json"
-            
+
             # Create and populate store
             store = MetricsStore(persist_path=path)
             store.counter("test")
             store.increment("test", 42.0)
             store.flush()
-            
+
             # Verify file exists and has content
             assert path.exists()
             with open(path) as f:
                 data = json.load(f)
             assert "test" in data
-            
+
             # Create new store instance with same path
             MetricsStore._instance = None
             MetricsStore._initialized = False
@@ -343,32 +343,32 @@ class TestMetricsStoreEdgeCases:
     def test_time_context_manager_exception(self):
         store = MetricsStore()
         store.timer("test_timer")
-        
+
         try:
             with store.time("test_timer"):
                 raise ValueError("Test error")
         except ValueError:
             pass
-        
+
         # Timer should still record the duration
         stats = store.get_stats("test_timer")
         assert stats["count"] == 1
 
     def test_concurrent_access(self):
         import threading
-        
+
         store = MetricsStore()
         store.counter("concurrent")
-        
+
         def increment_many():
             for _ in range(100):
                 store.increment("concurrent")
-        
+
         threads = [threading.Thread(target=increment_many) for _ in range(5)]
         for t in threads:
             t.start()
         for t in threads:
             t.join()
-        
+
         stats = store.get_stats("concurrent")
         assert stats["count"] == 500

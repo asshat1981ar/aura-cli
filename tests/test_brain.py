@@ -17,6 +17,7 @@ def brain(tmp_path):
 # Init
 # ---------------------------------------------------------------------------
 
+
 class TestBrainInit:
     def test_default_db_in_memory(self):
         b = Brain(db_path=":memory:")
@@ -36,6 +37,7 @@ class TestBrainInit:
 # ---------------------------------------------------------------------------
 # remember / recall_recent
 # ---------------------------------------------------------------------------
+
 
 class TestRememberRecallRecent:
     def test_remember_string(self, brain):
@@ -71,6 +73,7 @@ class TestRememberRecallRecent:
 # remember_tagged / recall_tagged / forget_tagged
 # ---------------------------------------------------------------------------
 
+
 class TestTaggedMemory:
     def test_remember_tagged_stored(self, brain):
         brain.remember_tagged("tagged entry", "my_tag")
@@ -104,6 +107,7 @@ class TestTaggedMemory:
 # set / get
 # ---------------------------------------------------------------------------
 
+
 class TestSetGet:
     def test_set_and_get_string(self, brain):
         brain.set("my_key", "my_value")
@@ -130,6 +134,7 @@ class TestSetGet:
 # recall_all / count_memories
 # ---------------------------------------------------------------------------
 
+
 class TestRecallAllCount:
     def test_recall_all_returns_list(self, brain):
         assert isinstance(brain.recall_all(), list)
@@ -152,6 +157,7 @@ class TestRecallAllCount:
 # ---------------------------------------------------------------------------
 # compress_to_budget
 # ---------------------------------------------------------------------------
+
 
 class TestCompressToBudget:
     def test_returns_list(self):
@@ -178,6 +184,7 @@ class TestCompressToBudget:
 # weaknesses
 # ---------------------------------------------------------------------------
 
+
 class TestWeaknesses:
     def test_add_and_recall_weakness(self, brain):
         brain.add_weakness("poor error handling in act phase")
@@ -203,6 +210,7 @@ class TestWeaknesses:
 # relate / analyze_critique_for_weaknesses
 # ---------------------------------------------------------------------------
 
+
 class TestRelateAndCritique:
     def test_relate_no_crash(self, brain):
         brain.relate("concept_a", "concept_b")  # Should not raise
@@ -220,6 +228,7 @@ class TestRelateAndCritique:
 # ---------------------------------------------------------------------------
 # recall_with_budget
 # ---------------------------------------------------------------------------
+
 
 class TestRecallWithBudget:
     def test_returns_list(self, brain):

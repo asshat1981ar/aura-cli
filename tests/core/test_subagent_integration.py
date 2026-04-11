@@ -43,12 +43,12 @@ class TestIOTAIntegration:
             "resolved": True,
             "fix": "suggested fix",
         }
-        
+
         # Mock the iota property to return our mock
-        with patch.object(SubAgentRegistry, 'iota', new_callable=PropertyMock) as mock_iota:
+        with patch.object(SubAgentRegistry, "iota", new_callable=PropertyMock) as mock_iota:
             mock_iota.return_value = mock_engine
             result = registry.resolve_error("test error", {"context": "value"})
-            
+
             mock_engine.resolve.assert_called_once()
             assert result["resolved"] == True
             assert result["fix"] == "suggested fix"
@@ -58,11 +58,11 @@ class TestIOTAIntegration:
         registry = SubAgentRegistry()
         mock_engine = MagicMock()
         mock_engine.resolve.side_effect = Exception("Engine failed")
-        
-        with patch.object(SubAgentRegistry, 'iota', new_callable=PropertyMock) as mock_iota:
+
+        with patch.object(SubAgentRegistry, "iota", new_callable=PropertyMock) as mock_iota:
             mock_iota.return_value = mock_engine
             result = registry.resolve_error("test error")
-            
+
             assert result["resolved"] == False
             assert "Engine failed" in result["reason"]
 
@@ -75,23 +75,23 @@ class TestKAPPAIntegration:
         registry = SubAgentRegistry()
         mock_recorder = MagicMock()
         mock_recorder.record.return_value = {"id": "rec1", "steps": 2}
-        
-        with patch.object(SubAgentRegistry, 'kappa', new_callable=PropertyMock) as mock_kappa:
+
+        with patch.object(SubAgentRegistry, "kappa", new_callable=PropertyMock) as mock_kappa:
             mock_kappa.return_value = mock_recorder
             steps = [{"action": "step1"}, {"action": "step2"}]
             result = registry.record_workflow("wf1", steps)
-            
+
             mock_recorder.record.assert_called_once_with(workflow_id="wf1", steps=steps)
             assert result["recorded"] == True
 
     def test_replay_workflow_unavailable(self):
         """Test workflow replay when KAPPA unavailable."""
         registry = SubAgentRegistry()
-        
-        with patch.object(SubAgentRegistry, 'kappa', new_callable=PropertyMock) as mock_kappa:
+
+        with patch.object(SubAgentRegistry, "kappa", new_callable=PropertyMock) as mock_kappa:
             mock_kappa.return_value = None
             result = registry.replay_workflow("wf1", {"var": "value"})
-            
+
             assert result["replayed"] == False
             assert "not available" in result["reason"]
 
@@ -107,11 +107,11 @@ class TestNUIntegration:
             "online": False,
             "mode": "offline",
         }
-        
-        with patch.object(SubAgentRegistry, 'nu', new_callable=PropertyMock) as mock_nu:
+
+        with patch.object(SubAgentRegistry, "nu", new_callable=PropertyMock) as mock_nu:
             mock_nu.return_value = mock_monitor
             result = registry.check_connectivity()
-            
+
             mock_monitor.check_connectivity.assert_called_once()
             assert result["online"] == False
             assert result["mode"] == "offline"
@@ -125,29 +125,29 @@ class TestPIIntegration:
         registry = SubAgentRegistry()
         mock_manager = MagicMock()
         mock_manager.load.return_value = {"secret_key": "decrypted_value"}
-        
-        with patch.object(SubAgentRegistry, 'pi', new_callable=PropertyMock) as mock_pi:
+
+        with patch.object(SubAgentRegistry, "pi", new_callable=PropertyMock) as mock_pi:
             mock_pi.return_value = mock_manager
             result = registry.load_encrypted_config("/path/to/config", key_id="key1")
-            
+
             mock_manager.load.assert_called_once_with("/path/to/config", key_id="key1")
             assert result["secret_key"] == "decrypted_value"
 
     def test_load_encrypted_config_fallback(self):
         """Test fallback to JSON when PI unavailable."""
         registry = SubAgentRegistry()
-        
-        with patch.object(SubAgentRegistry, 'pi', new_callable=PropertyMock) as mock_pi:
+
+        with patch.object(SubAgentRegistry, "pi", new_callable=PropertyMock) as mock_pi:
             mock_pi.return_value = None
-            
+
             import json
             import tempfile
             import os
-            
-            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
                 json.dump({"key": "value"}, f)
                 temp_path = f.name
-            
+
             try:
                 result = registry.load_encrypted_config(temp_path)
                 assert result == {"key": "value"}
@@ -158,11 +158,11 @@ class TestPIIntegration:
         """Test config saving with mocked manager."""
         registry = SubAgentRegistry()
         mock_manager = MagicMock()
-        
-        with patch.object(SubAgentRegistry, 'pi', new_callable=PropertyMock) as mock_pi:
+
+        with patch.object(SubAgentRegistry, "pi", new_callable=PropertyMock) as mock_pi:
             mock_pi.return_value = mock_manager
             result = registry.save_encrypted_config("/path", {"key": "value"}, key_id="key1")
-            
+
             mock_manager.save.assert_called_once_with("/path", {"key": "value"}, key_id="key1")
             assert result == True
 
@@ -178,11 +178,11 @@ class TestRHOIntegration:
             "healthy": False,
             "checks": {"memory": {"healthy": False}},
         }
-        
-        with patch.object(SubAgentRegistry, 'rho', new_callable=PropertyMock) as mock_rho:
+
+        with patch.object(SubAgentRegistry, "rho", new_callable=PropertyMock) as mock_rho:
             mock_rho.return_value = mock_monitor
             result = registry.run_health_checks()
-            
+
             mock_monitor.check_all.assert_called_once()
             assert result["healthy"] == False
 
@@ -194,11 +194,11 @@ class TestRHOIntegration:
             "healthy": True,
             "component": "memory",
         }
-        
-        with patch.object(SubAgentRegistry, 'rho', new_callable=PropertyMock) as mock_rho:
+
+        with patch.object(SubAgentRegistry, "rho", new_callable=PropertyMock) as mock_rho:
             mock_rho.return_value = mock_monitor
             result = registry.check_component_health("memory")
-            
+
             mock_monitor.check_component.assert_called_once_with("memory")
             assert result["healthy"] == True
 
@@ -214,12 +214,12 @@ class TestSIGMAIntegration:
             "allowed": False,
             "violations": [{"type": "secret", "file": "config.py"}],
         }
-        
-        with patch.object(SubAgentRegistry, 'sigma', new_callable=PropertyMock) as mock_sigma:
+
+        with patch.object(SubAgentRegistry, "sigma", new_callable=PropertyMock) as mock_sigma:
             mock_sigma.return_value = mock_auditor
             changes = [{"file": "config.py", "content": "API_KEY=xxx"}]
             result = registry.security_gate_check(changes)
-            
+
             mock_auditor.validate_changes.assert_called_once_with(changes)
             assert result["allowed"] == False
             assert len(result["violations"]) == 1
@@ -227,11 +227,11 @@ class TestSIGMAIntegration:
     def test_scan_for_secrets_unavailable(self):
         """Test secret scanning when SIGMA unavailable."""
         registry = SubAgentRegistry()
-        
-        with patch.object(SubAgentRegistry, 'sigma', new_callable=PropertyMock) as mock_sigma:
+
+        with patch.object(SubAgentRegistry, "sigma", new_callable=PropertyMock) as mock_sigma:
             mock_sigma.return_value = None
             result = registry.scan_for_secrets("content with secret")
-            
+
             # Should return empty list when unavailable
             assert result == []
 
@@ -244,15 +244,15 @@ class TestTAUIntegration:
         registry = SubAgentRegistry()
         mock_scheduler = MagicMock()
         mock_scheduler.schedule.return_value = {"id": "job1", "task_id": "task1"}
-        
-        with patch.object(SubAgentRegistry, 'tau', new_callable=PropertyMock) as mock_tau:
+
+        with patch.object(SubAgentRegistry, "tau", new_callable=PropertyMock) as mock_tau:
             mock_tau.return_value = mock_scheduler
-            
+
             def dummy_task(x):
                 return x * 2
-            
+
             result = registry.schedule_task("task1", dummy_task, "*/5 * * * *", 5)
-            
+
             assert result["scheduled"] == True
             assert result["job"]["id"] == "job1"
 
@@ -264,11 +264,11 @@ class TestTAUIntegration:
             {"id": "job1", "task_id": "task1"},
             {"id": "job2", "task_id": "task2"},
         ]
-        
-        with patch.object(SubAgentRegistry, 'tau', new_callable=PropertyMock) as mock_tau:
+
+        with patch.object(SubAgentRegistry, "tau", new_callable=PropertyMock) as mock_tau:
             mock_tau.return_value = mock_scheduler
             result = registry.get_scheduled_tasks()
-            
+
             mock_scheduler.list_tasks.assert_called_once()
             assert len(result) == 2
 
@@ -284,7 +284,7 @@ class TestSingletonPattern:
     def test_global_registry_preserved_across_calls(self):
         registry1 = get_subagent_registry()
         registry1._test_marker = "test_value"
-        
+
         registry2 = get_subagent_registry()
         assert registry2._test_marker == "test_value"
 
@@ -297,11 +297,11 @@ class TestErrorHandling:
         registry = SubAgentRegistry()
         mock_engine = MagicMock()
         mock_engine.resolve.side_effect = Exception("Engine failed")
-        
-        with patch.object(SubAgentRegistry, 'iota', new_callable=PropertyMock) as mock_iota:
+
+        with patch.object(SubAgentRegistry, "iota", new_callable=PropertyMock) as mock_iota:
             mock_iota.return_value = mock_engine
             result = registry.resolve_error("test error")
-            
+
             assert result["resolved"] == False
             assert "Engine failed" in result["reason"]
 
@@ -310,10 +310,10 @@ class TestErrorHandling:
         registry = SubAgentRegistry()
         mock_monitor = MagicMock()
         mock_monitor.check_all.side_effect = Exception("Monitor failed")
-        
-        with patch.object(SubAgentRegistry, 'rho', new_callable=PropertyMock) as mock_rho:
+
+        with patch.object(SubAgentRegistry, "rho", new_callable=PropertyMock) as mock_rho:
             mock_rho.return_value = mock_monitor
             result = registry.run_health_checks()
-            
+
             assert result["healthy"] == False
             assert "Monitor failed" in result["error"]

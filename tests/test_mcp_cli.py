@@ -1591,14 +1591,14 @@ def test_stdio_client_close_terminates_process(monkeypatch) -> None:
     """close() terminates the process if running."""
     spec = mcp_cli.MCPServerSpec(name="test", config={"type": "stdio", "command": "echo"})
     client = mcp_cli.StdioMCPClient(spec)
-    
+
     # Mock the process
     mock_proc = MagicMock()
     mock_proc.poll.return_value = None  # Process is running
     client._proc = mock_proc
-    
+
     client.close()
-    
+
     # Should call terminate, then wait, and set to None
     mock_proc.terminate.assert_called_once()
     mock_proc.wait.assert_called_once()
@@ -1609,15 +1609,15 @@ def test_stdio_client_close_kills_on_timeout(monkeypatch) -> None:
     """close() kills process if terminate times out."""
     spec = mcp_cli.MCPServerSpec(name="test", config={"type": "stdio", "command": "echo"})
     client = mcp_cli.StdioMCPClient(spec)
-    
+
     # Mock the process
     mock_proc = MagicMock()
     mock_proc.poll.return_value = None
     mock_proc.wait.side_effect = subprocess.TimeoutExpired("cmd", 2)
     client._proc = mock_proc
-    
+
     client.close()
-    
+
     mock_proc.terminate.assert_called_once()
     mock_proc.kill.assert_called_once()
     assert client._proc is None
@@ -1627,14 +1627,14 @@ def test_stdio_client_close_already_terminated(monkeypatch) -> None:
     """close() skips terminate if process already exited."""
     spec = mcp_cli.MCPServerSpec(name="test", config={"type": "stdio", "command": "echo"})
     client = mcp_cli.StdioMCPClient(spec)
-    
+
     # Mock the process as already terminated
     mock_proc = MagicMock()
     mock_proc.poll.return_value = 0  # Process has exited
     client._proc = mock_proc
-    
+
     client.close()
-    
+
     # Should NOT call terminate
     mock_proc.terminate.assert_not_called()
     assert client._proc is None
@@ -1644,14 +1644,14 @@ def test_http_client_request_get(monkeypatch) -> None:
     """_request() with GET method."""
     spec = mcp_cli.MCPServerSpec(name="http-server", config={"type": "http", "url": "http://example.test"})
     client = mcp_cli.HttpMCPClient(spec)
-    
+
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps({"result": "ok"}).encode()
     mock_response.__enter__ = MagicMock(return_value=mock_response)
     mock_response.__exit__ = MagicMock(return_value=None)
-    
+
     monkeypatch.setattr("urllib.request.urlopen", lambda req, **kw: mock_response)
-    
+
     result = client._request("GET", "http://example.test/test")
     assert result == {"result": "ok"}
 
@@ -1660,14 +1660,14 @@ def test_http_client_request_post(monkeypatch) -> None:
     """_request() with POST method."""
     spec = mcp_cli.MCPServerSpec(name="http-server", config={"type": "http", "url": "http://example.test"})
     client = mcp_cli.HttpMCPClient(spec)
-    
+
     mock_response = MagicMock()
     mock_response.read.return_value = json.dumps({"result": "created"}).encode()
     mock_response.__enter__ = MagicMock(return_value=mock_response)
     mock_response.__exit__ = MagicMock(return_value=None)
-    
+
     monkeypatch.setattr("urllib.request.urlopen", lambda req, **kw: mock_response)
-    
+
     result = client._request("POST", "http://example.test/test", {"key": "value"})
     assert result == {"result": "created"}
 
@@ -1676,12 +1676,12 @@ def test_http_client_request_timeout(monkeypatch) -> None:
     """_request() raises MCPCLIError on timeout."""
     spec = mcp_cli.MCPServerSpec(name="http-server", config={"type": "http", "url": "http://example.test"})
     client = mcp_cli.HttpMCPClient(spec)
-    
+
     def raise_timeout(*args, **kwargs):
         raise urllib.error.URLError("Connection timeout")
-    
+
     monkeypatch.setattr("urllib.request.urlopen", raise_timeout)
-    
+
     with pytest.raises(mcp_cli.MCPCLIError, match="Failed to reach"):
         client._request("GET", "http://example.test/test", timeout=0.001)
 
@@ -1690,11 +1690,11 @@ def test_http_client_request_aura_tooling_route(monkeypatch) -> None:
     """_request_aura() calls _request with full URL."""
     spec = mcp_cli.MCPServerSpec(name="http-server", config={"type": "http", "url": "http://example.test"})
     client = mcp_cli.HttpMCPClient(spec)
-    
+
     with patch.object(client, "_request") as mock_request:
         mock_request.return_value = {"tools": []}
         result = client._request_aura("GET", "/tools")
-    
+
     # Verify _request was called with full URL
     mock_request.assert_called_once()
     call_args = mock_request.call_args
@@ -1705,11 +1705,11 @@ def test_http_client_request_jsonrpc_fallback(monkeypatch) -> None:
     """_request_jsonrpc() makes RPC call to _request."""
     spec = mcp_cli.MCPServerSpec(name="http-server", config={"type": "http", "url": "http://example.test"})
     client = mcp_cli.HttpMCPClient(spec)
-    
+
     with patch.object(client, "_request") as mock_request:
         mock_request.return_value = {"jsonrpc": "2.0", "result": {"data": "test"}}
         result = client._request_jsonrpc("tools/list", {})
-    
+
     # Verify _request was called (initialize + the actual call)
     assert mock_request.call_count >= 1
 
@@ -1753,19 +1753,21 @@ def test_expand_env_vars_nested_dict(monkeypatch) -> None:
     """_expand_env_vars expands variables in nested structures."""
     monkeypatch.setenv("VAR1", "value1")
     monkeypatch.setenv("VAR2", "value2")
-    
-    result = mcp_cli._expand_env_vars({
-        "nested": {
-            "path": "${VAR1}/path",
-            "items": ["${VAR1}", "${VAR2}"],
+
+    result = mcp_cli._expand_env_vars(
+        {
+            "nested": {
+                "path": "${VAR1}/path",
+                "items": ["${VAR1}", "${VAR2}"],
+            }
         }
-    })
-    
+    )
+
     assert result["nested"]["path"] == "value1/path"
     assert result["nested"]["items"] == ["value1", "value2"]
 
 
-def test_expand_env_vars_with_env_prefix(monkeypatch) -> None:
+def test_expand_env_vars_with_env_prefix_v2(monkeypatch) -> None:
     """_expand_env_vars handles env: prefix in variable names."""
     monkeypatch.setenv("MY_VAR", "value")
     result = mcp_cli._expand_env_vars("${env:MY_VAR}")
@@ -1793,7 +1795,7 @@ def test_split_target_without_slash(monkeypatch) -> None:
     assert tool is None
 
 
-def test_format_tool_line_without_description(monkeypatch) -> None:
+def test_format_tool_line_without_description_v2(monkeypatch) -> None:
     """_format_tool_line omits description when not requested."""
     tool = {"name": "mytool", "description": "A test tool"}
     result = mcp_cli._format_tool_line("myserver", tool, include_description=False)
@@ -1837,9 +1839,7 @@ def test_print_default_listing_raw_with_tools(monkeypatch, capsys) -> None:
         {
             "server": "server1",
             "transport": "stdio",
-            "tools": [
-                {"name": "tool1", "description": "Test tool"}
-            ],
+            "tools": [{"name": "tool1", "description": "Test tool"}],
         }
     ]
     mcp_cli._print_default_listing(rows, raw=True, include_description=True)
@@ -1892,7 +1892,7 @@ def test_handle_server_unknown_raises(monkeypatch) -> None:
     """_handle_server raises for unknown server."""
     spec = mcp_cli.MCPServerSpec(name="myserver", config={"type": "stdio"})
     args = argparse.Namespace(json=False, raw=False, descriptions=False)
-    
+
     with pytest.raises(mcp_cli.MCPCLIError, match="Unknown MCP server"):
         mcp_cli._handle_server("unknown", {"myserver": spec}, args)
 
@@ -1901,7 +1901,7 @@ def test_handle_tool_unknown_server_raises(monkeypatch) -> None:
     """_handle_tool raises for unknown server."""
     spec = mcp_cli.MCPServerSpec(name="myserver", config={"type": "stdio"})
     args = argparse.Namespace(payload=None, json=False, raw=False)
-    
+
     with pytest.raises(mcp_cli.MCPCLIError, match="Unknown MCP server"):
         mcp_cli._handle_tool("unknown", "tool", {"myserver": spec}, args)
 
@@ -1911,7 +1911,7 @@ def test_main_grep_without_pattern_raises(monkeypatch, tmp_path) -> None:
     cfg = tmp_path / "mcp.json"
     cfg.write_text(json.dumps({"mcpServers": {}}))
     monkeypatch.setattr(mcp_cli, "_resolve_config_path", lambda _: cfg)
-    
+
     rc = mcp_cli.main(["grep"])
     assert rc == 1
 
@@ -1919,23 +1919,19 @@ def test_main_grep_without_pattern_raises(monkeypatch, tmp_path) -> None:
 def test_main_json_output_with_servers(monkeypatch, capsys, tmp_path) -> None:
     """main() --json includes config path and servers."""
     cfg = tmp_path / "mcp.json"
-    cfg.write_text(json.dumps({
-        "mcpServers": {
-            "test-server": {"type": "stdio", "command": "echo"}
-        }
-    }))
+    cfg.write_text(json.dumps({"mcpServers": {"test-server": {"type": "stdio", "command": "echo"}}}))
     monkeypatch.setattr(mcp_cli, "_resolve_config_path", lambda _: cfg)
-    
+
     with patch("aura_cli.mcp_cli._list_servers") as mock_list:
         mock_list.return_value = []
         rc = mcp_cli.main(["-j"])
-    
+
     captured = capsys.readouterr()
     assert "config_path" in captured.out
     assert rc == 0
 
 
-def test_load_config_file_not_found(tmp_path) -> None:
+def test_load_config_file_not_found_v2(tmp_path) -> None:
     """_load_config raises for missing file."""
     nonexistent = tmp_path / "nonexistent.json"
     with pytest.raises(mcp_cli.MCPCLIError, match="not found"):
@@ -1946,7 +1942,7 @@ def test_load_server_specs_invalid_mcpservers(tmp_path) -> None:
     """_load_server_specs raises if mcpServers is not a dict."""
     cfg = tmp_path / "mcp.json"
     cfg.write_text(json.dumps({"mcpServers": ["invalid", "array"]}))
-    
+
     with pytest.raises(mcp_cli.MCPCLIError, match="Invalid MCP config"):
         mcp_cli._load_server_specs(cfg)
 
@@ -1955,12 +1951,12 @@ def test_load_server_specs_missing_mcpservers(tmp_path) -> None:
     """_load_server_specs handles missing mcpServers key."""
     cfg = tmp_path / "mcp.json"
     cfg.write_text(json.dumps({}))
-    
+
     specs = mcp_cli._load_server_specs(cfg)
     assert specs == {}
 
 
-def test_extract_raw_text_string(monkeypatch) -> None:
+def test_extract_raw_text_string_v2(monkeypatch) -> None:
     """_extract_raw_text returns string as-is."""
     result = mcp_cli._extract_raw_text("plain text")
     assert result == "plain text"
@@ -1968,12 +1964,14 @@ def test_extract_raw_text_string(monkeypatch) -> None:
 
 def test_extract_raw_text_dict_with_content_list(monkeypatch) -> None:
     """_extract_raw_text extracts text from content list."""
-    result = mcp_cli._extract_raw_text({
-        "content": [
-            {"type": "text", "text": "first"},
-            {"type": "text", "text": "second"},
-        ]
-    })
+    result = mcp_cli._extract_raw_text(
+        {
+            "content": [
+                {"type": "text", "text": "first"},
+                {"type": "text", "text": "second"},
+            ]
+        }
+    )
     assert result == "first\nsecond"
 
 
@@ -1987,7 +1985,7 @@ def test_handle_grep_match_server_name(monkeypatch) -> None:
     """_handle_grep matches server names."""
     spec = mcp_cli.MCPServerSpec(name="test-server", config={"type": "stdio"})
     args = argparse.Namespace(json=False, descriptions=False)
-    
+
     with patch("aura_cli.mcp_cli._list_servers") as mock_list:
         mock_list.return_value = [
             {
@@ -1997,15 +1995,15 @@ def test_handle_grep_match_server_name(monkeypatch) -> None:
             }
         ]
         rc = mcp_cli._handle_grep("*test*", {"test-server": spec}, args)
-    
+
     assert rc == 0
 
 
-def test_handle_grep_json_output(monkeypatch, capsys) -> None:
+def test_handle_grep_json_output_v2(monkeypatch, capsys) -> None:
     """_handle_grep with --json outputs JSON."""
     spec = mcp_cli.MCPServerSpec(name="server", config={"type": "stdio"})
     args = argparse.Namespace(json=True, descriptions=False)
-    
+
     with patch("aura_cli.mcp_cli._list_servers") as mock_list:
         mock_list.return_value = [
             {
@@ -2015,7 +2013,7 @@ def test_handle_grep_json_output(monkeypatch, capsys) -> None:
             }
         ]
         rc = mcp_cli._handle_grep("*", {"server": spec}, args)
-    
+
     captured = capsys.readouterr()
     assert "pattern" in captured.out
     assert rc == 0
@@ -2025,7 +2023,7 @@ def test_handle_server_raw_omits_descriptions(monkeypatch, capsys) -> None:
     """_handle_server with --raw and no descriptions."""
     spec = mcp_cli.MCPServerSpec(name="server", config={"type": "stdio"})
     args = argparse.Namespace(json=False, raw=True, descriptions=False)
-    
+
     with patch("aura_cli.mcp_cli._create_client") as mock_create:
         mock_client = MagicMock()
         mock_client.__enter__ = MagicMock(return_value=mock_client)
@@ -2034,9 +2032,9 @@ def test_handle_server_raw_omits_descriptions(monkeypatch, capsys) -> None:
             {"name": "tool1", "description": "Test"},
         ]
         mock_create.return_value = mock_client
-        
+
         rc = mcp_cli._handle_server("server", {"server": spec}, args)
-    
+
     captured = capsys.readouterr()
     assert "tool1" in captured.out
     assert rc == 0
@@ -2046,14 +2044,14 @@ def test_handle_tool_unknown_tool_raises(monkeypatch) -> None:
     """_handle_tool raises when tool not found."""
     spec = mcp_cli.MCPServerSpec(name="server", config={"type": "stdio"})
     args = argparse.Namespace(payload=None, json=False, raw=False)
-    
+
     with patch("aura_cli.mcp_cli._create_client") as mock_create:
         mock_client = MagicMock()
         mock_client.__enter__ = MagicMock(return_value=mock_client)
         mock_client.__exit__ = MagicMock(return_value=None)
         mock_client.get_tool.side_effect = mcp_cli.MCPCLIError("Tool not found")
         mock_create.return_value = mock_client
-        
+
         with pytest.raises(mcp_cli.MCPCLIError):
             mcp_cli._handle_tool("server", "unknown", {"server": spec}, args)
 
@@ -2070,7 +2068,7 @@ def test_stdio_client_timeout_config(monkeypatch) -> None:
     monkeypatch.setenv("AURA_MCP_INIT_TIMEOUT_SECONDS", "5.5")
     monkeypatch.setenv("AURA_MCP_LIST_TIMEOUT_SECONDS", "10.5")
     monkeypatch.setenv("AURA_MCP_CALL_TIMEOUT_SECONDS", "15.5")
-    
+
     config = {
         "type": "stdio",
         "command": "echo",
@@ -2080,7 +2078,7 @@ def test_stdio_client_timeout_config(monkeypatch) -> None:
     }
     spec = mcp_cli.MCPServerSpec(name="test", config=config)
     client = mcp_cli.StdioMCPClient(spec)
-    
+
     # Env vars should override config
     assert client._initialize_timeout == 5.5
     assert client._list_timeout == 10.5

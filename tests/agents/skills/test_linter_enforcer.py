@@ -18,6 +18,7 @@ from agents.skills.linter_enforcer import (
 # _camel_to_snake / _snake_to_pascal
 # ---------------------------------------------------------------------------
 
+
 class TestNameConversions:
     def test_camel_to_snake_basic(self):
         assert _camel_to_snake("MyClass") == "my_class"
@@ -41,6 +42,7 @@ class TestNameConversions:
 # ---------------------------------------------------------------------------
 # _check_naming
 # ---------------------------------------------------------------------------
+
 
 class TestCheckNaming:
     def test_valid_snake_function_no_violation(self):
@@ -98,6 +100,7 @@ class TestCheckNaming:
 # _run_flake8
 # ---------------------------------------------------------------------------
 
+
 class TestRunFlake8:
     def test_returns_none_when_flake8_missing(self, tmp_path):
         with patch("subprocess.run", side_effect=FileNotFoundError):
@@ -138,6 +141,7 @@ class TestRunFlake8:
 # LinterEnforcerSkill — inline code mode
 # ---------------------------------------------------------------------------
 
+
 class TestLinterEnforcerInlineCode:
     @pytest.fixture
     def skill(self):
@@ -169,6 +173,7 @@ class TestLinterEnforcerInlineCode:
 # LinterEnforcerSkill — single project root
 # ---------------------------------------------------------------------------
 
+
 class TestLinterEnforcerProjectRoot:
     @pytest.fixture
     def skill(self):
@@ -194,6 +199,7 @@ class TestLinterEnforcerProjectRoot:
 # ---------------------------------------------------------------------------
 # LinterEnforcerSkill — multi-project paths
 # ---------------------------------------------------------------------------
+
 
 class TestLinterEnforcerMultiProject:
     @pytest.fixture

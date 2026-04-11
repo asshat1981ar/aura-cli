@@ -9,27 +9,33 @@ from unittest.mock import MagicMock, patch, PropertyMock
 # FALLBACK_CAPABILITIES
 # ---------------------------------------------------------------------------
 
+
 class TestFallbackCapabilities:
     def test_all_core_phases_present(self):
         from agents.registry import FALLBACK_CAPABILITIES
+
         for phase in ("ingest", "plan", "critique", "synthesize", "act", "sandbox", "verify", "reflect"):
             assert phase in FALLBACK_CAPABILITIES
 
     def test_each_entry_is_nonempty_list(self):
         from agents.registry import FALLBACK_CAPABILITIES
+
         for name, caps in FALLBACK_CAPABILITIES.items():
             assert isinstance(caps, list) and len(caps) > 0, f"{name} has empty capabilities"
 
     def test_plan_includes_planning(self):
         from agents.registry import FALLBACK_CAPABILITIES
+
         assert "planning" in FALLBACK_CAPABILITIES["plan"]
 
     def test_act_includes_code_generation(self):
         from agents.registry import FALLBACK_CAPABILITIES
+
         assert "code_generation" in FALLBACK_CAPABILITIES["act"]
 
     def test_debugging_entry_present(self):
         from agents.registry import FALLBACK_CAPABILITIES
+
         assert "debugging" in FALLBACK_CAPABILITIES
 
 
@@ -37,9 +43,11 @@ class TestFallbackCapabilities:
 # _make_spec
 # ---------------------------------------------------------------------------
 
+
 class TestMakeSpec:
     def test_uses_agent_native_capabilities(self):
         from agents.registry import _make_spec
+
         agent = MagicMock()
         agent.capabilities = ["custom_cap", "extra_cap"]
         spec = _make_spec("myagent", agent)
@@ -47,30 +55,35 @@ class TestMakeSpec:
 
     def test_falls_back_to_fallback_dict(self):
         from agents.registry import _make_spec
+
         agent = MagicMock(spec=[])  # no capabilities attr
         spec = _make_spec("plan", agent)
         assert "planning" in spec.capabilities
 
     def test_falls_back_to_name_list_if_unknown(self):
         from agents.registry import _make_spec
+
         agent = MagicMock(spec=[])
         spec = _make_spec("totally_unknown_agent", agent)
         assert spec.capabilities == ["totally_unknown_agent"]
 
     def test_spec_name_matches(self):
         from agents.registry import _make_spec
+
         agent = MagicMock(spec=[])
         spec = _make_spec("my_agent", agent)
         assert spec.name == "my_agent"
 
     def test_spec_source_is_local(self):
         from agents.registry import _make_spec
+
         agent = MagicMock(spec=[])
         spec = _make_spec("x", agent)
         assert spec.source == "local"
 
     def test_uses_agent_description_attribute(self):
         from agents.registry import _make_spec
+
         agent = MagicMock(spec=["description"])
         agent.description = "Does something cool"
         spec = _make_spec("x", agent)
@@ -78,6 +91,7 @@ class TestMakeSpec:
 
     def test_fallback_description(self):
         from agents.registry import _make_spec
+
         agent = MagicMock(spec=[])
         spec = _make_spec("mything", agent)
         assert "mything" in spec.description
@@ -87,22 +101,27 @@ class TestMakeSpec:
 # _lazy_import
 # ---------------------------------------------------------------------------
 
+
 class TestLazyImport:
     def test_returns_none_for_unknown(self):
         from agents.registry import _lazy_import
+
         result = _lazy_import("not_a_real_agent_xyz")
         assert result is None
 
     def test_returns_class_for_known_agent(self):
         from agents.registry import _lazy_import, _agent_cache
+
         _agent_cache.clear()
         cls = _lazy_import("synthesizer")
         assert cls is not None
         from agents.synthesizer import SynthesizerAgent
+
         assert cls is SynthesizerAgent
 
     def test_caches_result_on_second_call(self):
         from agents.registry import _lazy_import, _agent_cache
+
         _agent_cache.clear()
         cls1 = _lazy_import("synthesizer")
         cls2 = _lazy_import("synthesizer")
@@ -110,12 +129,14 @@ class TestLazyImport:
 
     def test_ingest_importable(self):
         from agents.registry import _lazy_import, _agent_cache
+
         _agent_cache.clear()
         cls = _lazy_import("ingest")
         assert cls is not None
 
     def test_debugger_importable(self):
         from agents.registry import _lazy_import, _agent_cache
+
         _agent_cache.clear()
         cls = _lazy_import("debugger")
         assert cls is not None
@@ -125,10 +146,12 @@ class TestLazyImport:
 # PlannerAdapter
 # ---------------------------------------------------------------------------
 
+
 class TestPlannerAdapter:
     @pytest.fixture
     def adapter(self):
         from agents.registry import PlannerAdapter
+
         agent = MagicMock()
         agent.plan.return_value = ["Step 1", "Step 2"]
         return PlannerAdapter(agent=agent)
@@ -163,10 +186,12 @@ class TestPlannerAdapter:
 # CriticAdapter
 # ---------------------------------------------------------------------------
 
+
 class TestCriticAdapter:
     @pytest.fixture
     def adapter(self):
         from agents.registry import CriticAdapter
+
         agent = MagicMock()
         agent.critique_plan.return_value = "This plan has issues."
         return CriticAdapter(agent=agent)
@@ -195,10 +220,12 @@ class TestCriticAdapter:
 # ActAdapter — unit helpers
 # ---------------------------------------------------------------------------
 
+
 class TestActAdapterHelpers:
     @pytest.fixture
     def adapter(self):
         from agents.registry import ActAdapter
+
         agent = MagicMock()
         agent.AURA_TARGET_DIRECTIVE = "# AURA_TARGET:"
         agent.implement.return_value = "# generated code"
@@ -254,6 +281,7 @@ class TestActAdapterRun:
     @pytest.fixture
     def adapter(self):
         from agents.registry import ActAdapter
+
         agent = MagicMock()
         agent.AURA_TARGET_DIRECTIVE = "# AURA_TARGET:"
         agent.implement.return_value = "def foo(): pass"
@@ -290,6 +318,7 @@ class TestActAdapterRun:
 # SandboxAdapter
 # ---------------------------------------------------------------------------
 
+
 class TestSandboxAdapter:
     @pytest.fixture
     def sandbox_result(self):
@@ -305,6 +334,7 @@ class TestSandboxAdapter:
     @pytest.fixture
     def adapter(self, sandbox_result):
         from agents.registry import SandboxAdapter
+
         agent = MagicMock()
         agent.run_code.return_value = sandbox_result
         return SandboxAdapter(agent=agent)

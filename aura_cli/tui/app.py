@@ -235,13 +235,14 @@ class AuraStudio:
         layout["queue"].update(build_queue_panel(queue_summary=snapshot["queue"]))
         layout["memory"].update(build_memory_panel(brain=brain))
         layout["metrics"].update(build_metrics_panel(cycle_log=cycle_log, run_tool_audit=snapshot.get("run_tool_audit")))
-        
+
         # New observability panels
         from aura.observability import get_metrics_store, get_tracer, SpanContext
+
         metrics_store = get_metrics_store()
         tracer = get_tracer()
         layout["observability"].update(build_observability_panel(metrics_store=metrics_store, tracer=tracer))
-        
+
         # Health panel
         health_status = getattr(orchestrator, "health_status", None) if orchestrator else None
         layout["health"].update(build_health_panel(health_status=health_status))

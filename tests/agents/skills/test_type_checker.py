@@ -11,6 +11,7 @@ from agents.skills.type_checker import _annotation_coverage, TypeCheckerSkill
 # _annotation_coverage
 # ---------------------------------------------------------------------------
 
+
 class TestAnnotationCoverage:
     def test_fully_annotated_returns_100(self):
         src = "def foo(x: int) -> str:\n    return str(x)\n"
@@ -21,10 +22,7 @@ class TestAnnotationCoverage:
         assert _annotation_coverage(src) == 0.0
 
     def test_partial_annotation(self):
-        src = (
-            "def annotated(x: int) -> int:\n    return x\n"
-            "def bare(x):\n    return x\n"
-        )
+        src = "def annotated(x: int) -> int:\n    return x\ndef bare(x):\n    return x\n"
         cov = _annotation_coverage(src)
         assert 0.0 < cov < 100.0
 
@@ -52,6 +50,7 @@ class TestAnnotationCoverage:
 # ---------------------------------------------------------------------------
 # TypeCheckerSkill._run — mypy unavailable (heuristic fallback)
 # ---------------------------------------------------------------------------
+
 
 class TestTypeCheckerSkillHeuristicFallback:
     @pytest.fixture
@@ -94,6 +93,7 @@ class TestTypeCheckerSkillHeuristicFallback:
 # TypeCheckerSkill._run — mypy available
 # ---------------------------------------------------------------------------
 
+
 class TestTypeCheckerSkillWithMypy:
     @pytest.fixture
     def skill(self):
@@ -135,10 +135,7 @@ class TestTypeCheckerSkillWithMypy:
         assert "annotation_coverage_pct" in result
 
     def test_type_errors_capped_at_100(self, skill, tmp_path):
-        errors = [
-            {"file": "x.py", "line": i, "level": "error", "error": "e"}
-            for i in range(150)
-        ]
+        errors = [{"file": "x.py", "line": i, "level": "error", "error": "e"} for i in range(150)]
         with patch("agents.skills.type_checker._run_mypy", return_value=errors):
             result = skill.run({"project_root": str(tmp_path)})
         assert len(result["type_errors"]) == 100
@@ -153,15 +150,18 @@ class TestTypeCheckerSkillWithMypy:
 # _run_mypy helper (smoke)
 # ---------------------------------------------------------------------------
 
+
 class TestRunMypy:
     def test_returns_none_when_mypy_missing(self):
         from agents.skills.type_checker import _run_mypy
+
         with patch("subprocess.run", side_effect=FileNotFoundError):
             result = _run_mypy(".", Path("."))
         assert result is None
 
     def test_returns_list_on_success(self):
         from agents.skills.type_checker import _run_mypy
+
         mock_proc = MagicMock()
         mock_proc.stdout = "module.py:5: error: Incompatible types\n"
         mock_proc.stderr = ""

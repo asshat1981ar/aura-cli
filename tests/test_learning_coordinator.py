@@ -164,10 +164,7 @@ class TestQualityAlertArtifacts:
 class TestGoalCap:
     def test_goals_capped_at_max_per_cycle(self):
         coord = LearningCoordinator(make_store())
-        alerts = [
-            make_alert(severity="high", suggested_goal=f"Fix thing {i}")
-            for i in range(10)
-        ]
+        alerts = [make_alert(severity="high", suggested_goal=f"Fix thing {i}") for i in range(10)]
         goals = coord.on_cycle_complete(make_cycle_entry(), {}, alerts)
         assert len(goals) <= LearningCoordinator.MAX_GOALS_PER_CYCLE
 
@@ -176,10 +173,7 @@ class TestGoalCap:
 
     def test_overflow_goals_are_deferred_to_backlog(self):
         coord = LearningCoordinator(make_store())
-        alerts = [
-            make_alert(severity="high", suggested_goal=f"Fix thing {i}")
-            for i in range(5)
-        ]
+        alerts = [make_alert(severity="high", suggested_goal=f"Fix thing {i}") for i in range(5)]
         goals = coord.on_cycle_complete(make_cycle_entry(), {}, alerts)
         backlog = coord.generate_backlog(limit=10)
         assert goals == ["Fix thing 0", "Fix thing 1", "Fix thing 2"]

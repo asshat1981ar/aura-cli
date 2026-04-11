@@ -20,6 +20,7 @@ def gate_with_baseline():
 # should_block — security scanner
 # ---------------------------------------------------------------------------
 
+
 class TestShouldBlockSecurity:
     def test_no_critical_findings_no_block(self, gate):
         blocked, reason = gate.should_block(
@@ -55,6 +56,7 @@ class TestShouldBlockSecurity:
 # should_block — coverage baseline
 # ---------------------------------------------------------------------------
 
+
 class TestShouldBlockCoverage:
     def test_no_baseline_no_coverage_block(self, gate):
         blocked, _ = gate.should_block(
@@ -65,37 +67,27 @@ class TestShouldBlockCoverage:
 
     def test_coverage_above_threshold_no_block(self, gate_with_baseline):
         # 80 baseline, drop only 3pp → below threshold of 5
-        blocked, _ = gate_with_baseline.should_block(
-            {}, {"test_coverage_analyzer": {"coverage_pct": 77.0}}
-        )
+        blocked, _ = gate_with_baseline.should_block({}, {"test_coverage_analyzer": {"coverage_pct": 77.0}})
         assert blocked is False
 
     def test_coverage_drop_exceeds_threshold_blocks(self, gate_with_baseline):
         # 80 baseline, current 74 → drop of 6pp > 5pp threshold
-        blocked, reason = gate_with_baseline.should_block(
-            {}, {"test_coverage_analyzer": {"coverage_pct": 74.0}}
-        )
+        blocked, reason = gate_with_baseline.should_block({}, {"test_coverage_analyzer": {"coverage_pct": 74.0}})
         assert blocked is True
         assert "coverage" in reason.lower()
         assert "80.0" in reason
 
     def test_coverage_exactly_at_threshold_no_block(self, gate_with_baseline):
         # drop exactly 5pp = threshold, not strictly greater
-        blocked, _ = gate_with_baseline.should_block(
-            {}, {"test_coverage_analyzer": {"coverage_pct": 75.0}}
-        )
+        blocked, _ = gate_with_baseline.should_block({}, {"test_coverage_analyzer": {"coverage_pct": 75.0}})
         assert blocked is False
 
     def test_missing_coverage_pct_no_block(self, gate_with_baseline):
-        blocked, _ = gate_with_baseline.should_block(
-            {}, {"test_coverage_analyzer": {}}
-        )
+        blocked, _ = gate_with_baseline.should_block({}, {"test_coverage_analyzer": {}})
         assert blocked is False
 
     def test_non_numeric_coverage_pct_no_block(self, gate_with_baseline):
-        blocked, _ = gate_with_baseline.should_block(
-            {}, {"test_coverage_analyzer": {"coverage_pct": "n/a"}}
-        )
+        blocked, _ = gate_with_baseline.should_block({}, {"test_coverage_analyzer": {"coverage_pct": "n/a"}})
         assert blocked is False
 
     def test_security_checked_before_coverage(self, gate_with_baseline):
@@ -114,6 +106,7 @@ class TestShouldBlockCoverage:
 # ---------------------------------------------------------------------------
 # request_approval
 # ---------------------------------------------------------------------------
+
 
 class TestRequestApproval:
     def test_auto_approve_env_var_returns_true(self, gate):
@@ -172,6 +165,7 @@ class TestRequestApproval:
 # ---------------------------------------------------------------------------
 # Init
 # ---------------------------------------------------------------------------
+
 
 class TestHumanGateInit:
     def test_default_no_baseline(self):

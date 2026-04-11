@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 class ExecutionStatus(Enum):
     """Status of an execution."""
+
     SUCCESS = "success"
     FAILURE = "failure"
     PARTIAL = "partial"
@@ -22,6 +23,7 @@ class ExecutionStatus(Enum):
 @dataclass
 class ExecutionOutcome:
     """Outcome of a single execution."""
+
     agent_name: str
     goal: str
     status: ExecutionStatus
@@ -31,7 +33,7 @@ class ExecutionOutcome:
     metadata: Dict[str, Any] = field(default_factory=dict)
     timestamp: datetime = field(default_factory=datetime.utcnow)
     id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
-    
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -44,7 +46,7 @@ class ExecutionOutcome:
             "metadata": self.metadata,
             "timestamp": self.timestamp.isoformat(),
         }
-    
+
     @classmethod
     def from_dict(cls, data: dict) -> "ExecutionOutcome":
         return cls(
@@ -62,14 +64,14 @@ class ExecutionOutcome:
 
 class FeedbackCollector:
     """Collect and store execution feedback."""
-    
+
     DEFAULT_DB_PATH = "~/.aura/learning_feedback.db"
-    
+
     def __init__(self, db_path: Optional[str] = None):
         self.db_path = Path(db_path or self.DEFAULT_DB_PATH).expanduser()
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
-    
+
     def _init_db(self):
         """Initialize feedback database."""
         with sqlite3.connect(str(self.db_path)) as conn:
@@ -99,7 +101,7 @@ class FeedbackCollector:
                 ON execution_outcomes(status)
             """)
             conn.commit()
-    
+
     def record(self, outcome: ExecutionOutcome) -> str:
         """Record an execution outcome."""
         with sqlite3.connect(str(self.db_path)) as conn:
@@ -124,7 +126,7 @@ class FeedbackCollector:
             )
             conn.commit()
         return outcome.id
-    
+
     def get_recent(
         self,
         agent_name: Optional[str] = None,
@@ -134,50 +136,50 @@ class FeedbackCollector:
         """Get recent execution outcomes."""
         query = "SELECT * FROM execution_outcomes WHERE 1=1"
         params = []
-        
+
         if agent_name:
             query += " AND agent_name = ?"
             params.append(agent_name)
-        
+
         if status:
             query += " AND status = ?"
             params.append(status.value)
-        
+
         query += " ORDER BY timestamp DESC LIMIT ?"
         params.append(limit)
-        
+
         with sqlite3.connect(str(self.db_path)) as conn:
             cursor = conn.execute(query, params)
             rows = cursor.fetchall()
-        
+
         return [self._row_to_outcome(row) for row in rows]
-    
+
     def get_stats(self, agent_name: Optional[str] = None) -> Dict[str, Any]:
         """Get execution statistics."""
         query = "SELECT status, COUNT(*), AVG(duration_ms), AVG(output_quality) FROM execution_outcomes"
         params = []
-        
+
         if agent_name:
             query += " WHERE agent_name = ?"
             params.append(agent_name)
-        
+
         query += " GROUP BY status"
-        
+
         with sqlite3.connect(str(self.db_path)) as conn:
             cursor = conn.execute(query, params)
             rows = cursor.fetchall()
-        
+
         stats = {
             "total": 0,
             "by_status": {},
             "avg_duration_ms": 0,
             "avg_quality": 0,
         }
-        
+
         total_count = 0
         total_duration = 0
         total_quality = 0
-        
+
         for status, count, avg_duration, avg_quality in rows:
             stats["by_status"][status] = {
                 "count": count,
@@ -187,14 +189,14 @@ class FeedbackCollector:
             total_count += count
             total_duration += (avg_duration or 0) * count
             total_quality += (avg_quality or 0) * count
-        
+
         stats["total"] = total_count
         if total_count > 0:
             stats["avg_duration_ms"] = total_duration / total_count
             stats["avg_quality"] = total_quality / total_count
-        
+
         return stats
-    
+
     def get_success_rate(self, agent_name: Optional[str] = None) -> float:
         """Get success rate for an agent or overall."""
         query = """
@@ -204,30 +206,27 @@ class FeedbackCollector:
             FROM execution_outcomes
         """
         params = []
-        
+
         if agent_name:
             query += " WHERE agent_name = ?"
             params.append(agent_name)
-        
+
         with sqlite3.connect(str(self.db_path)) as conn:
             cursor = conn.execute(query, params)
             row = cursor.fetchone()
-        
+
         if row and row[1] > 0:
             return row[0] / row[1]
         return 0.0
-    
+
     def clear_old(self, days: int = 30):
         """Clear outcomes older than specified days."""
         cutoff = time.time() - (days * 24 * 3600)
-        
+
         with sqlite3.connect(str(self.db_path)) as conn:
-            conn.execute(
-                "DELETE FROM execution_outcomes WHERE timestamp < ?",
-                (cutoff,)
-            )
+            conn.execute("DELETE FROM execution_outcomes WHERE timestamp < ?", (cutoff,))
             conn.commit()
-    
+
     def _row_to_outcome(self, row) -> ExecutionOutcome:
         """Convert database row to ExecutionOutcome."""
         return ExecutionOutcome(

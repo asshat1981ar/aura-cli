@@ -50,11 +50,7 @@ def get_mcp_server_api_key(server_name: str) -> Optional[str]:
     """
     try:
         spec = get_mcp_server_spec(server_name)
-        candidate_envs = tuple(
-            env_name
-            for env_name in (spec.token_env, *spec.legacy_token_envs)
-            if env_name
-        )
+        candidate_envs = tuple(env_name for env_name in (spec.token_env, *spec.legacy_token_envs) if env_name)
     except KeyError:
         candidate_envs = (f"MCP_{server_name.upper()}_API_KEY",)
 

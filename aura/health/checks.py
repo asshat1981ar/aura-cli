@@ -8,23 +8,23 @@ from .models import CheckResult, CheckType, HealthStatus, ThresholdConfig
 
 class HealthChecks:
     """Collection of built-in health checks."""
-    
+
     @staticmethod
     async def system_check() -> CheckResult:
         """Check overall system status."""
         start = time.time()
-        
+
         try:
             import platform
             import os
-            
+
             details = {
                 "platform": platform.platform(),
                 "python_version": platform.python_version(),
                 "processor": platform.processor() or "unknown",
-                "load_avg": os.getloadavg() if hasattr(os, 'getloadavg') else None,
+                "load_avg": os.getloadavg() if hasattr(os, "getloadavg") else None,
             }
-            
+
             return CheckResult(
                 name="system",
                 type=CheckType.SYSTEM,
@@ -40,7 +40,7 @@ class HealthChecks:
                 response_time_ms=(time.time() - start) * 1000,
                 message=str(e),
             )
-    
+
     @staticmethod
     async def disk_check(
         path: str = "/",
@@ -49,16 +49,16 @@ class HealthChecks:
     ) -> CheckResult:
         """Check disk usage."""
         start = time.time()
-        
+
         try:
             import shutil
-            
+
             usage = shutil.disk_usage(path)
             used_percent = (usage.used / usage.total) * 100
-            
+
             threshold = ThresholdConfig(warning_percent, critical_percent)
             status = threshold.evaluate(used_percent)
-            
+
             return CheckResult(
                 name="disk",
                 type=CheckType.DISK,
@@ -81,7 +81,7 @@ class HealthChecks:
                 response_time_ms=(time.time() - start) * 1000,
                 message=str(e),
             )
-    
+
     @staticmethod
     async def memory_check(
         warning_percent: float = 80.0,
@@ -89,16 +89,16 @@ class HealthChecks:
     ) -> CheckResult:
         """Check memory usage."""
         start = time.time()
-        
+
         try:
             import psutil
-            
+
             memory = psutil.virtual_memory()
             used_percent = memory.percent
-            
+
             threshold = ThresholdConfig(warning_percent, critical_percent)
             status = threshold.evaluate(used_percent)
-            
+
             return CheckResult(
                 name="memory",
                 type=CheckType.MEMORY,
@@ -128,7 +128,7 @@ class HealthChecks:
                 response_time_ms=(time.time() - start) * 1000,
                 message=str(e),
             )
-    
+
     @staticmethod
     async def cpu_check(
         warning_percent: float = 70.0,
@@ -136,16 +136,16 @@ class HealthChecks:
     ) -> CheckResult:
         """Check CPU usage."""
         start = time.time()
-        
+
         try:
             import psutil
-            
+
             # Get CPU percent over 1 second
             cpu_percent = psutil.cpu_percent(interval=0.1)
-            
+
             threshold = ThresholdConfig(warning_percent, critical_percent)
             status = threshold.evaluate(cpu_percent)
-            
+
             return CheckResult(
                 name="cpu",
                 type=CheckType.CPU,
@@ -173,21 +173,21 @@ class HealthChecks:
                 response_time_ms=(time.time() - start) * 1000,
                 message=str(e),
             )
-    
+
     @staticmethod
     async def database_check(connection_string: Optional[str] = None) -> CheckResult:
         """Check database connectivity."""
         start = time.time()
-        
+
         try:
             import sqlite3
-            
+
             conn = sqlite3.connect(connection_string or ":memory:")
             cursor = conn.cursor()
             cursor.execute("SELECT 1")
             cursor.fetchone()
             conn.close()
-            
+
             return CheckResult(
                 name="database",
                 type=CheckType.DATABASE,
@@ -203,7 +203,7 @@ class HealthChecks:
                 response_time_ms=(time.time() - start) * 1000,
                 message=str(e),
             )
-    
+
     @staticmethod
     async def api_check(
         url: str,
@@ -212,14 +212,14 @@ class HealthChecks:
     ) -> CheckResult:
         """Check API endpoint."""
         start = time.time()
-        
+
         try:
             import aiohttp
-            
+
             async with aiohttp.ClientSession() as session:
                 async with session.get(url, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
                     status = HealthStatus.HEALTHY if resp.status == expected_status else HealthStatus.UNHEALTHY
-                    
+
                     return CheckResult(
                         name=f"api_{url}",
                         type=CheckType.API,

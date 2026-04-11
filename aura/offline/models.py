@@ -9,6 +9,7 @@ from typing import Any, Optional
 
 class ConnectivityStatus(Enum):
     """Network connectivity status."""
+
     ONLINE = "online"
     OFFLINE = "offline"
     UNKNOWN = "unknown"
@@ -16,6 +17,7 @@ class ConnectivityStatus(Enum):
 
 class CommandPriority(Enum):
     """Command execution priority."""
+
     CRITICAL = 1
     HIGH = 2
     NORMAL = 3
@@ -24,6 +26,7 @@ class CommandPriority(Enum):
 
 class CommandStatus(Enum):
     """Status of a queued command."""
+
     PENDING = "pending"
     PROCESSING = "processing"
     COMPLETED = "completed"
@@ -33,6 +36,7 @@ class CommandStatus(Enum):
 @dataclass
 class QueuedCommand:
     """A command in the offline queue."""
+
     command: str
     args: tuple = field(default_factory=tuple)
     kwargs: dict = field(default_factory=dict)
@@ -42,11 +46,11 @@ class QueuedCommand:
     retry_count: int = 0
     max_retries: int = 3
     id: Optional[str] = None
-    
+
     def __post_init__(self):
         if self.id is None:
             self.id = str(uuid.uuid4())[:8]
-    
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -63,6 +67,7 @@ class QueuedCommand:
 @dataclass
 class CommandResult:
     """Result of executing a command."""
+
     command: str
     success: bool
     output: Any = None

@@ -9,7 +9,7 @@ from .cache import AnalysisCache
 
 __all__ = [
     "ContextGraph",
-    "CodeElement", 
+    "CodeElement",
     "RelevanceScorer",
     "AnalysisCache",
 ]

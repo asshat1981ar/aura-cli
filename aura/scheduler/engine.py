@@ -15,13 +15,13 @@ from .models import (
 
 class TaskScheduler:
     """Task scheduler with support for various scheduling types."""
-    
+
     def __init__(self, config: Optional[SchedulerConfig] = None):
         self.config = config or SchedulerConfig()
         self._tasks: Dict[str, ScheduledTask] = {}
         self._running = False
         self._task: Optional[asyncio.Task] = None
-    
+
     def schedule_once(
         self,
         name: str,
@@ -41,7 +41,7 @@ class TaskScheduler:
         )
         self._tasks[task.id] = task
         return task
-    
+
     def schedule_delayed(
         self,
         name: str,
@@ -61,7 +61,7 @@ class TaskScheduler:
         )
         self._tasks[task.id] = task
         return task
-    
+
     def schedule_interval(
         self,
         name: str,
@@ -83,7 +83,7 @@ class TaskScheduler:
         )
         self._tasks[task.id] = task
         return task
-    
+
     def cancel(self, task_id: str) -> bool:
         """Cancel a scheduled task."""
         task = self._tasks.get(task_id)
@@ -91,26 +91,26 @@ class TaskScheduler:
             task.status = TaskStatus.CANCELLED
             return True
         return False
-    
+
     def get_task(self, task_id: str) -> Optional[ScheduledTask]:
         """Get a task by ID."""
         return self._tasks.get(task_id)
-    
+
     def get_tasks(self, status: Optional[TaskStatus] = None) -> List[ScheduledTask]:
         """Get all tasks, optionally filtered by status."""
         tasks = list(self._tasks.values())
         if status:
             tasks = [t for t in tasks if t.status == status]
         return tasks
-    
+
     async def run_task(self, task: ScheduledTask) -> TaskResult:
         """Execute a single task."""
         task.status = TaskStatus.RUNNING
         task.last_run = datetime.utcnow()
         task.run_count += 1
-        
+
         started_at = datetime.utcnow()
-        
+
         try:
             if asyncio.iscoroutinefunction(task.func):
                 result = await asyncio.wait_for(
@@ -124,7 +124,7 @@ class TaskScheduler:
                     loop.run_in_executor(None, task.func, *task.args, **task.kwargs),
                     timeout=self.config.default_timeout,
                 )
-            
+
             task.result = TaskResult(
                 success=True,
                 output=result,
@@ -132,7 +132,7 @@ class TaskScheduler:
                 completed_at=datetime.utcnow(),
             )
             task.status = TaskStatus.COMPLETED
-            
+
         except Exception as e:
             task.result = TaskResult(
                 success=False,
@@ -141,7 +141,7 @@ class TaskScheduler:
                 completed_at=datetime.utcnow(),
             )
             task.status = TaskStatus.FAILED
-        
+
         # Update next_run for interval tasks
         if task.schedule_type == ScheduleType.INTERVAL:
             if task.max_runs is None or task.run_count < task.max_runs:
@@ -149,14 +149,14 @@ class TaskScheduler:
                 task.status = TaskStatus.PENDING
             else:
                 task.next_run = None
-        
+
         return task.result
-    
+
     async def start(self):
         """Start the scheduler."""
         self._running = True
         self._task = asyncio.create_task(self._scheduler_loop())
-    
+
     async def stop(self):
         """Stop the scheduler."""
         self._running = False
@@ -167,37 +167,29 @@ class TaskScheduler:
             except asyncio.CancelledError:
                 pass
             self._task = None
-    
+
     async def _scheduler_loop(self):
         """Main scheduler loop."""
         while self._running:
             try:
                 now = datetime.utcnow()
-                
+
                 # Find tasks that should run
-                pending_tasks = [
-                    t for t in self._tasks.values()
-                    if t.status == TaskStatus.PENDING
-                    and t.next_run
-                    and t.next_run <= now
-                ]
-                
+                pending_tasks = [t for t in self._tasks.values() if t.status == TaskStatus.PENDING and t.next_run and t.next_run <= now]
+
                 # Run tasks concurrently
                 if pending_tasks:
                     await asyncio.gather(
                         *[self.run_task(t) for t in pending_tasks],
                         return_exceptions=True,
                     )
-                
+
                 await asyncio.sleep(1)
             except asyncio.CancelledError:
                 break
-    
+
     def clear_completed(self):
         """Remove completed and cancelled tasks."""
-        to_remove = [
-            task_id for task_id, task in self._tasks.items()
-            if task.status in (TaskStatus.COMPLETED, TaskStatus.CANCELLED)
-        ]
+        to_remove = [task_id for task_id, task in self._tasks.items() if task.status in (TaskStatus.COMPLETED, TaskStatus.CANCELLED)]
         for task_id in to_remove:
             del self._tasks[task_id]

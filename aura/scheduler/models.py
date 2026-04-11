@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict, Optional
 
 class TaskStatus(Enum):
     """Status of a scheduled task."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -18,6 +19,7 @@ class TaskStatus(Enum):
 
 class ScheduleType(Enum):
     """Type of schedule."""
+
     ONCE = "once"
     INTERVAL = "interval"
     CRON = "cron"
@@ -27,12 +29,13 @@ class ScheduleType(Enum):
 @dataclass
 class TaskResult:
     """Result of a task execution."""
+
     success: bool
     output: Any = None
     error: Optional[str] = None
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
-    
+
     @property
     def duration_ms(self) -> float:
         """Get execution duration in milliseconds."""
@@ -44,6 +47,7 @@ class TaskResult:
 @dataclass
 class ScheduledTask:
     """A scheduled task."""
+
     name: str
     func: Callable
     schedule_type: ScheduleType
@@ -63,7 +67,7 @@ class ScheduledTask:
     run_count: int = 0
     max_runs: Optional[int] = None
     result: Optional[TaskResult] = None
-    
+
     def __post_init__(self):
         if self.schedule_type == ScheduleType.ONCE and isinstance(self.schedule_value, datetime):
             self.run_at = self.schedule_value
@@ -75,7 +79,7 @@ class ScheduledTask:
             # Store as timedelta for consistency
             self.schedule_value = timedelta(seconds=self.schedule_value)
             self.next_run = datetime.utcnow() + self.schedule_value
-    
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -93,6 +97,7 @@ class ScheduledTask:
 @dataclass
 class SchedulerConfig:
     """Configuration for the task scheduler."""
+
     max_workers: int = 4
     default_timeout: int = 300
     retry_failed: bool = True

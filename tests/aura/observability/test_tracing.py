@@ -120,7 +120,7 @@ class TestSpan:
             raise ValueError("Test error")
         except ValueError as e:
             span.record_exception(e, {"extra": "info"})
-        
+
         assert span.status == SpanStatus.ERROR
         assert len(span.events) == 1
         assert span.events[0].name == "exception"
@@ -156,7 +156,7 @@ class TestSpan:
             attributes={"key": "value"},
         )
         span.end()
-        
+
         d = span.to_dict()
         assert d["name"] == "test_span"
         assert d["kind"] == "SERVER"
@@ -242,14 +242,14 @@ class TestFileSpanExporter:
     def test_export(self, tmp_path):
         path = tmp_path / "spans.json"
         exporter = FileSpanExporter(path)
-        
+
         ctx = SpanContext.create()
         span = Span(name="test", context=ctx)
         span.end()
-        
+
         exporter.export([span])
         exporter.shutdown()
-        
+
         assert path.exists()
         content = path.read_text()
         assert "test" in content
@@ -257,16 +257,16 @@ class TestFileSpanExporter:
     def test_rotation(self, tmp_path):
         path = tmp_path / "spans.json"
         exporter = FileSpanExporter(path, max_file_size=100)
-        
+
         # Export enough to trigger rotation
         for i in range(10):
             ctx = SpanContext.create()
             span = Span(name=f"span_{i}", context=ctx)
             span.end()
             exporter.export([span])
-        
+
         exporter.shutdown()
-        
+
         # Check rotation occurred - either original or backup should exist
         backup = path.with_suffix(".json.1")
         assert path.exists() or backup.exists()
@@ -308,7 +308,7 @@ class TestDecoratorsAndUtilities:
         @traced(name="my_operation")
         def my_function():
             return 42
-        
+
         result = my_function()
         assert result == 42
 
@@ -316,7 +316,7 @@ class TestDecoratorsAndUtilities:
         @traced(name="failing_operation")
         def failing_function():
             raise ValueError("Test error")
-        
+
         with pytest.raises(ValueError):
             failing_function()
 
@@ -348,37 +348,34 @@ class TestThreadSafety:
     def test_concurrent_span_creation(self):
         tracer = Tracer(service_name="test", batch_size=1000)
         spans_created = []
-        
+
         def create_spans():
             for i in range(10):
                 with tracer.start_span(f"span_{i}") as span:
                     spans_created.append(span)
-        
+
         threads = [threading.Thread(target=create_spans) for _ in range(5)]
         for t in threads:
             t.start()
         for t in threads:
             t.join()
-        
+
         assert len(spans_created) == 50
 
     def test_isolated_span_stacks(self):
         tracer = Tracer(service_name="test")
         results = {}
-        
+
         def thread_work(thread_id):
             with tracer.start_span(f"thread_{thread_id}") as span:
                 results[thread_id] = tracer.get_current_span()
-        
-        threads = [
-            threading.Thread(target=thread_work, args=(i,))
-            for i in range(3)
-        ]
+
+        threads = [threading.Thread(target=thread_work, args=(i,)) for i in range(3)]
         for t in threads:
             t.start()
         for t in threads:
             t.join()
-        
+
         # Each thread should have its own current span
         for i in range(3):
             assert results[i] is not None

@@ -11,6 +11,7 @@ def _capture_log(level, event, **kwargs):
     buf = io.StringIO()
     with patch("sys.stderr", buf):
         from core.logging_utils import log_json
+
         log_json(level, event, **kwargs)
     output = buf.getvalue().strip()
     return json.loads(output)
@@ -58,15 +59,14 @@ class TestLogJson:
         with patch("sys.stdout", buf):
             with patch.dict("os.environ", {"AURA_LOG_STREAM": "stdout"}):
                 from core.logging_utils import log_json
+
                 log_json("INFO", "stdout_event")
         output = buf.getvalue().strip()
         parsed = json.loads(output)
         assert parsed["event"] == "stdout_event"
 
     def test_secrets_masked_in_details(self):
-        entry = _capture_log(
-            "INFO", "evt", details={"api_key": "sk-supersecret123456789"}
-        )
+        entry = _capture_log("INFO", "evt", details={"api_key": "sk-supersecret123456789"})
         # The value should be masked — not the raw secret
         details_str = json.dumps(entry.get("details", {}))
         assert "sk-supersecret123456789" not in details_str

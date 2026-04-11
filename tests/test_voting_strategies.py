@@ -308,7 +308,7 @@ class TestExpertPanelStrategy:
 
     def test_all_expertise_domains_covered(self, strategy):
         """Test expertise domains with exact pattern matching.
-        
+
         Note: Due to the pattern matching logic, "claude" pattern matches both
         "claude" and "claude-opus". When testing "claude-opus" with a domain
         not in "claude"'s list, it returns 0.5 (not expert) on first match.
@@ -536,10 +536,7 @@ class TestVotingStrategiesEdgeCases:
         """Strategies should handle many options."""
         strategy = SimpleMajorityStrategy()
         options = [f"opt_{i}" for i in range(100)]
-        votes = {
-            f"m{i}": Vote(model_id=f"m{i}", selection=options[i % len(options)])
-            for i in range(10)
-        }
+        votes = {f"m{i}": Vote(model_id=f"m{i}", selection=options[i % len(options)]) for i in range(10)}
         result = strategy.aggregate(votes, options)
         assert result.winner in options
         assert len(result.breakdown) == len(options)
@@ -547,10 +544,7 @@ class TestVotingStrategiesEdgeCases:
     def test_many_voters(self):
         """Strategies should handle many voters."""
         strategy = SimpleMajorityStrategy()
-        votes = {
-            f"m{i}": Vote(model_id=f"m{i}", selection="A" if i % 2 == 0 else "B")
-            for i in range(1000)
-        }
+        votes = {f"m{i}": Vote(model_id=f"m{i}", selection="A" if i % 2 == 0 else "B") for i in range(1000)}
         options = ["A", "B"]
         result = strategy.aggregate(votes, options)
         assert result.winner in ["A", "B"]

@@ -41,18 +41,21 @@ class TestCircuitBreaker(unittest.TestCase):
 
     def test_circuit_breaker_init(self):
         from memory.momento_adapter import _CircuitBreaker
+
         cb = _CircuitBreaker()
         self.assertEqual(cb._state, "closed")
         self.assertEqual(cb._failures, 0)
 
     def test_circuit_breaker_allow_closed(self):
         from memory.momento_adapter import _CircuitBreaker
+
         cb = _CircuitBreaker()
         self.assertTrue(cb.allow_request())
         self.assertTrue(cb.allow_request())
 
     def test_circuit_breaker_record_success(self):
         from memory.momento_adapter import _CircuitBreaker
+
         cb = _CircuitBreaker()
         cb._failures = 3
         cb.record_success()
@@ -61,6 +64,7 @@ class TestCircuitBreaker(unittest.TestCase):
 
     def test_circuit_breaker_opens_after_threshold(self):
         from memory.momento_adapter import _CircuitBreaker
+
         cb = _CircuitBreaker()
         for _ in range(cb.THRESHOLD):
             cb.record_failure()
@@ -69,6 +73,7 @@ class TestCircuitBreaker(unittest.TestCase):
 
     def test_circuit_breaker_half_open_after_reset(self):
         from memory.momento_adapter import _CircuitBreaker
+
         cb = _CircuitBreaker()
         for _ in range(cb.THRESHOLD):
             cb.record_failure()
@@ -79,6 +84,7 @@ class TestCircuitBreaker(unittest.TestCase):
 
     def test_circuit_breaker_half_open_success_closes(self):
         from memory.momento_adapter import _CircuitBreaker
+
         cb = _CircuitBreaker()
         for _ in range(cb.THRESHOLD):
             cb.record_failure()
@@ -89,6 +95,7 @@ class TestCircuitBreaker(unittest.TestCase):
 
     def test_circuit_breaker_half_open_failure_reopens(self):
         from memory.momento_adapter import _CircuitBreaker
+
         cb = _CircuitBreaker()
         for _ in range(cb.THRESHOLD):
             cb.record_failure()
@@ -99,10 +106,13 @@ class TestCircuitBreaker(unittest.TestCase):
 
     def test_circuit_breaker_thread_safe(self):
         from memory.momento_adapter import _CircuitBreaker
+
         cb = _CircuitBreaker()
+
         def record_failures():
             for _ in range(3):
                 cb.record_failure()
+
         threads = [threading.Thread(target=record_failures) for _ in range(2)]
         for t in threads:
             t.start()
@@ -193,6 +203,7 @@ class TestMomentoAdapterFallback(unittest.TestCase):
             TOPIC_WEAKNESS_FOUND,
             TOPIC_GOAL_QUEUED,
         )
+
         self.assertEqual(WORKING_MEMORY_CACHE, "aura-working-memory")
         self.assertEqual(EPISODIC_MEMORY_CACHE, "aura-episodic-memory")
         self.assertTrue(TOPIC_CYCLE_COMPLETE.startswith("aura."))
@@ -380,7 +391,7 @@ class TestMomentoAdapterCacheGetWithMockClient(unittest.TestCase):
         mock_hit = MagicMock()
         mock_hit.__class__.__name__ = "Hit"
         mock_hit.value_string = "test_value"
-        
+
         adapter._cache_client = MagicMock()
         adapter._cache_client.get.return_value = mock_hit
         adapter._available = True
@@ -398,7 +409,7 @@ class TestMomentoAdapterCacheGetWithMockClient(unittest.TestCase):
         from unittest.mock import MagicMock
 
         adapter = MomentoAdapter()
-        
+
         adapter._cache_client = MagicMock()
         adapter._cache_client.get.side_effect = RuntimeError("Test error")
         adapter._available = True
@@ -428,10 +439,10 @@ class TestMomentoAdapterCacheSetWithMockClient(unittest.TestCase):
         from unittest.mock import MagicMock
 
         adapter = MomentoAdapter()
-        
+
         mock_success = MagicMock()
         mock_success.__class__.__name__ = "Success"
-        
+
         adapter._cache_client = MagicMock()
         adapter._cache_client.set.return_value = mock_success
         adapter._available = True
@@ -449,7 +460,7 @@ class TestMomentoAdapterCacheSetWithMockClient(unittest.TestCase):
         from unittest.mock import MagicMock
 
         adapter = MomentoAdapter()
-        
+
         adapter._cache_client = MagicMock()
         adapter._cache_client.set.side_effect = RuntimeError("Test error")
         adapter._available = True
@@ -479,10 +490,10 @@ class TestMomentoAdapterListOperations(unittest.TestCase):
         from unittest.mock import MagicMock
 
         adapter = MomentoAdapter()
-        
+
         mock_success = MagicMock()
         mock_success.__class__.__name__ = "Success"
-        
+
         adapter._cache_client = MagicMock()
         adapter._cache_client.list_push_back.return_value = mock_success
         adapter._available = True
@@ -498,9 +509,9 @@ class TestMomentoAdapterListOperations(unittest.TestCase):
         from unittest.mock import MagicMock
 
         adapter = MomentoAdapter()
-        
+
         mock_success = MagicMock()
-        
+
         adapter._cache_client = MagicMock()
         adapter._cache_client.list_push_back.return_value = mock_success
         adapter._available = True
@@ -515,7 +526,7 @@ class TestMomentoAdapterListOperations(unittest.TestCase):
         from unittest.mock import MagicMock
 
         adapter = MomentoAdapter()
-        
+
         adapter._cache_client = MagicMock()
         adapter._cache_client.list_push_back.side_effect = RuntimeError("Test error")
         adapter._available = True
@@ -530,10 +541,10 @@ class TestMomentoAdapterListOperations(unittest.TestCase):
         from unittest.mock import MagicMock
 
         adapter = MomentoAdapter()
-        
+
         # Create a mock that's NOT a Hit
         mock_miss = MagicMock()
-        
+
         adapter._cache_client = MagicMock()
         adapter._cache_client.list_fetch.return_value = mock_miss
         adapter._available = True
@@ -548,7 +559,7 @@ class TestMomentoAdapterListOperations(unittest.TestCase):
         from unittest.mock import MagicMock
 
         adapter = MomentoAdapter()
-        
+
         adapter._cache_client = MagicMock()
         adapter._cache_client.list_fetch.side_effect = RuntimeError("Test error")
         adapter._available = True
@@ -575,7 +586,7 @@ class TestMomentoAdapterPublish(unittest.TestCase):
         from unittest.mock import MagicMock
 
         adapter = MomentoAdapter()
-        
+
         adapter._cache_client = MagicMock()
         adapter._topics_client = MagicMock()
         adapter._topics_client.publish.side_effect = RuntimeError("Test error")
@@ -603,7 +614,7 @@ class TestMomentoAdapterCacheDelete(unittest.TestCase):
         from unittest.mock import MagicMock
 
         adapter = MomentoAdapter()
-        
+
         adapter._cache_client = MagicMock()
         adapter._available = True
         adapter._initialized = True
@@ -618,7 +629,7 @@ class TestMomentoAdapterCacheDelete(unittest.TestCase):
         from unittest.mock import MagicMock
 
         adapter = MomentoAdapter()
-        
+
         adapter._cache_client = MagicMock()
         adapter._cache_client.delete.side_effect = RuntimeError("Test error")
         adapter._available = True
@@ -645,12 +656,12 @@ class TestMomentoAdapterEnsureCaches(unittest.TestCase):
         from unittest.mock import MagicMock
 
         adapter = MomentoAdapter()
-        
+
         # Create a proper mock that won't cause isinstance errors
         mock_success = MagicMock()
         # Mock __class__ to be recognized as CreateCache.Success
         mock_success.__class__ = type("Success", (), {})
-        
+
         adapter._cache_client = MagicMock()
         adapter._cache_client.create_cache.return_value = None  # Will cause exception, but test continues
         adapter._available = True
@@ -667,7 +678,7 @@ class TestMomentoAdapterEnsureCaches(unittest.TestCase):
         from unittest.mock import MagicMock
 
         adapter = MomentoAdapter()
-        
+
         adapter._cache_client = MagicMock()
         adapter._cache_client.create_cache.side_effect = RuntimeError("Test error")
         adapter._available = True
@@ -686,7 +697,6 @@ class TestMomentoAdapterLazyInit(unittest.TestCase):
     def tearDown(self):
         os.environ.pop("AURA_SKIP_CHDIR", None)
         os.environ.pop("MOMENTO_API_KEY", None)
-
 
 
 if __name__ == "__main__":

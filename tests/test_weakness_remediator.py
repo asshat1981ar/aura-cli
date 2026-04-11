@@ -91,10 +91,7 @@ class TestWeaknessRemediatorInternal:
     def test_internal_run_respects_limit(self):
         """Only generates up to `limit` goals."""
         remediator = WeaknessRemediator()
-        weaknesses = [
-            json.dumps({"type": "negative_sentiment", "description": f"issue {i}", "severity": "HIGH"})
-            for i in range(5)
-        ]
+        weaknesses = [json.dumps({"type": "negative_sentiment", "description": f"issue {i}", "severity": "HIGH"}) for i in range(5)]
         mock_brain = Mock()
         mock_brain.recall_weaknesses.return_value = weaknesses
         mock_brain.recall_queued_weakness_hashes.return_value = []
@@ -129,19 +126,23 @@ class TestWeaknessRemediatorInternal:
         """Goals are generated in score-descending order."""
         remediator = WeaknessRemediator()
         # High severity, high failure rate
-        w_high = json.dumps({
-            "type": "phase_failure",
-            "phase": "reasoning",
-            "failure_rate": 0.8,
-            "severity": "HIGH",
-        })
+        w_high = json.dumps(
+            {
+                "type": "phase_failure",
+                "phase": "reasoning",
+                "failure_rate": 0.8,
+                "severity": "HIGH",
+            }
+        )
         # Low severity
-        w_low = json.dumps({
-            "type": "phase_failure",
-            "phase": "planning",
-            "failure_rate": 0.1,
-            "severity": "LOW",
-        })
+        w_low = json.dumps(
+            {
+                "type": "phase_failure",
+                "phase": "planning",
+                "failure_rate": 0.1,
+                "severity": "LOW",
+            }
+        )
 
         mock_brain = Mock()
         mock_brain.recall_weaknesses.return_value = [w_low, w_high]

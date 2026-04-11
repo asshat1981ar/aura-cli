@@ -11,6 +11,7 @@ from agents.skills.base import SkillBase, iter_py_files, SKIP_DIRS
 # Concrete stub for abstract class
 # ---------------------------------------------------------------------------
 
+
 class _EchoSkill(SkillBase):
     name = "echo_skill"
 
@@ -28,6 +29,7 @@ class _BrokenSkill(SkillBase):
 # ---------------------------------------------------------------------------
 # iter_py_files
 # ---------------------------------------------------------------------------
+
 
 class TestIterPyFiles:
     def test_yields_py_files(self, tmp_path):
@@ -85,6 +87,7 @@ class TestIterPyFiles:
 # SKIP_DIRS
 # ---------------------------------------------------------------------------
 
+
 class TestSkipDirs:
     def test_is_frozenset(self):
         assert isinstance(SKIP_DIRS, frozenset)
@@ -101,6 +104,7 @@ class TestSkipDirs:
 # ---------------------------------------------------------------------------
 # SkillBase.run — happy path
 # ---------------------------------------------------------------------------
+
 
 class TestSkillBaseRun:
     def test_run_returns_dict(self):
@@ -137,6 +141,7 @@ class TestSkillBaseRun:
 # ---------------------------------------------------------------------------
 # SkillBase init
 # ---------------------------------------------------------------------------
+
 
 class TestSkillBaseInit:
     def test_brain_stored(self):

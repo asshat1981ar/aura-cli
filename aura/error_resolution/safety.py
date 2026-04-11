@@ -34,7 +34,7 @@ _SAFE_PATTERNS: list[str] = [
 
 # Commands that must never be auto-applied.
 _DANGEROUS_PATTERNS: list[str] = [
-    r"\brm\s+.*-[^\s]*r[^\s]*f\b",      # rm -rf / rm -fr
+    r"\brm\s+.*-[^\s]*r[^\s]*f\b",  # rm -rf / rm -fr
     r"\brm\s+.*-[^\s]*f[^\s]*r\b",
     r"^sudo\b",
     r"\bsudo\s",
@@ -45,10 +45,10 @@ _DANGEROUS_PATTERNS: list[str] = [
     r"DROP\s+TABLE",
     r"DROP\s+DATABASE",
     r"TRUNCATE\s+TABLE",
-    r"\|\s*(ba)?sh\b",                   # curl | sh / wget | bash
+    r"\|\s*(ba)?sh\b",  # curl | sh / wget | bash
     r"\|\s*bash\b",
     r">\s*/dev/",
-    r":\(\)\{.*\}",                      # fork bomb pattern
+    r":\(\)\{.*\}",  # fork bomb pattern
 ]
 
 # Commands that need human review but aren't outright dangerous.
@@ -101,11 +101,5 @@ class SafetyChecker:
         if level == "safe":
             return f"'{command}' is safe to auto-apply — it is a well-known, low-risk operation."
         if level == "dangerous":
-            return (
-                f"'{command}' is dangerous — it is destructive or irreversible and must never "
-                "be auto-applied without explicit human confirmation."
-            )
-        return (
-            f"'{command}' requires human review before applying — it may have side effects "
-            "or be difficult to reverse."
-        )
+            return f"'{command}' is dangerous — it is destructive or irreversible and must never be auto-applied without explicit human confirmation."
+        return f"'{command}' requires human review before applying — it may have side effects or be difficult to reverse."

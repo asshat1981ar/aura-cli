@@ -62,6 +62,7 @@ def apply_runtime_state(state: RuntimeBootstrapState, runtime_state: dict[str, A
     shared_state_module.orchestrator = state.orchestrator
     shared_state_module.model_adapter = state.model_adapter
     shared_state_module.memory_store = state.memory_store
+    shared_state_module._runtime_init_error = state.runtime_init_error
 
 
 async def ensure_runtime_initialized(
@@ -75,12 +76,13 @@ async def ensure_runtime_initialized(
     if state.runtime:
         return state.runtime
     try:
+        state.runtime_init_error = None
         runtime_state = await asyncio.to_thread(create_runtime_func, project_root, None)
         apply_runtime_state(state, runtime_state, shared_state_module)
-        state.runtime_init_error = None
         return runtime_state
     except Exception as exc:
         state.runtime_init_error = str(exc)
+        shared_state_module._runtime_init_error = state.runtime_init_error
         log_json("WARN", "aura_server_runtime_init_failed", details={"error": state.runtime_init_error})
         return {}
 
@@ -91,12 +93,12 @@ async def resolve_runtime_component(
     name: str,
     ensure_runtime_initialized_func: Callable[[], Any],
 ) -> Any:
-    component = getattr(state, name)
+    component = getattr(state, name, None)
     if component is not None:
         return component
     if not state.runtime:
         await ensure_runtime_initialized_func()
-        component = getattr(state, name)
+        component = getattr(state, name, None)
         if component is not None:
             return component
     detail = f"{name} is not configured"

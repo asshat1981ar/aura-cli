@@ -196,19 +196,13 @@ class TestOpenAIEmbeddingProvider:
 
     def test_healthcheck_success(self):
         provider = OpenAIEmbeddingProvider(api_key="k")
-        mock_resp = MagicMock()
-        mock_resp.json.return_value = self._make_api_response([[0.1]])
-        mock_resp.raise_for_status = MagicMock()
-
-        with patch("memory.embedding_provider._requests") as mock_requests:
-            mock_requests.post.return_value = mock_resp
-            assert provider.healthcheck() is True
+        # Healthcheck now just verifies API key presence, no network call
+        assert provider.healthcheck() is True
 
     def test_healthcheck_failure(self):
-        provider = OpenAIEmbeddingProvider(api_key="k")
-        with patch("memory.embedding_provider._requests") as mock_requests:
-            mock_requests.post.side_effect = Exception("network error")
-            assert provider.healthcheck() is False
+        provider = OpenAIEmbeddingProvider(api_key="")
+        # Healthcheck fails if no API key
+        assert provider.healthcheck() is False
 
     def test_provider_type(self):
         provider = OpenAIEmbeddingProvider(api_key="k")

@@ -57,6 +57,9 @@ dev = [
     "bandit>=1.8",
     "pip-audit>=2.7",
     "pre-commit>=3.0",
+    "hypothesis>=6.100.0",
+    "cryptography>=41.0",
+    "syrupy>=4.0.0",
 ]
 github = [
     "PyGithub>=2.1.0",
@@ -101,6 +104,7 @@ addopts = [
     "--cov-report=term-missing",
     # TODO: Raise to 80% once all critical modules have test coverage:
     # "--cov-fail-under=80",
+    "--snapshot-warn-unused",
 ]
 markers = [
     "unit: marks pure unit tests (no I/O, no external services)",

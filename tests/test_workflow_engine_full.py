@@ -245,3 +245,257 @@ def test_loop_health_check(engine):
 
 
 import threading  # Needed for engine tests
+
+
+# ---------------------------------------------------------------------------
+# Additional RetryPolicy tests
+# ---------------------------------------------------------------------------
+
+
+def test_retry_policy_zero_attempt_returns_base():
+    p = RetryPolicy(backoff_base=1.0)
+    assert p.sleep_for(0) == 1.0
+
+
+def test_retry_policy_max_backoff_capped():
+    p = RetryPolicy(backoff_base=10.0, max_backoff=15.0)
+    # 10 * 2^2 = 40 > 15
+    assert p.sleep_for(2) == 15.0
+
+
+def test_retry_policy_default_max_attempts():
+    p = RetryPolicy()
+    assert p.max_attempts == 3
+
+
+# ---------------------------------------------------------------------------
+# WorkflowStep / WorkflowDefinition model tests
+# ---------------------------------------------------------------------------
+
+
+def test_workflow_step_defaults():
+    step = WorkflowStep(name="s1")
+    assert step.skill_name is None
+    assert step.fn is None
+    assert step.static_inputs == {}
+    assert step.inputs_from == {}
+    assert step.skip_if_false is None
+    assert step.timeout_s == 120.0
+
+
+def test_workflow_definition_empty_steps():
+    wf = WorkflowDefinition(name="empty", steps=[])
+    assert wf.name == "empty"
+    assert wf.steps == []
+    assert wf.max_retries_total == 0
+
+
+def test_workflow_execution_pending_is_not_terminal():
+    exc = WorkflowExecution(
+        id="1",
+        workflow_name="x",
+        status="pending",
+        current_step_index=0,
+        step_outputs={},
+        history=[],
+        initial_inputs={},
+        error=None,
+        started_at=time.time(),
+        updated_at=time.time(),
+    )
+    assert exc.is_terminal() is False
+
+
+def test_workflow_execution_failed_is_terminal():
+    exc = WorkflowExecution(
+        id="2",
+        workflow_name="x",
+        status="failed",
+        current_step_index=0,
+        step_outputs={},
+        history=[],
+        initial_inputs={},
+        error="boom",
+        started_at=time.time(),
+        updated_at=time.time(),
+    )
+    assert exc.is_terminal() is True
+
+
+def test_workflow_execution_cancelled_is_terminal():
+    exc = WorkflowExecution(
+        id="3",
+        workflow_name="x",
+        status="cancelled",
+        current_step_index=0,
+        step_outputs={},
+        history=[],
+        initial_inputs={},
+        error=None,
+        started_at=time.time(),
+        updated_at=time.time(),
+    )
+    assert exc.is_terminal() is True
+
+
+def test_agentic_loop_completed_is_terminal():
+    loop = AgenticLoop(
+        id="1",
+        goal="g",
+        max_cycles=5,
+        current_cycle=2,
+        status="completed",
+        history=[],
+        stop_reason=None,
+        score=0.8,
+        started_at=time.time(),
+        updated_at=time.time(),
+    )
+    assert loop.is_terminal() is True
+
+
+def test_agentic_loop_failed_is_terminal():
+    loop = AgenticLoop(
+        id="2",
+        goal="g",
+        max_cycles=5,
+        current_cycle=1,
+        status="failed",
+        history=[],
+        stop_reason="error",
+        score=0.0,
+        started_at=time.time(),
+        updated_at=time.time(),
+    )
+    assert loop.is_terminal() is True
+
+
+def test_agentic_loop_paused_is_not_terminal():
+    loop = AgenticLoop(
+        id="3",
+        goal="g",
+        max_cycles=5,
+        current_cycle=1,
+        status="paused",
+        history=[],
+        stop_reason=None,
+        score=0.0,
+        started_at=time.time(),
+        updated_at=time.time(),
+    )
+    assert loop.is_terminal() is False
+
+
+# ---------------------------------------------------------------------------
+# _wire_inputs edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_wire_inputs_missing_step_key_returns_none():
+    step = WorkflowStep(name="s2", inputs_from={"val": "missing_step.key"})
+    result = _wire_inputs(step, {}, {})
+    assert result["val"] is None
+
+
+def test_wire_inputs_static_inputs_merged():
+    step = WorkflowStep(name="s1", static_inputs={"x": 42})
+    result = _wire_inputs(step, {}, {"y": 7})
+    assert result["x"] == 42
+    assert result["y"] == 7
+
+
+def test_wire_inputs_static_overrides_initial():
+    step = WorkflowStep(name="s1", static_inputs={"x": 99})
+    result = _wire_inputs(step, {}, {"x": 1})
+    assert result["x"] == 99
+
+
+# ---------------------------------------------------------------------------
+# _execute_step edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_execute_step_fn_receives_merged_inputs():
+    received = {}
+
+    def capture(inputs):
+        received.update(inputs)
+        return {"done": True}
+
+    step = WorkflowStep(name="s", fn=capture, static_inputs={"a": 1})
+    _execute_step(step, {}, {"b": 2})
+    assert received["a"] == 1
+    assert received["b"] == 2
+
+
+def test_execute_step_ok_records_elapsed():
+    step = WorkflowStep(name="s", fn=lambda x: {})
+    res = _execute_step(step, {}, {})
+    assert res.elapsed_ms >= 0
+
+
+def test_execute_step_skip_on_truthy_does_not_skip():
+    step = WorkflowStep(name="s", fn=lambda x: {"ok": True}, skip_if_false="check.run_me")
+    res = _execute_step(step, {"check": {"run_me": True}}, {})
+    assert res.status == "ok"
+
+
+# ---------------------------------------------------------------------------
+# Engine: list/status operations
+# ---------------------------------------------------------------------------
+
+
+def test_engine_execution_status_unknown_returns_not_found(engine):
+    result = engine.execution_status("no-such-id")
+    assert result["status"] == "not_found"
+
+
+def test_engine_list_executions_empty(engine):
+    result = engine.list_executions()
+    assert isinstance(result, list)
+
+
+def test_engine_list_loops_empty(engine):
+    result = engine.list_loops()
+    assert isinstance(result, list)
+
+
+def test_engine_loop_status_returns_dict(engine):
+    loop_id = engine.create_loop("check status", max_cycles=1)
+    s = engine.loop_status(loop_id)
+    assert s["goal"] == "check status"
+    assert s["max_cycles"] == 1
+
+
+def test_engine_stop_loop_marks_stopped(engine):
+    loop_id = engine.create_loop("stop me", max_cycles=3)
+    engine.stop_loop(loop_id, reason="test_done")
+    loop = engine._get_loop(loop_id)
+    assert loop.status == "stopped"
+    assert loop.stop_reason == "test_done"
+
+
+def test_engine_pause_and_resume_loop(engine):
+    loop_id = engine.create_loop("pause me", max_cycles=3)
+    engine.pause_loop(loop_id)
+    assert engine._get_loop(loop_id).status == "paused"
+    engine.resume_loop(loop_id)
+    assert engine._get_loop(loop_id).status == "running"
+
+
+def test_engine_loop_health_healthy(engine):
+    loop_id = engine.create_loop("active", max_cycles=5)
+    health = engine.check_loop_health(loop_id)
+    assert health["healthy"] is True
+    assert health["warnings"] == []
+
+
+def test_engine_get_step_output_missing_exec_raises(engine):
+    with pytest.raises(KeyError):
+        engine.get_step_output("no-exec", "no-step")
+
+
+def test_engine_builtin_workflows_registered(engine):
+    defs = engine.list_definitions()
+    names = {d["name"] for d in defs}
+    assert "security_audit" in names

@@ -24,7 +24,6 @@ Usage::
 from __future__ import annotations
 
 import dataclasses
-import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from core.learning_types import LearningArtifact
@@ -162,28 +161,32 @@ class LearningCoordinator:
         reflection_artifacts, reflection_goals = self._sync_reflection_reports(cycle_entry)
         artifacts.extend(reflection_artifacts)
 
-        # 4. Persist all artifacts
+        # 4. Collect immediate high-severity goals and mark acted_on BEFORE persisting
+        # so stored records accurately reflect which goals were enqueued.
+        immediate_goals: List[str] = []
+        for art in artifacts:
+            if art.is_actionable() and art.severity in self.ENQUEUE_SEVERITIES:
+                if len(immediate_goals) < self.MAX_GOALS_PER_CYCLE:
+                    immediate_goals.append(art.suggested_goal)  # type: ignore[arg-type]
+                    art.mark_acted_on()
+                else:
+                    # Overflow: defer to backlog so Phase 10 can drain them later
+                    self._pending_goals.append(art.suggested_goal)  # type: ignore[arg-type]
+
+        # Add reflection goals up to the cap; overflow goes to backlog
+        remaining = self.MAX_GOALS_PER_CYCLE - len(immediate_goals)
+        for i, g in enumerate(reflection_goals):
+            if i < remaining:
+                immediate_goals.append(g)
+            else:
+                self._pending_goals.append(g)
+
+        # 5. Persist all artifacts (acted_on is now set correctly)
         for art in artifacts:
             try:
                 self.memory.put("learning_artifacts", dataclasses.asdict(art))
             except Exception as exc:
                 log_json("WARN", "learning_artifact_persist_failed", details={"error": str(exc)})
-
-        # 5. Collect immediate high-severity goals (cap at MAX_GOALS_PER_CYCLE)
-        immediate_goals: List[str] = []
-        for art in artifacts:
-            if (
-                art.is_actionable()
-                and art.severity in self.ENQUEUE_SEVERITIES
-                and len(immediate_goals) < self.MAX_GOALS_PER_CYCLE
-            ):
-                immediate_goals.append(art.suggested_goal)  # type: ignore[arg-type]
-                art.mark_acted_on()
-
-        # Add reflection goals up to the cap
-        remaining = self.MAX_GOALS_PER_CYCLE - len(immediate_goals)
-        for g in reflection_goals[:remaining]:
-            immediate_goals.append(g)
 
         log_json(
             "INFO",
@@ -226,7 +229,7 @@ class LearningCoordinator:
             goal = cycle_entry.get("goal", "")
             goal_type = cycle_entry.get("goal_type", "unknown")
 
-            severity_map = {"HIGH": "high", "MEDIUM": "medium", "LOW": "low"}
+            severity_map = {"CRITICAL": "critical", "HIGH": "high", "MEDIUM": "medium", "LOW": "low"}
             type_map = {
                 "phase_failure": "phase_failure",
                 "low_value_skill": "skill_weakness",
@@ -234,7 +237,8 @@ class LearningCoordinator:
             }
 
             for insight in latest.get("insights", []):
-                severity = severity_map.get(insight.get("severity", "LOW"), "low")
+                raw_severity = str(insight.get("severity", "LOW")).upper()
+                severity = severity_map.get(raw_severity, "low")
                 artifact_type = type_map.get(insight.get("type", ""), "cycle_learning")
                 suggested_goal: Optional[str] = None
                 if severity in self.ENQUEUE_SEVERITIES:

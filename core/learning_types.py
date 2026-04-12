@@ -10,16 +10,16 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 # Valid artifact types
 ARTIFACT_TYPES = frozenset(
     {
-        "phase_failure",      # a pipeline phase is failing at high rate
-        "skill_weakness",     # a skill produces low-signal output
-        "quality_regression", # a quality metric dropped below threshold
-        "cycle_learning",     # a per-cycle learning string from ReflectorAgent
-        "success_pattern",    # a pattern observed in successful cycles
+        "phase_failure",  # a pipeline phase is failing at high rate
+        "skill_weakness",  # a skill produces low-signal output
+        "quality_regression",  # a quality metric dropped below threshold
+        "cycle_learning",  # a per-cycle learning string from ReflectorAgent
+        "success_pattern",  # a pattern observed in successful cycles
     }
 )
 

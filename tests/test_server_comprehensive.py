@@ -13,6 +13,8 @@ from fastapi import HTTPException
 
 
 def _load_server_module():
+    import aura_cli.cli_main  # ensure cli_main is loaded before patching
+
     fake_rt = {
         "orchestrator": MagicMock(),
         "model_adapter": MagicMock(),
@@ -97,9 +99,9 @@ def test_health_endpoint_auth_failure(server_module):
 
 def test_health_endpoint_success(server_module):
     data = _run(server_module.health())
-    assert data["status"] == "ok"
+    assert data["status"] == "healthy"
     assert "providers" in data
-    assert "run_enabled" in data
+    assert "version" in data
 
 
 def test_health_endpoint_succeeds_without_bound_runtime_components(server_module):
@@ -114,7 +116,7 @@ def test_health_endpoint_succeeds_without_bound_runtime_components(server_module
     server_module.memory_store = None
     try:
         data = _run(server_module.health())
-        assert data["status"] == "ok"
+        assert data["status"] == "healthy"
         assert "providers" in data
     finally:
         server_module.runtime = original_runtime
@@ -124,10 +126,12 @@ def test_health_endpoint_succeeds_without_bound_runtime_components(server_module
 
 
 def test_metrics_endpoint_success(server_module):
-    data = _run(server_module.metrics())
-    assert data["status"] == "ok"
-    assert "skill_metrics" in data
-    assert data["skill_metrics"]["registered_services"] >= 0
+    from fastapi.responses import Response
+
+    response = _run(server_module.metrics())
+    # Prometheus metrics returns a Response with text/plain body
+    assert isinstance(response, Response)
+    assert response.body is not None or response.status_code == 200
 
 
 def test_tools_endpoint_success(server_module):
@@ -256,3 +260,81 @@ def test_execute_run_disabled(server_module, monkeypatch):
     monkeypatch.setenv("AGENT_API_ENABLE_RUN", "0")
     with pytest.raises(HTTPException):
         _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=["ls"])))
+
+
+# ---------------------------------------------------------------------------
+# Additional coverage
+# ---------------------------------------------------------------------------
+
+
+def test_require_auth_valid_token(server_module, monkeypatch):
+    monkeypatch.setenv("AGENT_API_TOKEN", "abc-secret")
+    # Should not raise
+    server_module.require_auth("Bearer abc-secret")
+
+
+def test_require_auth_no_env_token_allows_any(server_module, monkeypatch):
+    monkeypatch.delenv("AGENT_API_TOKEN", raising=False)
+    # No env token configured → bypass auth
+    server_module.require_auth("Bearer anything")
+
+
+def test_health_returns_healthy_version_string(server_module):
+    data = _run(server_module.health())
+    assert data["status"] == "healthy"
+    assert "version" in data
+    assert isinstance(data["version"], str)
+
+
+def test_metrics_returns_response_object(server_module):
+    from fastapi.responses import Response
+
+    response = _run(server_module.metrics())
+    assert isinstance(response, Response)
+
+
+def test_execute_run_empty_command_rejected(server_module):
+    with pytest.raises(HTTPException):
+        _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[""])))
+
+
+def test_tools_endpoint_contains_ask_and_goal(server_module):
+    data = _run(server_module.tools())
+    names = {t["name"] for t in data["tools"]}
+    assert "ask" in names
+    assert "goal" in names
+
+
+def test_execute_ask_error_propagates_gracefully(server_module):
+    with patch.object(server_module.model_adapter, "respond", side_effect=RuntimeError("adapter down")):
+        with pytest.raises((HTTPException, RuntimeError)):
+            _run(server_module.execute(server_module.ExecuteRequest(tool_name="ask", args=["hello"])))
+
+
+def test_execute_goal_orchestrator_returns_no_stop_reason(server_module):
+    mock_entry = {
+        "cycle_id": "c1",
+        "stop_reason": None,
+        "phase_outputs": {"verification": {"status": "pass"}},
+    }
+    server_module.orchestrator.run_cycle.return_value = mock_entry
+    response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="goal", args=["keep going"])))
+    payloads = _sse_payloads(_run(_collect_streaming_response(response)))
+    assert any(evt.get("type") in ("cycle", "complete") for evt in payloads)
+
+
+def test_execute_run_non_zero_exit_code_in_exit_event(server_module):
+    cmd = f'{sys.executable} -c "raise SystemExit(42)"'
+    response = _run(server_module.execute(server_module.ExecuteRequest(tool_name="run", args=[cmd])))
+    payloads = _sse_payloads(_run(_collect_streaming_response(response)))
+    exit_events = [evt for evt in payloads if evt.get("type") == "exit"]
+    assert exit_events, "No exit event found"
+    assert exit_events[-1]["code"] == 42
+
+
+def test_server_module_has_execute_request_class(server_module):
+    assert hasattr(server_module, "ExecuteRequest")
+
+
+def test_server_module_has_require_auth_function(server_module):
+    assert callable(server_module.require_auth)

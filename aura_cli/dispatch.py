@@ -1549,6 +1549,36 @@ def _handle_cancel_dispatch(ctx: DispatchContext) -> int:
 
 # ── Phase-1 Developer Experience handlers ────────────────────────────────────
 
+
+def _load_yaml_or_json(path: Path) -> dict:
+    """Load a YAML or JSON file into a dict.
+
+    Tries JSON first, then YAML (if PyYAML is available).
+
+    Raises:
+        FileNotFoundError: if the file does not exist.
+        ValueError: if the file cannot be parsed or PyYAML is missing for .yaml/.yml files.
+    """
+    import json as _json
+
+    text = path.read_text()
+    try:
+        return _json.loads(text)
+    except _json.JSONDecodeError:
+        pass
+
+    try:
+        import yaml  # type: ignore[import-untyped]
+
+        result = yaml.safe_load(text)
+        return result if isinstance(result, dict) else {}
+    except ImportError:
+        raise ValueError(
+            f"Cannot parse '{path}' as YAML: PyYAML is not installed. "
+            "Install it with: pip install pyyaml — or convert the file to JSON."
+        )
+
+
 _WORKFLOW_TEMPLATES: dict[str, str] = {
     "code-review": """\
 # AURA Workflow: Code Review
@@ -1682,33 +1712,17 @@ def _handle_workflow_visualize_dispatch(ctx: DispatchContext) -> int:
         return 1
 
     try:
-        import json as _json
-
-        # Load YAML/JSON manually to avoid needing a function registry
-        text = wf_path.read_text()
-        try:
-            data: dict = _json.loads(text)
-        except _json.JSONDecodeError:
-            try:
-                import yaml  # type: ignore[import-untyped]
-
-                data = yaml.safe_load(text) or {}
-            except ImportError:
-                # Fallback: basic YAML key-value parsing for simple cases
-                data = {}
-                for line in text.splitlines():
-                    if ":" in line and not line.strip().startswith("#"):
-                        k, _, v = line.strip().partition(":")
-                        data[k.strip()] = v.strip()
+        data = _load_yaml_or_json(wf_path)
 
         from core.graph_engine import StateGraph
 
-        # Build a stub registry so every function name resolves
-        node_names = [n.get("name", n.get("id", "unknown")) for n in data.get("nodes", [])]
-        stub_registry = {name: (lambda s: s) for name in node_names}
-        # Also register any function references
-        func_names = [n.get("function", n.get("name", "")) for n in data.get("nodes", [])]
-        stub_registry.update({fn: (lambda s: s) for fn in func_names if fn})
+        # Build a stub registry so every function name resolves without a real runtime.
+        # Use a factory to avoid lambda closure capture issues.
+        def _stub_fn(state: dict) -> dict:
+            return state
+
+        func_names = {n.get("function", "") or n.get("name", "") for n in data.get("nodes", [])}
+        stub_registry = {fn: _stub_fn for fn in func_names if fn}
 
         graph = StateGraph._from_dict(data, node_registry=stub_registry)
         compiled = graph.compile()
@@ -1729,8 +1743,6 @@ def _handle_workflow_visualize_dispatch(ctx: DispatchContext) -> int:
 
 def _handle_workflow_validate_dispatch(ctx: DispatchContext) -> int:
     """Validate a YAML workflow file for structural correctness."""
-    import json as _json
-
     args = ctx.args
     workflow_file = getattr(args, "workflow_file", None)
     if not workflow_file:
@@ -1744,22 +1756,10 @@ def _handle_workflow_validate_dispatch(ctx: DispatchContext) -> int:
 
     errors: list[str] = []
     try:
-        text = wf_path.read_text()
-        try:
-            data: dict = _json.loads(text)
-        except _json.JSONDecodeError:
-            try:
-                import yaml  # type: ignore[import-untyped]
+        data = _load_yaml_or_json(wf_path)
+        from core.graph_engine import _validate_workflow_schema
 
-                data = yaml.safe_load(text) or {}
-            except ImportError:
-                errors.append("PyYAML is not installed — install it with: pip install pyyaml")
-                data = {}
-
-        if data:
-            from core.graph_engine import _validate_workflow_schema
-
-            _validate_workflow_schema(data)
+        _validate_workflow_schema(data)
     except Exception as exc:
         errors.append(str(exc))
 
@@ -1800,28 +1800,24 @@ def _handle_agent_benchmark_dispatch(ctx: DispatchContext) -> int:
         print(f"Error: file '{pipeline_path}' not found", file=sys.stderr)
         return 1
 
+    if samples < 1:
+        print("Error: --samples must be at least 1", file=sys.stderr)
+        return 1
+
     log_json("INFO", "benchmark_started", details={"file": str(pipeline_path), "suite": suite, "samples": samples})
 
     # Synthetic benchmark: time graph compilation with stub registry.
     benchmark_results: list[dict] = []
     try:
-        import json as _json
-
-        text = pipeline_path.read_text()
-        try:
-            data: dict = _json.loads(text)
-        except _json.JSONDecodeError:
-            try:
-                import yaml  # type: ignore[import-untyped]
-
-                data = yaml.safe_load(text) or {}
-            except ImportError:
-                data = {}
+        data = _load_yaml_or_json(pipeline_path)
 
         from core.graph_engine import StateGraph
 
-        func_names = [n.get("function", n.get("name", "")) for n in data.get("nodes", [])]
-        stub_registry = {fn: (lambda s: s) for fn in func_names if fn}
+        def _stub_fn(state: dict) -> dict:
+            return state
+
+        func_names = {n.get("function", "") or n.get("name", "") for n in data.get("nodes", [])}
+        stub_registry = {fn: _stub_fn for fn in func_names if fn}
 
         start = time.time()
         StateGraph._from_dict(data, node_registry=stub_registry).compile()
@@ -1831,10 +1827,11 @@ def _handle_agent_benchmark_dispatch(ctx: DispatchContext) -> int:
         print(f"Error: failed to load pipeline — {exc}", file=sys.stderr)
         return 1
 
-    # Simulate sample runs (stub — real execution would invoke the compiled graph).
+    # Simulate sample runs.
+    # TODO: replace time.sleep stub with real graph execution once a task harness is wired.
     for i in range(samples):
         t0 = time.time()
-        time.sleep(0.001)  # placeholder for actual sample invocation
+        time.sleep(0.001)
         benchmark_results.append(
             {
                 "sample": i + 1,
@@ -1847,13 +1844,14 @@ def _handle_agent_benchmark_dispatch(ctx: DispatchContext) -> int:
     latencies = [r["latency_ms"] for r in benchmark_results]
     avg_ms = round(sum(latencies) / len(latencies), 2) if latencies else 0
     success_count = sum(1 for r in benchmark_results if r["success"])
+    success_rate = success_count / samples
     summary = {
         "pipeline": str(pipeline_path),
         "suite": suite,
         "samples": samples,
         "compile_ms": compile_ms,
         "avg_latency_ms": avg_ms,
-        "success_rate": success_count / samples if samples else 0,
+        "success_rate": success_rate,
         "results": benchmark_results,
     }
 
@@ -1875,7 +1873,7 @@ def _handle_agent_benchmark_dispatch(ctx: DispatchContext) -> int:
             table.add_row("Samples", str(samples))
             table.add_row("Compile time", f"{compile_ms} ms")
             table.add_row("Avg latency", f"{avg_ms} ms")
-            table.add_row("Success rate", f"{success_count / samples:.0%}")
+            table.add_row("Success rate", f"{success_rate:.0%}")
             console.print(table)
         except ImportError:
             print(f"Pipeline:      {pipeline_path}")
@@ -1883,14 +1881,12 @@ def _handle_agent_benchmark_dispatch(ctx: DispatchContext) -> int:
             print(f"Samples:       {samples}")
             print(f"Compile time:  {compile_ms} ms")
             print(f"Avg latency:   {avg_ms} ms")
-            print(f"Success rate:  {success_count / samples:.0%}")
+            print(f"Success rate:  {success_rate:.0%}")
     return 0
 
 
 def _handle_agent_diff_dispatch(ctx: DispatchContext) -> int:
     """Diff two configuration files and display highlighted differences."""
-    import json as _json
-
     args = ctx.args
     config_a = getattr(args, "config_a", None)
     config_b = getattr(args, "config_b", None)
@@ -1899,26 +1895,9 @@ def _handle_agent_diff_dispatch(ctx: DispatchContext) -> int:
         print("Error: both config_a and config_b are required", file=sys.stderr)
         return 1
 
-    def _load_config(path_str: str) -> dict:
-        p = Path(path_str)
-        if not p.exists():
-            raise FileNotFoundError(f"File not found: {p}")
-        text = p.read_text()
-        try:
-            return _json.loads(text)
-        except _json.JSONDecodeError:
-            pass
-        # Attempt YAML
-        try:
-            import yaml  # type: ignore[import-untyped]
-
-            return yaml.safe_load(text) or {}
-        except ImportError:
-            raise ValueError(f"Cannot parse '{p}': install PyYAML for YAML support or use JSON format.")
-
     try:
-        data_a = _load_config(config_a)
-        data_b = _load_config(config_b)
+        data_a = _load_yaml_or_json(Path(config_a))
+        data_b = _load_yaml_or_json(Path(config_b))
     except (FileNotFoundError, ValueError) as exc:
         print(f"Error: {exc}", file=sys.stderr)
         return 1

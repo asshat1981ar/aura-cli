@@ -1,6 +1,6 @@
 name: CI
 
-on:
+"on":
   push:
     branches: [main, master, "refactor/**", "ci/**", "feature/**", "fix/**"]
   pull_request:

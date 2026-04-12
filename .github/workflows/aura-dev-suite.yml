@@ -2,7 +2,7 @@
 # Mirrors the OpenAI Agent Builder "Aura Dev Suite" multi-agent workflow
 name: Aura Dev Suite
 
-on:
+"on":
   issues:
     types: [labeled]
   issue_comment:

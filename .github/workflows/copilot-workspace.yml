@@ -1,6 +1,6 @@
 name: GitHub Copilot Workspace
 
-on:
+"on":
   issues:
     types: [opened, labeled]
   workflow_dispatch:

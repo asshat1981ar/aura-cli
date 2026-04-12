@@ -1,6 +1,6 @@
 name: GitHub Coder / Codespaces Automation
 
-on:
+"on":
   push:
     branches: [main]
     paths:

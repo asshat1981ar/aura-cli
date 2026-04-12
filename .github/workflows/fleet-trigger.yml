@@ -1,6 +1,6 @@
 # Fires when fleet:trigger label is applied; POSTs to n8n fleet webhook
 
-on:
+"on":
   issues:
     types: [labeled]
 

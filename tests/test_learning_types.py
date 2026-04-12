@@ -179,7 +179,6 @@ class TestLearningArtifactBulk:
         assert len(actionable) == 2
 
     def test_artifact_type_frozenset_immutable(self):
-        import pytest
         with pytest.raises((AttributeError, TypeError)):
             ARTIFACT_TYPES.add("new_type")  # type: ignore[union-attr]
 

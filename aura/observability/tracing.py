@@ -8,16 +8,14 @@ from __future__ import annotations
 
 import json
 import threading
-import time
 import uuid
-from collections import defaultdict
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
 from pathlib import Path
-from typing import Any, Callable, Dict, Generator, List, Optional, Protocol, Set, Union
+from typing import Any, Callable, Dict, Generator, List, Optional, Protocol
 
 
 class SpanStatus(Enum):

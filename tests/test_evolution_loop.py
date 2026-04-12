@@ -39,7 +39,7 @@ def _make_loop(**overrides):
 # ---------------------------------------------------------------------------
 
 
-class TestInnovationProposal:
+class TestInnovationProposalAdditional:
     def test_as_dict(self):
         p = InnovationProposal(
             proposal_id="test:1",
@@ -1016,4 +1016,3 @@ class TestCommitAndTrackExperiment:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

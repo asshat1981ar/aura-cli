@@ -1307,7 +1307,7 @@ def test_parse_args_minimal(monkeypatch) -> None:
 
 
 # ── _split_target ──
-def test_split_target_server_only(monkeypatch) -> None:
+def test_split_target_server_only_additional(monkeypatch) -> None:
     server, tool = mcp_cli._split_target("myserver")
     assert server == "myserver"
     assert tool is None
@@ -1331,7 +1331,7 @@ def test_extract_raw_text_string_returns_as_is(monkeypatch) -> None:
     assert result == "raw string result"
 
 
-def test_extract_raw_text_dict_content_list(monkeypatch) -> None:
+def test_extract_raw_text_dict_content_list_additional(monkeypatch) -> None:
     data = {
         "content": [
             {"type": "text", "text": "line1"},
@@ -1765,7 +1765,7 @@ def test_expand_env_vars_nested_dict(monkeypatch) -> None:
     assert result["nested"]["items"] == ["value1", "value2"]
 
 
-def test_expand_env_vars_with_env_prefix(monkeypatch) -> None:
+def test_expand_env_vars_with_env_prefix_additional(monkeypatch) -> None:
     """_expand_env_vars handles env: prefix in variable names."""
     monkeypatch.setenv("MY_VAR", "value")
     result = mcp_cli._expand_env_vars("${env:MY_VAR}")
@@ -1793,7 +1793,7 @@ def test_split_target_without_slash(monkeypatch) -> None:
     assert tool is None
 
 
-def test_format_tool_line_without_description(monkeypatch) -> None:
+def test_format_tool_line_without_description_additional(monkeypatch) -> None:
     """_format_tool_line omits description when not requested."""
     tool = {"name": "mytool", "description": "A test tool"}
     result = mcp_cli._format_tool_line("myserver", tool, include_description=False)
@@ -1935,7 +1935,7 @@ def test_main_json_output_with_servers(monkeypatch, capsys, tmp_path) -> None:
     assert rc == 0
 
 
-def test_load_config_file_not_found(tmp_path) -> None:
+def test_load_config_file_not_found_additional(tmp_path) -> None:
     """_load_config raises for missing file."""
     nonexistent = tmp_path / "nonexistent.json"
     with pytest.raises(mcp_cli.MCPCLIError, match="not found"):
@@ -1960,7 +1960,7 @@ def test_load_server_specs_missing_mcpservers(tmp_path) -> None:
     assert specs == {}
 
 
-def test_extract_raw_text_string(monkeypatch) -> None:
+def test_extract_raw_text_string_additional(monkeypatch) -> None:
     """_extract_raw_text returns string as-is."""
     result = mcp_cli._extract_raw_text("plain text")
     assert result == "plain text"
@@ -2001,7 +2001,7 @@ def test_handle_grep_match_server_name(monkeypatch) -> None:
     assert rc == 0
 
 
-def test_handle_grep_json_output(monkeypatch, capsys) -> None:
+def test_handle_grep_json_output_additional(monkeypatch, capsys) -> None:
     """_handle_grep with --json outputs JSON."""
     spec = mcp_cli.MCPServerSpec(name="server", config={"type": "stdio"})
     args = argparse.Namespace(json=True, descriptions=False)

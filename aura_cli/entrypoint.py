@@ -105,7 +105,6 @@ def main(project_root_override=None, argv=None):
     except Exception as exc:
         # Use enhanced error presenter for runtime errors
         if json_output:
-            import json
             print(json.dumps({"error": str(exc), "type": type(exc).__name__}))
         else:
             present_error(

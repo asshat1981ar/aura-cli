@@ -540,6 +540,88 @@ def _customize_config_set(parser: argparse.ArgumentParser) -> None:
     )
 
 
+# ── Phase-1 Developer Experience customizers ────────────────────────────────
+
+
+def _customize_workflow_create(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--template",
+        dest="workflow_template",
+        default="code-review",
+        choices=["code-review", "research", "data-analysis", "custom"],
+        help="Built-in workflow template to scaffold (default: code-review).",
+    )
+    parser.add_argument(
+        "--name",
+        dest="workflow_name",
+        default=None,
+        help="Output YAML file name (default: <template>.yaml).",
+    )
+
+
+def _customize_workflow_visualize(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "workflow_file",
+        help="Path to the YAML workflow file to visualize.",
+    )
+
+
+def _customize_workflow_validate(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "workflow_file",
+        help="Path to the YAML workflow file to validate.",
+    )
+
+
+def _customize_agent_benchmark(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "pipeline_file",
+        help="Path to the YAML pipeline file to benchmark.",
+    )
+    parser.add_argument(
+        "--suite",
+        dest="benchmark_suite",
+        default="hotpotqa",
+        choices=["hotpotqa", "alfworld", "gsm8k", "triviaqa"],
+        help="Task suite to benchmark against (default: hotpotqa).",
+    )
+    parser.add_argument(
+        "--samples",
+        dest="benchmark_samples",
+        type=int,
+        default=10,
+        help="Number of samples to run from the suite (default: 10).",
+    )
+
+
+def _customize_agent_diff(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "config_a",
+        help="First configuration file (YAML or JSON).",
+    )
+    parser.add_argument(
+        "config_b",
+        help="Second configuration file (YAML or JSON).",
+    )
+
+
+def _customize_agent_explain(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--trace",
+        dest="explain_trace",
+        default="last-run",
+        help="Trace identifier to explain (default: last-run).",
+    )
+
+
+def _customize_completions(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "shell",
+        choices=["bash", "zsh", "fish"],
+        help="Shell to generate completions for.",
+    )
+
+
 _PARSER_CUSTOMIZERS.update(
     {
         ("help",): _customize_help,
@@ -588,6 +670,14 @@ _PARSER_CUSTOMIZERS.update(
         ("cancel",): _customize_cancel,
         # ── Config management ───────────────────────────────────────────────────
         ("config", "set"): _customize_config_set,
+        # ── Phase-1 Developer Experience ────────────────────────────────────────
+        ("workflow", "create"): _customize_workflow_create,
+        ("workflow", "visualize"): _customize_workflow_visualize,
+        ("workflow", "validate"): _customize_workflow_validate,
+        ("agent", "benchmark"): _customize_agent_benchmark,
+        ("agent", "diff"): _customize_agent_diff,
+        ("agent", "explain"): _customize_agent_explain,
+        ("completions",): _customize_completions,
     }
 )
 

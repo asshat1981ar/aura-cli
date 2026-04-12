@@ -178,7 +178,7 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
     CommandSpec(
         path=("workflow",),
         summary="Workflow operations",
-        description="Run orchestrated workflow goals with explicit cycle limits.",
+        description="Manage and run orchestrated workflow goals (create, run, visualize, validate).",
         examples=('python3 main.py workflow run "Summarize repo"',),
     ),
     CommandSpec(
@@ -187,6 +187,43 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         description="Run the orchestrator loop for a single workflow goal.",
         examples=('python3 main.py workflow run "Summarize repo" --max-cycles 3',),
         legacy_flags=("--workflow-goal",),
+    ),
+    CommandSpec(
+        path=("workflow", "create"),
+        summary="Create a workflow from a template",
+        description=(
+            "Scaffold a new YAML workflow file from a built-in template.\n\n"
+            "Available templates: code-review, research, data-analysis, custom."
+        ),
+        examples=(
+            "python3 main.py workflow create --template code-review",
+            "python3 main.py workflow create --template research --name my-pipeline.yaml",
+        ),
+    ),
+    CommandSpec(
+        path=("workflow", "visualize"),
+        summary="Visualize a workflow as a Mermaid diagram",
+        description=(
+            "Parse a YAML workflow file and output a Mermaid diagram representation.\n\n"
+            "The diagram is printed to stdout and can be embedded in Markdown or rendered "
+            "at https://mermaid.live."
+        ),
+        examples=(
+            "python3 main.py workflow visualize my-pipeline.yaml",
+            "python3 main.py workflow visualize my-pipeline.yaml --json",
+        ),
+    ),
+    CommandSpec(
+        path=("workflow", "validate"),
+        summary="Validate a workflow YAML file",
+        description=(
+            "Parse and validate a YAML workflow file for structural correctness.\n\n"
+            "Checks for valid node references, edge definitions, and required fields."
+        ),
+        examples=(
+            "python3 main.py workflow validate my-pipeline.yaml",
+            "python3 main.py workflow validate my-pipeline.yaml --json",
+        ),
     ),
     CommandSpec(
         path=("mcp",),
@@ -460,6 +497,61 @@ COMMAND_SPECS: tuple[CommandSpec, ...] = (
         description="Display all registered AURA agents, their type, and status.",
         examples=("python3 main.py agent list",),
     ),
+    CommandSpec(
+        path=("agent", "benchmark"),
+        summary="Benchmark an agent pipeline",
+        description=(
+            "Profile a workflow or pipeline YAML against a standard task suite.\n\n"
+            "Built-in suites: hotpotqa, alfworld, gsm8k, triviaqa.\n"
+            "Reports per-task latency, success rate, and total cost."
+        ),
+        examples=(
+            "python3 main.py agent benchmark my-pipeline.yaml --suite hotpotqa",
+            "python3 main.py agent benchmark my-pipeline.yaml --suite gsm8k --json",
+        ),
+    ),
+    CommandSpec(
+        path=("agent", "diff"),
+        summary="Diff two configurations",
+        description=(
+            "Compare two YAML/JSON config files and display a highlighted diff.\n\n"
+            "Shows added, removed, and changed keys with colour-coded output."
+        ),
+        examples=(
+            "python3 main.py agent diff config-v1.yaml config-v2.yaml",
+            "python3 main.py agent diff config-v1.yaml config-v2.yaml --json",
+        ),
+    ),
+    CommandSpec(
+        path=("agent", "explain"),
+        summary="Explain the last execution trace",
+        description=(
+            "Introspect the last pipeline run and visualize the reasoning trace.\n\n"
+            "Displays per-phase outputs, plan steps, critique issues, and "
+            "model calls with token counts."
+        ),
+        examples=(
+            "python3 main.py agent explain",
+            "python3 main.py agent explain --trace last-run",
+            "python3 main.py agent explain --json",
+        ),
+    ),
+    CommandSpec(
+        path=("completions",),
+        summary="Generate shell completion scripts",
+        description=(
+            "Output shell completion scripts for bash, zsh, or fish.\n\n"
+            "To install:\n"
+            "  bash:  python3 main.py completions bash >> ~/.bash_completion\n"
+            "  zsh:   python3 main.py completions zsh > ~/.zsh/completions/_aura\n"
+            "  fish:  python3 main.py completions fish > ~/.config/fish/completions/aura.fish"
+        ),
+        examples=(
+            "python3 main.py completions bash",
+            "python3 main.py completions zsh",
+            "python3 main.py completions fish",
+        ),
+    ),
     # Security Issue #427: Credential migration commands
     CommandSpec(
         path=("credentials",),
@@ -581,6 +673,14 @@ CLI_ACTION_SPECS: tuple[CLIActionSpec, ...] = (
     CLIActionSpec("interactive", True, None),
     CLIActionSpec("agent_run", True, ("agent", "run")),
     CLIActionSpec("agent_list", False, ("agent", "list")),
+    # ── Phase-1 Developer Experience ────────────────────────────────────────────
+    CLIActionSpec("workflow_create", False, ("workflow", "create")),
+    CLIActionSpec("workflow_visualize", False, ("workflow", "visualize")),
+    CLIActionSpec("workflow_validate", False, ("workflow", "validate")),
+    CLIActionSpec("agent_benchmark", False, ("agent", "benchmark")),
+    CLIActionSpec("agent_diff", False, ("agent", "diff")),
+    CLIActionSpec("agent_explain", True, ("agent", "explain")),
+    CLIActionSpec("completions", False, ("completions",)),
     # Security Issue #427: Credential migration actions
     CLIActionSpec("credentials_migrate", False, ("credentials", "migrate")),
     CLIActionSpec("credentials_store", False, ("credentials", "store")),
@@ -607,6 +707,13 @@ _ACTION_SMOKE_OVERRIDES: dict[str, tuple[str, ...]] = {
     # Security Issue #427: Credential command smoke overrides
     "credentials_store": ("credentials", "store", "--key", "example_key", "--value", "example_value"),
     "credentials_delete": ("credentials", "delete", "--key", "example_key", "--yes"),
+    # Phase-1 Developer Experience smoke overrides
+    "workflow_create": ("workflow", "create", "--template", "code-review"),
+    "workflow_visualize": ("workflow", "visualize", "example-pipeline.yaml"),
+    "workflow_validate": ("workflow", "validate", "example-pipeline.yaml"),
+    "agent_benchmark": ("agent", "benchmark", "example-pipeline.yaml", "--suite", "hotpotqa"),
+    "agent_diff": ("agent", "diff", "config-v1.yaml", "config-v2.yaml"),
+    "completions": ("completions", "bash"),
 }
 
 _SMOKE_POSITIONAL_ARGS_BY_PATH: dict[tuple[str, ...], tuple[str, ...]] = {
@@ -710,6 +817,14 @@ _CANONICAL_PATH_TO_ACTION: dict[tuple[str, ...], str] = {
     ("innovate", "insights"): "innovate_insights",
     ("agent", "run"): "agent_run",
     ("agent", "list"): "agent_list",
+    # ── Phase-1 Developer Experience ────────────────────────────────────────────
+    ("workflow", "create"): "workflow_create",
+    ("workflow", "visualize"): "workflow_visualize",
+    ("workflow", "validate"): "workflow_validate",
+    ("agent", "benchmark"): "agent_benchmark",
+    ("agent", "diff"): "agent_diff",
+    ("agent", "explain"): "agent_explain",
+    ("completions",): "completions",
     # Security Issue #427: Credential management paths
     ("credentials", "migrate"): "credentials_migrate",
     ("credentials", "store"): "credentials_store",

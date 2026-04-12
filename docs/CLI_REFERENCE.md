@@ -66,9 +66,11 @@ Known record codes:
 - [`readiness`](#readiness)
 - [`bootstrap`](#bootstrap)
 - [`config`](#config)
+  - [`aura config set`](#aura-config-set)
 - [`contract-report`](#contract-report)
 - [`diag`](#diag)
 - [`logs`](#logs)
+- [`history`](#history)
 - [`watch`](#watch)
 - [`studio`](#studio)
 - [`goal`](#goal)
@@ -79,6 +81,9 @@ Known record codes:
   - [`aura goal resume`](#aura-goal-resume)
 - [`workflow`](#workflow)
   - [`aura workflow run`](#aura-workflow-run)
+  - [`aura workflow create`](#aura-workflow-create)
+  - [`aura workflow visualize`](#aura-workflow-visualize)
+  - [`aura workflow validate`](#aura-workflow-validate)
 - [`mcp`](#mcp)
   - [`aura mcp tools`](#aura-mcp-tools)
   - [`aura mcp call`](#aura-mcp-call)
@@ -111,6 +116,10 @@ Known record codes:
 - [`agent`](#agent)
   - [`aura agent run`](#aura-agent-run)
   - [`aura agent list`](#aura-agent-list)
+  - [`aura agent benchmark`](#aura-agent-benchmark)
+  - [`aura agent diff`](#aura-agent-diff)
+  - [`aura agent explain`](#aura-agent-explain)
+- [`completions`](#completions)
 - [`credentials`](#credentials)
   - [`aura credentials migrate`](#aura-credentials-migrate)
   - [`aura credentials store`](#aura-credentials-store)
@@ -187,6 +196,19 @@ Print the resolved effective runtime configuration.
 Examples:
 - `python3 main.py config`
 
+### `aura config set`
+
+Set a config value
+
+Persist a configuration key-value pair to aura.config.json.
+Use dotted model paths like 'model.code_generation' to set model routing.
+
+`action`: `config_set` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py config set model.code_generation google/gemini-2.5-pro`
+- `python3 main.py config set dry_run true`
+
 ## `contract-report`
 
 ### `aura contract-report`
@@ -230,6 +252,21 @@ Tail or follow logs from stdin or a file.
 Examples:
 - `python3 main.py logs --tail 50`
 - `python3 main.py logs --file memory/aura.log --follow`
+
+## `history`
+
+### `aura history`
+
+Show completed goal history
+
+List the last N completed goals with their scores and timestamps from the goal archive.
+
+`action`: `history` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py history`
+- `python3 main.py history --limit 20`
+- `python3 main.py history --json`
 
 ## `watch`
 
@@ -349,7 +386,7 @@ Examples:
 
 Workflow operations
 
-Run orchestrated workflow goals with explicit cycle limits.
+Manage and run orchestrated workflow goals (create, run, visualize, validate).
 
 Examples:
 - `python3 main.py workflow run "Summarize repo"`
@@ -367,6 +404,48 @@ Legacy flags:
 
 Examples:
 - `python3 main.py workflow run "Summarize repo" --max-cycles 3`
+
+### `aura workflow create`
+
+Create a workflow from a template
+
+Scaffold a new YAML workflow file from a built-in template.
+
+Available templates: code-review, research, data-analysis, custom.
+
+`action`: `workflow_create` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py workflow create --template code-review`
+- `python3 main.py workflow create --template research --name my-pipeline.yaml`
+
+### `aura workflow visualize`
+
+Visualize a workflow as a Mermaid diagram
+
+Parse a YAML workflow file and output a Mermaid diagram representation.
+
+The diagram is printed to stdout and can be embedded in Markdown or rendered at https://mermaid.live.
+
+`action`: `workflow_visualize` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py workflow visualize my-pipeline.yaml`
+- `python3 main.py workflow visualize my-pipeline.yaml --json`
+
+### `aura workflow validate`
+
+Validate a workflow YAML file
+
+Parse and validate a YAML workflow file for structural correctness.
+
+Checks for valid node references, edge definitions, and required fields.
+
+`action`: `workflow_validate` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py workflow validate my-pipeline.yaml`
+- `python3 main.py workflow validate my-pipeline.yaml --json`
 
 ## `mcp`
 
@@ -760,6 +839,70 @@ Display all registered AURA agents, their type, and status.
 
 Examples:
 - `python3 main.py agent list`
+
+### `aura agent benchmark`
+
+Benchmark an agent pipeline
+
+Profile a workflow or pipeline YAML against a standard task suite.
+
+Built-in suites: hotpotqa, alfworld, gsm8k, triviaqa.
+Reports per-task latency, success rate, and total cost.
+
+`action`: `agent_benchmark` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py agent benchmark my-pipeline.yaml --suite hotpotqa`
+- `python3 main.py agent benchmark my-pipeline.yaml --suite gsm8k --json`
+
+### `aura agent diff`
+
+Diff two configurations
+
+Compare two YAML/JSON config files and display a highlighted diff.
+
+Shows added, removed, and changed keys with colour-coded output.
+
+`action`: `agent_diff` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py agent diff config-v1.yaml config-v2.yaml`
+- `python3 main.py agent diff config-v1.yaml config-v2.yaml --json`
+
+### `aura agent explain`
+
+Explain the last execution trace
+
+Introspect the last pipeline run and visualize the reasoning trace.
+
+Displays per-phase outputs, plan steps, critique issues, and model calls with token counts.
+
+`action`: `agent_explain` `requires_runtime`: `true`
+
+Examples:
+- `python3 main.py agent explain`
+- `python3 main.py agent explain --trace last-run`
+- `python3 main.py agent explain --json`
+
+## `completions`
+
+### `aura completions`
+
+Generate shell completion scripts
+
+Output shell completion scripts for bash, zsh, or fish.
+
+To install:
+  bash:  python3 main.py completions bash >> ~/.bash_completion
+  zsh:   python3 main.py completions zsh > ~/.zsh/completions/_aura
+  fish:  python3 main.py completions fish > ~/.config/fish/completions/aura.fish
+
+`action`: `completions` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py completions bash`
+- `python3 main.py completions zsh`
+- `python3 main.py completions fish`
 
 ## `credentials`
 

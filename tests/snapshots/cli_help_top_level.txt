@@ -9,6 +9,7 @@ Commands:
   contract-report [EXPERIMENTAL] Print CLI contract report
   diag         [EXPERIMENTAL] MCP diagnostics snapshot
   logs         Stream AURA logs
+  history      Show completed goal history
   watch        [EXPERIMENTAL] Launch TUI monitor
   studio       [EXPERIMENTAL] Launch AURA Studio
   goal         Goal queue operations
@@ -23,6 +24,7 @@ Commands:
   sadd         [EXPERIMENTAL] Sub-Agent Driven Development
   innovate     Innovation Catalyst session management
   agent        Agent SDK commands
+  completions  Generate shell completion scripts
   credentials  Secure credential management
   cancel       Cancel an active pipeline run
 

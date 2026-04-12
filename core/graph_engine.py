@@ -165,7 +165,7 @@ class CompiledGraph:
         """Execute the graph starting from the entry point."""
         run_id = uuid.uuid4().hex[:12]
         start_time = time.monotonic()
-        state = dict(initial_state)
+        state = copy.deepcopy(initial_state)
         steps: List[ExecutionStep] = []
         iteration = 0
         current_node = self._entry_point
@@ -194,6 +194,11 @@ class CompiledGraph:
                 node_start = time.monotonic()
                 try:
                     output = node_def.fn(copy.deepcopy(state))
+                    if not isinstance(output, dict):
+                        raise TypeError(
+                            f"Node '{current_node}' must return a dict, "
+                            f"got {type(output).__name__}"
+                        )
                 except Exception as exc:
                     log_json("WARN", "graph_node_error", details={
                         "run_id": run_id, "node": current_node,
@@ -249,7 +254,7 @@ class CompiledGraph:
         cond_edges = self._conditional.get(current, [])
         for ce in cond_edges:
             try:
-                result = ce.condition_fn(state)
+                result = ce.condition_fn(copy.deepcopy(state))
                 target = ce.mapping.get(result)
                 if target is not None:
                     return target
@@ -365,6 +370,16 @@ class StateGraph:
             raise ValueError("Entry point must be set before compiling (call set_entry_point)")
         if not self._nodes:
             raise ValueError("Graph must have at least one node")
+        # Validate each node has at most one unconditional outgoing edge
+        source_counts: Dict[str, int] = {}
+        for edge in self._edges:
+            source_counts[edge.source] = source_counts.get(edge.source, 0) + 1
+        for src, count in source_counts.items():
+            if count > 1:
+                raise ValueError(
+                    f"Node '{src}' has {count} unconditional edges. "
+                    "Each node may have at most one unconditional outgoing edge."
+                )
         return CompiledGraph(
             nodes=dict(self._nodes),
             edges=list(self._edges),
@@ -383,6 +398,8 @@ class StateGraph:
 
         The subgraph's ``invoke`` method will be called with the current state.
         """
+        if name == END:
+            raise ValueError(f"Node name '{END}' is reserved as the graph end sentinel")
         if name in self._nodes:
             raise ValueError(f"Node '{name}' already exists")
 
@@ -401,8 +418,17 @@ class StateGraph:
 
         The *node_registry* maps node function names (strings in YAML) to
         actual callables.
+
+        Requires PyYAML (``pip install pyyaml``). Raises ``ImportError`` with
+        a helpful message if PyYAML is not installed.
         """
-        import yaml
+        try:
+            import yaml
+        except ImportError as exc:
+            raise ImportError(
+                "PyYAML is required for YAML workflow loading. "
+                "Install it with: pip install pyyaml"
+            ) from exc
         path = Path(path)
         with open(path) as f:
             data = yaml.safe_load(f)
@@ -491,9 +517,20 @@ class StateGraph:
         return self
 
     def to_mermaid(self) -> str:
-        """Render the graph definition as a Mermaid diagram (before compilation)."""
-        compiled = self.compile()
-        return compiled.to_mermaid()
+        """Render the graph definition as a Mermaid diagram.
+
+        Does not require an entry point or full compilation — safe to call
+        at any point during graph construction.
+        """
+        lines = ["graph TD"]
+        for e in self._edges:
+            target_label = "END" if e.target == END else e.target
+            lines.append(f"    {e.source} --> {target_label}")
+        for ce in self._conditional_edges:
+            for label, target in ce.mapping.items():
+                target_label = "END" if target == END else target
+                lines.append(f"    {ce.source} -->|{label}| {target_label}")
+        return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------

@@ -55,7 +55,15 @@ class ToolSchema:
 
 
 def _type_matches(value: Any, type_str: str) -> bool:
-    """Check if a value roughly matches a JSON-Schema type string."""
+    """Check if a value roughly matches a JSON-Schema type string.
+
+    Supported subset: string, integer, number, boolean, array, object.
+    Per JSON-Schema semantics, booleans are NOT valid integers or numbers.
+    Unknown type strings pass through (return True).
+    """
+    # JSON-Schema treats bool as distinct from integer/number
+    if type_str in ("integer", "number") and isinstance(value, bool):
+        return False
     mapping = {
         "string": str,
         "integer": int,
@@ -169,7 +177,8 @@ class HookRegistry:
             try:
                 hook(payload)
             except Exception:
-                log_json("WARN", f"Hook error in {phase}", details={
+                log_json("WARN", "hook_error", details={
+                    "phase": phase,
                     "error": traceback.format_exc(),
                 })
 
@@ -303,7 +312,10 @@ class ReActLoop:
 
                 # --- ACT ---
                 action_name = decision.get("action")
-                action_input = decision.get("action_input", {})
+                action_input = decision.get("action_input")
+                # Normalize: tool execution requires a dict; non-dict/None from LLM → {}
+                if not isinstance(action_input, dict):
+                    action_input = {}
 
                 if action_name is None:
                     # No action and no final answer — treat as malformed; observe error
@@ -383,7 +395,9 @@ class ReActLoop:
             return f"Error: Invalid arguments for tool '{name}': {'; '.join(errors)}"
 
         try:
-            result = tool.fn(**args)
+            # Filter to schema-defined parameters to guard against LLM hallucinations
+            filtered_args = {k: v for k, v in args.items() if k in tool.schema.parameters}
+            result = tool.fn(**filtered_args)
             return str(result)
         except Exception as exc:
             log_json("WARN", "tool_execution_error", details={

@@ -374,6 +374,69 @@ class TestMermaid:
 # ---------------------------------------------------------------------------
 
 class TestYAMLLoading:
+    def test_from_yaml(self):
+        """Load and execute a graph from a YAML definition."""
+        pytest.importorskip("yaml", reason="PyYAML not installed")
+        import tempfile, yaml
+
+        registry = {
+            "classify_fn": classify_node,
+            "handle_bug_fn": handle_bug,
+            "handle_feature_fn": handle_feature,
+            "route_fn": lambda s: s["category"],
+        }
+        definition = {
+            "name": "yaml_test_workflow",
+            "nodes": [
+                {"name": "classify", "function": "classify_fn"},
+                {"name": "handle_bug", "function": "handle_bug_fn"},
+                {"name": "handle_feature", "function": "handle_feature_fn"},
+            ],
+            "entry_point": "classify",
+            "conditional_edges": [
+                {
+                    "source": "classify",
+                    "condition": "route_fn",
+                    "mapping": {"bug": "handle_bug", "feature": "handle_feature"},
+                },
+            ],
+            "edges": [
+                {"source": "handle_bug", "target": "__end__"},
+                {"source": "handle_feature", "target": "__end__"},
+            ],
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
+            yaml.dump(definition, f)
+            tmp_path = f.name
+
+        try:
+            graph = StateGraph.from_yaml(tmp_path, node_registry=registry)
+            result = graph.compile().invoke({"text": "error found"})
+            assert result.state["result"] == "Bug report filed"
+            assert result.status == "completed"
+
+            result2 = graph.compile().invoke({"text": "add new feature"})
+            assert result2.state["result"] == "Feature added to backlog"
+        finally:
+            os.unlink(tmp_path)
+
+    def test_from_yaml_missing_pyyaml(self):
+        """from_yaml raises ImportError with helpful message when PyYAML missing."""
+        import sys
+        import importlib
+        yaml_mod = sys.modules.get("yaml")
+        # Temporarily hide yaml from imports
+        sys.modules["yaml"] = None  # type: ignore[assignment]
+        try:
+            with pytest.raises(ImportError, match="pyyaml"):
+                StateGraph.from_yaml("nonexistent.yaml")
+        finally:
+            if yaml_mod is not None:
+                sys.modules["yaml"] = yaml_mod
+            else:
+                del sys.modules["yaml"]
+
     def test_from_json(self):
         """Load and execute a graph from a JSON definition."""
         registry = {

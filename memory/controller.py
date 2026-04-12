@@ -104,5 +104,29 @@ class MemoryController:
         log_json("INFO", "memory_checkpoint_complete")
 
 
+    def distill(self, max_entries: int = 50) -> int:
+        """Consolidate SESSION tier entries into PROJECT tier with deduplication."""
+        session_entries = self.tiers[MemoryTier.SESSION][-max_entries:]
+        if not session_entries:
+            return 0
+        existing_project = set()
+        for entry in self.tiers[MemoryTier.PROJECT]:
+            existing_project.add(str(entry.content))
+        distilled = 0
+        for entry in session_entries:
+            content_str = str(entry.content)
+            if content_str not in existing_project:
+                self.store(MemoryTier.PROJECT, entry.content, entry.metadata)
+                existing_project.add(content_str)
+                distilled += 1
+        log_json("INFO", "memory_distill_complete",
+                 details={"session_entries_reviewed": len(session_entries),
+                          "distilled_to_project": distilled})
+        return distilled
+
+    def tier_stats(self) -> Dict[str, int]:
+        """Return entry counts for each memory tier."""
+        return {tier.value: len(entries) for tier, entries in self.tiers.items()}
+
 # Global Controller Instance
 memory_controller = MemoryController()

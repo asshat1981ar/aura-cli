@@ -1,5 +1,6 @@
 import os
 import re
+from enum import Enum
 from pathlib import Path
 from typing import List, Union
 from core.exceptions import AuraError
@@ -10,6 +11,48 @@ class SecurityError(AuraError):
     """Raised when a security boundary is violated."""
 
     pass
+
+
+class ActionCategory(Enum):
+    """Classify actions as inbound (read-only) or outbound (side-effecting)."""
+
+    INBOUND = "inbound"
+    OUTBOUND = "outbound"
+
+
+_INBOUND_ACTIONS: frozenset = frozenset({
+    "read", "search", "analyze", "list", "query", "inspect",
+    "grep", "cat", "ls", "find", "stat",
+    "git_log", "git_status", "git_diff",
+    "memory_search", "memory_stats",
+    "health_check", "doctor", "diag",
+    "config_list", "mcp_tools",
+})
+
+_OUTBOUND_ACTIONS: frozenset = frozenset({
+    "write", "apply", "commit", "push", "deploy", "send", "delete",
+    "rm", "mv",
+    "git_commit", "git_push",
+    "file_write", "file_delete",
+    "goal_add", "goal_run",
+    "credential_migrate",
+})
+
+
+def classify_action(action: str) -> ActionCategory:
+    """Classify an action string as INBOUND or OUTBOUND.
+
+    Unknown actions default to OUTBOUND (fail-safe).
+    """
+    normalised = action.strip().lower()
+    if normalised in _INBOUND_ACTIONS:
+        return ActionCategory.INBOUND
+    return ActionCategory.OUTBOUND
+
+
+def is_safe_action(action: str) -> bool:
+    """Return True if the action is classified as inbound (read-only)."""
+    return classify_action(action) == ActionCategory.INBOUND
 
 
 # Hardcoded safe commands for AURA

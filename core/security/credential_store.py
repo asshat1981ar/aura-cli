@@ -1,34 +1,54 @@
-"""Abstract base for credential storage backends."""
+"""Abstract credential store interface.
+
+Defines the contract for credential storage backends.
+All implementations must support set/get/delete/list_keys operations.
+"""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 
 class CredentialStore(ABC):
-    """Interface for secure credential storage.
-
-    Implementations must handle arbitrary key names and secret values
-    without crashing, raising documented exceptions for invalid input.
-    """
+    """Abstract base class for credential storage backends."""
 
     @abstractmethod
-    def get(self, key: str) -> Optional[str]:
-        """Retrieve a secret by key. Returns None if not found."""
+    def set(self, name: str, secret: str) -> None:
+        """Store a credential.
+
+        Args:
+            name: Credential identifier (non-empty string).
+            secret: Secret value to store.
+
+        Raises:
+            ValueError: If name is empty.
+        """
 
     @abstractmethod
-    def set(self, key: str, value: str) -> None:
-        """Store a secret under the given key."""
+    def get(self, name: str) -> str | None:
+        """Retrieve a stored credential.
+
+        Args:
+            name: Credential identifier.
+
+        Returns:
+            The secret value, or None if not found.
+        """
 
     @abstractmethod
-    def delete(self, key: str) -> bool:
-        """Delete a secret. Returns True if it existed."""
+    def delete(self, name: str) -> None:
+        """Delete a stored credential.
+
+        Does not raise if the credential does not exist.
+
+        Args:
+            name: Credential identifier.
+        """
 
     @abstractmethod
     def list_keys(self) -> list[str]:
-        """List all stored key names."""
+        """List all stored credential names.
 
-    def has(self, key: str) -> bool:
-        """Check if a key exists."""
-        return self.get(key) is not None
+        Returns:
+            List of credential identifiers.
+        """

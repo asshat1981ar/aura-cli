@@ -1,8 +1,8 @@
-"""DPoP (Demonstrating Proof-of-Possession) proof generator.
+"""RFC 9449 DPoP (Demonstrating Proof-of-Possession) proof generator.
 
-Implements RFC 9449 DPoP proof tokens for OAuth 2.0.
-Generates signed JWT proofs that bind an access token to a specific
-HTTP method and URL.
+Generates DPoP proofs using ephemeral ECDSA P-256 key pairs.
+Each DPoPProofGenerator instance holds one ephemeral key pair;
+each call to generate_proof produces a fresh JWT with a unique jti.
 """
 
 from __future__ import annotations
@@ -12,95 +12,106 @@ import hashlib
 import json
 import time
 import uuid
-from typing import Optional
 
-# Use hmac-based signing as a lightweight fallback when
-# cryptographic libraries (jwcrypto, PyJWT) are not available.
-import hmac
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec, utils
 
 
 def _b64url_encode(data: bytes) -> str:
-    """Base64url-encode without padding."""
+    """Base64url encode without padding."""
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
 
 
 def _b64url_decode(s: str) -> bytes:
-    """Base64url-decode with padding restoration."""
-    padding = "=" * (4 - len(s) % 4)
-    return base64.urlsafe_b64decode(s + padding)
+    """Base64url decode with padding restoration."""
+    padding = 4 - len(s) % 4
+    if padding != 4:
+        s += "=" * padding
+    return base64.urlsafe_b64decode(s)
+
+
+def _int_to_b64url(n: int, length: int) -> str:
+    """Encode an integer as a base64url string of the given byte length."""
+    return _b64url_encode(n.to_bytes(length, byteorder="big"))
 
 
 class DPoPProofGenerator:
-    """Generates DPoP proof JWTs per RFC 9449.
+    """Generates DPoP proofs per RFC 9449.
 
-    Uses HMAC-SHA256 as a lightweight signing mechanism.
-    In production, replace with EC or RSA key pair signing.
+    Each instance generates an ephemeral ECDSA P-256 key pair.
+    The public key is embedded in the JWT header as a JWK.
     """
 
-    def __init__(self, signing_key: bytes | None = None) -> None:
-        if signing_key is None:
-            signing_key = uuid.uuid4().bytes  # Ephemeral key per instance
-        self._signing_key = signing_key
+    def __init__(self) -> None:
+        self._private_key = ec.generate_private_key(ec.SECP256R1())
+        self._public_key = self._private_key.public_key()
+        self._jwk = self._build_jwk()
+
+    def _build_jwk(self) -> dict:
+        """Build the JWK representation of the public key."""
+        public_numbers = self._public_key.public_numbers()
+        return {
+            "kty": "EC",
+            "crv": "P-256",
+            "x": _int_to_b64url(public_numbers.x, 32),
+            "y": _int_to_b64url(public_numbers.y, 32),
+        }
+
+    @property
+    def public_jwk(self) -> dict:
+        """Return the public JWK."""
+        return dict(self._jwk)
 
     def generate_proof(
         self,
         htm: str,
         htu: str,
-        access_token: Optional[str] = None,
+        access_token: str | None = None,
     ) -> str:
         """Generate a DPoP proof JWT.
 
         Args:
-            htm: HTTP method (e.g., "GET", "POST").
+            htm: HTTP method (will be uppercased).
             htu: HTTP target URI.
-            access_token: Optional access token to bind via ath claim.
+            access_token: Optional access token for ath claim.
 
         Returns:
-            A compact JWT string (header.payload.signature).
-
-        Raises:
-            ValueError: If htm or htu are empty.
+            A compact-serialized JWT string (header.payload.signature).
         """
-        if not htm:
-            raise ValueError("htm (HTTP method) must not be empty")
-        if not htu:
-            raise ValueError("htu (HTTP target URI) must not be empty")
-
         header = {
             "typ": "dpop+jwt",
-            "alg": "HS256",
+            "alg": "ES256",
+            "jwk": self._jwk,
         }
 
         payload: dict = {
             "jti": str(uuid.uuid4()),
-            "htm": str(htm),
-            "htu": str(htu),
+            "htm": htm.upper(),
+            "htu": htu,
             "iat": int(time.time()),
         }
 
         if access_token is not None:
-            # ath = base64url(SHA-256(access_token))
-            token_bytes = str(access_token).encode("utf-8", errors="replace")
-            ath = _b64url_encode(hashlib.sha256(token_bytes).digest())
-            payload["ath"] = ath
+            token_hash = hashlib.sha256(access_token.encode("utf-8")).digest()
+            payload["ath"] = _b64url_encode(token_hash)
 
         header_b64 = _b64url_encode(json.dumps(header, separators=(",", ":")).encode())
-        payload_b64 = _b64url_encode(json.dumps(payload, separators=(",", ":")).encode())
+        payload_b64 = _b64url_encode(
+            json.dumps(payload, separators=(",", ":")).encode()
+        )
 
         signing_input = f"{header_b64}.{payload_b64}".encode("ascii")
-        signature = hmac.new(self._signing_key, signing_input, hashlib.sha256).digest()
-        sig_b64 = _b64url_encode(signature)
 
-        return f"{header_b64}.{payload_b64}.{sig_b64}"
+        # Sign with ECDSA using SHA-256
+        der_signature = self._private_key.sign(
+            signing_input, ec.ECDSA(hashes.SHA256())
+        )
 
+        # Convert DER signature to raw r||s format (64 bytes for P-256)
+        r, s = utils.decode_dss_signature(der_signature)
+        raw_signature = r.to_bytes(32, byteorder="big") + s.to_bytes(
+            32, byteorder="big"
+        )
+        signature_b64 = _b64url_encode(raw_signature)
 
-# Module-level singleton
-_dpop_generator: Optional[DPoPProofGenerator] = None
-
-
-def get_dpop_generator() -> DPoPProofGenerator:
-    """Get or create the module-level DPoP generator."""
-    global _dpop_generator
-    if _dpop_generator is None:
-        _dpop_generator = DPoPProofGenerator()
-    return _dpop_generator
+        return f"{header_b64}.{payload_b64}.{signature_b64}"

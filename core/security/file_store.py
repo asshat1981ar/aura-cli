@@ -1,96 +1,77 @@
-"""File-based credential store — stores secrets as JSON on disk."""
+"""Fernet-encrypted file-backed credential store.
+
+Falls back to this when the OS keyring is unavailable. Credentials are
+encrypted with a Fernet key derived from a master password or stored
+in a key file.
+"""
 
 from __future__ import annotations
 
 import json
-import re
+import os
 from pathlib import Path
-from typing import Optional
+
+from cryptography.fernet import Fernet
 
 from core.security.credential_store import CredentialStore
 
-# Key validation: alphanumeric, hyphens, underscores, dots; max 512 chars
-_KEY_RE = re.compile(r"^[a-zA-Z0-9._-]{1,512}$")
-
-# Characters that could enable path traversal or injection
-_UNSAFE_CHARS = frozenset("/\\:\x00")
-
-_STORE_FILENAME = "credentials.json"
+_DEFAULT_DIR = Path.home() / ".aura" / "credentials"
 
 
 class FileStore(CredentialStore):
-    """Stores credentials in a JSON file within a config directory.
+    """Credential store backed by Fernet-encrypted JSON files."""
 
-    Security properties:
-    - Key names are validated against a strict allowlist pattern
-    - Path traversal attempts are rejected
-    - The backing file is a single JSON object (not one-file-per-key)
-    - Corrupt backing files are handled gracefully
-    """
+    def __init__(
+        self,
+        store_dir: Path | str | None = None,
+        fernet_key: bytes | None = None,
+    ) -> None:
+        self._dir = Path(store_dir) if store_dir else _DEFAULT_DIR
+        self._dir.mkdir(parents=True, exist_ok=True)
 
-    def __init__(self, config_dir: str) -> None:
-        self._config_dir = Path(config_dir)
-        self._config_dir.mkdir(parents=True, exist_ok=True)
-        self._store_path = self._config_dir / _STORE_FILENAME
+        key_file = self._dir / ".key"
+        if fernet_key:
+            self._fernet = Fernet(fernet_key)
+            if not key_file.exists():
+                key_file.write_bytes(fernet_key)
+                os.chmod(key_file, 0o600)
+        elif key_file.exists():
+            self._fernet = Fernet(key_file.read_bytes().strip())
+        else:
+            new_key = Fernet.generate_key()
+            key_file.write_bytes(new_key)
+            os.chmod(key_file, 0o600)
+            self._fernet = Fernet(new_key)
 
-    def _validate_key(self, key: str) -> None:
-        """Reject keys that could cause filesystem or injection issues."""
-        if not key:
-            raise ValueError("Key must not be empty")
-        if any(c in key for c in _UNSAFE_CHARS):
-            raise ValueError(f"Key contains unsafe characters: {key!r}")
-        if ".." in key:
-            raise ValueError(f"Key contains path traversal sequence: {key!r}")
-        if len(key) > 512:
-            raise ValueError(f"Key too long ({len(key)} > 512)")
+        self._store_file = self._dir / "store.enc"
+        self._data: dict[str, str] = self._load()
 
-    def _read_store(self) -> dict[str, str]:
-        """Read the backing JSON file. Returns empty dict on corruption."""
-        if not self._store_path.exists():
-            return {}
-        try:
-            data = self._store_path.read_text(encoding="utf-8")
-            parsed = json.loads(data)
-            if not isinstance(parsed, dict):
-                return {}
-            return {k: v for k, v in parsed.items() if isinstance(v, str)}
-        except (json.JSONDecodeError, UnicodeDecodeError, OSError):
-            return {}
+    def set(self, name: str, secret: str) -> None:
+        if not name:
+            raise ValueError("Credential name must not be empty")
+        self._data[name] = secret
+        self._save()
 
-    def _write_store(self, data: dict[str, str]) -> None:
-        """Atomically write the store file."""
-        tmp_path = self._store_path.with_suffix(".tmp")
-        try:
-            tmp_path.write_text(
-                json.dumps(data, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-            tmp_path.replace(self._store_path)
-        except OSError:
-            if tmp_path.exists():
-                tmp_path.unlink(missing_ok=True)
-            raise
+    def get(self, name: str) -> str | None:
+        return self._data.get(name)
 
-    def get(self, key: str) -> Optional[str]:
-        self._validate_key(key)
-        return self._read_store().get(key)
-
-    def set(self, key: str, value: str) -> None:
-        self._validate_key(key)
-        if not isinstance(value, str):
-            raise TypeError(f"Value must be a string, got {type(value).__name__}")
-        store = self._read_store()
-        store[key] = value
-        self._write_store(store)
-
-    def delete(self, key: str) -> bool:
-        self._validate_key(key)
-        store = self._read_store()
-        if key not in store:
-            return False
-        del store[key]
-        self._write_store(store)
-        return True
+    def delete(self, name: str) -> None:
+        self._data.pop(name, None)
+        self._save()
 
     def list_keys(self) -> list[str]:
-        return list(self._read_store().keys())
+        return list(self._data.keys())
+
+    def _load(self) -> dict[str, str]:
+        if not self._store_file.exists():
+            return {}
+        encrypted = self._store_file.read_bytes()
+        if not encrypted:
+            return {}
+        decrypted = self._fernet.decrypt(encrypted)
+        return json.loads(decrypted.decode("utf-8"))
+
+    def _save(self) -> None:
+        raw = json.dumps(self._data).encode("utf-8")
+        encrypted = self._fernet.encrypt(raw)
+        self._store_file.write_bytes(encrypted)

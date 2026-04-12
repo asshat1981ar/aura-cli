@@ -1,0 +1,21 @@
+# serializer version: 1
+# name: TestCLIOutputGolden.test_credential_store_subclasses
+  list([
+    'FileStore',
+  ])
+# ---
+# name: TestCLIOutputGolden.test_dpop_generator_class_name
+  'DPoPProofGenerator'
+# ---
+# name: TestCLIOutputGolden.test_dpop_session_class_name
+  'DPoPSession'
+# ---
+# name: TestCLIOutputGolden.test_file_store_default_filename
+  'credentials.json'
+# ---
+# name: TestCLIOutputGolden.test_main_help_includes_expected_sections
+  'AURA CLI'
+# ---
+# name: TestCLIOutputGolden.test_store_factory_fallback_warning_text
+  'System keyring is not available; credentials will be stored in a local file. Install a keyring backend for better security.'
+# ---

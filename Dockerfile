@@ -1,30 +1,42 @@
 # AURA API Server - Production Dockerfile (multi-stage build)
+# Updated for Redis TLS and ReAct Orchestration
 
-# ── builder ───────────────────────────────────────────────────────────────────
-FROM python:3.11-slim AS builder
+# Stage 1: Builder
+FROM python:3.12-slim AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     curl \
+    musl-dev \
+    libffi-dev \
+    libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
 COPY requirements.txt pyproject.toml ./
 
+# Install dependencies
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Copy source so the editable install can resolve the package
+# Copy source
 COPY . .
+# Note: In this project, code is in root directories like core/, agents/
 RUN pip install --no-cache-dir --prefix=/install -e . --no-deps
 
-# ── runtime ───────────────────────────────────────────────────────────────────
-FROM python:3.11-slim
+# Stage 2: Runtime
+FROM python:3.12-slim
 
 # No build tools in the runtime image
+ENV PYTHONPATH=/install/lib/python3.12/site-packages \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
 
-ENV PYTHONPATH=/install/lib/python3.11/site-packages \
-    PYTHONUNBUFFERED=1
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    redis-tools \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -35,14 +47,11 @@ COPY --from=builder /install /install
 RUN useradd -m -u 1000 aura
 
 # Copy application code with correct ownership
+# Flat structure: copying everything
 COPY --chown=aura:aura . .
 
 # Create data directory and set permissions
 RUN mkdir -p /data && chown -R aura:aura /data /app
-
-# Install curl for the health check (minimal, no build tools)
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/*
 
 # Switch to non-root user
 USER aura
@@ -54,4 +63,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 # Expose port
 EXPOSE 8000
 
-CMD ["uvicorn", "aura_cli.server:app", "--host", "0.0.0.0", "--port", "8000"]
+# Entry point per pyproject.toml
+CMD ["aura", "goal", "run"]

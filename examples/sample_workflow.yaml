@@ -1,0 +1,50 @@
+# Sample graph workflow definition — YAML format
+# This workflow classifies incoming text and routes it to the appropriate handler.
+#
+# Load with:
+#   from core.graph_engine import StateGraph
+#   graph = StateGraph.from_yaml("examples/sample_workflow.yaml", node_registry={...})
+#   result = graph.compile().invoke({"text": "error in production"})
+
+name: issue_triage
+max_iterations: 20
+
+state_schema:
+  text: string
+  category: string
+  priority: string
+  result: string
+
+nodes:
+  - name: classify
+    function: classify_fn
+  - name: prioritize
+    function: prioritize_fn
+  - name: handle_bug
+    function: handle_bug_fn
+  - name: handle_feature
+    function: handle_feature_fn
+  - name: report
+    function: report_fn
+
+entry_point: classify
+
+edges:
+  - source: handle_bug
+    target: report
+  - source: handle_feature
+    target: report
+  - source: report
+    target: __end__
+
+conditional_edges:
+  - source: classify
+    condition: route_category_fn
+    mapping:
+      bug: prioritize
+      feature: handle_feature
+  - source: prioritize
+    condition: route_priority_fn
+    mapping:
+      high: handle_bug
+      low: handle_feature

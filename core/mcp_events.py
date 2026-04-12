@@ -4,6 +4,7 @@ Enables external tools and MCP servers to signal events back to the
 orchestrator asynchronously. Uses Server-Sent Events (SSE) for streaming
 and a pub/sub EventBus for in-process coordination.
 """
+
 import asyncio
 import json
 import time
@@ -18,6 +19,7 @@ from core.logging_utils import log_json
 
 class EventType(str, Enum):
     """Standard MCP callback event types."""
+
     TOOL_COMPLETE = "tool.complete"
     TEST_READY = "test.ready"
     CI_COMPLETE = "ci.complete"
@@ -31,6 +33,7 @@ class EventType(str, Enum):
 @dataclass
 class MCPEvent:
     """An event from an MCP tool or external source."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     event_type: EventType = EventType.CUSTOM
     source: str = ""
@@ -40,11 +43,7 @@ class MCPEvent:
 
     def to_sse(self) -> str:
         """Format as Server-Sent Event message."""
-        return (
-            f"id: {self.id}\n"
-            f"event: {self.event_type.value}\n"
-            f"data: {json.dumps(self.to_dict())}\n\n"
-        )
+        return f"id: {self.id}\nevent: {self.event_type.value}\ndata: {json.dumps(self.to_dict())}\n\n"
 
     def to_dict(self) -> dict:
         return {
@@ -99,7 +98,7 @@ class EventBus:
         """Publish an event to all matching subscribers and SSE queues."""
         self._history.append(event)
         if len(self._history) > self._max_history:
-            self._history = self._history[-self._max_history:]
+            self._history = self._history[-self._max_history :]
 
         key = event.event_type.value
         for callback in self._subscribers.get(key, []):
@@ -109,8 +108,7 @@ class EventBus:
                 else:
                     callback(event)
             except Exception as exc:
-                log_json("WARN", "event_subscriber_error",
-                         details={"event": key, "error": str(exc)})
+                log_json("WARN", "event_subscriber_error", details={"event": key, "error": str(exc)})
 
         for callback in self._subscribers.get("*", []):
             try:
@@ -131,7 +129,7 @@ class EventBus:
         """Publish an event synchronously (for non-async contexts)."""
         self._history.append(event)
         if len(self._history) > self._max_history:
-            self._history = self._history[-self._max_history:]
+            self._history = self._history[-self._max_history :]
 
         key = event.event_type.value
         for callback in self._subscribers.get(key, []) + self._subscribers.get("*", []):
@@ -152,9 +150,7 @@ class EventBus:
         """Close an SSE stream."""
         self._queues.pop(stream_id, None)
 
-    def get_history(self, event_type: str | None = None,
-                    since: float | None = None,
-                    limit: int = 50) -> list[MCPEvent]:
+    def get_history(self, event_type: str | None = None, since: float | None = None, limit: int = 50) -> list[MCPEvent]:
         """Get event history with optional filters."""
         events = self._history
         if event_type:
@@ -171,9 +167,7 @@ class CallbackRegistry:
         self.event_bus = event_bus
         self._pending: dict[str, dict] = {}
 
-    def register_callback(self, correlation_id: str,
-                          callback: Callable,
-                          timeout_seconds: float = 300):
+    def register_callback(self, correlation_id: str, callback: Callable, timeout_seconds: float = 300):
         """Register a callback for when a tool signals completion."""
         self._pending[correlation_id] = {
             "callback": callback,
@@ -193,8 +187,7 @@ class CallbackRegistry:
 
         self.event_bus.subscribe(EventType.TOOL_COMPLETE, _handler)
 
-    async def wait_for(self, correlation_id: str,
-                       timeout: float = 60) -> MCPEvent | None:
+    async def wait_for(self, correlation_id: str, timeout: float = 60) -> MCPEvent | None:
         """Wait for a specific callback event."""
         sid = f"wait_{correlation_id}"
         _, queue = self.event_bus.create_sse_stream(sid)
@@ -217,7 +210,6 @@ class CallbackRegistry:
     def cleanup_expired(self):
         """Remove expired pending callbacks."""
         now = time.time()
-        expired = [cid for cid, entry in self._pending.items()
-                   if entry["timeout"] < now]
+        expired = [cid for cid, entry in self._pending.items() if entry["timeout"] < now]
         for cid in expired:
             self._pending.pop(cid, None)

@@ -1,4 +1,5 @@
 """Skill: score AI-generated code quality without an LLM."""
+
 from __future__ import annotations
 import ast
 import re
@@ -8,7 +9,7 @@ from agents.skills.base import SkillBase
 from core.logging_utils import log_json
 
 _HARDCODED_PATH_RE = re.compile(r'["\'](?:/home/|/root/|C:\\\\|/tmp/)[^"\']{3,}["\']')
-_BARE_EXCEPT_RE = re.compile(r'^\s*except\s*:', re.MULTILINE)
+_BARE_EXCEPT_RE = re.compile(r"^\s*except\s*:", re.MULTILINE)
 
 
 def _has_docstring(tree: ast.Module) -> bool:

@@ -1,4 +1,5 @@
 """Tests for subprocess prompt injection sanitization (issue #333)."""
+
 from __future__ import annotations
 
 import shlex
@@ -13,6 +14,7 @@ class TestLocalCommandProfileSanitization:
 
     def _make_adapter(self):
         from core.model_adapter import ModelAdapter
+
         return ModelAdapter.__new__(ModelAdapter)
 
     def test_shell_metacharacters_are_escaped_in_rendered_parts(self):
@@ -35,15 +37,10 @@ class TestLocalCommandProfileSanitization:
         rendered_prompt_arg = captured["args"][1]  # echo <prompt>
         # The semicolon and ampersands must be quoted/escaped — they should not
         # appear as bare tokens that the shell could interpret.
-        assert ";" not in rendered_prompt_arg or rendered_prompt_arg.startswith("'") or \
-               rendered_prompt_arg.startswith('"'), (
-            f"Prompt metacharacters not sanitized. Got: {rendered_prompt_arg!r}"
-        )
+        assert ";" not in rendered_prompt_arg or rendered_prompt_arg.startswith("'") or rendered_prompt_arg.startswith('"'), f"Prompt metacharacters not sanitized. Got: {rendered_prompt_arg!r}"
         # shlex.quote wraps in single quotes; the raw semicolon should be inside quotes
         expected = shlex.quote(malicious_prompt)
-        assert rendered_prompt_arg == expected, (
-            f"Expected shlex.quote result {expected!r}, got {rendered_prompt_arg!r}"
-        )
+        assert rendered_prompt_arg == expected, f"Expected shlex.quote result {expected!r}, got {rendered_prompt_arg!r}"
 
     def test_backtick_injection_escaped(self):
         """Backtick command substitution must be neutralized."""

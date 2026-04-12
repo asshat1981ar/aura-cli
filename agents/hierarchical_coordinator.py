@@ -93,11 +93,12 @@ class HierarchicalCoordinatorAgent:
     ) -> CycleReport:
         """Run one controlled execution cycle for a Forge story."""
         self._cycle_counter += 1
-        
+
         # Superpowers: INITIALIZING State - Semantic Tool Discovery
         from agents.skills.mcp_semantic_discovery import mcp_semantic_discovery
+
         discovery_context = mcp_semantic_discovery(f"Tools needed for story {story_id}: {story_text}")
-        
+
         tasks = await self.plan(story_id=story_id, story_text=story_text)
         lessons = await self._lessons_for_cycle(self._cycle_counter)
         results: List[TaskResult] = []
@@ -168,7 +169,6 @@ class HierarchicalCoordinatorAgent:
         # Mocking the calls
         log_json("INFO", "swarm_github_delivery_pr_created", details={"story_id": story_id})
         log_json("INFO", "swarm_github_delivery_merging", details={"story_id": story_id})
-
 
     async def reflect(self, report: CycleReport) -> List[CycleLesson]:
         """Return lessons that should be written back to shared memory."""

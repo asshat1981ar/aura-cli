@@ -1,4 +1,5 @@
 """Thread-safety tests for memory/brain.py — covers issue #328."""
+
 import threading
 import tempfile
 import unittest
@@ -10,6 +11,7 @@ class TestBrainThreadSafety(unittest.TestCase):
 
     def _make_brain(self, tmp_dir: str) -> object:
         from memory.brain import Brain
+
         return Brain(db_path=str(Path(tmp_dir) / "brain_test.db"))
 
     def test_lock_attribute_exists(self):
@@ -22,8 +24,7 @@ class TestBrainThreadSafety(unittest.TestCase):
             )
             # Accept both Lock and RLock
             self.assertTrue(
-                isinstance(brain._lock, type(threading.Lock()))
-                or isinstance(brain._lock, type(threading.RLock())),
+                isinstance(brain._lock, type(threading.Lock())) or isinstance(brain._lock, type(threading.RLock())),
                 "_lock must be a threading.Lock or threading.RLock instance",
             )
 

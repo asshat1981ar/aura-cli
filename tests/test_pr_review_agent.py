@@ -23,7 +23,7 @@ class TestPRReviewAgent:
                 {
                     "filename": "src/feature.py",
                     "content": 'def hello():\n    print("Hello")\n    return 42\n',
-                    "patch": "@@ -0,0 +1,3 @@\n+def hello():\n+    print(\"Hello\")\n+    return 42",
+                    "patch": '@@ -0,0 +1,3 @@\n+def hello():\n+    print("Hello")\n+    return 42',
                 }
             ],
         }
@@ -46,11 +46,13 @@ class TestPRReviewAgent:
     @pytest.mark.asyncio
     async def test_detects_print_statement(self, agent):
         """Test detection of print statements."""
-        files = [{
-            "filename": "src/module.py",  # Not a test file
-            "content": 'def test():\n    print("debug")\n',
-            "patch": "@@ -0,0 +1,2 @@\n+def test():\n+    print(\"debug\")",
-        }]
+        files = [
+            {
+                "filename": "src/module.py",  # Not a test file
+                "content": 'def test():\n    print("debug")\n',
+                "patch": '@@ -0,0 +1,2 @@\n+def test():\n+    print("debug")',
+            }
+        ]
 
         result = await agent.review_pr(
             pr_number=1,
@@ -66,11 +68,13 @@ class TestPRReviewAgent:
     @pytest.mark.asyncio
     async def test_detects_todo_without_ticket(self, agent):
         """Test detection of TODOs without ticket references."""
-        files = [{
-            "filename": "src/test.py",
-            "content": '# TODO fix this later\ndef test():\n    pass\n',
-            "patch": "@@ -0,0 +1,3 @@\n+# TODO fix this later\n+def test():\n+    pass",
-        }]
+        files = [
+            {
+                "filename": "src/test.py",
+                "content": "# TODO fix this later\ndef test():\n    pass\n",
+                "patch": "@@ -0,0 +1,3 @@\n+# TODO fix this later\n+def test():\n+    pass",
+            }
+        ]
 
         result = await agent.review_pr(
             pr_number=1,
@@ -85,11 +89,13 @@ class TestPRReviewAgent:
     @pytest.mark.asyncio
     async def test_detects_debug_breakpoint(self, agent):
         """Test detection of debug breakpoints."""
-        files = [{
-            "filename": "src/test.py",
-            "content": 'def test():\n    breakpoint()\n    pass\n',
-            "patch": "@@ -0,0 +1,3 @@\n+def test():\n+    breakpoint()\n+    pass",
-        }]
+        files = [
+            {
+                "filename": "src/test.py",
+                "content": "def test():\n    breakpoint()\n    pass\n",
+                "patch": "@@ -0,0 +1,3 @@\n+def test():\n+    breakpoint()\n+    pass",
+            }
+        ]
 
         result = await agent.review_pr(
             pr_number=1,
@@ -105,11 +111,13 @@ class TestPRReviewAgent:
     @pytest.mark.asyncio
     async def test_approves_clean_pr(self, agent):
         """Test that clean PRs get approved."""
-        files = [{
-            "filename": "src/clean.py",
-            "content": 'def hello():\n    """Say hello."""\n    return "Hello"\n',
-            "patch": "@@ -0,0 +1,3 @@\n+def hello():\n+    \"\"\"Say hello.\"\"\"\n+    return \"Hello\"",
-        }]
+        files = [
+            {
+                "filename": "src/clean.py",
+                "content": 'def hello():\n    """Say hello."""\n    return "Hello"\n',
+                "patch": '@@ -0,0 +1,3 @@\n+def hello():\n+    """Say hello."""\n+    return "Hello"',
+            }
+        ]
 
         result = await agent.review_pr(
             pr_number=1,
@@ -124,11 +132,13 @@ class TestPRReviewAgent:
     @pytest.mark.asyncio
     async def test_rejects_pr_with_errors(self, agent):
         """Test that PRs with errors are not approved."""
-        files = [{
-            "filename": "src/bad.py",
-            "content": 'def test():\n    breakpoint()\n    password = "secret123"\n',
-            "patch": "@@ -0,0 +1,3 @@\n+def test():\n+    breakpoint()\n+    password = \"secret123\"",
-        }]
+        files = [
+            {
+                "filename": "src/bad.py",
+                "content": 'def test():\n    breakpoint()\n    password = "secret123"\n',
+                "patch": '@@ -0,0 +1,3 @@\n+def test():\n+    breakpoint()\n+    password = "secret123"',
+            }
+        ]
 
         result = await agent.review_pr(
             pr_number=1,

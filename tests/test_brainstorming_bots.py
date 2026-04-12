@@ -60,6 +60,7 @@ def _all_scores_valid(ideas: List[Idea]) -> bool:
 # TestBaseBrainstormingBot
 # ---------------------------------------------------------------------------
 
+
 class TestBaseBrainstormingBot(unittest.TestCase):
     """Tests for the abstract base class."""
 
@@ -176,6 +177,7 @@ class TestBaseBrainstormingBot(unittest.TestCase):
 # TestEachBot — parameterized via subTest
 # ---------------------------------------------------------------------------
 
+
 class TestEachBot(unittest.TestCase):
     """Uniform tests run against all 8 bots."""
 
@@ -280,6 +282,7 @@ class TestEachBot(unittest.TestCase):
 # TestBotRegistry
 # ---------------------------------------------------------------------------
 
+
 class TestBotRegistry(unittest.TestCase):
     """Tests for BRAINSTORMING_BOTS dict, get_bot(), and list_techniques()."""
 
@@ -287,8 +290,7 @@ class TestBotRegistry(unittest.TestCase):
         self.assertEqual(len(BRAINSTORMING_BOTS), 8)
 
     def test_registry_contains_expected_keys(self):
-        expected_keys = {"scamper", "six_hats", "mind_map", "reverse",
-                         "worst_idea", "lotus", "star", "bia"}
+        expected_keys = {"scamper", "six_hats", "mind_map", "reverse", "worst_idea", "lotus", "star", "bia"}
         self.assertEqual(set(BRAINSTORMING_BOTS.keys()), expected_keys)
 
     def test_registry_values_are_classes_not_instances(self):
@@ -345,6 +347,7 @@ class TestBotRegistry(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # TestIdeaQuality — structural minimums and content checks
 # ---------------------------------------------------------------------------
+
 
 class TestIdeaQuality(unittest.TestCase):
     """Tests that specific bots produce the expected structural minimum of ideas."""
@@ -416,8 +419,7 @@ class TestIdeaQuality(unittest.TestCase):
         bot = SCAMPERBot()
         ideas = bot.generate(SAMPLE_TASK)
         for idea in ideas:
-            self.assertIn(SAMPLE_TASK, idea.description,
-                          msg="SCAMPER idea description should include the task")
+            self.assertIn(SAMPLE_TASK, idea.description, msg="SCAMPER idea description should include the task")
 
     def test_six_hats_ideas_contain_hat_color(self):
         """Six Thinking Hats descriptions contain the hat colour in brackets."""
@@ -430,7 +432,8 @@ class TestIdeaQuality(unittest.TestCase):
                 if color in idea.description.upper():
                     found_colors.add(color)
         self.assertEqual(
-            found_colors, hat_colors,
+            found_colors,
+            hat_colors,
             msg=f"Expected all hat colors in descriptions; found: {found_colors}",
         )
 
@@ -439,34 +442,29 @@ class TestIdeaQuality(unittest.TestCase):
         bot = SCAMPERBot()
         ideas = bot.generate(SAMPLE_TASK)
         for idea in ideas:
-            self.assertIn("scamper_action", idea.metadata,
-                          msg="SCAMPER idea missing 'scamper_action' in metadata")
+            self.assertIn("scamper_action", idea.metadata, msg="SCAMPER idea missing 'scamper_action' in metadata")
 
     def test_six_hats_metadata_contains_hat_color(self):
         """Six Thinking Hats ideas carry 'hat_color' in metadata."""
         bot = SixThinkingHatsBot()
         ideas = bot.generate(SAMPLE_TASK)
         for idea in ideas:
-            self.assertIn("hat_color", idea.metadata,
-                          msg="SixThinkingHats idea missing 'hat_color' in metadata")
+            self.assertIn("hat_color", idea.metadata, msg="SixThinkingHats idea missing 'hat_color' in metadata")
 
     def test_lotus_blossom_metadata_has_level_field(self):
         """Lotus Blossom ideas carry a 'level' key in metadata."""
         bot = LotusBlossomBot()
         ideas = bot.generate(SAMPLE_TASK)
         for idea in ideas:
-            self.assertIn("level", idea.metadata,
-                          msg="LotusBlossomBot idea missing 'level' in metadata")
+            self.assertIn("level", idea.metadata, msg="LotusBlossomBot idea missing 'level' in metadata")
 
     def test_bia_metadata_contains_domain(self):
         """BIABot ideas carry a 'domain' key in metadata."""
         bot = BIABot()
         ideas = bot.generate(SAMPLE_TASK)
         for idea in ideas:
-            self.assertIn("domain", idea.metadata,
-                          msg="BIABot idea missing 'domain' in metadata")
-            self.assertIn(idea.metadata["domain"], BIABot.DOMAINS,
-                          msg=f"BIABot domain '{idea.metadata['domain']}' not in DOMAINS list")
+            self.assertIn("domain", idea.metadata, msg="BIABot idea missing 'domain' in metadata")
+            self.assertIn(idea.metadata["domain"], BIABot.DOMAINS, msg=f"BIABot domain '{idea.metadata['domain']}' not in DOMAINS list")
 
     def test_all_ideas_have_descriptions(self):
         """All ideas from every bot have non-empty description strings."""

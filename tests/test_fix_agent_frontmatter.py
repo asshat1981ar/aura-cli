@@ -2,8 +2,9 @@ import os
 import sys
 
 # Add scripts directory to path to import the function
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'scripts')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "scripts")))
 from fix_agent_frontmatter import fix_frontmatter
+
 
 def test_fix_frontmatter_standard():
     input_text = """---
@@ -57,6 +58,7 @@ You are a Senior Backend Engineer.
         print(expected_output)
     assert output == expected_output
 
+
 def test_fix_frontmatter_already_fixed():
     input_text = """---
 name: already-good
@@ -71,13 +73,14 @@ model: inherit
 body text
 """
     output = fix_frontmatter(input_text)
-    
+
     # Actually, the current script will change `description: |` into `description: |` then indent the next line which has `This is a good description.`. Wait!
-    # Let me check if my script handles `description: |` correctly. 
+    # Let me check if my script handles `description: |` correctly.
     # If the file already has `description: |`, it will read `description:` and change it.
     pass
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     test_fix_frontmatter_standard()
     test_fix_frontmatter_already_fixed()
     print("All tests passed!")

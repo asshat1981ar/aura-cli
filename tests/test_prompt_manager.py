@@ -62,6 +62,7 @@ _CODER_PARAMS = {
 # TestPromptCacheEntry
 # ===========================================================================
 
+
 class TestPromptCacheEntry(unittest.TestCase):
     """Tests for the PromptCacheEntry dataclass."""
 
@@ -92,6 +93,7 @@ class TestPromptCacheEntry(unittest.TestCase):
 # ===========================================================================
 # TestPromptCache
 # ===========================================================================
+
 
 class TestPromptCache(unittest.TestCase):
     """Tests for PromptCache LRU + TTL behaviour."""
@@ -220,7 +222,7 @@ class TestPromptCache(unittest.TestCase):
     def test_clear_resets_everything(self):
         """clear() should empty the cache and reset hit/miss counters."""
         self.cache.set("planner", {"g": "goal"}, "prompt")
-        self.cache.get("planner", {"g": "goal"})   # hit
+        self.cache.get("planner", {"g": "goal"})  # hit
         self.cache.get("planner", {"missing": "k"})  # miss
 
         self.cache.clear()
@@ -241,6 +243,7 @@ class TestPromptCache(unittest.TestCase):
 # ===========================================================================
 # TestSystemPrompts
 # ===========================================================================
+
 
 class TestSystemPrompts(unittest.TestCase):
     """Tests for SYSTEM_PROMPTS and get_system_prompt()."""
@@ -282,6 +285,7 @@ class TestSystemPrompts(unittest.TestCase):
 # ===========================================================================
 # TestRenderPrompt
 # ===========================================================================
+
 
 class TestRenderPrompt(unittest.TestCase):
     """Tests for render_prompt() template rendering and caching."""
@@ -396,6 +400,7 @@ class TestRenderPrompt(unittest.TestCase):
 # TestGlobalCacheHelpers
 # ===========================================================================
 
+
 class TestGlobalCacheHelpers(unittest.TestCase):
     """Tests for get_cached_prompt_stats() and clear_prompt_cache()."""
 
@@ -432,6 +437,7 @@ class TestGlobalCacheHelpers(unittest.TestCase):
 # ===========================================================================
 # TestLegacyAliases
 # ===========================================================================
+
 
 class TestLegacyAliases(unittest.TestCase):
     """Tests verifying backward-compatibility aliases equal the originals."""

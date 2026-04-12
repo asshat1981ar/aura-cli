@@ -1,4 +1,5 @@
 """Tests for core.quality_trends — quality trend analyzer."""
+
 import json
 import time
 from pathlib import Path

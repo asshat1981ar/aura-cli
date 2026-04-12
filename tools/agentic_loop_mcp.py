@@ -42,6 +42,7 @@ Start:
   # or:
   python tools/agentic_loop_mcp.py
 """
+
 from __future__ import annotations
 
 import os
@@ -57,7 +58,7 @@ if str(_ROOT) not in sys.path:
 
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 
 from core.logging_utils import log_json
 from core.mcp_contracts import (
@@ -72,6 +73,13 @@ from core.workflow_engine import (
     RetryPolicy,
     get_engine,
 )
+from tools.mcp_server_support import (
+    auth_dependency,
+    auth_mode_label,
+    build_basic_metrics_payload,
+    resolve_server_port,
+    uptime_seconds,
+)
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -83,23 +91,10 @@ app = FastAPI(
     version="1.0.0",
 )
 
-_TOKEN = os.getenv("AGENTIC_LOOP_TOKEN", "")
 _SERVER_START = time.time()
 _call_counts: Dict[str, int] = {}
 _call_errors: Dict[str, int] = {}
-
-
-# ---------------------------------------------------------------------------
-# Auth
-# ---------------------------------------------------------------------------
-
-def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
-    if not _TOKEN:
-        return
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing Authorization header.")
-    if authorization.removeprefix("Bearer ").strip() != _TOKEN:
-        raise HTTPException(status_code=403, detail="Invalid token.")
+_require_auth = auth_dependency("agentic_loop")
 
 
 # ---------------------------------------------------------------------------
@@ -127,8 +122,7 @@ _TOOL_SCHEMAS: Dict[str, Dict] = {
                             "name": {"type": "string"},
                             "skill_name": {"type": "string", "description": "AURA skill name."},
                             "static_inputs": {"type": "object"},
-                            "inputs_from": {"type": "object",
-                                            "description": "{'dest_key': 'step_name.output_key'}"},
+                            "inputs_from": {"type": "object", "description": "{'dest_key': 'step_name.output_key'}"},
                             "skip_if_false": {"type": "string"},
                             "max_attempts": {"type": "integer", "default": 3},
                             "timeout_s": {"type": "number", "default": 120},
@@ -150,10 +144,8 @@ _TOOL_SCHEMAS: Dict[str, Dict] = {
             "type": "object",
             "properties": {
                 "workflow_name": {"type": "string"},
-                "inputs": {"type": "object",
-                           "description": "Initial inputs (e.g. {'project_root': '.'})"},
-                "background": {"type": "boolean", "default": False,
-                               "description": "Run in background thread; returns immediately."},
+                "inputs": {"type": "object", "description": "Initial inputs (e.g. {'project_root': '.'})"},
+                "background": {"type": "boolean", "default": False, "description": "Run in background thread; returns immediately."},
             },
             "required": ["workflow_name"],
         },
@@ -277,8 +269,7 @@ _TOOL_SCHEMAS: Dict[str, Dict] = {
         "inputSchema": {
             "type": "object",
             "properties": {
-                "status": {"type": "string",
-                           "enum": ["running", "paused", "completed", "failed", "stopped"]},
+                "status": {"type": "string", "enum": ["running", "paused", "completed", "failed", "stopped"]},
             },
         },
     },
@@ -293,6 +284,7 @@ def _build_descriptor(name: str) -> Dict:
 # Tool handlers
 # ---------------------------------------------------------------------------
 
+
 def _h_workflow_define(args: Dict) -> Dict:
     name = args.get("name", "").strip()
     if not name:
@@ -306,15 +298,17 @@ def _h_workflow_define(args: Dict) -> Dict:
         if not isinstance(s, dict) or not s.get("name"):
             raise ValueError(f"Each step must have a 'name'. Got: {s!r}")
         retry = RetryPolicy(max_attempts=int(s.get("max_attempts", 3)))
-        steps.append(WorkflowStep(
-            name=s["name"],
-            skill_name=s.get("skill_name"),
-            static_inputs=s.get("static_inputs", {}),
-            inputs_from=s.get("inputs_from", {}),
-            skip_if_false=s.get("skip_if_false"),
-            retry=retry,
-            timeout_s=float(s.get("timeout_s", 120)),
-        ))
+        steps.append(
+            WorkflowStep(
+                name=s["name"],
+                skill_name=s.get("skill_name"),
+                static_inputs=s.get("static_inputs", {}),
+                inputs_from=s.get("inputs_from", {}),
+                skip_if_false=s.get("skip_if_false"),
+                retry=retry,
+                timeout_s=float(s.get("timeout_s", 120)),
+            )
+        )
 
     wf = WorkflowDefinition(
         name=name,
@@ -360,13 +354,12 @@ def _h_workflow_run(args: Dict) -> Dict:
 
         # Fallback: create a stub execution so the caller has an ID to poll
         import uuid as _uuid
+
         stub_id = str(_uuid.uuid4())
-        return {"exec_id": stub_id, "mode": "background_started", "workflow": wf_name,
-                "note": "Poll workflow_status after a moment."}
+        return {"exec_id": stub_id, "mode": "background_started", "workflow": wf_name, "note": "Poll workflow_status after a moment."}
     else:
         exec_id = engine.run_workflow(wf_name, inputs)
-        return {"exec_id": exec_id, "mode": "sync", "workflow": wf_name,
-                "status": engine.execution_status(exec_id)["status"]}
+        return {"exec_id": exec_id, "mode": "sync", "workflow": wf_name, "status": engine.execution_status(exec_id)["status"]}
 
 
 def _h_workflow_status(args: Dict) -> Dict:
@@ -478,22 +471,22 @@ def _h_loop_list(args: Dict) -> Dict:
 
 
 _TOOL_HANDLERS: Dict[str, Any] = {
-    "workflow_define":  _h_workflow_define,
-    "workflow_list":    _h_workflow_list,
-    "workflow_run":     _h_workflow_run,
-    "workflow_status":  _h_workflow_status,
-    "workflow_output":  _h_workflow_output,
-    "workflow_cancel":  _h_workflow_cancel,
-    "workflow_pause":   _h_workflow_pause,
-    "workflow_resume":  _h_workflow_resume,
-    "loop_create":      _h_loop_create,
-    "loop_tick":        _h_loop_tick,
-    "loop_status":      _h_loop_status,
-    "loop_stop":        _h_loop_stop,
-    "loop_pause":       _h_loop_pause,
-    "loop_resume":      _h_loop_resume,
-    "loop_health":      _h_loop_health,
-    "loop_list":        _h_loop_list,
+    "workflow_define": _h_workflow_define,
+    "workflow_list": _h_workflow_list,
+    "workflow_run": _h_workflow_run,
+    "workflow_status": _h_workflow_status,
+    "workflow_output": _h_workflow_output,
+    "workflow_cancel": _h_workflow_cancel,
+    "workflow_pause": _h_workflow_pause,
+    "workflow_resume": _h_workflow_resume,
+    "loop_create": _h_loop_create,
+    "loop_tick": _h_loop_tick,
+    "loop_status": _h_loop_status,
+    "loop_stop": _h_loop_stop,
+    "loop_pause": _h_loop_pause,
+    "loop_resume": _h_loop_resume,
+    "loop_health": _h_loop_health,
+    "loop_list": _h_loop_list,
 }
 
 
@@ -501,8 +494,9 @@ _TOOL_HANDLERS: Dict[str, Any] = {
 # FastAPI routes
 # ---------------------------------------------------------------------------
 
+
 @app.get("/health")
-async def health(_: None = Depends(_check_auth)) -> Dict:
+async def health(auth: str = Depends(_require_auth)) -> Dict:
     engine = get_engine()
     execs = engine.list_executions()
     loops = engine.list_loops()
@@ -510,7 +504,7 @@ async def health(_: None = Depends(_check_auth)) -> Dict:
         server=get_registered_service("agentic_loop")["name"],
         version="1.0.0",
         tool_count=len(_TOOL_HANDLERS),
-        uptime_s=round(time.time() - _SERVER_START, 1),
+        uptime_s=uptime_seconds(_SERVER_START),
         workflows_defined=len(engine.list_definitions()),
         executions_active=sum(1 for e in execs if e["status"] == "running"),
         executions_total=len(execs),
@@ -520,7 +514,7 @@ async def health(_: None = Depends(_check_auth)) -> Dict:
 
 
 @app.get("/discovery")
-async def discovery(_: None = Depends(_check_auth)) -> Dict:
+async def discovery(auth: str = Depends(_require_auth)) -> Dict:
     return build_discovery_payload(
         current_server=get_registered_service("agentic_loop"),
         servers=list_registered_services(),
@@ -529,29 +523,29 @@ async def discovery(_: None = Depends(_check_auth)) -> Dict:
 
 
 @app.get("/tools")
-async def list_tools(_: None = Depends(_check_auth)) -> Dict:
+async def list_tools(auth: str = Depends(_require_auth)) -> Dict:
     return {"tools": build_tool_descriptors_from_schemas(_TOOL_SCHEMAS)}
 
 
 @app.get("/tool/{name}")
-async def get_tool(name: str, _: None = Depends(_check_auth)) -> Dict:
+async def get_tool(name: str, auth: str = Depends(_require_auth)) -> Dict:
     if name not in _TOOL_SCHEMAS:
         raise HTTPException(status_code=404, detail=f"Tool '{name}' not found.")
     return _build_descriptor(name)
 
 
 @app.get("/workflows")
-async def list_workflows_route(_: None = Depends(_check_auth)) -> Dict:
+async def list_workflows_route(auth: str = Depends(_require_auth)) -> Dict:
     return {"workflows": get_engine().list_definitions()}
 
 
 @app.get("/loops")
-async def list_loops_route(status: Optional[str] = None, _: None = Depends(_check_auth)) -> Dict:
+async def list_loops_route(status: Optional[str] = None, auth: str = Depends(_require_auth)) -> Dict:
     return {"loops": get_engine().list_loops(status_filter=status)}
 
 
 @app.post("/call")
-async def call_tool(request: ToolCallRequest, _: None = Depends(_check_auth)) -> ToolResult:
+async def call_tool(request: ToolCallRequest, auth: str = Depends(_require_auth)) -> ToolResult:
     name = request.tool_name
     handler = _TOOL_HANDLERS.get(name)
     if not handler:
@@ -562,43 +556,31 @@ async def call_tool(request: ToolCallRequest, _: None = Depends(_check_auth)) ->
     try:
         result = handler(request.args)
         elapsed = round((time.time() - t0) * 1000, 2)
-        log_json("INFO", "agentic_loop_mcp_tool_called",
-                 details={"tool": name, "elapsed_ms": elapsed})
+        log_json("INFO", "agentic_loop_mcp_tool_called", details={"tool": name, "elapsed_ms": elapsed})
         return ToolResult(tool_name=name, result=result, elapsed_ms=elapsed)
     except (ValueError, KeyError) as exc:
         elapsed = round((time.time() - t0) * 1000, 2)
         _call_errors[name] = _call_errors.get(name, 0) + 1
-        log_json("WARN", "agentic_loop_mcp_bad_args",
-                 details={"tool": name, "error": str(exc)})
+        log_json("WARN", "agentic_loop_mcp_bad_args", details={"tool": name, "error": str(exc)})
         return ToolResult(tool_name=name, error=str(exc), elapsed_ms=elapsed)
     except Exception as exc:
         elapsed = round((time.time() - t0) * 1000, 2)
         _call_errors[name] = _call_errors.get(name, 0) + 1
-        log_json("ERROR", "agentic_loop_mcp_error",
-                 details={"tool": name, "error": str(exc)})
+        log_json("ERROR", "agentic_loop_mcp_error", details={"tool": name, "error": str(exc)})
         return ToolResult(tool_name=name, error=f"Internal error: {exc}", elapsed_ms=elapsed)
 
 
 @app.get("/metrics")
-async def get_metrics(_: None = Depends(_check_auth)) -> Dict:
-    total_calls = sum(_call_counts.values())
-    total_errors = sum(_call_errors.values())
+async def get_metrics(auth: str = Depends(_require_auth)) -> Dict:
     engine = get_engine()
-    return {
-        "uptime_seconds": round(time.time() - _SERVER_START, 1),
-        "total_calls": total_calls,
-        "total_errors": total_errors,
-        "error_rate": round(total_errors / max(total_calls, 1), 4),
-        "executions_total": len(engine.list_executions()),
-        "loops_total": len(engine.list_loops()),
-        "tools": {
-            name: {
-                "calls": _call_counts.get(name, 0),
-                "errors": _call_errors.get(name, 0),
-            }
-            for name in _TOOL_SCHEMAS
-        },
-    }
+    return build_basic_metrics_payload(
+        server_start=_SERVER_START,
+        tool_names=_TOOL_SCHEMAS,
+        call_counts=_call_counts,
+        call_errors=_call_errors,
+        executions_total=len(engine.list_executions()),
+        loops_total=len(engine.list_loops()),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -607,7 +589,7 @@ async def get_metrics(_: None = Depends(_check_auth)) -> Dict:
 
 if __name__ == "__main__":
     import uvicorn
-    from core.config_manager import config as _cfg
-    # R4: port from config registry; env var still overrides for backward-compat
-    port = int(os.getenv("AGENTIC_LOOP_PORT", _cfg.get_mcp_server_port("agentic_loop")))
+
+    port = resolve_server_port("agentic_loop")
+    print(f"[MCP agentic_loop] Starting on port {port} (auth: {auth_mode_label('agentic_loop')})")
     uvicorn.run("tools.agentic_loop_mcp:app", host="0.0.0.0", port=port, reload=False)

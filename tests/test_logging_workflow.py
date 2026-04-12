@@ -9,7 +9,8 @@ from unittest.mock import MagicMock, patch
 
 from git.exc import GitCommandError
 
-from core.git_tools import GitTools, GitToolsError
+from core.git_tools import GitTools
+from core.exceptions import GitToolsError
 from core.orchestrator import LoopOrchestrator
 from core.policy import Policy
 from memory.store import MemoryStore
@@ -25,17 +26,21 @@ class _StaticAgent:
 
 def _base_agents(*, change_set):
     return {
-        "ingest": _StaticAgent({
-            "goal": "test goal",
-            "snapshot": "snapshot",
-            "memory_summary": "",
-            "constraints": {},
-        }),
+        "ingest": _StaticAgent(
+            {
+                "goal": "test goal",
+                "snapshot": "snapshot",
+                "memory_summary": "",
+                "constraints": {},
+            }
+        ),
         "plan": _StaticAgent({"steps": ["step"], "risks": []}),
         "critique": _StaticAgent({"issues": [], "fixes": []}),
-        "synthesize": _StaticAgent({
-            "tasks": [{"id": "t1", "title": "demo", "intent": "", "files": [], "tests": []}],
-        }),
+        "synthesize": _StaticAgent(
+            {
+                "tasks": [{"id": "t1", "title": "demo", "intent": "", "files": [], "tests": []}],
+            }
+        ),
         "act": _StaticAgent(change_set),
         "sandbox": _StaticAgent({"passed": True, "summary": "ok"}),
         "verify": _StaticAgent({"status": "pass", "failures": [], "logs": ""}),
@@ -84,12 +89,14 @@ class TestLoggingWorkflow(unittest.TestCase):
             orchestrator = self._make_orchestrator(
                 root,
                 change_set={
-                    "changes": [{
-                        "file_path": "test_file.py",
-                        "old_code": "",
-                        "new_code": "print('generated')\n",
-                        "overwrite_file": True,
-                    }],
+                    "changes": [
+                        {
+                            "file_path": "test_file.py",
+                            "old_code": "",
+                            "new_code": "print('generated')\n",
+                            "overwrite_file": True,
+                        }
+                    ],
                 },
             )
 
@@ -111,12 +118,14 @@ class TestLoggingWorkflow(unittest.TestCase):
             orchestrator = self._make_orchestrator(
                 root,
                 change_set={
-                    "changes": [{
-                        "file_path": "test_file.py",
-                        "old_code": "missing snippet",
-                        "new_code": "print('new')\n",
-                        "overwrite_file": False,
-                    }],
+                    "changes": [
+                        {
+                            "file_path": "test_file.py",
+                            "old_code": "missing snippet",
+                            "new_code": "print('new')\n",
+                            "overwrite_file": False,
+                        }
+                    ],
                 },
             )
 

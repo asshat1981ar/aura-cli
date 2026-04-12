@@ -6,6 +6,7 @@ Integrates with AURA's existing FastAPI infrastructure to add A2A endpoints:
 - GET  /a2a/tasks/{id}          — Get task status
 - POST /a2a/tasks/{id}/cancel   — Cancel a task
 """
+
 from typing import Callable
 
 from core.a2a.agent_card import AgentCard
@@ -24,15 +25,13 @@ class A2AServer:
     def register_handler(self, capability: str, handler: Callable):
         """Register a handler for a capability."""
         self.handlers[capability] = handler
-        log_json("INFO", "a2a_handler_registered",
-                 details={"capability": capability})
+        log_json("INFO", "a2a_handler_registered", details={"capability": capability})
 
     def get_agent_card(self) -> dict:
         """GET /.well-known/agent.json"""
         return self.agent_card.to_dict()
 
-    async def create_task(self, capability: str, message: str,
-                          metadata: dict | None = None) -> A2ATask:
+    async def create_task(self, capability: str, message: str, metadata: dict | None = None) -> A2ATask:
         """Create and execute a task."""
         task = A2ATask(capability=capability, metadata=metadata or {})
         task.add_message("user", message)
@@ -43,6 +42,7 @@ class A2AServer:
             task.transition(TaskState.WORKING)
             try:
                 import asyncio
+
                 if asyncio.iscoroutinefunction(handler):
                     result = await handler(task)
                 else:
@@ -56,8 +56,7 @@ class A2AServer:
             except Exception as exc:
                 task.add_message("agent", f"Failed: {exc}")
                 task.transition(TaskState.FAILED)
-                log_json("WARN", "a2a_task_failed",
-                         details={"task_id": task.id, "error": str(exc)})
+                log_json("WARN", "a2a_task_failed", details={"task_id": task.id, "error": str(exc)})
         else:
             task.add_message("agent", f"Unknown capability: {capability}")
             task.transition(TaskState.FAILED)
@@ -69,9 +68,7 @@ class A2AServer:
 
     def cancel_task(self, task_id: str) -> bool:
         task = self.tasks.get(task_id)
-        if task and task.state in (
-            TaskState.SUBMITTED, TaskState.WORKING, TaskState.INPUT_REQUIRED
-        ):
+        if task and task.state in (TaskState.SUBMITTED, TaskState.WORKING, TaskState.INPUT_REQUIRED):
             task.transition(TaskState.CANCELED)
             return True
         return False

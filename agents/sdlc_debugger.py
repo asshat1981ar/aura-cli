@@ -24,9 +24,7 @@ class SDLCDebuggerAgent:
 
     async def execute(self, task: SwarmTask, result: TaskResult) -> DebugReport:
         """Generate a structured root-cause report."""
-        message = " ".join(
-            part for part in [result.summary, result.error_message or "", str(result.output)] if part
-        ).lower()
+        message = " ".join(part for part in [result.summary, result.error_message or "", str(result.output)] if part).lower()
 
         findings: List[SDLCFinding] = []
 
@@ -159,10 +157,10 @@ class SDLCDebuggerAgent:
             recovery_plan=recovery_plan,
             should_retry=True,
         )
-        
+
         # Superpowers: SDLC-wide failure classification + GitHub Issue emission
         await self._emit_github_issue(task, debug_report)
-        
+
         return debug_report
 
     async def _emit_github_issue(self, task: SwarmTask, report: DebugReport) -> None:
@@ -174,16 +172,15 @@ class SDLCDebuggerAgent:
         issue_body += "Findings:\n"
         for f in report.findings:
             issue_body += f"- [{f.lens}] {f.observation} (Cause: {f.probable_cause})\n"
-        
+
         issue_body += "\nRecovery Plan:\n"
         for step in report.recovery_plan:
             issue_body += f"- {step}\n"
-            
+
         # Logging for the AURA operator
         log_json("INFO", "sdlc_debugger_emit_issue", details={"task_id": task.task_id})
         # Mocking the MCP call for now since we lack the token
         # requests.post("http://localhost:8007/call", json={"tool_name": "create_issue", ...})
-
 
     async def reflect(self, report: DebugReport) -> List[str]:
         """Return lessons that the coordinator can inject into subsequent cycles."""

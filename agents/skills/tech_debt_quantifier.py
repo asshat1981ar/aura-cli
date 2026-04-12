@@ -1,11 +1,12 @@
 """Skill: quantify technical debt across a codebase."""
+
 from __future__ import annotations
 import ast
 import re
 from pathlib import Path
 from typing import Any, Dict, List
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 from core.logging_utils import log_json
 
 _DEBT_TAGS = re.compile(r"#\s*(TODO|FIXME|HACK|XXX|NOQA|TEMP|BUG)\b", re.IGNORECASE)
@@ -31,7 +32,7 @@ class TechDebtQuantifierSkill(SkillBase):
         total_funcs = 0
         total_todos = 0
 
-        py_files = [f for f in project_root.rglob("*.py") if ".git" not in f.parts and "node_modules" not in f.parts and "__pycache__" not in f.parts]
+        py_files = list(iter_py_files(project_root))
 
         for f in py_files:
             try:
@@ -89,9 +90,7 @@ class TechDebtQuantifierSkill(SkillBase):
         density = len(unique_items) / max(total_files, 1)
         debt_score = max(0.0, round(100 - min(density * 20, 100), 1))
 
-        summary = (f"{len(unique_items)} debt items found across {total_files} files "
-                   f"({total_todos} TODO/FIXME/HACK). "
-                   f"Estimated remediation: {total_effort:.1f} dev-days. Debt score: {debt_score}/100.")
+        summary = f"{len(unique_items)} debt items found across {total_files} files ({total_todos} TODO/FIXME/HACK). Estimated remediation: {total_effort:.1f} dev-days. Debt score: {debt_score}/100."
 
         log_json("INFO", "tech_debt_quantifier_complete", details={"items": len(unique_items), "score": debt_score})
         return {"debt_score": debt_score, "debt_items": unique_items[:200], "total_todos": total_todos, "total_files": total_files, "total_lines": total_lines, "estimated_effort_days": round(total_effort, 1), "summary": summary}

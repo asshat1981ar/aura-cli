@@ -1,4 +1,5 @@
 """Central environment lifecycle manager for multi-CLI workspace isolation."""
+
 from __future__ import annotations
 
 import json
@@ -40,11 +41,7 @@ class EnvironmentManager:
 
     def __init__(self, project_root: Path, workspaces_dir: Optional[Path] = None):
         self.project_root = Path(project_root).resolve()
-        self.workspaces_dir = (
-            Path(workspaces_dir)
-            if workspaces_dir
-            else self.project_root / _DEFAULT_WORKSPACES_DIR
-        )
+        self.workspaces_dir = Path(workspaces_dir) if workspaces_dir else self.project_root / _DEFAULT_WORKSPACES_DIR
         self._environments: Dict[str, EnvironmentConfig] = {}
         self._registry_path = self.workspaces_dir / ".registry.json"
         self._load_registry()
@@ -72,13 +69,8 @@ class EnvironmentManager:
     def _save_registry(self) -> None:
         """Persist environment registry to disk."""
         self.workspaces_dir.mkdir(parents=True, exist_ok=True)
-        data = {
-            name: env.as_dict()
-            for name, env in self._environments.items()
-        }
-        self._registry_path.write_text(
-            json.dumps(data, indent=2), encoding="utf-8"
-        )
+        data = {name: env.as_dict() for name, env in self._environments.items()}
+        self._registry_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
     def bootstrap_environment(
         self,
@@ -149,13 +141,9 @@ class EnvironmentManager:
             }
 
         env.config_dir.mkdir(parents=True, exist_ok=True)
-        (env.config_dir / "aura.config.json").write_text(
-            json.dumps(config, indent=2), encoding="utf-8"
-        )
+        (env.config_dir / "aura.config.json").write_text(json.dumps(config, indent=2), encoding="utf-8")
 
-    def teardown_environment(
-        self, name: str, *, preserve_secrets: bool = True
-    ) -> dict:
+    def teardown_environment(self, name: str, *, preserve_secrets: bool = True) -> dict:
         """Tear down an environment workspace.
 
         Args:

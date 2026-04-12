@@ -4,48 +4,45 @@ import requests
 import time
 from typing import Dict, Any, Optional
 
+
 class GitHubTools:
     BASE_URL = "https://api.github.com"
-    
+
     def __init__(self):
         self.github_pat = os.getenv("GITHUB_PAT")
         if not self.github_pat:
             raise ValueError("GITHUB_PAT environment variable not set.")
-        
-        self.headers = {
-            "Authorization": f"token {self.github_pat}",
-            "Accept": "application/vnd.github.v3+json"
-        }
+
+        self.headers = {"Authorization": f"token {self.github_pat}", "Accept": "application/vnd.github.v3+json"}
 
     def _make_request(self, method: str, url: str, params: Optional[Dict] = None, json_data: Optional[Dict] = None, data: Optional[str] = None) -> Dict[str, Any]:
         retries = 3
         for attempt in range(retries):
             response = requests.request(method, url, headers=self.headers, params=params, json=json_data, data=data)
-            
-            if response.status_code == 200: # OK
+
+            if response.status_code == 200:  # OK
                 return response.json()
-            elif response.status_code == 201: # Created
+            elif response.status_code == 201:  # Created
                 return response.json()
-            elif response.status_code == 204: # No Content
+            elif response.status_code == 204:  # No Content
                 return {"message": "No Content"}
-            elif response.status_code == 404: # Not Found
+            elif response.status_code == 404:  # Not Found
                 raise ValueError(f"Resource not found: {url}")
-            elif response.status_code == 403 and 'rate limit exceeded' in response.text: # Rate Limit
-                reset_time = int(response.headers.get('x-ratelimit-reset', time.time() + 60))
-                sleep_duration = max(reset_time - time.time(), 10) # Sleep at least 10 seconds
+            elif response.status_code == 403 and "rate limit exceeded" in response.text:  # Rate Limit
+                reset_time = int(response.headers.get("x-ratelimit-reset", time.time() + 60))
+                sleep_duration = max(reset_time - time.time(), 10)  # Sleep at least 10 seconds
                 print(f"GitHub API rate limit exceeded. Retrying in {sleep_duration} seconds.")
                 time.sleep(sleep_duration)
-            elif response.status_code == 422: # Unprocessable Entity (e.g., validation error)
+            elif response.status_code == 422:  # Unprocessable Entity (e.g., validation error)
                 raise ValueError(f"GitHub API validation error: {response.json().get('message', 'Unknown error')}")
             else:
                 if attempt < retries - 1:
-                    sleep_duration = 2 ** attempt # Exponential backoff
+                    sleep_duration = 2**attempt  # Exponential backoff
                     print(f"GitHub API request failed (status {response.status_code}). Retrying in {sleep_duration} seconds.")
                     time.sleep(sleep_duration)
                 else:
                     raise ValueError(f"GitHub API request failed after {retries} attempts: {response.status_code} - {response.text}")
         raise ValueError(f"GitHub API request failed after {retries} attempts due to unhandled status code.")
-
 
     def get_repo(self, repo_full_name: str) -> Dict[str, Any]:
         """
@@ -84,15 +81,15 @@ class GitHubTools:
                 sha = None
             else:
                 raise
-        
+
         payload = {
             "message": message,
-            "content": base64.b64encode(content.encode("utf-8")).decode("ascii"), # GitHub API expects base64 encoded content
-            "branch": branch
+            "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),  # GitHub API expects base64 encoded content
+            "branch": branch,
         }
         if sha:
             payload["sha"] = sha
-        
+
         return self._make_request("PUT", contents_url, json_data=payload)
 
     def get_pull_request_details(self, repo_full_name: str, pr_number: int) -> Dict[str, Any]:
@@ -214,6 +211,7 @@ class GitHubTools:
         info = self._make_request("GET", url, params=params)
         if info.get("encoding") == "base64":
             import base64
+
             content = base64.b64decode(info["content"]).decode("utf-8", errors="replace")
         else:
             content = info.get("content", "")

@@ -12,25 +12,25 @@ from core.logging_utils import log_json
 # The tool's own name is always the PRIMARY capability; the group is secondary.
 
 _MCP_CAPABILITY_GROUPS: Dict[str, List[str]] = {
-    "git":         ["git_blame", "git_log", "git_diff", "git_status", "git_commit", "git_push"],
+    "git": ["git_blame", "git_log", "git_diff", "git_status", "git_commit", "git_push"],
     "file_system": ["read_file", "write_file", "list_dir", "search_files", "move_file", "delete_file"],
-    "docker":      ["docker_build", "docker_run", "docker_logs", "docker_ps", "docker_stop"],
-    "database":    ["execute_query", "list_tables", "describe_schema", "run_migration"],
-    "web":         ["fetch_url", "http_get", "http_post", "web_search"],
-    "github":      ["gh_issue", "gh_pr", "gh_repo", "gh_release", "gh_workflow"],
+    "docker": ["docker_build", "docker_run", "docker_logs", "docker_ps", "docker_stop"],
+    "database": ["execute_query", "list_tables", "describe_schema", "run_migration"],
+    "web": ["fetch_url", "http_get", "http_post", "web_search"],
+    "github": ["gh_issue", "gh_pr", "gh_repo", "gh_release", "gh_workflow"],
     # AURA skills exposed as MCP tools (via aura_mcp_skills_server)
     "code_analysis": ["ast_analyzer", "symbol_indexer", "complexity_scorer", "code_clone_detector"],
-    "security":      ["security_scanner", "security_hardener", "semgrep_scan"],
-    "lint_check":    ["linter_enforcer", "type_checker", "error_pattern_matcher"],
-    "architecture":  ["architecture_validator", "dependency_analyzer", "structural_analyzer"],
+    "security": ["security_scanner", "security_hardener", "semgrep_scan"],
+    "lint_check": ["linter_enforcer", "type_checker", "error_pattern_matcher"],
+    "architecture": ["architecture_validator", "dependency_analyzer", "structural_analyzer"],
     "test_coverage": ["test_coverage_analyzer", "incremental_differ"],
-    "git_analysis":  ["git_history_analyzer", "git_blame", "git_log", "git_diff"],
+    "git_analysis": ["git_history_analyzer", "git_blame", "git_log", "git_diff"],
     "documentation": ["doc_generator", "changelog_generator"],
     # MCP external servers by capability cluster
-    "browser":       ["playwright_navigate", "playwright_click", "puppeteer_screenshot"],
-    "search":        ["brave_search", "fetch_url", "web_search"],
-    "memory_store":  ["memory_add", "memory_search", "memory_get"],
-    "sadd":          ["sadd_parse_spec", "sadd_session_status", "sadd_list_sessions", "sadd_session_events", "sadd_session_artifacts"],
+    "browser": ["playwright_navigate", "playwright_click", "puppeteer_screenshot"],
+    "search": ["brave_search", "fetch_url", "web_search"],
+    "memory_store": ["memory_add", "memory_search", "memory_get"],
+    "sadd": ["sadd_parse_spec", "sadd_session_status", "sadd_list_sessions", "sadd_session_events", "sadd_session_artifacts"],
 }
 
 
@@ -92,15 +92,11 @@ class TypedAgentRegistry:
                              :meth:`mark_unhealthy` are excluded from results.
         """
         names = self._capabilities.get(capability, [])
-        results = [
-            self._agents[name]
-            for name in names
-            if name in self._agents and not (skip_unhealthy and name in self._unhealthy)
-        ]
+        results = [self._agents[name] for name in names if name in self._agents and not (skip_unhealthy and name in self._unhealthy)]
 
         def _sort_key(spec: AgentSpec):
             primary_match = 0 if (spec.capabilities and spec.capabilities[0] == capability) else 1
-            source_rank   = 0 if spec.source == "local" else 1
+            source_rank = 0 if spec.source == "local" else 1
             return (primary_match, source_rank)
 
         results.sort(key=_sort_key)

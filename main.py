@@ -2,8 +2,10 @@
 # Keep this wrapper lazy so lightweight/help paths do not trigger full runtime imports.
 import json
 import sys
+
 try:
     from dotenv import load_dotenv
+
     load_dotenv()
 except ImportError:
     pass
@@ -42,15 +44,12 @@ if __name__ == "__main__":
             sys.exit(2)
 
     from aura_cli.cli_main import main as _main
+
     try:
         sys.exit(_main(argv=raw_argv))
     except Exception as exc:
         if "--json" in raw_argv:
-            print(json.dumps(attach_cli_warnings({
-                "status": "error",
-                "code": "unexpected_runtime_error",
-                "message": str(exc)
-            }, parsed)))
+            print(json.dumps(attach_cli_warnings({"status": "error", "code": "unexpected_runtime_error", "message": str(exc)}, parsed)))
         else:
             raise
         sys.exit(1)

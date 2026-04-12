@@ -1,4 +1,5 @@
 """Tests for MemoryStore._rotate_log_if_needed in memory/store.py."""
+
 import json
 import os
 import tempfile
@@ -31,8 +32,7 @@ class TestStoreRotation(unittest.TestCase):
     def test_no_rotation_below_max_bytes(self):
         entry = {"event": "test", "status": "ok"}
         self.store.append_log(entry)
-        self.assertFalse(os.path.exists(self._log_rotation_path(1)),
-                         "No rotation file should exist below threshold")
+        self.assertFalse(os.path.exists(self._log_rotation_path(1)), "No rotation file should exist below threshold")
 
     # ── Rotation at threshold ─────────────────────────────────────────────────
 
@@ -40,8 +40,7 @@ class TestStoreRotation(unittest.TestCase):
         max_bytes = self.store._LOG_MAX_BYTES
         self._seed_large_file(max_bytes + 1)
         self.store.append_log({"event": "after_threshold"})
-        self.assertTrue(os.path.exists(self._log_rotation_path(1)),
-                        "Rotation file .1 should exist after exceeding threshold")
+        self.assertTrue(os.path.exists(self._log_rotation_path(1)), "Rotation file .1 should exist after exceeding threshold")
 
     def test_rotation_clears_current_log(self):
         max_bytes = self.store._LOG_MAX_BYTES
@@ -50,8 +49,7 @@ class TestStoreRotation(unittest.TestCase):
         with open(self._log_path()) as f:
             content = f.read()
         self.assertIn("fresh", content)
-        self.assertLess(len(content), max_bytes,
-                        "Current log should be small after rotation")
+        self.assertLess(len(content), max_bytes, "Current log should be small after rotation")
 
     # ── Multiple rotations ────────────────────────────────────────────────────
 
@@ -62,8 +60,7 @@ class TestStoreRotation(unittest.TestCase):
             self.store.append_log({"cycle": i})
         # After 3 rotations, .1, .2, .3 should all exist
         for n in range(1, self.store._LOG_KEEP_ROTATIONS + 1):
-            self.assertTrue(os.path.exists(self._log_rotation_path(n)),
-                            f"Rotation file .{n} should exist")
+            self.assertTrue(os.path.exists(self._log_rotation_path(n)), f"Rotation file .{n} should exist")
 
     def test_oldest_rotation_pruned(self):
         """After exceeding _LOG_KEEP_ROTATIONS, the oldest file is dropped."""
@@ -74,8 +71,7 @@ class TestStoreRotation(unittest.TestCase):
             self._seed_large_file(max_bytes + 1)
             self.store.append_log({"cycle": i})
         beyond = self._log_rotation_path(keep + 1)
-        self.assertFalse(os.path.exists(beyond),
-                         f"Rotation file .{keep + 1} should not exist (pruned)")
+        self.assertFalse(os.path.exists(beyond), f"Rotation file .{keep + 1} should not exist (pruned)")
 
     # ── Content integrity ────────────────────────────────────────────────────
 

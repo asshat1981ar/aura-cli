@@ -2,6 +2,7 @@
 
 Allows AURA to find ready tasks, claim them, and close them upon completion.
 """
+
 from __future__ import annotations
 
 import json
@@ -15,7 +16,7 @@ from core.logging_utils import log_json
 class BeadsSkill(SkillBase):
     """
     Skill to wrap the 'bd' CLI for autonomous task management.
-    
+
     Supported commands (via 'cmd' argument):
       - ready: List unblocked tasks
       - show: Show task details (requires 'id')
@@ -40,34 +41,28 @@ class BeadsSkill(SkillBase):
         cmd: Optional[str] = input_data.get("cmd")
         bead_id: Optional[str] = input_data.get("id")
         args: List[str] = input_data.get("args", [])
-        
+
         if not cmd:
             return {"error": "Provide 'cmd' (ready, show, update, close, prime, sync)"}
 
         # Base command
         full_cmd = ["bd", "--json", cmd]
-        
+
         # Add ID if applicable
         if bead_id:
             full_cmd.append(bead_id)
-            
+
         # Add extra args
         full_cmd.extend(args)
 
         try:
             log_json("INFO", "beads_skill_executing", details={"command": " ".join(full_cmd)})
-            result = subprocess.run(
-                full_cmd,
-                capture_output=True,
-                text=True,
-                timeout=30,
-                check=False
-            )
-            
+            result = subprocess.run(full_cmd, capture_output=True, text=True, timeout=30, check=False)
+
             # Handle non-zero exit codes (some commands might return JSON on error too)
             stdout = result.stdout.strip()
             stderr = result.stderr.strip()
-            
+
             try:
                 data = self._normalize_payload(cmd, json.loads(stdout) if stdout else {})
                 if result.returncode != 0:
@@ -75,12 +70,7 @@ class BeadsSkill(SkillBase):
                     data["stderr"] = stderr
                 return data
             except json.JSONDecodeError:
-                return {
-                    "returncode": result.returncode,
-                    "stdout": stdout,
-                    "stderr": stderr,
-                    "error": "Failed to parse JSON output from bd CLI"
-                }
+                return {"returncode": result.returncode, "stdout": stdout, "stderr": stderr, "error": "Failed to parse JSON output from bd CLI"}
 
         except subprocess.TimeoutExpired:
             return {"error": "beads_cli_timeout", "command": " ".join(full_cmd)}

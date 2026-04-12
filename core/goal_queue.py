@@ -1,8 +1,9 @@
 import json
 import time
 from collections import deque
-from pathlib import Path # Import Path
-from core.logging_utils import log_json # Import log_json
+from pathlib import Path  # Import Path
+from core.logging_utils import log_json  # Import log_json
+
 
 class GoalQueue:
     """
@@ -25,7 +26,7 @@ class GoalQueue:
             queue_path (str): The path to the JSON file where the queue is persisted.
                               Defaults to "memory/goal_queue.json".
         """
-        self.queue_path = Path(queue_path) # Convert to Path object
+        self.queue_path = Path(queue_path)  # Convert to Path object
         self.queue_path.parent.mkdir(parents=True, exist_ok=True)
         data = self._load_data()
         self.queue = deque(data.get("queue", []))

@@ -19,6 +19,7 @@ Start:
 Auth (optional):
   Set MONITORING_MCP_TOKEN env var
 """
+
 from __future__ import annotations
 
 import os
@@ -80,6 +81,7 @@ _DEFAULT_SERVERS: Dict[str, int] = {
 # Auth
 # ---------------------------------------------------------------------------
 
+
 def _check_auth(authorization: Optional[str] = Header(default=None)) -> None:
     if not _TOKEN:
         return
@@ -140,6 +142,7 @@ def _build_descriptor(name: str) -> Dict:
 # ---------------------------------------------------------------------------
 # Tool implementations
 # ---------------------------------------------------------------------------
+
 
 def _metric_push(args: Dict) -> Any:
     name = args.get("name", "").strip()
@@ -224,33 +227,39 @@ def _alert_list(args: Dict) -> Any:
         min_val = min(recent)
 
         if "max" in thresholds and max_val > thresholds["max"]:
-            alerts.append({
-                "metric": metric_name,
-                "type": "threshold_exceeded",
-                "threshold_max": thresholds["max"],
-                "current_max": max_val,
-                "severity": "warning",
-            })
+            alerts.append(
+                {
+                    "metric": metric_name,
+                    "type": "threshold_exceeded",
+                    "threshold_max": thresholds["max"],
+                    "current_max": max_val,
+                    "severity": "warning",
+                }
+            )
         if "min" in thresholds and min_val < thresholds["min"]:
-            alerts.append({
-                "metric": metric_name,
-                "type": "below_minimum",
-                "threshold_min": thresholds["min"],
-                "current_min": min_val,
-                "severity": "warning",
-            })
+            alerts.append(
+                {
+                    "metric": metric_name,
+                    "type": "below_minimum",
+                    "threshold_min": thresholds["min"],
+                    "current_min": min_val,
+                    "severity": "warning",
+                }
+            )
 
     # Also check tool error rates
     for tool_name in _call_counts:
         calls = _call_counts.get(tool_name, 0)
         errors = _call_errors.get(tool_name, 0)
         if calls > 10 and errors / calls > 0.5:
-            alerts.append({
-                "metric": f"tool_error_rate.{tool_name}",
-                "type": "high_error_rate",
-                "error_rate": round(errors / calls, 4),
-                "severity": "critical",
-            })
+            alerts.append(
+                {
+                    "metric": f"tool_error_rate.{tool_name}",
+                    "type": "high_error_rate",
+                    "error_rate": round(errors / calls, 4),
+                    "severity": "critical",
+                }
+            )
 
     return {"alerts": alerts, "count": len(alerts)}
 
@@ -286,6 +295,7 @@ _TOOL_HANDLERS = {
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @app.get("/health")
 async def health(_: None = Depends(_check_auth)):
@@ -387,5 +397,6 @@ async def get_metrics(_: None = Depends(_check_auth)) -> str:
 if __name__ == "__main__":
     import uvicorn
     from core.config_manager import config as _cfg
+
     port = int(os.getenv("MONITORING_MCP_PORT", _cfg.get_mcp_server_port("monitoring", default=8016)))
     uvicorn.run("tools.monitoring_mcp:app", host="0.0.0.0", port=port, reload=False)

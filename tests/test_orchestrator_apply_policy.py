@@ -22,8 +22,7 @@ def test_apply_change_set_logs_policy_block_for_mismatch_overwrite(tmp_path: Pat
         "overwrite_file": True,
     }
 
-    with patch("core.orchestrator.apply_change_with_explicit_overwrite_policy", side_effect=MismatchOverwriteBlockedError("blocked")), \
-         patch("core.orchestrator.log_json") as mock_log:
+    with patch("core.orchestrator.apply_change_with_explicit_overwrite_policy", side_effect=MismatchOverwriteBlockedError("blocked")), patch("core.orchestrator.log_json") as mock_log:
         result = orchestrator._apply_change_set(change_set, dry_run=False)
 
     assert result["applied"] == []
@@ -33,10 +32,7 @@ def test_apply_change_set_logs_policy_block_for_mismatch_overwrite(tmp_path: Pat
     assert "old_code_mismatch_overwrite_blocked" in events
     assert "old_code_not_found" not in events
 
-    blocked_logs = [
-        c for c in mock_log.call_args_list
-        if len(c.args) >= 2 and c.args[1] == "old_code_mismatch_overwrite_blocked"
-    ]
+    blocked_logs = [c for c in mock_log.call_args_list if len(c.args) >= 2 and c.args[1] == "old_code_mismatch_overwrite_blocked"]
     assert blocked_logs[0].kwargs["details"]["policy"] == "explicit_overwrite_file_required"
 
 
@@ -59,8 +55,7 @@ def test_apply_change_set_real_policy_blocks_stale_overwrite_and_preserves_file(
         "overwrite_file": True,
     }
 
-    with patch("core.file_tools.recover_old_code_from_git", return_value=None), \
-         patch("core.orchestrator.log_json") as mock_log:
+    with patch("core.file_tools.recover_old_code_from_git", return_value=None), patch("core.orchestrator.log_json") as mock_log:
         result = orchestrator._apply_change_set(change_set, dry_run=False)
 
     assert target.read_text(encoding="utf-8") == "print('before')\n"
@@ -93,8 +88,7 @@ def test_apply_change_set_real_policy_allows_explicit_full_file_overwrite(tmp_pa
         "overwrite_file": True,
     }
 
-    with patch("core.file_tools.recover_old_code_from_git", return_value=None), \
-         patch("core.orchestrator.log_json") as mock_log:
+    with patch("core.file_tools.recover_old_code_from_git", return_value=None), patch("core.orchestrator.log_json") as mock_log:
         result = orchestrator._apply_change_set(change_set, dry_run=False)
 
     assert target.read_text(encoding="utf-8") == "print('after')\n"

@@ -113,7 +113,7 @@ def test_primary_capability_sorting():
 def test_local_before_mcp_sorting():
     """Local agents should still rank before MCP agents even when both have the same primary."""
     registry = TypedAgentRegistry()
-    mcp_spec   = AgentSpec(name="mcp_coder",   description="mcp",   capabilities=["coding"], source="mcp")
+    mcp_spec = AgentSpec(name="mcp_coder", description="mcp", capabilities=["coding"], source="mcp")
     local_spec = AgentSpec(name="local_coder", description="local", capabilities=["coding"], source="local")
     registry.register(mcp_spec)
     registry.register(local_spec)
@@ -159,8 +159,8 @@ def test_fallback_unknown_agent_defaults_to_name():
 def test_mcp_tool_grouping():
     """MCP tools in a known group register under their name AND the group."""
     caps = _resolve_mcp_capabilities("git_log")
-    assert "git_log" in caps   # own name (primary)
-    assert "git" in caps       # group name (secondary)
+    assert "git_log" in caps  # own name (primary)
+    assert "git" in caps  # group name (secondary)
     assert caps[0] == "git_log"  # own name is always primary
 
 
@@ -183,7 +183,7 @@ def test_mcp_tool_grouping_registered_in_registry():
     registry.register(spec)
 
     by_own_name = registry.resolve_by_capability("git_log")
-    by_group    = registry.resolve_by_capability("git")
+    by_group = registry.resolve_by_capability("git")
 
     assert len(by_own_name) == 1
     assert by_own_name[0].name == "git_log"
@@ -194,6 +194,7 @@ def test_mcp_tool_grouping_registered_in_registry():
 # ---------------------------------------------------------------------------
 # Tests: health-check gating (2026-03-25)
 # ---------------------------------------------------------------------------
+
 
 def test_unhealthy_agent_excluded_from_resolution():
     """Agents marked unhealthy should not appear in resolve_by_capability results."""
@@ -235,7 +236,7 @@ def test_healthy_fallback_used_when_primary_unhealthy():
     """When the primary agent is unhealthy, the next available agent is returned."""
     registry = TypedAgentRegistry()
     primary = AgentSpec(name="primary_coder", description="primary", capabilities=["coding"], source="local")
-    fallback = AgentSpec(name="backup_coder",  description="backup",  capabilities=["coding"], source="local")
+    fallback = AgentSpec(name="backup_coder", description="backup", capabilities=["coding"], source="local")
     registry.register(primary)
     registry.register(fallback)
 
@@ -277,6 +278,7 @@ def test_classify_goal_smart_with_failing_model_falls_back():
 def test_resolve_agent_for_goal_python():
     """A Python-specific goal should resolve to python_agent over act."""
     from agents.registry import FALLBACK_CAPABILITIES, _make_spec
+
     registry = TypedAgentRegistry()
 
     class Fake:
@@ -287,6 +289,7 @@ def test_resolve_agent_for_goal_python():
 
     # Patch the global singleton temporarily
     import core.mcp_agent_registry as reg_mod
+
     original = reg_mod.agent_registry
     reg_mod.agent_registry = registry
     try:
@@ -300,6 +303,7 @@ def test_resolve_agent_for_goal_python():
 def test_resolve_agent_for_goal_returns_none_when_empty_registry():
     """resolve_agent_for_goal returns None when no agents are registered."""
     import core.mcp_agent_registry as reg_mod
+
     original = reg_mod.agent_registry
     reg_mod.agent_registry = TypedAgentRegistry()
     try:
@@ -312,9 +316,9 @@ def test_resolve_agent_for_goal_returns_none_when_empty_registry():
 def test_goal_type_to_capability_covers_all_types():
     """All classify_goal return values should have a mapping in GOAL_TYPE_TO_CAPABILITY."""
     from core.skill_dispatcher import SKILL_MAP
+
     for goal_type in SKILL_MAP:
         assert goal_type in GOAL_TYPE_TO_CAPABILITY, f"Missing: {goal_type}"
-
 
 
 # ---------------------------------------------------------------------------
@@ -441,15 +445,23 @@ def test_update_registry_health_only_affects_matching_server():
 
 # --- _MCP_CAPABILITY_GROUPS has 17 keys ---
 
+
 def test_mcp_capability_groups_has_17_keys():
     assert len(_MCP_CAPABILITY_GROUPS) == 17
 
 
 def test_mcp_capability_groups_contains_new_keys():
     expected_new = {
-        "code_analysis", "security", "lint_check", "architecture",
-        "test_coverage", "git_analysis", "documentation", "browser",
-        "search", "memory_store",
+        "code_analysis",
+        "security",
+        "lint_check",
+        "architecture",
+        "test_coverage",
+        "git_analysis",
+        "documentation",
+        "browser",
+        "search",
+        "memory_store",
     }
     for key in expected_new:
         assert key in _MCP_CAPABILITY_GROUPS, f"Missing key: {key}"
@@ -488,15 +500,12 @@ def test_dispatch_skills_builds_mcp_available_when_agent_registered():
     fake_spec = AgentSpec(name=skill_name, description="mcp tool", capabilities=[skill_name], source="mcp")
 
     class FakeSkill:
-        def run(self, _): return {"ok": True}
+        def run(self, _):
+            return {"ok": True}
 
     # Provide a filler skill for every bucket slot except skill_name so that
     # len(available) >= 1 (avoids ThreadPoolExecutor max_workers=0 crash)
-    filler_skills = {
-        n: FakeSkill()
-        for n in SKILL_MAP.get(goal_type, [])
-        if n != skill_name
-    }
+    filler_skills = {n: FakeSkill() for n in SKILL_MAP.get(goal_type, []) if n != skill_name}
     if not filler_skills:
         pytest.skip("All skills in bucket are MCP-only; cannot satisfy max_workers>0 requirement")
 

@@ -4,6 +4,7 @@
 Usage:
     python3 scripts/new_story.py --title "My idea" [--quick] [--type feature]
 """
+
 import argparse
 import datetime
 import re
@@ -34,7 +35,7 @@ def main():
     ap = argparse.ArgumentParser(description="Scaffold a new Forge story")
     ap.add_argument("--title", required=True, help="Story title")
     ap.add_argument("--quick", action="store_true", help="Use lightweight template")
-    ap.add_argument("--type", default="feature", choices=["feature","bug","improvement","self_evolution"])
+    ap.add_argument("--type", default="feature", choices=["feature", "bug", "improvement", "self_evolution"])
     args = ap.parse_args()
 
     story_id = next_id()

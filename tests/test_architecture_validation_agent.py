@@ -4,6 +4,7 @@ Like api_validation_agent, this module uses `# ruff: noqa: F821` — all helper
 calls are intentional pseudo-code stubs. We inject MagicMock replacements into
 the module namespace before invoking the real function.
 """
+
 import sys
 from unittest.mock import MagicMock
 
@@ -42,6 +43,7 @@ def _load_module_with_mocks():
 class TestRunArchitectureValidation:
     def test_function_exists_and_is_callable(self):
         import agents.architecture_validation_agent as mod
+
         assert hasattr(mod, "run_architecture_validation_after_refactor")
         assert callable(mod.run_architecture_validation_after_refactor)
 

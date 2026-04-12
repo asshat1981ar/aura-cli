@@ -1,5 +1,6 @@
 # tests/test_agent_sdk_hooks.py
 """Tests for Agent SDK hooks."""
+
 import unittest
 from unittest.mock import MagicMock
 import time

@@ -30,16 +30,11 @@ class IngestAgent(Agent):
         goal = input_data.get("goal", "")
         project_root = Path(input_data.get("project_root", "."))
         memory_entries = self.brain.recall_recent(limit=50)
-        
+
         # Use ContextManager if available, else fallback to basic logic
         if self.cm:
             file_list = self._snapshot(project_root)
-            bundle = self.cm.get_context_bundle(
-                goal=goal,
-                goal_type=input_data.get("goal_type", "default"),
-                recent_memory=[str(m) for m in memory_entries],
-                file_list=file_list
-            )
+            bundle = self.cm.get_context_bundle(goal=goal, goal_type=input_data.get("goal_type", "default"), recent_memory=[str(m) for m in memory_entries], file_list=file_list)
             context = {
                 "goal": goal,
                 "bundle": bundle,
@@ -75,9 +70,6 @@ class IngestAgent(Agent):
                 "constraints": input_data.get("constraints", {}),
                 "hints": hints,
                 "hints_summary": hints_text,
-                "instructions": (
-                    "HINTS BELOW: summarize recent cycles touching this goal. "
-                    "Do not repeat failures; prefer paths that avoid listed stop reasons/failures."
-                ),
+                "instructions": ("HINTS BELOW: summarize recent cycles touching this goal. Do not repeat failures; prefer paths that avoid listed stop reasons/failures."),
             }
         return context

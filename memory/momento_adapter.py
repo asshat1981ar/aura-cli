@@ -26,6 +26,7 @@ Topics used by AURA:
     aura.weakness_found   published when a new weakness is recorded
     aura.goal_queued      published when propagation engine queues a goal
 """
+
 from __future__ import annotations
 
 import os
@@ -43,7 +44,7 @@ EPISODIC_MEMORY_CACHE = "aura-episodic-memory"
 # Topic names
 TOPIC_CYCLE_COMPLETE = "aura.cycle_complete"
 TOPIC_WEAKNESS_FOUND = "aura.weakness_found"
-TOPIC_GOAL_QUEUED    = "aura.goal_queued"
+TOPIC_GOAL_QUEUED = "aura.goal_queued"
 
 # How many items to keep in each Momento list (rolling window)
 LIST_MAX_SIZE = 200
@@ -59,13 +60,13 @@ class _CircuitBreaker:
     States: closed (normal) → open (fail-fast) → half-open (probe) → closed.
     """
 
-    THRESHOLD = 5        # failures before opening
-    RESET_SECONDS = 30.0 # seconds before attempting a probe
+    THRESHOLD = 5  # failures before opening
+    RESET_SECONDS = 30.0  # seconds before attempting a probe
 
     def __init__(self):
         self._lock = threading.Lock()
         self._failures = 0
-        self._state = "closed"   # "closed" | "open" | "half_open"
+        self._state = "closed"  # "closed" | "open" | "half_open"
         self._opened_at: float = 0.0
 
     def allow_request(self) -> bool:
@@ -90,8 +91,7 @@ class _CircuitBreaker:
             self._failures += 1
             if self._failures >= self.THRESHOLD or self._state == "half_open":
                 if self._state != "open":
-                    log_json("WARN", "momento_circuit_open",
-                             details={"failures": self._failures})
+                    log_json("WARN", "momento_circuit_open", details={"failures": self._failures})
                 self._state = "open"
                 self._opened_at = time.monotonic()
 
@@ -137,6 +137,7 @@ class MomentoAdapter:
             return None
         try:
             from momento.responses import CacheGet
+
             resp = self._cache_client.get(cache, key)
             if isinstance(resp, CacheGet.Hit):
                 self._circuit.record_success()
@@ -145,8 +146,7 @@ class MomentoAdapter:
             return None
         except Exception as exc:
             self._circuit.record_failure()
-            log_json("WARN", "momento_cache_get_failed",
-                     details={"cache": cache, "key": key, "error": str(exc)})
+            log_json("WARN", "momento_cache_get_failed", details={"cache": cache, "key": key, "error": str(exc)})
             return None
 
     def cache_set(
@@ -161,6 +161,7 @@ class MomentoAdapter:
             return False
         try:
             from momento.responses import CacheSet
+
             ttl = timedelta(seconds=ttl_seconds) if ttl_seconds > 0 else None
             resp = self._cache_client.set(cache, key, value, ttl)
             ok = isinstance(resp, CacheSet.Success)
@@ -171,8 +172,7 @@ class MomentoAdapter:
             return ok
         except Exception as exc:
             self._circuit.record_failure()
-            log_json("WARN", "momento_cache_set_failed",
-                     details={"cache": cache, "key": key, "error": str(exc)})
+            log_json("WARN", "momento_cache_set_failed", details={"cache": cache, "key": key, "error": str(exc)})
             return False
 
     def cache_delete(self, cache: str, key: str) -> bool:
@@ -183,8 +183,7 @@ class MomentoAdapter:
             self._cache_client.delete(cache, key)
             return True
         except Exception as exc:
-            log_json("WARN", "momento_cache_delete_failed",
-                     details={"cache": cache, "key": key, "error": str(exc)})
+            log_json("WARN", "momento_cache_delete_failed", details={"cache": cache, "key": key, "error": str(exc)})
             return False
 
     # ── List operations (rolling log patterns) ───────────────────────────────
@@ -203,14 +202,14 @@ class MomentoAdapter:
         try:
             from momento.requests import CollectionTtl
             from momento.responses import CacheListPushBack
+
             ttl = CollectionTtl.of(timedelta(seconds=ttl_seconds)) if ttl_seconds > 0 else CollectionTtl.from_cache_ttl()
             resp = self._cache_client.list_push_back(cache, key, value, ttl=ttl)
             # Trim front if over max_size
             self._cache_client.list_retain(cache, key, -max_size, -1)
             return isinstance(resp, CacheListPushBack.Success)
         except Exception as exc:
-            log_json("WARN", "momento_list_push_failed",
-                     details={"cache": cache, "key": key, "error": str(exc)})
+            log_json("WARN", "momento_list_push_failed", details={"cache": cache, "key": key, "error": str(exc)})
             return False
 
     def list_range(
@@ -225,13 +224,13 @@ class MomentoAdapter:
             return []
         try:
             from momento.responses import CacheListFetch
+
             resp = self._cache_client.list_fetch(cache, key, start_index=start, end_index=end)
             if isinstance(resp, CacheListFetch.Hit):
                 return resp.values_string
             return []
         except Exception as exc:
-            log_json("WARN", "momento_list_range_failed",
-                     details={"cache": cache, "key": key, "error": str(exc)})
+            log_json("WARN", "momento_list_range_failed", details={"cache": cache, "key": key, "error": str(exc)})
             return []
 
     # ── Topics (event bus) ───────────────────────────────────────────────────
@@ -242,11 +241,11 @@ class MomentoAdapter:
             return False
         try:
             from momento.responses import TopicPublish
+
             resp = self._topics_client.publish(WORKING_MEMORY_CACHE, topic, message)
             return isinstance(resp, TopicPublish.Success)
         except Exception as exc:
-            log_json("WARN", "momento_publish_failed",
-                     details={"topic": topic, "error": str(exc)})
+            log_json("WARN", "momento_publish_failed", details={"topic": topic, "error": str(exc)})
             return False
 
     # ── Distributed Locking ──────────────────────────────────────────────────
@@ -258,21 +257,16 @@ class MomentoAdapter:
         plus TTL to avoid permanent deadlocks).
         """
         if not self.is_available():
-            return True # In local/single-node mode, always "acquired"
-            
-        # Momento doesn't have native NX yet, so we use a check-then-set 
+            return True  # In local/single-node mode, always "acquired"
+
+        # Momento doesn't have native NX yet, so we use a check-then-set
         # but for true distributed safety at scale, we'd use a more robust
         # primitive. For AURA's needs, this reduces collision probability.
         existing = self.cache_get(WORKING_MEMORY_CACHE, f"lock:{lock_name}")
         if existing:
             return False
-            
-        return self.cache_set(
-            WORKING_MEMORY_CACHE, 
-            f"lock:{lock_name}", 
-            str(time.time()), 
-            ttl_seconds=ttl_seconds
-        )
+
+        return self.cache_set(WORKING_MEMORY_CACHE, f"lock:{lock_name}", str(time.time()), ttl_seconds=ttl_seconds)
 
     def release_lock(self, lock_name: str) -> bool:
         """Release a distributed lock."""
@@ -288,6 +282,7 @@ class MomentoAdapter:
             return
         try:
             from momento.responses import CreateCache
+
             for cache_name in (WORKING_MEMORY_CACHE, EPISODIC_MEMORY_CACHE):
                 resp = self._cache_client.create_cache(cache_name)
                 if isinstance(resp, CreateCache.Success):
@@ -306,6 +301,7 @@ class MomentoAdapter:
                 Configurations,
                 CredentialProvider,
             )
+
             cred = CredentialProvider.from_string(self._api_key)
             self._cache_client = CacheClient(
                 configuration=Configurations.Laptop.v1(),
@@ -318,11 +314,9 @@ class MomentoAdapter:
             )
             self.ensure_caches()
             self._available = True
-            log_json("INFO", "momento_adapter_initialized",
-                     details={"ttl": DEFAULT_TTL_SECONDS})
+            log_json("INFO", "momento_adapter_initialized", details={"ttl": DEFAULT_TTL_SECONDS})
         except ImportError:
-            log_json("WARN", "momento_sdk_not_installed",
-                     details={"hint": "pip install momento"})
+            log_json("WARN", "momento_sdk_not_installed", details={"hint": "pip install momento"})
             self._available = False
         except Exception as exc:
             log_json("WARN", "momento_init_failed", details={"error": str(exc)})

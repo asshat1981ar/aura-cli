@@ -7,6 +7,7 @@ Uses Python's built-in ast module to analyze:
 - Dead code detection (unreachable after return/raise)
 - Type annotation coverage
 """
+
 from __future__ import annotations
 
 import ast
@@ -15,7 +16,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
 
-from agents.skills.base import SkillBase
+from agents.skills.base import SkillBase, iter_py_files
 
 
 @dataclass
@@ -53,16 +54,7 @@ class ASTAnalyzerSkill(SkillBase):
             "dead_code": [],
         }
 
-        py_files = list(project_root.rglob("*.py"))
-        # Skip venv, node_modules, __pycache__
-        py_files = [
-            f
-            for f in py_files
-            if not any(
-                skip in str(f)
-                for skip in [".venv", "node_modules", "__pycache__", ".git", "archive"]
-            )
-        ]
+        py_files = list(iter_py_files(project_root))
 
         all_metrics: List[ASTMetrics] = []
         for py_file in py_files[:200]:  # Limit for performance
@@ -183,15 +175,9 @@ class ASTAnalyzerSkill(SkillBase):
                 )
                 break
 
-    def _check_class_smells(
-        self, node: ast.ClassDef, file_path: str, metrics: ASTMetrics
-    ) -> None:
+    def _check_class_smells(self, node: ast.ClassDef, file_path: str, metrics: ASTMetrics) -> None:
         """Check for class-level code smells."""
-        method_count = sum(
-            1
-            for n in node.body
-            if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
-        )
+        method_count = sum(1 for n in node.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)))
         if method_count > 20:
             metrics.smells.append(
                 {
@@ -204,9 +190,7 @@ class ASTAnalyzerSkill(SkillBase):
                 }
             )
 
-    def _collect_imports(
-        self, node: ast.Import | ast.ImportFrom, metrics: ASTMetrics
-    ) -> None:
+    def _collect_imports(self, node: ast.Import | ast.ImportFrom, metrics: ASTMetrics) -> None:
         """Collect import module names."""
         if isinstance(node, ast.ImportFrom) and node.module:
             metrics.imports.append(node.module)
@@ -215,15 +199,24 @@ class ASTAnalyzerSkill(SkillBase):
                 metrics.imports.append(alias.name)
 
     def _max_nesting_depth(self, tree: ast.AST, depth: int = 0) -> int:
-        """Calculate the maximum nesting depth of control-flow structures."""
-        max_depth = depth
-        for node in ast.iter_child_nodes(tree):
-            if isinstance(node, (ast.If, ast.For, ast.While, ast.With, ast.Try)):
-                child_depth = self._max_nesting_depth(node, depth + 1)
-                max_depth = max(max_depth, child_depth)
-            else:
-                child_depth = self._max_nesting_depth(node, depth)
-                max_depth = max(max_depth, child_depth)
+        """Calculate the maximum nesting depth of control-flow structures.
+
+        Iterative BFS/DFS via explicit stack — avoids Python recursion limit
+        and the timeout that occurred with the naive recursive implementation.
+        """
+        _CONTROL_FLOW = (ast.If, ast.For, ast.While, ast.With, ast.Try)
+        max_depth = 0
+        stack: list[tuple[ast.AST, int]] = [(tree, 0)]
+        while stack:
+            node, curr_depth = stack.pop()
+            for child in ast.iter_child_nodes(node):
+                if isinstance(child, _CONTROL_FLOW):
+                    new_depth = curr_depth + 1
+                    if new_depth > max_depth:
+                        max_depth = new_depth
+                    stack.append((child, new_depth))
+                else:
+                    stack.append((child, curr_depth))
         return max_depth
 
     def _type_coverage(self, tree: ast.AST) -> float:

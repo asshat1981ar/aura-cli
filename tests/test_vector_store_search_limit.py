@@ -1,4 +1,5 @@
 """Tests for vector_store search limit — covers issue #329."""
+
 import tempfile
 import unittest
 from unittest.mock import MagicMock, patch
@@ -7,15 +8,17 @@ from pathlib import Path
 
 def _make_brain(tmp_dir: str):
     from memory.brain import Brain
+
     return Brain(db_path=str(Path(tmp_dir) / "vs_test.db"))
 
 
 def _make_model_adapter(dims: int = 4):
     import numpy as np
+
     adapter = MagicMock()
     adapter.model_id.return_value = "test-model"
     # get_embedding returns a fixed unit vector
-    vec = np.ones(dims, dtype=np.float32) / (dims ** 0.5)
+    vec = np.ones(dims, dtype=np.float32) / (dims**0.5)
     adapter.get_embedding.return_value = vec
     # embed returns a list of identical vectors
     adapter.embed.side_effect = lambda texts: [vec for _ in texts]
@@ -27,6 +30,7 @@ class TestVectorStoreSearchLimitConstant(unittest.TestCase):
 
     def test_search_limit_constant_exists(self):
         import core.vector_store as vs_mod
+
         self.assertTrue(
             hasattr(vs_mod, "SEARCH_LIMIT"),
             "core/vector_store.py must define a SEARCH_LIMIT constant",
@@ -34,11 +38,13 @@ class TestVectorStoreSearchLimitConstant(unittest.TestCase):
 
     def test_search_limit_is_positive_integer(self):
         import core.vector_store as vs_mod
+
         self.assertIsInstance(vs_mod.SEARCH_LIMIT, int)
         self.assertGreater(vs_mod.SEARCH_LIMIT, 0)
 
     def test_search_limit_value(self):
         import core.vector_store as vs_mod
+
         self.assertEqual(
             vs_mod.SEARCH_LIMIT,
             1000,
@@ -70,6 +76,7 @@ class TestVectorStoreSearchAppliesLimit(unittest.TestCase):
 
             # sqlite3.Connection.execute is read-only, so verify via source inspection
             import inspect
+
             src = inspect.getsource(vs.search)
             self.assertIn("SEARCH_LIMIT", src, "search() must reference SEARCH_LIMIT constant")
             self.assertIn("LIMIT", src, "search() SQL must contain LIMIT clause")
@@ -116,8 +123,7 @@ class TestVectorStoreSearchAppliesLimit(unittest.TestCase):
                     rid = uuid.uuid4().hex
                     content = f"entry-{i}"
                     content_hash = hashlib.sha256(content.encode()).hexdigest()
-                    rows.append((rid, content, "test", None, now, now, None, None,
-                                  "[]", 1.0, 0, "test-model", dims, content_hash, embedding_blob))
+                    rows.append((rid, content, "test", None, now, now, None, None, "[]", 1.0, 0, "test-model", dims, content_hash, embedding_blob))
 
                 brain.db.executemany(
                     """INSERT INTO memory_records
@@ -150,8 +156,7 @@ class TestVectorStoreSearchAppliesLimit(unittest.TestCase):
                 self.assertLessEqual(
                     frombuffer_call_count[0],
                     SEARCH_LIMIT,
-                    f"search() should process at most SEARCH_LIMIT={SEARCH_LIMIT} candidates "
-                    f"from the DB, but np.frombuffer was called {frombuffer_call_count[0]} times",
+                    f"search() should process at most SEARCH_LIMIT={SEARCH_LIMIT} candidates from the DB, but np.frombuffer was called {frombuffer_call_count[0]} times",
                 )
 
 

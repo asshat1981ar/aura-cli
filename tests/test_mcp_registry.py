@@ -1,4 +1,5 @@
 """Unit tests for core/mcp_registry.py."""
+
 from __future__ import annotations
 
 import os
@@ -48,6 +49,7 @@ class TestMCPServiceSpec:
 class TestDescribeService:
     def _dev_tools_spec(self) -> MCPServiceSpec:
         from core.mcp_registry import _SERVICE_SPECS
+
         return next(s for s in _SERVICE_SPECS if s.config_name == "dev_tools")
 
     @patch("core.mcp_registry._config")

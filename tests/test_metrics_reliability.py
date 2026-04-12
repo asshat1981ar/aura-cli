@@ -8,6 +8,7 @@ import io
 from aura_cli.dispatch import _handle_metrics_show_dispatch, DispatchContext
 from memory.store import MemoryStore
 
+
 class TestMetricsReliability(unittest.TestCase):
     def setUp(self):
         self.tmp_dir = tempfile.TemporaryDirectory()
@@ -24,12 +25,12 @@ class TestMetricsReliability(unittest.TestCase):
             {"cycle_id": "c2", "goal": "g2", "outcome": "FAILED", "duration_s": 20.0, "stop_reason": "MAX_CYCLES"},
             {"cycle_id": "c3", "goal": "g3", "outcome": "SKIPPED", "duration_s": 5.0, "stop_reason": "PASS"},
         ]
-        
+
         for c in cycles:
             entry = {
                 "cycle_id": c["cycle_id"],
                 "goal": c["goal"],
-                "cycle_summary": c, # Structured summary
+                "cycle_summary": c,  # Structured summary
             }
             self.memory_store.append_log(entry)
 
@@ -42,19 +43,19 @@ class TestMetricsReliability(unittest.TestCase):
         out = io.StringIO()
         with patch("sys.stdout", out):
             _handle_metrics_show_dispatch(ctx)
-        
+
         payload = json.loads(out.getvalue())
-        
+
         recent = payload["recent_cycles"]
         self.assertEqual(len(recent), 3)
-        
+
         self.assertEqual(recent[0]["status"], "SUCCESS")
         self.assertEqual(recent[0]["stop_reason"], "PASS")
         self.assertEqual(recent[1]["status"], "FAILED")
         self.assertEqual(recent[1]["stop_reason"], "MAX_CYCLES")
         self.assertEqual(recent[2]["status"], "SKIPPED")
         self.assertEqual(recent[2]["stop_reason"], "PASS")
-        
+
         summary = payload["summary"]
         self.assertEqual(summary["successes"], 1)
         self.assertEqual(summary["skipped"], 1)
@@ -62,6 +63,7 @@ class TestMetricsReliability(unittest.TestCase):
         self.assertEqual(summary["count"], 3)
         self.assertAlmostEqual(summary["win_rate"], 33.33333333)
         self.assertAlmostEqual(summary["avg_duration"], 11.66666666)
+
 
 if __name__ == "__main__":
     unittest.main()

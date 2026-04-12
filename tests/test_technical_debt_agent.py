@@ -1,4 +1,5 @@
 """Unit tests for agents/technical_debt_agent.py — TechnicalDebtAgent."""
+
 from agents.technical_debt_agent import TechnicalDebtAgent
 
 
@@ -120,20 +121,24 @@ class TestTrackDebtMetrics:
 
 
 class TestVisualizeHotspots:
-    def test_does_not_raise(self, capsys):
+    def test_does_not_raise(self):
         agent = TechnicalDebtAgent()
         data = [{"file": "core/orchestrator.py", "failures": 5, "impact": 0.8}]
         agent.visualize_hotspots(data)
 
-    def test_prints_heatmap_header(self, capsys):
-        agent = TechnicalDebtAgent()
-        agent.visualize_hotspots([])
-        captured = capsys.readouterr()
-        assert "HEATMAP" in captured.out or "TECHNICAL DEBT" in captured.out
+    def test_prints_heatmap_header(self, caplog):
+        import logging
 
-    def test_prints_high_risk_label(self, capsys):
+        agent = TechnicalDebtAgent()
+        with caplog.at_level(logging.WARNING, logger="agents.technical_debt_agent"):
+            agent.visualize_hotspots([])
+        assert any("HEATMAP" in r.message or "TECHNICAL DEBT" in r.message for r in caplog.records)
+
+    def test_prints_high_risk_label(self, caplog):
+        import logging
+
         agent = TechnicalDebtAgent()
         data = [{"file": "core/orchestrator.py", "failures": 5, "impact": 0.9}]
-        agent.visualize_hotspots(data)
-        captured = capsys.readouterr()
-        assert "HIGH" in captured.out
+        with caplog.at_level(logging.WARNING, logger="agents.technical_debt_agent"):
+            agent.visualize_hotspots(data)
+        assert any("HIGH" in r.message for r in caplog.records)

@@ -1,4 +1,5 @@
 """Unit tests for core.in_flight_tracker.InFlightTracker."""
+
 import json
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from core.in_flight_tracker import InFlightTracker
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _tracker(tmp_path: Path) -> InFlightTracker:
     return InFlightTracker(path=tmp_path / "in_flight_goal.json")
 
@@ -18,6 +20,7 @@ def _tracker(tmp_path: Path) -> InFlightTracker:
 # ---------------------------------------------------------------------------
 # write()
 # ---------------------------------------------------------------------------
+
 
 class TestWrite:
     def test_creates_file(self, tmp_path):
@@ -33,7 +36,7 @@ class TestWrite:
         assert data["cycle_limit"] == 5
         assert data["phase"] == "ingest"
         assert "started_at" in data
-        assert "T" in data["started_at"]   # ISO-8601 format
+        assert "T" in data["started_at"]  # ISO-8601 format
 
     def test_custom_phase(self, tmp_path):
         t = _tracker(tmp_path)
@@ -63,6 +66,7 @@ class TestWrite:
 # ---------------------------------------------------------------------------
 # read()
 # ---------------------------------------------------------------------------
+
 
 class TestRead:
     def test_returns_none_when_absent(self, tmp_path):
@@ -94,6 +98,7 @@ class TestRead:
 # clear()
 # ---------------------------------------------------------------------------
 
+
 class TestClear:
     def test_removes_file(self, tmp_path):
         t = _tracker(tmp_path)
@@ -118,6 +123,7 @@ class TestClear:
 # exists()
 # ---------------------------------------------------------------------------
 
+
 class TestExists:
     def test_false_when_absent(self, tmp_path):
         assert not _tracker(tmp_path).exists()
@@ -138,6 +144,7 @@ class TestExists:
 # try/finally pattern (the critical usage contract)
 # ---------------------------------------------------------------------------
 
+
 class TestFinallyPattern:
     def test_clear_called_even_on_exception(self, tmp_path):
         t = _tracker(tmp_path)
@@ -154,5 +161,5 @@ class TestFinallyPattern:
         t = _tracker(tmp_path)
         t.write("Goal", cycle_limit=1)
         t.clear()
-        t.clear()   # second clear must not raise
+        t.clear()  # second clear must not raise
         assert not t.exists()

@@ -11,6 +11,7 @@ Covers:
 - classify_goal cache hit-rate over 1 000 calls
 - Git fuzzy recovery: similarity threshold accuracy
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -25,6 +26,7 @@ import pytest
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
+
 def _ms(start: float) -> float:
     return (time.monotonic() - start) * 1_000
 
@@ -33,12 +35,14 @@ def _ms(start: float) -> float:
 # 1. CACHE BENCHMARKS
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestCachePerformance:
     """L0 in-memory cache: preload, hit, miss latency."""
 
     def _make_adapter(self):
         """Create ModelAdapter with empty in-memory cache, no DB."""
         from core.model_adapter import ModelAdapter
+
         adapter = ModelAdapter.__new__(ModelAdapter)
         adapter._mem_cache = {}
         adapter.brain = None
@@ -70,7 +74,7 @@ class TestCachePerformance:
         elapsed = _ms(start)
         assert hits == 1_000
         assert elapsed < 50, f"1k cache hits took {elapsed:.1f}ms (expect <50ms)"
-        print(f"\n  [PASS] 1k cache hits: {elapsed:.2f}ms  ({elapsed/1000:.4f}ms each)")
+        print(f"\n  [PASS] 1k cache hits: {elapsed:.2f}ms  ({elapsed / 1000:.4f}ms each)")
 
     def test_cache_write_throughput(self):
         adapter = self._make_adapter()
@@ -85,6 +89,7 @@ class TestCachePerformance:
 
     def test_estimate_context_budget_is_fast(self):
         from core.model_adapter import ModelAdapter
+
         adapter = ModelAdapter.__new__(ModelAdapter)
         adapter._mem_cache = {}
         adapter.brain = None
@@ -100,6 +105,7 @@ class TestCachePerformance:
 
     def test_compress_context_correctness_and_speed(self):
         from core.model_adapter import ModelAdapter
+
         adapter = ModelAdapter.__new__(ModelAdapter)
         adapter._mem_cache = {}
         adapter.brain = None
@@ -116,6 +122,7 @@ class TestCachePerformance:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 2. TOKEN BUDGET COMPRESSION AT SCALE
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestTokenBudgetCompression:
     """Brain.recall_with_budget + compress_to_budget at 100/1000/10000 entries."""
@@ -134,11 +141,14 @@ class TestTokenBudgetCompression:
             used += len(entry) + 1
         return list(reversed(selected))
 
-    @pytest.mark.parametrize("n_entries,max_tokens", [
-        (100, 4_000),
-        (1_000, 4_000),
-        (10_000, 4_000),
-    ])
+    @pytest.mark.parametrize(
+        "n_entries,max_tokens",
+        [
+            (100, 4_000),
+            (1_000, 4_000),
+            (10_000, 4_000),
+        ],
+    )
     def test_compression_speed(self, n_entries, max_tokens):
         entries = self._make_entries(n_entries)
         start = time.monotonic()
@@ -158,7 +168,7 @@ class TestTokenBudgetCompression:
         entries = self._make_entries(1_000)
         result = self._compress_to_budget(entries, max_tokens=500)
         # Most recent entries (high indices) should be in result
-        indices = [int(e.split()[2].rstrip(':')) for e in result]
+        indices = [int(e.split()[2].rstrip(":")) for e in result]
         assert max(indices) == 999, "Most recent entry should be preserved"
         print(f"\n  [PASS] Compression preserves most recent (max idx={max(indices)})")
 
@@ -176,6 +186,7 @@ class TestTokenBudgetCompression:
 # 3. ATOMIC CHANGESET PERFORMANCE
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestAtomicChangeSetPerformance:
     """AtomicChangeSet: timing + rollback correctness at scale."""
 
@@ -184,17 +195,20 @@ class TestAtomicChangeSetPerformance:
         for i in range(n):
             f = tmpdir / f"file_{i}.py"
             f.write_text(f"def func_{i}():\n    return {i}\n")
-            changes.append({
-                "file_path": str(f.relative_to(tmpdir)),
-                "old_code": f"def func_{i}():\n    return {i}\n",
-                "new_code": f"def func_{i}():\n    return {i * 2}  # doubled\n",
-                "overwrite_file": False,
-            })
+            changes.append(
+                {
+                    "file_path": str(f.relative_to(tmpdir)),
+                    "old_code": f"def func_{i}():\n    return {i}\n",
+                    "new_code": f"def func_{i}():\n    return {i * 2}  # doubled\n",
+                    "overwrite_file": False,
+                }
+            )
         return changes
 
     @pytest.mark.parametrize("n_files", [1, 10, 50])
     def test_apply_speed(self, n_files, tmp_path):
         from core.file_tools import AtomicChangeSet
+
         changes = self._make_changes(tmp_path, n_files)
 
         start = time.monotonic()
@@ -209,27 +223,27 @@ class TestAtomicChangeSetPerformance:
 
     def test_rollback_on_failure(self, tmp_path):
         from core.file_tools import AtomicChangeSet, OldCodeNotFoundError
+
         # Create 5 valid files
         changes = self._make_changes(tmp_path, 5)
         # Create a real file that will be modified, then later cause an error
-        error_file_path = str(changes[2]["file_path"]) # Use an existing file
+        error_file_path = str(changes[2]["file_path"])  # Use an existing file
         (tmp_path / error_file_path).write_text("initial content to be replaced")
 
         # Make the 3rd change (index 2) target existing content that cannot be found
         # and new_code is empty, forcing OldCodeNotFoundError.
         changes[2]["file_path"] = error_file_path
-        changes[2]["old_code"] = "this content will not be found" # Does not exist
-        changes[2]["new_code"] = "" # Empty new_code triggers OldCodeNotFoundError if old_code not found
+        changes[2]["old_code"] = "this content will not be found"  # Does not exist
+        changes[2]["new_code"] = ""  # Empty new_code triggers OldCodeNotFoundError if old_code not found
 
         original_contents = {
             c["file_path"]: (tmp_path / c["file_path"]).read_text()
-            for c in changes[:2] # Only files before the failing change should be considered for rollback check
+            for c in changes[:2]  # Only files before the failing change should be considered for rollback check
         }
         # Also include the error_file's original content for rollback verification
         original_contents[error_file_path] = "initial content to be replaced"
 
-
-        with pytest.raises(OldCodeNotFoundError): # Expecting OldCodeNotFoundError from _safe_apply_change
+        with pytest.raises(OldCodeNotFoundError):  # Expecting OldCodeNotFoundError from _safe_apply_change
             AtomicChangeSet(changes, tmp_path).apply()
 
         # All modified files (before and including the failed one) should be restored to original
@@ -262,8 +276,10 @@ class TestAtomicChangeSetPerformance:
         t1 = threading.Thread(target=run, args=("a", changes_a, dir_a))
         t2 = threading.Thread(target=run, args=("b", changes_b, dir_b))
         start = time.monotonic()
-        t1.start(); t2.start()
-        t1.join(); t2.join()
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
         elapsed = _ms(start)
 
         assert not errors, f"Concurrent errors: {errors}"
@@ -276,11 +292,13 @@ class TestAtomicChangeSetPerformance:
 # 4. OSCILLATION DETECTOR SIMULATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestOscillationDetectorSimulation:
     """Feed synthetic score streams and validate detection accuracy."""
 
     def _get_detector(self):
         from core.convergence_escape import OscillationDetector
+
         return OscillationDetector()
 
     def test_detects_perfect_alternation(self):
@@ -308,7 +326,9 @@ class TestOscillationDetectorSimulation:
     def test_detects_after_minimum_transitions(self):
         d = self._get_detector()
         # Only 2 alternations — should NOT trigger yet
-        d.record(0.8); d.record(0.2); d.record(0.8)
+        d.record(0.8)
+        d.record(0.2)
+        d.record(0.8)
         # 3rd alternation triggers detection
         d.record(0.1)
         triggered = d.is_oscillating()
@@ -330,8 +350,7 @@ class TestOscillationDetectorSimulation:
         for s in [0.9, 0.1, 0.9, 0.1, 0.8, 0.2]:
             d.record(s)
         strategy = d.suggest_strategy()
-        assert strategy in ("vary_prompt", "replan", "none", "no_oscillation"), \
-            f"Unexpected strategy: {strategy}"
+        assert strategy in ("vary_prompt", "replan", "none", "no_oscillation"), f"Unexpected strategy: {strategy}"
         print(f"\n  [PASS] suggest_strategy() returned '{strategy}'")
 
     def test_reset_clears_detection(self):
@@ -347,11 +366,13 @@ class TestOscillationDetectorSimulation:
 # 5. SKILL METRICS TRACKING PERFORMANCE
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestSkillMetricsPerformance:
     """SkillMetrics concurrent recording throughput."""
 
     def _make_metrics(self):
         from core.skill_dispatcher import SkillMetrics
+
         return SkillMetrics()
 
     def test_record_throughput(self):
@@ -363,7 +384,7 @@ class TestSkillMetricsPerformance:
         assert elapsed < 500, f"10k records took {elapsed:.1f}ms (expect <500ms)"
         snap = m.snapshot()
         assert len(snap) == 24
-        print(f"\n  [PASS] 10k metric records: {elapsed:.2f}ms ({elapsed/10000:.3f}ms each)")
+        print(f"\n  [PASS] 10k metric records: {elapsed:.2f}ms ({elapsed / 10000:.3f}ms each)")
 
     def test_concurrent_recording(self):
         m = self._make_metrics()
@@ -378,8 +399,10 @@ class TestSkillMetricsPerformance:
 
         threads = [threading.Thread(target=worker, args=(f"skill{j}",)) for j in range(8)]
         start = time.monotonic()
-        for t in threads: t.start()
-        for t in threads: t.join()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
         elapsed = _ms(start)
 
         assert not errors, f"Thread safety errors: {errors}"
@@ -400,18 +423,20 @@ class TestSkillMetricsPerformance:
             snap = m.snapshot()
         elapsed = _ms(start)
         assert elapsed < 200, f"1k snapshots took {elapsed:.1f}ms (expect <200ms)"
-        print(f"\n  [PASS] 1k metric snapshots: {elapsed:.2f}ms ({elapsed/1000:.3f}ms each)")
+        print(f"\n  [PASS] 1k metric snapshots: {elapsed:.2f}ms ({elapsed / 1000:.3f}ms each)")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 6. GOAL CLASSIFIER CACHE SIMULATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestGoalClassifierCache:
     """Simulate 1000 calls; verify cache avoids redundant LLM calls."""
 
     def test_keyword_classifier_speed(self):
         from core.skill_dispatcher import classify_goal
+
         goals = [
             "Fix the null pointer exception in user_service.py",
             "Add retry logic to HTTP client",
@@ -426,7 +451,7 @@ class TestGoalClassifierCache:
 
         assert all(r in ("bug_fix", "feature", "refactor", "security", "docs", "default") for r in results)
         assert elapsed < 100, f"1000 keyword classifications took {elapsed:.1f}ms (expect <100ms)"
-        print(f"\n  [PASS] 1000 keyword goal classifications: {elapsed:.2f}ms ({elapsed/1000:.3f}ms each)")
+        print(f"\n  [PASS] 1000 keyword goal classifications: {elapsed:.2f}ms ({elapsed / 1000:.3f}ms each)")
 
     def test_llm_classifier_cache_hit_rate(self):
         """Verify classify_goal_llm() only calls LLM once per unique goal."""
@@ -436,6 +461,7 @@ class TestGoalClassifierCache:
         sd._classify_goal_cache.clear()
 
         call_count = 0
+
         def fake_respond(prompt, **kwargs):
             nonlocal call_count
             call_count += 1
@@ -481,11 +507,13 @@ class TestGoalClassifierCache:
 # 7. GIT FUZZY HISTORY RECOVERY SIMULATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestFuzzyHistoryRecovery:
     """Simulate find_historical_match without live git — test difflib logic."""
 
     def _similarity(self, a: str, b: str) -> float:
         import difflib
+
         return difflib.SequenceMatcher(None, a, b).ratio()
 
     def test_exact_match_similarity_is_1(self):
@@ -553,11 +581,13 @@ class TestFuzzyHistoryRecovery:
 # 8. HUMAN GATE PERFORMANCE
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestHumanGatePerformance:
     """HumanGate decision speed + correctness."""
 
     def _make_gate(self, baseline_coverage=80.0):
         from core.human_gate import HumanGate
+
         gate = HumanGate()
         gate._coverage_baseline = baseline_coverage
         return gate
@@ -581,6 +611,7 @@ class TestHumanGatePerformance:
 
     def test_blocks_on_coverage_drop(self):
         from core.human_gate import HumanGate
+
         gate = HumanGate(coverage_baseline=85.0)
         verify = {"score": 0.8, "passed": True}
         # Coverage drop must be in skill_results["test_coverage_analyzer"]
@@ -603,10 +634,11 @@ class TestHumanGatePerformance:
             gate.should_block(verify, skill)
         elapsed = _ms(start)
         assert elapsed < 200, f"10k gate decisions took {elapsed:.1f}ms (expect <200ms)"
-        print(f"\n  [PASS] HumanGate: 10k decisions: {elapsed:.2f}ms ({elapsed/10000:.4f}ms each)")
+        print(f"\n  [PASS] HumanGate: 10k decisions: {elapsed:.2f}ms ({elapsed / 10000:.4f}ms each)")
 
     def test_auto_approve_env_var(self, monkeypatch):
         from core.human_gate import HumanGate
+
         monkeypatch.setenv("AURA_AUTO_APPROVE", "1")
         gate = HumanGate()
         approved = gate.request_approval("security critical found", {"file": "auth.py"})
@@ -618,11 +650,13 @@ class TestHumanGatePerformance:
 # 9. SKILL CHAINER SIMULATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
+
 class TestSkillChainerSimulation:
     """SkillChainer: verify correct goal queuing on critical findings."""
 
     def _make_chainer_and_queue(self):
         from core.skill_dispatcher import SkillChainer
+
         chainer = SkillChainer()
         mock_queue = MagicMock()
         mock_queue.add = MagicMock(return_value=None)
@@ -653,6 +687,7 @@ class TestSkillChainerSimulation:
 
     def test_chain_skill_results_helper(self):
         from core.skill_dispatcher import chain_skill_results
+
         skill_results = {
             "security_scanner": {"critical_count": 1, "findings": ["hardcoded secret"]},
             "complexity_scorer": {"high_risk_count": 5},
@@ -668,6 +703,7 @@ class TestSkillChainerSimulation:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 10. END-TO-END PERFORMANCE: FULL ORCHESTRATOR CYCLE TIMING
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestOrchestratorCycleTiming:
     """Mock-LLM orchestrator cycle: measure per-phase overhead."""
@@ -686,14 +722,14 @@ class TestOrchestratorCycleTiming:
             return agent
 
         agents = {
-            "ingest":     make_agent("ingest",     {"context": "mock context", "goal": "test goal", "snapshot": "mock snapshot", "memory_summary": "mock memory summary", "hints_summary": "mock hints summary", "constraints": []}),
-            "plan":       make_agent("plan",        {"steps": ["step 1", "step 2"], "risks": []}),
-            "critique":   make_agent("critique",    {"issues": [], "fixes": []}),
-            "synthesize": make_agent("synthesize",  {"tasks": [{"id": "t1", "title": "test", "intent": "test", "files": [], "tests": []}]}),
-            "act":        make_agent("act",         {"changes": []}),
-            "sandbox":    make_agent("sandbox",     {"status": "skip", "details": {}}),
-            "verify":     make_agent("verify",      {"passed": True, "score": 1.0, "failures": [], "logs": ""}),
-            "reflect":    make_agent("reflect",     {"summary": "done", "weaknesses": [], "learnings": [], "next_actions": []}),
+            "ingest": make_agent("ingest", {"context": "mock context", "goal": "test goal", "snapshot": "mock snapshot", "memory_summary": "mock memory summary", "hints_summary": "mock hints summary", "constraints": []}),
+            "plan": make_agent("plan", {"steps": ["step 1", "step 2"], "risks": []}),
+            "critique": make_agent("critique", {"issues": [], "fixes": []}),
+            "synthesize": make_agent("synthesize", {"tasks": [{"id": "t1", "title": "test", "intent": "test", "files": [], "tests": []}]}),
+            "act": make_agent("act", {"changes": []}),
+            "sandbox": make_agent("sandbox", {"status": "skip", "details": {}}),
+            "verify": make_agent("verify", {"passed": True, "score": 1.0, "failures": [], "logs": ""}),
+            "reflect": make_agent("reflect", {"summary": "done", "weaknesses": [], "learnings": [], "next_actions": []}),
         }
 
         orch = LoopOrchestrator(
@@ -728,6 +764,7 @@ class TestOrchestratorCycleTiming:
 # ═══════════════════════════════════════════════════════════════════════════════
 # 11. INCREMENTAL COVERAGE PATH LOGIC
 # ═══════════════════════════════════════════════════════════════════════════════
+
 
 class TestIncrementalCoverageLogic:
     """Validate incremental coverage path selection without running pytest."""

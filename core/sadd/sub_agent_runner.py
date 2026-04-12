@@ -107,8 +107,7 @@ class SubAgentRunner:
             ws = self._workstream.spec
             matched = self._mcp_bridge.match_tools_for_goal(ws.goal_text)
             if matched:
-                tool_names = [t["name"] for t in matched]
-                context["sadd_mcp_tools"] = self._mcp_bridge.build_tool_context(tool_names)
+                context["sadd_mcp_tools"] = self._mcp_bridge.build_tool_context(matched)
 
         return context
 

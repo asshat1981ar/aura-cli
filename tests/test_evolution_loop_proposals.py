@@ -8,6 +8,7 @@ Focuses on:
 - Dry-run behaviour
 - on_cycle_complete trigger logic
 """
+
 from __future__ import annotations
 
 import unittest
@@ -36,9 +37,7 @@ def _make_loop(
     coder.implement.return_value = "# code"
     critic = MagicMock()
     critic.critique_code.return_value = '{"score": 8}'
-    critic.validate_mutation.return_value = (
-        '{"decision": "REJECTED", "confidence_score": 0.5, "impact_assessment": "low", "reasoning": "test"}'
-    )
+    critic.validate_mutation.return_value = '{"decision": "REJECTED", "confidence_score": 0.5, "impact_assessment": "low", "reasoning": "test"}'
     brain = MagicMock()
     brain.recall_with_budget.return_value = []
     brain.recall_weaknesses.return_value = []
@@ -48,8 +47,7 @@ def _make_loop(
     git_tools.repo_path = project_root
     mutator = MagicMock()
 
-    with patch("core.evolution_loop.ExperimentTracker"), \
-         patch("core.evolution_loop.MetricsCollector"):
+    with patch("core.evolution_loop.ExperimentTracker"), patch("core.evolution_loop.MetricsCollector"):
         loop = EvolutionLoop(
             planner=planner,
             coder=coder,
@@ -128,9 +126,17 @@ class TestInnovationProposalDataclass(unittest.TestCase):
         proposal = self._make_proposal()
         d = proposal.as_dict()
         for field in (
-            "proposal_id", "title", "category", "goal", "rationale",
-            "evidence", "smallest_surface", "expected_value", "risk_level",
-            "verification_cost", "recommended_action",
+            "proposal_id",
+            "title",
+            "category",
+            "goal",
+            "rationale",
+            "evidence",
+            "smallest_surface",
+            "expected_value",
+            "risk_level",
+            "verification_cost",
+            "recommended_action",
         ):
             self.assertIn(field, d)
 
@@ -183,9 +189,11 @@ class TestBuildInnovationProposals(unittest.TestCase):
         self.assertIn("mcp:ensure_mcp_servers", ids)
 
     def test_hotspot_produces_orchestration_proposal(self):
-        architecture = _make_architecture(hotspots=[
-            {"file": "core/orchestrator.py", "risk_level": "high"},
-        ])
+        architecture = _make_architecture(
+            hotspots=[
+                {"file": "core/orchestrator.py", "risk_level": "high"},
+            ]
+        )
         capability = _make_capability()
         proposals = self.loop._build_innovation_proposals("improve goal", architecture, capability)
         hotspot_proposals = [p for p in proposals if p.proposal_id.startswith("hotspot:")]
@@ -271,45 +279,55 @@ class TestSelectProposals(unittest.TestCase):
         self.assertGreaterEqual(len(selected), 1)
 
     def test_capability_focus_prioritises_skill_category(self):
-        proposals = self._make_proposals([
-            ("orchestration", "low"),
-            ("skill", "low"),
-            ("verification", "low"),
-        ])
+        proposals = self._make_proposals(
+            [
+                ("orchestration", "low"),
+                ("skill", "low"),
+                ("verification", "low"),
+            ]
+        )
         selected = self.loop._select_proposals(proposals, focus="capability", proposal_limit=1)
         self.assertEqual(selected[0].category, "skill")
 
     def test_quality_focus_prioritises_verification_category(self):
-        proposals = self._make_proposals([
-            ("skill", "low"),
-            ("orchestration", "low"),
-            ("verification", "low"),
-        ])
+        proposals = self._make_proposals(
+            [
+                ("skill", "low"),
+                ("orchestration", "low"),
+                ("verification", "low"),
+            ]
+        )
         selected = self.loop._select_proposals(proposals, focus="quality", proposal_limit=1)
         self.assertEqual(selected[0].category, "verification")
 
     def test_throughput_focus_prioritises_developer_surface(self):
-        proposals = self._make_proposals([
-            ("skill", "low"),
-            ("developer-surface", "low"),
-            ("verification", "low"),
-        ])
+        proposals = self._make_proposals(
+            [
+                ("skill", "low"),
+                ("developer-surface", "low"),
+                ("verification", "low"),
+            ]
+        )
         selected = self.loop._select_proposals(proposals, focus="throughput", proposal_limit=1)
         self.assertEqual(selected[0].category, "developer-surface")
 
     def test_unknown_focus_falls_back_to_capability_ordering(self):
-        proposals = self._make_proposals([
-            ("orchestration", "low"),
-            ("skill", "low"),
-        ])
+        proposals = self._make_proposals(
+            [
+                ("orchestration", "low"),
+                ("skill", "low"),
+            ]
+        )
         selected = self.loop._select_proposals(proposals, focus="unknown_focus", proposal_limit=1)
         self.assertEqual(selected[0].category, "skill")
 
     def test_lower_risk_ranked_higher_within_same_category(self):
-        proposals = self._make_proposals([
-            ("skill", "high"),
-            ("skill", "low"),
-        ])
+        proposals = self._make_proposals(
+            [
+                ("skill", "high"),
+                ("skill", "low"),
+            ]
+        )
         selected = self.loop._select_proposals(proposals, focus="capability", proposal_limit=2)
         self.assertEqual(selected[0].risk_level, "low")
 
@@ -434,9 +452,7 @@ class TestOnCycleCompleteTrigger(unittest.TestCase):
         loop = _make_loop()
         entry = {
             "goal": "something",
-            "phase_outputs": {
-                "skill_context": {"structural_hotspot": {"file": "x.py"}}
-            },
+            "phase_outputs": {"skill_context": {"structural_hotspot": {"file": "x.py"}}},
         }
         with patch.object(loop, "run") as mock_run:
             loop.on_cycle_complete(entry)
@@ -487,9 +503,7 @@ class TestMutationPlanToDsl(unittest.TestCase):
         self.assertIn("print('hello')", dsl)
 
     def test_replace_in_file_mutation_with_old_content(self):
-        plan = {"mutations": [
-            {"file_path": "bar.py", "old_content": "old", "new_content": "new"}
-        ]}
+        plan = {"mutations": [{"file_path": "bar.py", "old_content": "old", "new_content": "new"}]}
         dsl = self.loop._mutation_plan_to_dsl(plan)
         self.assertIn("REPLACE_IN_FILE bar.py", dsl)
         self.assertIn("old", dsl)

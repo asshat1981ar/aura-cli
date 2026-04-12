@@ -1,5 +1,6 @@
 # tests/test_agent_sdk_cli_integration.py
 """Tests for Agent SDK CLI integration."""
+
 import unittest
 from unittest.mock import MagicMock, patch, AsyncMock
 from pathlib import Path
@@ -94,14 +95,17 @@ class TestCLIIntegrationV2(unittest.TestCase):
 
     def setUp(self):
         import tempfile
+
         self.tmpdir = tempfile.mkdtemp()
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_build_controller_initializes_subsystems(self):
         from core.agent_sdk.cli_integration import build_controller_from_args
+
         args = MagicMock()
         args.model = None
         args.max_turns = None
@@ -111,6 +115,7 @@ class TestCLIIntegrationV2(unittest.TestCase):
         # Patch config to use temp paths so no side effects in CWD
         with patch("core.agent_sdk.cli_integration.AgentSDKConfig") as MockConfig:
             from core.agent_sdk.config import AgentSDKConfig
+
             cfg = AgentSDKConfig(
                 model_stats_path=Path(self.tmpdir) / "stats.json",
                 session_db_path=Path(self.tmpdir) / "sessions.db",
@@ -124,6 +129,7 @@ class TestCLIIntegrationV2(unittest.TestCase):
 
     def test_format_result_shows_cost(self):
         from core.agent_sdk.cli_integration import format_result
+
         result = {
             "result": "Done.",
             "session_id": "abc-123",
@@ -137,15 +143,18 @@ class TestCLIIntegrationV2(unittest.TestCase):
 class TestAgentScanCLI(unittest.TestCase):
     def setUp(self):
         import tempfile
+
         self.tmpdir = tempfile.mkdtemp()
         (Path(self.tmpdir) / "test.py").write_text("def hello():\n    pass\n")
 
     def tearDown(self):
         import shutil
+
         shutil.rmtree(self.tmpdir, ignore_errors=True)
 
     def test_handle_agent_scan(self):
         from core.agent_sdk.cli_integration import handle_agent_scan
+
         result = handle_agent_scan(
             project_root=Path(self.tmpdir),
             db_path=Path(self.tmpdir) / "index.db",
@@ -157,6 +166,7 @@ class TestAgentScanCLI(unittest.TestCase):
 
     def test_handle_agent_scan_stats(self):
         from core.agent_sdk.cli_integration import handle_agent_scan, format_scan_stats
+
         handle_agent_scan(
             project_root=Path(self.tmpdir),
             db_path=Path(self.tmpdir) / "index.db",

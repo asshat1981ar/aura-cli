@@ -10,6 +10,7 @@ Covers:
 Run with:
     AURA_SKIP_CHDIR=1 python3 -m pytest tests/test_pipeline_optimization.py -v
 """
+
 import json
 import os
 import threading
@@ -24,9 +25,11 @@ os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 def _make_orchestrator(**kwargs):
     """Return a minimal LoopOrchestrator instance with mocked heavy deps."""
     from core.orchestrator import LoopOrchestrator
+
     orch = LoopOrchestrator.__new__(LoopOrchestrator)
     # Minimal attribute set needed for tested methods
     orch.project_root = MagicMock()
@@ -90,9 +93,11 @@ class _CaptureServer:
 # WebhookGoalRequest
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestWebhookGoalRequest(unittest.TestCase):
     def test_metadata_field_accepted(self):
         from aura_cli.server import WebhookGoalRequest
+
         req = WebhookGoalRequest(
             goal="fix tests",
             metadata={"quality_gate_critique": "coupling too high", "pipeline_run_id": "run-001"},
@@ -102,6 +107,7 @@ class TestWebhookGoalRequest(unittest.TestCase):
 
     def test_metadata_defaults_to_empty_dict(self):
         from aura_cli.server import WebhookGoalRequest
+
         req = WebhookGoalRequest(goal="fix tests")
         self.assertIsInstance(req.metadata, dict)
         self.assertEqual(req.metadata, {})
@@ -110,6 +116,7 @@ class TestWebhookGoalRequest(unittest.TestCase):
 # ─────────────────────────────────────────────────────────────────────────────
 # _enrich_act_context
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestEnrichActContext(unittest.TestCase):
     def _make_config(self, enabled: bool) -> dict:
@@ -156,9 +163,11 @@ class TestEnrichActContext(unittest.TestCase):
 # ReflectorAgent skill_context enrichment
 # ─────────────────────────────────────────────────────────────────────────────
 
+
 class TestReflectorSkillContext(unittest.TestCase):
     def setUp(self):
         from agents.reflector import ReflectorAgent
+
         self.agent = ReflectorAgent()
 
     def test_no_skill_context_produces_empty_summary(self):
@@ -167,55 +176,68 @@ class TestReflectorSkillContext(unittest.TestCase):
         self.assertEqual(out["skill_summary"], {})
 
     def test_security_critical_surfaces_as_learning(self):
-        out = self.agent.run({
-            "verification": {"status": "pass", "failures": []},
-            "skill_context": {"security_scanner": {"critical_count": 3, "findings": ["a", "b", "c"]}},
-        })
+        out = self.agent.run(
+            {
+                "verification": {"status": "pass", "failures": []},
+                "skill_context": {"security_scanner": {"critical_count": 3, "findings": ["a", "b", "c"]}},
+            }
+        )
         self.assertTrue(any("security" in l for l in out["learnings"]))
         self.assertEqual(out["skill_summary"]["security_scanner"]["critical"], 3)
 
     def test_coupling_alert(self):
-        out = self.agent.run({
-            "verification": {"status": "pass", "failures": []},
-            "skill_context": {"architecture_validator": {"coupling_score": 1.8, "circular_deps": []}},
-        })
+        out = self.agent.run(
+            {
+                "verification": {"status": "pass", "failures": []},
+                "skill_context": {"architecture_validator": {"coupling_score": 1.8, "circular_deps": []}},
+            }
+        )
         self.assertTrue(any("coupling" in l for l in out["learnings"]))
 
     def test_coverage_below_target_alert(self):
-        out = self.agent.run({
-            "verification": {"status": "pass", "failures": []},
-            "skill_context": {"test_coverage_analyzer": {"coverage_pct": 55.0, "meets_target": False}},
-        })
+        out = self.agent.run(
+            {
+                "verification": {"status": "pass", "failures": []},
+                "skill_context": {"test_coverage_analyzer": {"coverage_pct": 55.0, "meets_target": False}},
+            }
+        )
         self.assertTrue(any("coverage" in l for l in out["learnings"]))
 
     def test_no_alert_when_all_ok(self):
-        out = self.agent.run({
-            "verification": {"status": "pass", "failures": []},
-            "skill_context": {
-                "security_scanner": {"critical_count": 0, "findings": []},
-                "architecture_validator": {"coupling_score": 0.7, "circular_deps": []},
-                "test_coverage_analyzer": {"coverage_pct": 85.0, "meets_target": True},
-            },
-        })
+        out = self.agent.run(
+            {
+                "verification": {"status": "pass", "failures": []},
+                "skill_context": {
+                    "security_scanner": {"critical_count": 0, "findings": []},
+                    "architecture_validator": {"coupling_score": 0.7, "circular_deps": []},
+                    "test_coverage_analyzer": {"coverage_pct": 85.0, "meets_target": True},
+                },
+            }
+        )
         self.assertEqual(out["learnings"], [])
 
     def test_pipeline_run_id_propagated(self):
-        out = self.agent.run({
-            "verification": {"status": "pass", "failures": []},
-            "pipeline_run_id": "run-xyz",
-        })
+        out = self.agent.run(
+            {
+                "verification": {"status": "pass", "failures": []},
+                "pipeline_run_id": "run-xyz",
+            }
+        )
         self.assertEqual(out["pipeline_run_id"], "run-xyz")
 
     def test_failure_analysis_still_works(self):
-        out = self.agent.run({
-            "verification": {"status": "fail", "failures": ["NameError: foo not defined"]},
-        })
+        out = self.agent.run(
+            {
+                "verification": {"status": "fail", "failures": ["NameError: foo not defined"]},
+            }
+        )
         self.assertTrue(any("context_gap" in l for l in out["learnings"]))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # _notify_n8n_feedback + P5 fan-out
 # ─────────────────────────────────────────────────────────────────────────────
+
 
 class TestNotifyN8nFeedback(unittest.TestCase):
     def setUp(self):
@@ -248,7 +270,9 @@ class TestNotifyN8nFeedback(unittest.TestCase):
         with patch.object(type(orch), "_load_config_file", return_value=self._config()):
             orch._notify_n8n_feedback("refactor auth", "cycle_001", True, phase_outputs)
 
-        import time; time.sleep(0.2)
+        import time
+
+        time.sleep(0.2)
         self.assertEqual(len(self.capture_p4.received), 1)
         body = self.capture_p4.received[0]
         self.assertEqual(body["cycle_id"], "cycle_001")
@@ -265,7 +289,9 @@ class TestNotifyN8nFeedback(unittest.TestCase):
         with patch.object(type(orch), "_load_config_file", return_value=self._config(obs=True)):
             orch._notify_n8n_feedback("add tests", "cycle_002", True, phase_outputs)
 
-        import time; time.sleep(0.2)
+        import time
+
+        time.sleep(0.2)
         self.assertEqual(len(self.capture_p5.received), 1)
         self.assertEqual(self.capture_p5.received[0]["cycle_id"], "cycle_002")
 
@@ -275,7 +301,9 @@ class TestNotifyN8nFeedback(unittest.TestCase):
         with patch.object(type(orch), "_load_config_file", return_value=self._config(enabled=False)):
             orch._notify_n8n_feedback("test", "cycle_003", False, phase_outputs)
 
-        import time; time.sleep(0.1)
+        import time
+
+        time.sleep(0.1)
         self.assertEqual(len(self.capture_p4.received), 0)
 
     def test_does_not_raise_on_connection_error(self):
@@ -296,7 +324,9 @@ class TestNotifyN8nFeedback(unittest.TestCase):
         with patch.object(type(orch), "_load_config_file", return_value=self._config(obs=False)):
             orch._notify_n8n_feedback("goal", "cycle_fallback", True, phase_outputs)
 
-        import time; time.sleep(0.2)
+        import time
+
+        time.sleep(0.2)
         self.assertEqual(len(self.capture_p4.received), 1)
         self.assertEqual(self.capture_p4.received[0]["pipeline_run_id"], "cycle_fallback")
 

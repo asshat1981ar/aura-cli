@@ -1,9 +1,9 @@
 import json
 import warnings
-from pathlib import Path # Import Path for _validate_file_path
-import re # Import re for _validate_file_path
+from pathlib import Path  # Import Path for _validate_file_path
+import re  # Import re for _validate_file_path
 
-from core.git_tools import GitToolsError
+from core.exceptions import GitToolsError
 from core.logging_utils import log_json
 from core.file_tools import (
     FileToolsError,
@@ -16,9 +16,10 @@ from core.file_tools import (
 )
 from agents.debugger import DebuggerAgent
 
+
 class HybridClosedLoop:
     """
-    [DEPRECATED] Implements the legacy Hybrid Closed Loop. 
+    [DEPRECATED] Implements the legacy Hybrid Closed Loop.
     Use core.orchestrator.LoopOrchestrator for modern async development.
     """
 
@@ -85,12 +86,7 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
         """
         Initializes the HybridClosedLoop with model, brain, and Git tools.
         """
-        warnings.warn(
-            "HybridClosedLoop is deprecated and will be removed in V3. "
-            "Migrate to LoopOrchestrator.",
-            DeprecationWarning,
-            stacklevel=2
-        )
+        warnings.warn("HybridClosedLoop is deprecated and will be removed in V3. Migrate to LoopOrchestrator.", DeprecationWarning, stacklevel=2)
         self.model = model
         self.brain = brain
         self.git = git_tools
@@ -102,18 +98,13 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
             stacklevel=2,
         )
 
-        self.weights = {
-            "performance": 0.30,
-            "stability": 0.30,
-            "security": 0.25,
-            "elegance": 0.15
-        }
+        self.weights = {"performance": 0.30, "stability": 0.30, "security": 0.25, "elegance": 0.15}
 
         self.previous_score = 0
         self.current_score = 0.0
         self.current_goal = None
         self.regression_count = 0
-        self.stable_convergence_count = 0 # Added for Robust Confirmation
+        self.stable_convergence_count = 0  # Added for Robust Confirmation
 
     def snapshot(self):
         """
@@ -172,15 +163,15 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
 
     def _validate_file_path(self, file_path: str, current_goal: str) -> bool:
         # New strict validation for code patterns in file_path
-        code_pattern = re.compile(r'\b(def|class|import|from|while|for|if|else|elif|try|except|finally)\b|\S+\s*\(.*\)\s*\{|\S+\s*\(.*\)\s*:', re.DOTALL) # Basic patterns to detect code
+        code_pattern = re.compile(r"\b(def|class|import|from|while|for|if|else|elif|try|except|finally)\b|\S+\s*\(.*\)\s*\{|\S+\s*\(.*\)\s*:", re.DOTALL)  # Basic patterns to detect code
         if code_pattern.search(file_path):
             log_json("ERROR", "invalid_file_path_contains_code", goal=current_goal, details={"original_file_path": file_path[:500], "reason": "file_path contains code patterns"})
             return False
 
-        if '\\n' in file_path or len(file_path) > 255: # Arbitrary length limit to catch clearly erroneous paths
+        if "\\n" in file_path or len(file_path) > 255:  # Arbitrary length limit to catch clearly erroneous paths
             log_json("ERROR", "invalid_file_path_from_hybrid_loop", goal=current_goal, details={"original_file_path": file_path[:500], "reason": "contains newline or too long"})
             return False
-        
+
         return True
 
     def _log_and_diagnose_error(
@@ -196,42 +187,17 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
         context_message: str = "",
         extra_details: dict | None = None,
     ):
-        diagnosis = self.debugger.diagnose( # Changed from debugger_instance to self.debugger
-            error_message=error_message,
-            current_goal=current_goal,
-            context=f"File: {file_path}, {context_message}",
-            improve_plan=result_json.get("IMPROVE", ""),
-            implement_details=change
+        diagnosis = self.debugger.diagnose(  # Changed from debugger_instance to self.debugger
+            error_message=error_message, current_goal=current_goal, context=f"File: {file_path}, {context_message}", improve_plan=result_json.get("IMPROVE", ""), implement_details=change
         )
-        details = {
-            "error": error_message,
-            "file": file_path,
-            "change_idx": change_idx,
-            "diagnosis": diagnosis
-        }
+        details = {"error": error_message, "file": file_path, "change_idx": change_idx, "diagnosis": diagnosis}
         if extra_details:
             details.update(extra_details)
 
-        log_json(
-            log_level,
-            log_event,
-            goal=current_goal,
-            details=details
-        )
-        return False # Indicates that changes were not applied successfully
+        log_json(log_level, log_event, goal=current_goal, details=details)
+        return False  # Indicates that changes were not applied successfully
 
-    def _apply_change_with_debug(
-        self,
-        project_root: Path,
-        sanitized_file_path: str,
-        old_code: str,
-        new_code: str,
-        overwrite_file: bool,
-        current_goal: str,
-        change_idx: int,
-        result_json: dict,
-        change: dict
-    ) -> bool:
+    def _apply_change_with_debug(self, project_root: Path, sanitized_file_path: str, old_code: str, new_code: str, overwrite_file: bool, current_goal: str, change_idx: int, result_json: dict, change: dict) -> bool:
         changes_applied_successfully = True
         try:
             log_json("INFO", "applying_code_change", goal=current_goal, details={"file": sanitized_file_path, "change_idx": change_idx, "overwrite": overwrite_file})
@@ -244,34 +210,28 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
             )
         except MismatchOverwriteBlockedError as e:
             changes_applied_successfully = self._log_and_diagnose_error(
-                str(e), current_goal, sanitized_file_path, change_idx,
-                "ERROR", MISMATCH_OVERWRITE_BLOCK_EVENT, result_json, change,
+                str(e),
+                current_goal,
+                sanitized_file_path,
+                change_idx,
+                "ERROR",
+                MISMATCH_OVERWRITE_BLOCK_EVENT,
+                result_json,
+                change,
                 context_message="Policy blocked mismatch-overwrite fallback; explicit overwrite_file with empty old_code required.",
                 extra_details=mismatch_overwrite_block_log_details(e, sanitized_file_path),
             )
         except OldCodeNotFoundError as e:
-            changes_applied_successfully = self._log_and_diagnose_error(
-                str(e), current_goal, sanitized_file_path, change_idx,
-                "ERROR", "old_code_not_found", result_json, change, context_message=f"Change: {change.get('old_code')}"
-            )
+            changes_applied_successfully = self._log_and_diagnose_error(str(e), current_goal, sanitized_file_path, change_idx, "ERROR", "old_code_not_found", result_json, change, context_message=f"Change: {change.get('old_code')}")
         except FileNotFoundError as e:
-            changes_applied_successfully = self._log_and_diagnose_error(
-                str(e), current_goal, sanitized_file_path, change_idx,
-                "ERROR", "file_not_found_for_replace", result_json, change
-            )
+            changes_applied_successfully = self._log_and_diagnose_error(str(e), current_goal, sanitized_file_path, change_idx, "ERROR", "file_not_found_for_replace", result_json, change)
         except FileToolsError as e:
-            changes_applied_successfully = self._log_and_diagnose_error(
-                str(e), current_goal, sanitized_file_path, change_idx,
-                "ERROR", "file_tools_error", result_json, change
-            )
+            changes_applied_successfully = self._log_and_diagnose_error(str(e), current_goal, sanitized_file_path, change_idx, "ERROR", "file_tools_error", result_json, change)
         except Exception as e:
-            changes_applied_successfully = self._log_and_diagnose_error(
-                str(e), current_goal, sanitized_file_path, change_idx,
-                "CRITICAL", "unexpected_error_applying_change", result_json, change, context_message=f"Change: {change}"
-            )
+            changes_applied_successfully = self._log_and_diagnose_error(str(e), current_goal, sanitized_file_path, change_idx, "CRITICAL", "unexpected_error_applying_change", result_json, change, context_message=f"Change: {change}")
         return changes_applied_successfully
 
-    def run(self, goal, dry_run: bool = False): # Added dry_run parameter
+    def run(self, goal, dry_run: bool = False):  # Added dry_run parameter
         """
         Executes a single iteration of the Hybrid Closed Loop. This involves:
         1. Prompting the LLM with the goal and system state.
@@ -298,19 +258,13 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
             "PLAN": "Error: Model response failed.",
             "IMPLEMENT": {},
             "TEST": "Error: Model response failed.",
-            "CRITIQUE": {
-                "performance_score": 0,
-                "stability_score": 0,
-                "security_score": 0,
-                "elegance_score": 0,
-                "weaknesses": ["Model response failed due to an exception or invalid JSON."]
-            },
+            "CRITIQUE": {"performance_score": 0, "stability_score": 0, "security_score": 0, "elegance_score": 0, "weaknesses": ["Model response failed due to an exception or invalid JSON."]},
             "IMPROVE": "Error: Model response failed.",
             "VERSION": "Error: Model response failed.",
-            "SUMMARY": "Error: Model response failed."
+            "SUMMARY": "Error: Model response failed.",
         }
 
-        raw_response = "" # Initialize raw_response for potential error logging
+        raw_response = ""  # Initialize raw_response for potential error logging
 
         try:
             raw_response = self.model.respond(prompt)
@@ -319,29 +273,17 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
             expected_keys = ["DEFINE", "PLAN", "IMPLEMENT", "TEST", "CRITIQUE", "IMPROVE", "VERSION", "SUMMARY"]
             if not isinstance(parsed_response, dict) or not all(key in parsed_response for key in expected_keys):
                 raise ValueError("Model response is not a valid structured JSON or missing required keys.")
-            structured_response.update(parsed_response) # Update default with actual response
+            structured_response.update(parsed_response)  # Update default with actual response
             log_json("INFO", "model_response_parsed", goal=goal, details={"dry_run": dry_run, "summary": structured_response.get("SUMMARY")})
         except json.JSONDecodeError as e:
             log_json("ERROR", "model_json_decode_error", goal=goal, details={"error": str(e), "raw_response_snippet": raw_response[:200]})
-            diagnosis = self.debugger.diagnose(
-                error_message=str(e),
-                current_goal=goal,
-                context=raw_response[:500],
-                improve_plan=structured_response.get("IMPROVE", "No IMPROVE plan available."),
-                implement_details=structured_response.get("IMPLEMENT", {})
-            )
+            diagnosis = self.debugger.diagnose(error_message=str(e), current_goal=goal, context=raw_response[:500], improve_plan=structured_response.get("IMPROVE", "No IMPROVE plan available."), implement_details=structured_response.get("IMPLEMENT", {}))
             structured_response["CRITIQUE"]["weaknesses"].append(f"JSONDecodeError: {e}. Diagnosis: {diagnosis.get('summary', 'N/A')}. Fix: {diagnosis.get('fix_strategy', 'N/A')}. Raw: {raw_response[:200]}...")
             self.stable_convergence_count = 0
             self.regression_count += 1
         except Exception as e:
             log_json("ERROR", "model_response_error", goal=goal, details={"error": str(e)})
-            diagnosis = self.debugger.diagnose(
-                error_message=str(e),
-                current_goal=goal,
-                context=raw_response[:500],
-                improve_plan=structured_response.get("IMPROVE", "No IMPROVE plan available."),
-                implement_details=structured_response.get("IMPLEMENT", {})
-            )
+            diagnosis = self.debugger.diagnose(error_message=str(e), current_goal=goal, context=raw_response[:500], improve_plan=structured_response.get("IMPROVE", "No IMPROVE plan available."), implement_details=structured_response.get("IMPLEMENT", {}))
             structured_response["CRITIQUE"]["weaknesses"].append(f"Unexpected Error during model response parsing: {e}. Diagnosis: {diagnosis.get('summary', 'N/A')}. Fix: {diagnosis.get('fix_strategy', 'N/A')}.")
             self.stable_convergence_count = 0
             self.regression_count += 1
@@ -369,7 +311,7 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
 
         if current_score < self.previous_score:
             self.regression_count += 1
-            self.stable_convergence_count = 0 # Reset stable convergence on regression
+            self.stable_convergence_count = 0  # Reset stable convergence on regression
             log_json("INFO", "regression_detected", goal=goal, details={"current_score": current_score, "previous_score": self.previous_score, "regression_count": self.regression_count})
         else:
             self.regression_count = 0
@@ -380,20 +322,20 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
         self.previous_score = current_score
 
         self.brain.remember(goal)
-        self.brain.remember(structured_response) # Remember the structured response
+        self.brain.remember(structured_response)  # Remember the structured response
         log_json("INFO", "brain_remembered_goal_and_response", goal=goal, details={"dry_run": dry_run, "summary_snippet": structured_response.get("SUMMARY", "")[:100]})
 
         # Git commit logic:
         # Only commit if we have a stable convergence or a significant improvement
         # This is a temporary rule for now. A better rule would involve testing.
-        if self.stable_convergence_count >= 1 or current_score > self.previous_score: # Commit on any improvement or single stable pass
+        if self.stable_convergence_count >= 1 or current_score > self.previous_score:  # Commit on any improvement or single stable pass
             if dry_run:
-                log_json("INFO", "git_commit_skipped", goal=goal, details={"reason": "dry_run", "version_message": structured_response.get('VERSION')})
+                log_json("INFO", "git_commit_skipped", goal=goal, details={"reason": "dry_run", "version_message": structured_response.get("VERSION")})
                 log_json("INFO", "git_stash_pop_skipped", goal=goal, details={"reason": "dry_run_after_commit"})
             else:
                 try:
                     self.git.commit_all(f"AURA evolution: {structured_response.get('VERSION', f'Iteration for {goal}')}")
-                    log_json("INFO", "git_committed", goal=goal, details={"version_message": structured_response.get('VERSION')})
+                    log_json("INFO", "git_committed", goal=goal, details={"version_message": structured_response.get("VERSION")})
                     # If committed successfully, we can pop the stash if it exists
                     try:
                         self.git.stash_pop()
@@ -401,15 +343,15 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
                     except GitToolsError as e:
                         log_json("WARN", "git_stash_pop_failed_after_commit", goal=goal, details={"error": str(e)})
                 except GitToolsError as e:
-                    log_json("ERROR", "git_commit_failed", goal=goal, details={"error": str(e), "version_message": structured_response.get('VERSION')})
+                    log_json("ERROR", "git_commit_failed", goal=goal, details={"error": str(e), "version_message": structured_response.get("VERSION")})
                     try:
                         # self.git.rollback_last_commit(f"Rollback failed commit for goal: {goal}") # This might rollback a prior commit, which is dangerous.
                         # Instead of rolling back, if commit fails, leave it for manual inspection/stash pop.
                         log_json("ERROR", "git_commit_failed_no_rollback", goal=goal, details={"message": "Commit failed, manual intervention needed. Stash might still be present."})
                     except GitToolsError as rb_e:
                         log_json("CRITICAL", "git_rollback_failed_after_commit_failure", goal=goal, details={"error": str(rb_e)})
-                    self.regression_count += 1 # Treat failed commit as a regression
-        else: # If no improvement or regression, then implicitly changes are not applied/reverted
+                    self.regression_count += 1  # Treat failed commit as a regression
+        else:  # If no improvement or regression, then implicitly changes are not applied/reverted
             # If there was a stash, and no commit, pop the stash to revert changes from this iteration
             if dry_run:
                 log_json("INFO", "git_stash_pop_skipped", goal=goal, details={"reason": "dry_run_no_improvement"})
@@ -428,7 +370,7 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
             return json.dumps(final_output)
 
         # Robust Confirmation Logic:
-        if self.absolute_pass(current_score) and (current_score >= self.previous_score): # Changed relative_pass
+        if self.absolute_pass(current_score) and (current_score >= self.previous_score):  # Changed relative_pass
             self.stable_convergence_count += 1
             log_json("INFO", "stable_convergence_count_incremented", goal=goal, details={"current_score": current_score, "stable_convergence_count": self.stable_convergence_count})
             if self.stable_convergence_count >= self._STABLE_CONVERGENCE_THRESHOLD:
@@ -440,9 +382,8 @@ The "CRITIQUE" section should be a JSON object with specific score keys.
                 log_json("INFO", "optimization_converged", goal=goal, details={"final_score": current_score, "dry_run": dry_run})
                 return json.dumps(final_output)
         else:
-            self.stable_convergence_count = 0 # Reset if conditions are not met
+            self.stable_convergence_count = 0  # Reset if conditions are not met
             log_json("INFO", "stable_convergence_count_reset", goal=goal, details={"current_score": current_score})
-
 
         # If not converged, continue evolution
         current_status = f"Continuing evolution (Score: {current_score}, Stable Convergence Count: {self.stable_convergence_count})"

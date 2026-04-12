@@ -90,41 +90,41 @@ _GOAL_TYPE_HINTS: Dict[str, list[str]] = {
 # Used by resolve_agent_for_goal() to bridge classification → registry.
 # ---------------------------------------------------------------------------
 GOAL_TYPE_TO_CAPABILITY: Dict[str, str] = {
-    "bug_fix":  "debugging",
-    "feature":  "code_generation",
+    "bug_fix": "debugging",
+    "feature": "code_generation",
     "refactor": "refactor",
     "security": "code_generation",  # security_scanner skill + generic coder
-    "docs":     "doc_generation",
-    "default":  "code_generation",
+    "docs": "doc_generation",
+    "default": "code_generation",
 }
 
 # Maps AURA skill names to their MCP tool names (via aura_mcp_skills_server).
 # Used by dispatch_skills() to prefer the MCP version when the local skill
 # module is unavailable but the MCP server is reachable.
 SKILL_TO_MCP_TOOL: Dict[str, str] = {
-    "ast_analyzer":           "ast_analyzer",
-    "dependency_analyzer":    "dependency_analyzer",
+    "ast_analyzer": "ast_analyzer",
+    "dependency_analyzer": "dependency_analyzer",
     "architecture_validator": "architecture_validator",
-    "complexity_scorer":      "complexity_scorer",
-    "code_clone_detector":    "code_clone_detector",
-    "error_pattern_matcher":  "error_pattern_matcher",
-    "git_history_analyzer":   "git_history_analyzer",
-    "incremental_differ":     "incremental_differ",
-    "linter_enforcer":        "linter_enforcer",
-    "security_scanner":       "security_scanner",
-    "symbol_indexer":         "symbol_indexer",
+    "complexity_scorer": "complexity_scorer",
+    "code_clone_detector": "code_clone_detector",
+    "error_pattern_matcher": "error_pattern_matcher",
+    "git_history_analyzer": "git_history_analyzer",
+    "incremental_differ": "incremental_differ",
+    "linter_enforcer": "linter_enforcer",
+    "security_scanner": "security_scanner",
+    "symbol_indexer": "symbol_indexer",
     "test_coverage_analyzer": "test_coverage_analyzer",
-    "type_checker":           "type_checker",
+    "type_checker": "type_checker",
 }
 
 # Language-hint keywords used for secondary capability refinement
 _LANGUAGE_HINTS: Dict[str, str] = {
-    "python":     "python",
-    ".py":        "python",
+    "python": "python",
+    ".py": "python",
     "typescript": "typescript",
     "javascript": "typescript",
-    ".ts":        "typescript",
-    ".js":        "typescript",
+    ".ts": "typescript",
+    ".js": "typescript",
 }
 
 
@@ -323,12 +323,7 @@ def dispatch_skills(
 
     skill_names = SKILL_MAP.get(goal_type, SKILL_MAP["default"])
 
-    mcp_available = {
-        skill: SKILL_TO_MCP_TOOL[skill]
-        for skill in skill_names
-        if skill not in skills and skill in SKILL_TO_MCP_TOOL
-        and len(agent_registry.resolve_by_capability(skill)) > 0
-    }
+    mcp_available = {skill: SKILL_TO_MCP_TOOL[skill] for skill in skill_names if skill not in skills and skill in SKILL_TO_MCP_TOOL and len(agent_registry.resolve_by_capability(skill)) > 0}
     available = [n for n in skill_names if n in skills]
     if mcp_available:
         log_json("INFO", "skill_dispatch_mcp_fallback", details={"mcp_skills": list(mcp_available.keys())})
@@ -383,6 +378,7 @@ def dispatch_skills(
     # Run MCP fallback skills for any skill not handled locally
     if mcp_available:
         import httpx
+
         mcp_results = {}
         for skill_name, tool_name in mcp_available.items():
             try:

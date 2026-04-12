@@ -4,6 +4,7 @@ Each orchestrator phase returns a PhaseResult with a confidence score (0.0-1.0)
 and a suggested next action. The ConfidenceRouter uses these scores to make
 data-driven routing decisions instead of hard-coded pass/fail logic.
 """
+
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -11,6 +12,7 @@ from typing import Any
 
 class NextAction(str, Enum):
     """Suggested next action after a phase completes."""
+
     CONTINUE = "continue"
     RETRY = "retry"
     REPLAN = "replan"
@@ -22,6 +24,7 @@ class NextAction(str, Enum):
 @dataclass
 class PhaseResult:
     """Result from any orchestrator phase with confidence scoring."""
+
     phase: str
     output: dict[str, Any] = field(default_factory=dict)
     confidence: float = 0.5
@@ -74,8 +77,7 @@ class ConfidenceRouter:
     def should_replan(self, result: PhaseResult) -> bool:
         if result.suggested_next == NextAction.REPLAN:
             return True
-        if result.phase in ("plan", "critique") and \
-                result.confidence < self.thresholds["replan_below"]:
+        if result.phase in ("plan", "critique") and result.confidence < self.thresholds["replan_below"]:
             return True
         return False
 
@@ -101,8 +103,7 @@ class ConfidenceRouter:
 
     def should_skip_optional(self, result: PhaseResult, next_phase: str) -> bool:
         """Check if an optional phase can be skipped due to high confidence."""
-        if next_phase in self.OPTIONAL_PHASES and \
-                result.confidence > self.thresholds["skip_above"]:
+        if next_phase in self.OPTIONAL_PHASES and result.confidence > self.thresholds["skip_above"]:
             return True
         return False
 

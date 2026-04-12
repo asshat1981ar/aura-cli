@@ -75,12 +75,7 @@ def build_metrics_panel(cycle_log: Optional[List[Dict]] = None, *, run_tool_audi
         table.add_row("last cmd", str(run_tool_audit.get("last_command") or "n/a"))
         table.add_row(
             "outcomes",
-            (
-                f"{run_tool_audit.get('success_count', 0)} ok, "
-                f"{run_tool_audit.get('error_count', 0)} err, "
-                f"{run_tool_audit.get('timeout_count', 0)} timeout, "
-                f"{run_tool_audit.get('truncated_count', 0)} trunc"
-            ),
+            (f"{run_tool_audit.get('success_count', 0)} ok, {run_tool_audit.get('error_count', 0)} err, {run_tool_audit.get('timeout_count', 0)} timeout, {run_tool_audit.get('truncated_count', 0)} trunc"),
         )
         for entry in list(run_tool_audit.get("recent", []))[-3:]:
             command = str(entry.get("command") or "")

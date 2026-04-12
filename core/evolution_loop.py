@@ -551,6 +551,133 @@ class EvolutionLoop:
                 log_json("INFO", "evolution_loop_triggered_by_hotspot_signal", details={"goal": goal})
             self.run(goal, execute_queued=False)
 
+    def _hypothesize(self, goal: str, memory_snapshot: str, similar_past_problems: str, known_weaknesses: str) -> str:
+        """Phase 1: Generate a hypothesis for the evolutionary goal."""
+        hypothesis = self.planner.plan(
+            goal=EVOLUTION_HYPOTHESIS_PROMPT.replace("{goal}", goal).replace("{memory_snapshot}", memory_snapshot).replace("{similar_past_problems}", similar_past_problems).replace("{known_weaknesses}", known_weaknesses),
+            memory_snapshot=memory_snapshot,
+            similar_past_problems=similar_past_problems,
+            known_weaknesses=known_weaknesses,
+        )
+        return "\n".join(hypothesis) if isinstance(hypothesis, list) else str(hypothesis)
+
+    def _decompose_tasks(self, hypothesis_str: str, memory_snapshot: str, similar_past_problems: str, known_weaknesses: str):
+        """Phase 2: Decompose hypothesis into atomic tasks."""
+        task_list = self.planner.plan(
+            goal=EVOLUTION_TASK_DECOMPOSITION_PROMPT.replace("{hypothesis}", hypothesis_str).replace("{memory_snapshot}", memory_snapshot),
+            memory_snapshot=memory_snapshot,
+            similar_past_problems=similar_past_problems,
+            known_weaknesses=known_weaknesses,
+        )
+        return task_list
+
+    def _implement_and_critique(self, goal: str, task_list) -> tuple:
+        """Phase 3-4: Implement tasks and critique the result."""
+        task_str = "\n".join(task_list)
+        implementation = self.coder.implement(task_str)
+        evaluation = self.critic.critique_code(
+            task=goal,
+            code=implementation,
+            requirements="Evaluate the implementation against the goal and provide a score based on correctness, efficiency, and adherence to the task.",
+        )
+        self.brain.analyze_critique_for_weaknesses(evaluation)
+        return implementation, evaluation
+
+    def _propose_and_validate_mutation(self, evaluation_str: str, memory_snapshot: str, similar_past_problems: str, known_weaknesses: str) -> tuple:
+        """Phase 5-6: Propose mutation and validate it."""
+        mutation_prompt = EVOLUTION_MUTATION_PROMPT.replace("{evaluation}", evaluation_str).replace("{memory_snapshot}", memory_snapshot)
+        raw_mutation_response = self._get_mutation_response(
+            mutation_prompt,
+            memory_snapshot,
+            similar_past_problems,
+            known_weaknesses,
+        )
+        mutation_plan = None
+        mutation_str = raw_mutation_response
+        try:
+            mutation_plan, mutation_str = self._normalize_mutation_plan(raw_mutation_response)
+        except Exception as e:
+            log_json("ERROR", "evolution_mutation_plan_invalid", details={"error": str(e), "raw_response_snippet": raw_mutation_response[:200]})
+
+        validation_target = json.dumps(mutation_plan) if mutation_plan is not None else mutation_str
+        raw_validation_result = self.critic.validate_mutation(validation_target)
+
+        decision, confidence_score = self._parse_validation_result(raw_validation_result)
+
+        if decision == "APPROVED" and confidence_score >= 0.7:
+            self.mutator.apply_mutation(mutation_str)
+            log_json("INFO", "mutation_approved_and_applied", details={"confidence": confidence_score})
+        else:
+            log_json("INFO", "mutation_rejected", details={"decision": decision, "confidence": confidence_score, "reason": "Programmatic decision"})
+
+        return mutation_plan, mutation_str
+
+    def _parse_validation_result(self, raw_validation_result: str) -> tuple:
+        """Parse the mutation validation result from the critic."""
+        decision = "REJECTED"
+        confidence_score = 0.0
+        impact_assessment = "N/A"
+        reasoning = "Could not parse validation response or LLM failed to provide valid structure."
+
+        try:
+            parsed_validation = _aura_safe_loads(raw_validation_result, "evolution_mutation_validation")
+            if isinstance(parsed_validation, dict):
+                decision = parsed_validation.get("decision", decision)
+                raw_confidence = parsed_validation.get("confidence_score", confidence_score)
+                try:
+                    confidence_score = float(raw_confidence)
+                except (ValueError, TypeError):
+                    confidence_score = 0.0
+                impact_assessment = parsed_validation.get("impact_assessment", impact_assessment)
+                reasoning = parsed_validation.get("reasoning", reasoning)
+            else:
+                log_json("ERROR", "evolution_mutation_validation_invalid_format", details={"raw_response_snippet": raw_validation_result[:200]})
+        except json.JSONDecodeError as e:
+            log_json("ERROR", "evolution_mutation_validation_json_decode_error", details={"error": str(e), "raw_response_snippet": raw_validation_result[:200]})
+        except Exception as e:
+            log_json("ERROR", "evolution_mutation_validation_unexpected_error", details={"error": str(e), "raw_response_snippet": raw_validation_result[:200]})
+
+        log_json("INFO", "mutation_validation_result", details={"decision": decision, "confidence": confidence_score, "impact": impact_assessment, "reasoning_snippet": reasoning[:100]})
+        return decision, confidence_score
+
+    def _commit_and_track_experiment(self, goal: str, experiment_id: str, t0_experiment: float, hypothesis_str: str, baseline_metrics) -> dict:
+        """Phase 7: Commit changes and evaluate experiment outcome."""
+        self.git.commit_all(f"AURA evolutionary update: {goal}")
+
+        experiment_result = self.experiment_tracker.finish_experiment(
+            experiment_id=experiment_id,
+            hypothesis=hypothesis_str[:200],
+            change_description=f"Evolution: {goal[:100]}",
+            metrics_before=baseline_metrics,
+            cycle_number=self._cycle_count,
+            duration=time.time() - t0_experiment,
+        )
+        if not experiment_result.kept:
+            log_json("WARN", "evolution_experiment_discarded", details={"id": experiment_id, "reason": experiment_result.reason})
+            try:
+                self.git.run(["git", "revert", "--no-commit", "HEAD"])
+                self.git.commit_all(f"Revert evolution (experiment {experiment_id} regressed)")
+                log_json("INFO", "evolution_reverted", details={"id": experiment_id})
+            except Exception as revert_err:
+                log_json("WARN", "evolution_revert_failed", details={"error": str(revert_err)})
+
+        return {
+            "id": experiment_id,
+            "kept": experiment_result.kept,
+            "net_improvement": experiment_result.net_improvement,
+        }
+
+    def _persist_memories(self, goal: str, hypothesis, evaluation, mutation_str: str) -> None:
+        """Store evolution artifacts in brain and vector memory."""
+        self.brain.remember(goal)
+        self.brain.remember(hypothesis)
+        self.brain.remember(evaluation)
+        self.brain.remember(mutation_str)
+
+        if self.vector:
+            self.vector.add(goal)
+            self.vector.add(mutation_str)
+
     def run(
         self,
         goal,
@@ -629,122 +756,39 @@ class EvolutionLoop:
         log_json("INFO", "evolution_loop_start", details={"goal": goal})
 
         # 1. Hypothesize
-        hypothesis = self.planner.plan(
-            goal=EVOLUTION_HYPOTHESIS_PROMPT.replace("{goal}", goal).replace("{memory_snapshot}", memory_snapshot).replace("{similar_past_problems}", similar_past_problems).replace("{known_weaknesses}", known_weaknesses),
-            memory_snapshot=memory_snapshot,
-            similar_past_problems=similar_past_problems,
-            known_weaknesses=known_weaknesses,
-        )
-        # Hypothesis can be a list or a string depending on model output, ensure string
-        hypothesis_str = "\n".join(hypothesis) if isinstance(hypothesis, list) else str(hypothesis)
+        hypothesis_str = self._hypothesize(goal, memory_snapshot, similar_past_problems, known_weaknesses)
 
         # 2. Decompose
-        task_list = self.planner.plan(goal=EVOLUTION_TASK_DECOMPOSITION_PROMPT.replace("{hypothesis}", hypothesis_str).replace("{memory_snapshot}", memory_snapshot), memory_snapshot=memory_snapshot, similar_past_problems=similar_past_problems, known_weaknesses=known_weaknesses)
-        task_str = "\n".join(task_list)
+        task_list = self._decompose_tasks(hypothesis_str, memory_snapshot, similar_past_problems, known_weaknesses)
 
-        # 3. Execute
-        implementation = self.coder.implement(task_str)
+        # 3-4. Implement and Critique
+        implementation, evaluation = self._implement_and_critique(goal, task_list)
 
-        # 4. Critique
-        evaluation = self.critic.critique_code(task=goal, code=implementation, requirements="Evaluate the implementation against the goal and provide a score based on correctness, efficiency, and adherence to the task.")
-
-        # Detect weaknesses from evaluation using Brain's method
-        self.brain.analyze_critique_for_weaknesses(evaluation)
-
-        evaluation_str = str(evaluation)
-
-        # 5. Mutate (Self-Improvement)
-        mutation_prompt = EVOLUTION_MUTATION_PROMPT.replace("{evaluation}", evaluation_str).replace("{memory_snapshot}", memory_snapshot)
-        raw_mutation_response = self._get_mutation_response(
-            mutation_prompt,
+        # 5-6. Propose and validate mutation
+        mutation_plan, mutation_str = self._propose_and_validate_mutation(
+            str(evaluation),
             memory_snapshot,
             similar_past_problems,
             known_weaknesses,
         )
-        mutation_plan = None
-        mutation_str = raw_mutation_response
-        try:
-            mutation_plan, mutation_str = self._normalize_mutation_plan(raw_mutation_response)
-        except Exception as e:
-            log_json("ERROR", "evolution_mutation_plan_invalid", details={"error": str(e), "raw_response_snippet": raw_mutation_response[:200]})
 
-        # 6. Integrate mutation
-        validation_target = json.dumps(mutation_plan) if mutation_plan is not None else mutation_str
-        raw_validation_result = self.critic.validate_mutation(validation_target)
+        # Persist memories
+        self._persist_memories(goal, hypothesis_str, evaluation, mutation_str)
 
-        # Initialize with safe defaults
-        decision = "REJECTED"
-        confidence_score = 0.0
-        impact_assessment = "N/A"
-        reasoning = "Could not parse validation response or LLM failed to provide valid structure."
-
-        try:
-            parsed_validation = _aura_safe_loads(raw_validation_result, "evolution_mutation_validation")
-            if isinstance(parsed_validation, dict):
-                decision = parsed_validation.get("decision", decision)
-                raw_confidence = parsed_validation.get("confidence_score", confidence_score)
-                try:
-                    confidence_score = float(raw_confidence)
-                except (ValueError, TypeError):
-                    confidence_score = 0.0
-                impact_assessment = parsed_validation.get("impact_assessment", impact_assessment)
-                reasoning = parsed_validation.get("reasoning", reasoning)
-            else:
-                log_json("ERROR", "evolution_mutation_validation_invalid_format", details={"raw_response_snippet": raw_validation_result[:200]})
-        except json.JSONDecodeError as e:
-            log_json("ERROR", "evolution_mutation_validation_json_decode_error", details={"error": str(e), "raw_response_snippet": raw_validation_result[:200]})
-        except Exception as e:
-            log_json("ERROR", "evolution_mutation_validation_unexpected_error", details={"error": str(e), "raw_response_snippet": raw_validation_result[:200]})
-
-        log_json("INFO", "mutation_validation_result", details={"decision": decision, "confidence": confidence_score, "impact": impact_assessment, "reasoning_snippet": reasoning[:100]})
-
-        # Programmatic decision to apply mutation
-        if decision == "APPROVED" and confidence_score >= 0.7:  # Example threshold
-            self.mutator.apply_mutation(mutation_str)
-            log_json("INFO", "mutation_approved_and_applied", details={"confidence": confidence_score})
-        else:
-            log_json("INFO", "mutation_rejected", details={"decision": decision, "confidence": confidence_score, "reason": "Programmatic decision"})
-
-        self.brain.remember(goal)
-        self.brain.remember(hypothesis)
-        self.brain.remember(evaluation)
-        self.brain.remember(mutation_str)
-
-        if self.vector:
-            self.vector.add(goal)
-            self.vector.add(mutation_str)
-
-        # 7. Commit evolution
-        self.git.commit_all(f"AURA evolutionary update: {goal}")
-
-        # ── Experiment tracking: measure and decide keep/discard ──
-        experiment_result = self.experiment_tracker.finish_experiment(
-            experiment_id=experiment_id,
-            hypothesis=hypothesis_str[:200],
-            change_description=f"Evolution: {goal[:100]}",
-            metrics_before=baseline_metrics,
-            cycle_number=self._cycle_count,
-            duration=time.time() - t0_experiment,
+        # 7. Commit and track experiment
+        experiment_info = self._commit_and_track_experiment(
+            goal,
+            experiment_id,
+            t0_experiment,
+            hypothesis_str,
+            baseline_metrics,
         )
-        if not experiment_result.kept:
-            log_json("WARN", "evolution_experiment_discarded", details={"id": experiment_id, "reason": experiment_result.reason})
-            # Revert the commit if experiment regressed
-            try:
-                self.git.run(["git", "revert", "--no-commit", "HEAD"])
-                self.git.commit_all(f"Revert evolution (experiment {experiment_id} regressed)")
-                log_json("INFO", "evolution_reverted", details={"id": experiment_id})
-            except Exception as revert_err:
-                log_json("WARN", "evolution_revert_failed", details={"error": str(revert_err)})
 
         return {
-            "hypothesis": hypothesis,
+            "hypothesis": hypothesis_str,
             "tasks": task_list,
             "implementation": implementation,
             "evaluation": evaluation,
             "mutation": mutation_plan if mutation_plan is not None else mutation_str,
-            "experiment": {
-                "id": experiment_id,
-                "kept": experiment_result.kept,
-                "net_improvement": experiment_result.net_improvement,
-            },
+            "experiment": experiment_info,
         }

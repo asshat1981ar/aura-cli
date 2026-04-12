@@ -1,4 +1,5 @@
 """Cycle pipeline panel for AURA TUI."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
@@ -8,6 +9,7 @@ try:
     from rich.table import Table
     from rich.text import Text
     from rich import box
+
     _RICH_AVAILABLE = True
 except ImportError:
     _RICH_AVAILABLE = False
@@ -34,15 +36,7 @@ def build_cycle_panel(
 
     summary_phase_status = {}
     if last_summary and isinstance(last_summary.get("phase_status"), dict):
-        summary_phase_status = {
-            phase: (
-                "✅" if status == "pass"
-                else "❌" if status == "fail"
-                else "⟳" if status == "running"
-                else "○"
-            )
-            for phase, status in last_summary["phase_status"].items()
-        }
+        summary_phase_status = {phase: ("✅" if status == "pass" else "❌" if status == "fail" else "⟳" if status == "running" else "○") for phase, status in last_summary["phase_status"].items()}
 
     display_status = phases_status or summary_phase_status
 
@@ -56,7 +50,7 @@ def build_cycle_panel(
         outcome = last_summary.get("outcome", "UNKNOWN")
         stop = last_summary.get("stop_reason", "N/A")
         follow_ups = last_summary.get("queued_follow_up_goals", [])
-        
+
         color = "green" if outcome == "SUCCESS" else "red" if outcome == "FAILED" else "yellow"
         table.add_section()
         table.add_row("Last Outcome", f"[bold {color}]{outcome}[/bold {color}]")
@@ -82,7 +76,7 @@ def build_cycle_panel(
     title = f"[bold blue]Pipeline[/bold blue] [dim]{goal_text}[/dim]"
     if confidence is not None and current_goal:
         color = "green" if confidence > 0.7 else "yellow" if confidence > 0.4 else "red"
-        title += f" [dim]|[/dim] [bold {color}]Conf: {confidence*100:.0f}%[/bold {color}]"
+        title += f" [dim]|[/dim] [bold {color}]Conf: {confidence * 100:.0f}%[/bold {color}]"
 
     return Panel(
         table,

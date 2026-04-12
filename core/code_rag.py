@@ -4,24 +4,27 @@ Before generating code, retrieves the top-K most similar past successful
 implementations from the vector store and injects them as few-shot examples.
 This reduces retries by grounding generation in proven patterns.
 """
+
 import time
 from dataclasses import dataclass, field
 from core.logging_utils import log_json
 
+
 @dataclass
 class RAGContext:
     """Retrieved context for code generation."""
+
     examples: list[dict] = field(default_factory=list)  # past implementations
-    patterns: list[str] = field(default_factory=list)    # code patterns
+    patterns: list[str] = field(default_factory=list)  # code patterns
     anti_patterns: list[str] = field(default_factory=list)  # what to avoid
     retrieval_time_ms: float = 0.0
     total_tokens: int = 0
 
+
 class CodeRAG:
     """Retrieval-Augmented Generation for code — grounds generation in past successes."""
 
-    def __init__(self, vector_store=None, brain=None, max_examples: int = 3,
-                 max_tokens: int = 2000, min_similarity: float = 0.6):
+    def __init__(self, vector_store=None, brain=None, max_examples: int = 3, max_tokens: int = 2000, min_similarity: float = 0.6):
         self.vector_store = vector_store
         self.brain = brain
         self.max_examples = max_examples
@@ -38,7 +41,7 @@ class CodeRAG:
 
         # 1. Search for similar past goals/implementations
         examples = self._search_implementations(goal)
-        context.examples = examples[:self.max_examples]
+        context.examples = examples[: self.max_examples]
 
         # 2. Search for relevant code patterns
         if task_bundle:
@@ -53,12 +56,16 @@ class CodeRAG:
         context.retrieval_time_ms = (time.time() - t0) * 1000
         context.total_tokens = sum(len(str(e).split()) for e in context.examples)
 
-        log_json("INFO", "code_rag_retrieved", details={
-            "examples": len(context.examples),
-            "patterns": len(context.patterns),
-            "anti_patterns": len(context.anti_patterns),
-            "retrieval_ms": round(context.retrieval_time_ms, 1),
-        })
+        log_json(
+            "INFO",
+            "code_rag_retrieved",
+            details={
+                "examples": len(context.examples),
+                "patterns": len(context.patterns),
+                "anti_patterns": len(context.anti_patterns),
+                "retrieval_ms": round(context.retrieval_time_ms, 1),
+            },
+        )
         return context
 
     def augment_prompt(self, base_prompt: str, rag_context: RAGContext) -> str:
@@ -67,10 +74,10 @@ class CodeRAG:
 
         if rag_context.examples:
             sections.append("## Similar Past Implementations (proven to work)")
-            for i, ex in enumerate(rag_context.examples[:self.max_examples]):
+            for i, ex in enumerate(rag_context.examples[: self.max_examples]):
                 content = ex.get("content", str(ex))[:500]
                 source = ex.get("source", "memory")
-                sections.append(f"### Example {i+1} (from {source}):\n{content}\n")
+                sections.append(f"### Example {i + 1} (from {source}):\n{content}\n")
 
         if rag_context.patterns:
             sections.append("## Relevant Patterns")
@@ -88,8 +95,7 @@ class CodeRAG:
         rag_section = "\n".join(sections)
         return f"{base_prompt}\n\n{rag_section}"
 
-    def store_successful_implementation(self, goal: str, changes: list[dict],
-                                         goal_type: str = ""):
+    def store_successful_implementation(self, goal: str, changes: list[dict], goal_type: str = ""):
         """Store a successful implementation for future RAG retrieval."""
         if not self.vector_store:
             return
@@ -127,6 +133,7 @@ class CodeRAG:
         try:
             if self.vector_store:
                 from core.memory_types import RetrievalQuery
+
                 query = RetrievalQuery(
                     query_text=goal,
                     k=self.max_examples * 2,
@@ -140,8 +147,7 @@ class CodeRAG:
                         if isinstance(hit, str):
                             results.append({"content": hit, "source": "vector_store"})
                         elif hasattr(hit, "content"):
-                            results.append({"content": hit.content, "source": hit.source_ref,
-                                          "score": getattr(hit, "score", 0)})
+                            results.append({"content": hit.content, "source": hit.source_ref, "score": getattr(hit, "score", 0)})
         except Exception as exc:
             log_json("WARN", "code_rag_search_failed", details={"error": str(exc)})
 
@@ -149,7 +155,7 @@ class CodeRAG:
         if self.brain and not results:
             try:
                 memories = self.brain.recall_with_budget(max_tokens=self.max_tokens)
-                for m in memories[:self.max_examples]:
+                for m in memories[: self.max_examples]:
                     if any(kw in m.lower() for kw in ["implement", "code", "function", "class"]):
                         results.append({"content": m, "source": "brain"})
             except (OSError, IOError, ValueError):
@@ -177,6 +183,7 @@ class CodeRAG:
         try:
             from memory.consolidation import NegativeExampleStore
             from pathlib import Path
+
             store_path = Path(__file__).parent.parent / "memory" / "negative_examples.json"
             if store_path.exists():
                 store = NegativeExampleStore(store_path)

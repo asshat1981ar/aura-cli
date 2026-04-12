@@ -111,9 +111,7 @@ def runtime_provider_status(
 ) -> dict[str, bool]:
     openai_ready = bool(resolve_openai_api_key())
     anthropic_ready = bool(resolve_anthropic_api_key())
-    openrouter_ready = bool(
-        resolve_openrouter_api_key(config_api_key=config_api_key, cli_arg=openrouter_api_key_arg)
-    )
+    openrouter_ready = bool(resolve_openrouter_api_key(config_api_key=config_api_key, cli_arg=openrouter_api_key_arg))
     local_ready = bool(resolve_local_model_command() or resolve_local_model_profiles())
     local_embedding_ready = bool(resolve_local_embedding_profile_name() or resolve_local_embedding_mode() == "local-tfidf-svd-50d")
     gemini_ready = bool(resolve_gemini_cli_path())

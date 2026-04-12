@@ -1,117 +1,209 @@
-# Contributing to aura-cli
+# Contributing to AURA CLI
 
-Thank you for your interest in contributing to aura-cli! This guide will help you get started.
+Welcome to AURA CLI — an autonomous development platform with a 10-phase
+pipeline (ingest → plan → critique → code → apply → verify → reflect → adapt → evolve → archive).
+
+---
 
 ## Development Setup
 
-### Prerequisites
-
-- Python 3.10+
-- Git
-- A GitHub account
-
-### Getting Started
-
-1. Fork the repository on GitHub
-2. Clone your fork locally:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/aura-cli.git
-   cd aura-cli
-   ```
-3. Create a virtual environment:
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # Linux/macOS
-   # or
-   venv\Scripts\activate     # Windows
-   ```
-4. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-5. Install pre-commit hooks:
-   ```bash
-   pre-commit install
-   ```
-
-## Branch Strategy
-
-- `main` — stable, production-ready code
-- `feature/*` — new features (branch from `main`)
-- `fix/*` — bug fixes (branch from `main`)
-- `docs/*` — documentation changes
-
-Always create a new branch for your work:
 ```bash
-git checkout -b feature/your-feature-name
+# Clone the repository
+git clone <repo-url>
+cd aura-cli
+
+# Create virtual environment (Python 3.10+)
+python3 -m venv .venv
+source .venv/bin/activate
+
+# Install runtime + dev dependencies
+pip install -r requirements.txt
+pip install pytest pytest-timeout pytest-cov ruff pre-commit
+
+# Install pre-commit hooks
+pre-commit install
+
+# Set required env vars for testing
+export AURA_SKIP_CHDIR=1    # Keeps working directory stable during tests
+export AURA_TEST_MODE=1     # Enables test-only bypasses (e.g. JWT algorithm=none)
+
+# Verify setup
+python3 main.py --help
+python3 -m ruff check .
 ```
 
-## Making Changes
+---
 
-### Code Style
+## Running Tests
 
-- We use **Ruff** for linting and formatting (configured in `ruff.toml`)
-- Run `ruff check .` before committing
-- Run `ruff format .` to auto-format
-- Pre-commit hooks will catch most style issues automatically
+> ⚠️ **CRITICAL**: Never run `pytest tests/` without a timeout.
+> Some test files hang indefinitely (>2 minutes). Always use the targeted safe suite below.
 
-### Commit Messages
+### Fast Regression Suite (~4–6 seconds)
 
-Follow [Conventional Commits](https://www.conventionalcommits.org/):
+```bash
+python3 -m pytest \
+  tests/test_auth.py \
+  tests/test_jwt_hardening.py \
+  tests/test_server_api.py \
+  tests/test_cli_exit_codes.py \
+  tests/test_sanitizer.py \
+  tests/test_correlation.py \
+  tests/test_config_schema.py \
+  tests/test_redis_cache.py \
+  tests/test_sandbox_violations.py \
+  tests/test_sandbox_unit.py \
+  tests/test_e2e_sandbox_retry.py \
+  -v --timeout=30 --no-cov
+```
 
-- `feat:` — new feature
-- `fix:` — bug fix
-- `docs:` — documentation only
-- `refactor:` — code restructuring without behavior change
-- `test:` — adding or updating tests
-- `chore:` — maintenance tasks
+### With Coverage
 
-Example: `feat: add retry logic to agent orchestrator`
+```bash
+python3 -m pytest tests/test_auth.py tests/test_sanitizer.py \
+  -v --timeout=30 \
+  --cov=aura_cli --cov=core --cov=agents --cov=memory \
+  --cov-report=term-missing
+```
 
-### Testing
+### Run a Single Test
 
-- Run tests with: `python -m pytest tests/`
-- Add tests for any new functionality
-- Ensure all existing tests pass before submitting a PR
+```bash
+python3 -m pytest tests/test_auth.py::test_create_access_token -v --no-cov
+```
 
-## Submitting a Pull Request
+### Triage All Test Files (finds hanging tests)
 
-1. Push your branch to your fork
-2. Open a Pull Request against `main` on the upstream repository
-3. Fill out the PR template completely
-4. Ensure CI checks pass
-5. Request a review
+```bash
+python3 scripts/triage_tests.py --timeout 30
+# Output: reports/test-triage.json, reports/safe-tests.txt
+```
 
-### PR Guidelines
+---
 
-- Keep PRs focused — one feature or fix per PR
-- Include a clear description of what changed and why
-- Link any related issues (e.g., "Closes #42")
-- Add tests for new functionality
-- Update documentation if behavior changes
+## Project Structure
 
-## Reporting Issues
+| Directory | Purpose |
+|-----------|---------|
+| `aura_cli/` | CLI interface + FastAPI server (`server.py`, routers, middleware) |
+| `core/` | Orchestration engine (~120 modules: auth, config, sanitizer, correlation…) |
+| `agents/` | Specialized pipeline agents (ingest, planner, coder, sandbox, applicator…) |
+| `memory/` | Persistence layer (SQLite, JSONL decision log, Redis cache) |
+| `tools/` | MCP servers (mcp_server.py, sadd_mcp_server.py, observability_mcp.py) |
+| `tests/` | 277 test files (unit, integration, e2e) |
+| `scripts/` | Development utilities (triage_tests.py, validate_config.py, find_coverage_gaps.py) |
+| `docs/` | Architecture documentation, ADRs, security audits |
 
-- Use the issue templates provided (Bug Report or Feature Request)
-- Search existing issues before creating a new one
-- Include reproduction steps for bugs
-- Be specific about expected vs. actual behavior
+---
 
-## Agent Development
+## Entry Points
 
-If you are contributing a new agent or modifying an existing one:
+| Command | Purpose |
+|---------|---------|
+| `python3 main.py` | CLI via `aura_cli.cli_main:main()` |
+| `python3 -m aura_cli.server` | Start canonical dev-tools FastAPI server (port 8001) |
+| `python3 tools/mcp_server.py` | Start legacy MCP compatibility server |
+| `python3 tools/sadd_mcp_server.py` | Start SADD MCP server (port 8020) |
+| `python3 tools/observability_mcp.py` | Start Observability MCP (port 8030) |
+| `bash run_aura.sh` | Convenience wrapper for CLI |
 
-- Agent definitions live in `.github/agents/`
-- Follow the existing agent format (frontmatter with name/description, then markdown body)
-- Include: Responsibilities, Memory Model, Interfaces, and Failure Modes Guarded Against
-- Test your agent locally using the [Copilot CLI](https://gh.io/customagents/cli)
+---
 
-## Code of Conduct
+## Commit Convention
 
-This project follows our [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to uphold these standards.
+We follow [Conventional Commits](https://www.conventionalcommits.org/):
 
-## Questions?
+```
+type(scope): brief description
 
-If you have questions about contributing, open a Discussion or reach out in an existing issue thread.
+[optional body]
 
-Thank you for helping make aura-cli better!
+Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>
+```
+
+### Types
+
+| Type | When |
+|------|------|
+| `feat` | New feature or capability |
+| `fix` | Bug fix |
+| `test` | Adding or fixing tests |
+| `docs` | Documentation changes |
+| `refactor` | Code restructuring (no behavior change) |
+| `perf` | Performance improvement |
+| `ci` | CI/CD changes |
+| `chore` | Build system, dependencies, tooling |
+
+### Scopes
+
+Use sprint numbers (`s1`–`s10`) for sprint work, or module names (`auth`, `sandbox`, `server`, `memory`, etc.) for targeted changes.
+
+### Examples
+
+```
+feat(core): add rate limiting to model adapter
+fix(sandbox): handle RLIMIT_AS gracefully on macOS
+test(auth): add JWT algorithm confusion attack tests
+docs(api): document authentication flow with sequence diagram
+ci: add weekly dependency audit workflow
+```
+
+---
+
+## Pull Request Process
+
+1. Create a feature branch from `main`: `git checkout -b feat/your-feature`
+2. Make changes with tests (maintain or increase coverage)
+3. Ensure pre-commit hooks pass: `pre-commit run --all-files`
+4. Run the safe test suite and verify all 165+ tests pass
+5. Update `CHANGELOG.md` for user-facing changes
+6. Submit PR with a clear description linking to any related issues
+
+---
+
+## Security Policy
+
+| Rule | Detail |
+|------|--------|
+| ❌ `algorithm="none"` | NEVER use in production code. Use `tests/fakes/fake_auth.py` for test auth bypass |
+| ❌ `aura_auth.db` | NEVER commit — contains JWT revocation secrets |
+| ❌ `.env` files | NEVER commit — use environment variables |
+| ✅ Input validation | ALWAYS validate through `core/sanitizer.py` |
+| ✅ Sandbox code | ALWAYS run untrusted code through `agents/sandbox.py` |
+| ✅ Secret rotation | Rotate `AURA_AUTH_SECRET_KEY` if compromised |
+
+To report security vulnerabilities: open a private GitHub issue or contact the maintainers directly.
+
+---
+
+## Key Gotchas
+
+1. **`pytest tests/` hangs** — always use the targeted safe test file list with `--timeout=30`
+2. **prometheus_client changes metrics behavior** — monkeypatch `_PROMETHEUS_AVAILABLE = False` in tests that check JSON metrics
+3. **`SandboxResult` requires keyword args** — uses `@dataclass(kw_only=True)`; never use positional args
+4. **`python-jose[cryptography]`** must be installed for JWT tests (not just `python-jose`)
+5. **`AURA_SKIP_CHDIR=1`** is required to keep working directory stable during tests
+6. **`AURA_TEST_MODE=1`** must be set for tests that use `algorithm="none"` JWT bypass
+7. **Coverage scope** — always use `--cov=aura_cli --cov=core --cov=agents --cov=memory`, not `--cov=.` (inflates denominator with tools/)
+8. **SQLite WAL mode** — all SQLite connections now use WAL; `:memory:` DBs in tests are unaffected
+
+---
+
+## Development Utilities
+
+```bash
+# Validate configuration files
+python3 scripts/validate_config.py
+
+# Find highest-impact modules to add tests for
+python3 scripts/find_coverage_gaps.py --top 10
+
+# Triage all test files (find hanging ones)
+python3 scripts/triage_tests.py --timeout 30
+
+# Generate CLI reference docs
+python3 scripts/generate_cli_reference.py
+
+# Check CLI reference is current (CI check)
+python3 scripts/generate_cli_reference.py --check
+```

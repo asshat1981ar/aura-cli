@@ -1,4 +1,5 @@
 """Tests for environments/ package — config, manager, isolation, bootstrap."""
+
 import json
 import os
 import shutil
@@ -64,9 +65,7 @@ class TestEnvironmentConfig(unittest.TestCase):
 
     def test_custom_port_range(self):
         base = Path("/tmp/test_envs")
-        env = EnvironmentConfig.from_name(
-            "gemini", "gemini-cli", base, port_range=(9000, 9010)
-        )
+        env = EnvironmentConfig.from_name("gemini", "gemini-cli", base, port_range=(9000, 9010))
         self.assertEqual(env.port_range, (9000, 9010))
 
 

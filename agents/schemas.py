@@ -23,12 +23,8 @@ class DebugStrategy(BaseModel):
 
     summary: str = Field(description="Concise summary of the error")
     diagnosis: str = Field(description="Detailed explanation of the probable cause")
-    fix_strategy: str = Field(
-        description="Step-by-step plan or code suggestion to resolve the issue"
-    )
-    severity: Literal["CRITICAL", "HIGH", "MEDIUM", "LOW"] = Field(
-        description="Error severity level"
-    )
+    fix_strategy: str = Field(description="Step-by-step plan or code suggestion to resolve the issue")
+    severity: Literal["CRITICAL", "HIGH", "MEDIUM", "LOW"] = Field(description="Error severity level")
 
     @property
     def fix_instructions(self) -> str:
@@ -38,6 +34,7 @@ class DebugStrategy(BaseModel):
 
 class PlanStep(BaseModel):
     """A single step in an execution plan."""
+
     step_number: int = Field(description="Sequential step number (1-indexed)")
     description: str = Field(description="Clear, actionable description of the step")
     target_file: Optional[str] = Field(default=None, description="Primary file this step modifies (if any)")
@@ -46,47 +43,40 @@ class PlanStep(BaseModel):
 
 class PlannerOutput(BaseModel):
     """Structured output from the PlannerAgent with Chain-of-Thought reasoning."""
-    
+
     # Chain-of-Thought reasoning
     analysis: str = Field(description="Step 1: Analyze the goal and current codebase state")
     gap_assessment: str = Field(description="Step 2: Identify structural gaps and requirements")
     approach: str = Field(description="Step 3: Describe the overall approach and strategy")
     risk_assessment: str = Field(description="Step 4: Predict potential failure modes and risks")
-    
+
     # Final structured output
     plan: List[PlanStep] = Field(description="The generated execution plan as ordered steps")
     confidence: float = Field(ge=0.0, le=1.0, description="Confidence score (0.0-1.0) in this plan")
     total_steps: int = Field(description="Total number of steps in the plan")
-    estimated_complexity: Literal["low", "medium", "high"] = Field(
-        description="Estimated complexity of the goal"
-    )
+    estimated_complexity: Literal["low", "medium", "high"] = Field(description="Estimated complexity of the goal")
 
 
 class CriticIssue(BaseModel):
     """A specific issue identified during critique."""
-    severity: Literal["critical", "major", "minor", "suggestion"] = Field(
-        description="Severity of the issue"
-    )
-    category: Literal["completeness", "clarity", "feasibility", "alignment", "safety", "other"] = Field(
-        description="Category of the issue"
-    )
+
+    severity: Literal["critical", "major", "minor", "suggestion"] = Field(description="Severity of the issue")
+    category: Literal["completeness", "clarity", "feasibility", "alignment", "safety", "correctness", "maintainability", "performance", "security", "other"] = Field(description="Category of the issue")
     description: str = Field(description="Detailed description of the issue")
     recommendation: str = Field(description="Specific recommendation to address this issue")
 
 
 class CriticOutput(BaseModel):
     """Structured output from the CriticAgent with Chain-of-Thought reasoning."""
-    
+
     # Chain-of-Thought reasoning
     initial_assessment: str = Field(description="Step 1: Initial impression and high-level assessment")
     completeness_check: str = Field(description="Step 2: Check if all requirements are addressed")
     feasibility_analysis: str = Field(description="Step 3: Analyze feasibility of each component")
     risk_identification: str = Field(description="Step 4: Identify potential risks and edge cases")
-    
+
     # Final structured output
-    overall_assessment: Literal["approve", "approve_with_changes", "request_changes", "reject"] = Field(
-        description="Overall assessment of the plan/code"
-    )
+    overall_assessment: Literal["approve", "approve_with_changes", "request_changes", "reject"] = Field(description="Overall assessment of the plan/code")
     confidence: float = Field(ge=0.0, le=1.0, description="Confidence in this assessment")
     issues: List[CriticIssue] = Field(default_factory=list, description="List of identified issues")
     positive_aspects: List[str] = Field(default_factory=list, description="What's done well")
@@ -95,6 +85,7 @@ class CriticOutput(BaseModel):
 
 class CodeChange(BaseModel):
     """A single code change to be applied."""
+
     file_path: str = Field(description="Target file path for this change")
     search_block: str = Field(description="Exact code to find and replace (for matching)")
     replace_block: str = Field(description="New code to insert")
@@ -103,13 +94,13 @@ class CodeChange(BaseModel):
 
 class CoderOutput(BaseModel):
     """Structured output from the CoderAgent with Chain-of-Thought reasoning."""
-    
+
     # Chain-of-Thought reasoning
     problem_analysis: str = Field(description="Step 1: Analyze the problem and requirements")
     approach_selection: str = Field(description="Step 2: Select the best implementation approach")
     design_considerations: str = Field(description="Step 3: Consider edge cases and design patterns")
     testing_strategy: str = Field(description="Step 4: Plan how to verify the implementation")
-    
+
     # Final structured output
     aura_target: str = Field(description="Target file path for the main code")
     code: str = Field(description="The generated Python code")
@@ -121,16 +112,14 @@ class CoderOutput(BaseModel):
 
 class MutationValidationOutput(BaseModel):
     """Structured output for mutation validation (used by CriticAgent)."""
-    
+
     # Chain-of-Thought reasoning
     impact_analysis: str = Field(description="Step 1: Analyze the potential impact of this mutation")
     safety_assessment: str = Field(description="Step 2: Assess safety concerns and risks")
     effectiveness_evaluation: str = Field(description="Step 3: Evaluate likelihood of success")
-    
+
     # Final structured output
-    decision: Literal["APPROVED", "REJECTED", "NEEDS_REVISION"] = Field(
-        description="Validation decision"
-    )
+    decision: Literal["APPROVED", "REJECTED", "NEEDS_REVISION"] = Field(description="Validation decision")
     confidence_score: float = Field(ge=0.0, le=1.0, description="Confidence in this decision")
     impact_assessment: str = Field(description="Summary of positive and negative impacts")
     reasoning: str = Field(description="Detailed reasoning for the decision")
@@ -148,6 +137,7 @@ from typing import Dict, Any
 
 class InnovationPhase(str, Enum):
     """Phases of the Innovation Catalyst methodology."""
+
     IMMERSION = "immersion"
     DIVERGENCE = "divergence"
     CONVERGENCE = "convergence"
@@ -157,6 +147,7 @@ class InnovationPhase(str, Enum):
 
 class BrainstormingTechnique(str, Enum):
     """Supported brainstorming techniques."""
+
     SCAMPER = "SCAMPER"
     SIX_THINKING_HATS = "Six Thinking Hats"
     MIND_MAPPING = "Mind Mapping"
@@ -169,6 +160,7 @@ class BrainstormingTechnique(str, Enum):
 
 class Idea(BaseModel):
     """A single idea generated during brainstorming."""
+
     description: str = Field(description="Detailed description of the idea")
     technique: str = Field(description="Brainstorming technique that generated this idea")
     novelty: float = Field(ge=0.0, le=1.0, description="Novelty score (0-1)")
@@ -179,6 +171,7 @@ class Idea(BaseModel):
 
 class TechniqueResult(BaseModel):
     """Results from a single brainstorming technique."""
+
     technique: str = Field(description="Name of the technique")
     ideas: List[Idea] = Field(description="Ideas generated by this technique")
     idea_count: int = Field(description="Number of ideas generated")
@@ -187,6 +180,7 @@ class TechniqueResult(BaseModel):
 
 class InnovationOutput(BaseModel):
     """Structured output from the InnovationSwarm agent."""
+
     session_id: str = Field(description="Unique session identifier")
     problem_statement: str = Field(description="Original problem being solved")
     phase: InnovationPhase = Field(description="Current innovation phase")
@@ -205,6 +199,7 @@ class InnovationOutput(BaseModel):
 
 class InnovationSessionState(BaseModel):
     """Tracks the complete state of an innovation session."""
+
     session_id: str = Field(description="Unique session identifier")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
@@ -222,6 +217,7 @@ class InnovationSessionState(BaseModel):
 
 class MetaConductorOutput(BaseModel):
     """Output from the MetaConductor orchestrating innovation sessions."""
+
     session_id: str = Field(description="Session identifier")
     problem_statement: str = Field(description="Original problem")
     phases: List[InnovationPhase] = Field(description="All phases in the workflow")

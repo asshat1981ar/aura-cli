@@ -4,6 +4,7 @@
 Assembles goal classification, memory hints, skill recommendations,
 and MCP tool availability — without making any LLM calls.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -102,10 +103,7 @@ class ContextBuilder:
         — counts keyword hits per goal type and picks the best match.
         """
         goal_lower = goal.lower()
-        scores = {
-            gt: sum(1 for kw in kws if kw in goal_lower)
-            for gt, kws in _GOAL_TYPE_HINTS.items()
-        }
+        scores = {gt: sum(1 for kw in kws if kw in goal_lower) for gt, kws in _GOAL_TYPE_HINTS.items()}
         best = max(scores, key=scores.get)
         return best if scores[best] > 0 else "default"
 
@@ -125,12 +123,9 @@ class ContextBuilder:
             memories = self._brain.recall_with_budget(max_tokens=2000)
             # Simple keyword filtering for relevance
             goal_words = set(goal.lower().split())
-            relevant = [
-                m for m in memories
-                if any(w in m.lower() for w in goal_words)
-            ]
+            relevant = [m for m in memories if any(w in m.lower() for w in goal_words)]
             return relevant or memories[:5]
-        except Exception:
+        except (AttributeError, TypeError, KeyError, RuntimeError):
             return []
 
     def _get_available_mcp_categories(self) -> List[str]:
@@ -154,7 +149,7 @@ class ContextBuilder:
                 "relevant_symbols": relevant,
                 "impact_radius": impact,
             }
-        except Exception:
+        except (AttributeError, TypeError, KeyError, RuntimeError):
             return {}
 
     def build(self, goal: str) -> Dict[str, Any]:
@@ -177,10 +172,7 @@ class ContextBuilder:
         if context:
             parts = []
             if context.get("memory_hints"):
-                hints = "\n".join(
-                    f"- {h.get('content', h) if isinstance(h, dict) else h}"
-                    for h in context["memory_hints"]
-                )
+                hints = "\n".join(f"- {h.get('content', h) if isinstance(h, dict) else h}" for h in context["memory_hints"])
                 parts.append(f"### Memory Hints\n{hints}")
             if context.get("recommended_skills"):
                 skills = ", ".join(context["recommended_skills"])
@@ -189,9 +181,7 @@ class ContextBuilder:
                 patterns = "\n".join(f"- {p}" for p in context["failure_patterns"])
                 parts.append(f"### Failure Patterns\nRecent failures for this goal type:\n{patterns}")
             if context.get("skill_weights"):
-                sorted_skills = sorted(
-                    context["skill_weights"].items(), key=lambda x: x[1], reverse=True
-                )
+                sorted_skills = sorted(context["skill_weights"].items(), key=lambda x: x[1], reverse=True)
                 weights_str = ", ".join(f"{name} ({w:.1f})" for name, w in sorted_skills)
                 parts.append(f"### Skill Weights\n{weights_str}")
             if context.get("workflow_info"):

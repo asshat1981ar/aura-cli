@@ -23,6 +23,7 @@ Typical usage::
     else:
         print(f"Wrote {len(result.code)} chars → {result.target_path}")
 """
+
 import re
 import shutil
 from dataclasses import dataclass, field
@@ -34,6 +35,7 @@ from typing import Optional
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ApplyResult:
@@ -61,16 +63,14 @@ class ApplyResult:
 
     def __str__(self):
         if self.success:
-            return (
-                f"[ApplyResult OK] wrote {len(self.code or '')} chars "
-                f"→ {self.target_path}  (backup: {self.backup_path})"
-            )
+            return f"[ApplyResult OK] wrote {len(self.code or '')} chars → {self.target_path}  (backup: {self.backup_path})"
         return f"[ApplyResult FAIL] {self.error}"
 
 
 # ---------------------------------------------------------------------------
 # Agent
 # ---------------------------------------------------------------------------
+
 
 class ApplicatorAgent:
     """Parses LLM-generated code and writes it to the real filesystem.
@@ -168,10 +168,7 @@ class ApplicatorAgent:
                 target_path=None,
                 backup_path=None,
                 code=code,
-                error=(
-                    "No target path provided and no # AURA_TARGET: directive "
-                    "found in the code block."
-                ),
+                error=("No target path provided and no # AURA_TARGET: directive found in the code block."),
             )
 
         path = Path(resolved_path)
@@ -201,10 +198,7 @@ class ApplicatorAgent:
                 error=f"Filesystem write failed: {exc}",
             )
 
-        self.brain.remember(
-            f"ApplicatorAgent wrote {len(code)} chars to {resolved_path} "
-            f"(backup: {backup_path})"
-        )
+        self.brain.remember(f"ApplicatorAgent wrote {len(code)} chars to {resolved_path} (backup: {backup_path})")
 
         return ApplyResult(
             success=True,

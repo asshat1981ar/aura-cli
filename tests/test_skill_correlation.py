@@ -1,4 +1,5 @@
 """Tests for core.skill_correlation — skill correlation matrix."""
+
 import json
 import os
 import tempfile
@@ -124,11 +125,14 @@ class TestGetCorrelation:
 class TestSuggestSkills:
     def test_suggests_correlated_skills(self, matrix):
         # Build correlation: a+b succeed together, a+c succeed together
-        matrix.record_cycle([
-            SkillOutcome(skill_name="a", goal_type="feature", success=True),
-            SkillOutcome(skill_name="b", goal_type="feature", success=True),
-            SkillOutcome(skill_name="c", goal_type="feature", success=True),
-        ], cycle_success=True)
+        matrix.record_cycle(
+            [
+                SkillOutcome(skill_name="a", goal_type="feature", success=True),
+                SkillOutcome(skill_name="b", goal_type="feature", success=True),
+                SkillOutcome(skill_name="c", goal_type="feature", success=True),
+            ],
+            cycle_success=True,
+        )
 
         suggestions = matrix.suggest_skills(["a"], top_k=3)
         names = [s[0] for s in suggestions]
@@ -136,10 +140,13 @@ class TestSuggestSkills:
         assert "c" in names
 
     def test_does_not_suggest_base_skills(self, matrix):
-        matrix.record_cycle([
-            SkillOutcome(skill_name="a", goal_type="feature", success=True),
-            SkillOutcome(skill_name="b", goal_type="feature", success=True),
-        ], cycle_success=True)
+        matrix.record_cycle(
+            [
+                SkillOutcome(skill_name="a", goal_type="feature", success=True),
+                SkillOutcome(skill_name="b", goal_type="feature", success=True),
+            ],
+            cycle_success=True,
+        )
 
         suggestions = matrix.suggest_skills(["a", "b"], top_k=3)
         names = [s[0] for s in suggestions]
@@ -152,10 +159,13 @@ class TestSuggestSkills:
 
     def test_excludes_negatively_correlated(self, matrix):
         # Only failure cycles => negative correlation
-        matrix.record_cycle([
-            SkillOutcome(skill_name="a", goal_type="feature", success=False),
-            SkillOutcome(skill_name="bad", goal_type="feature", success=False),
-        ], cycle_success=False)
+        matrix.record_cycle(
+            [
+                SkillOutcome(skill_name="a", goal_type="feature", success=False),
+                SkillOutcome(skill_name="bad", goal_type="feature", success=False),
+            ],
+            cycle_success=False,
+        )
 
         suggestions = matrix.suggest_skills(["a"], top_k=3)
         names = [s[0] for s in suggestions]
@@ -169,11 +179,14 @@ class TestDiscoverClusters:
     def test_discovers_cluster(self, matrix):
         # Three skills that always succeed together
         for _ in range(3):
-            matrix.record_cycle([
-                SkillOutcome(skill_name="x", goal_type="feature", success=True),
-                SkillOutcome(skill_name="y", goal_type="feature", success=True),
-                SkillOutcome(skill_name="z", goal_type="feature", success=True),
-            ], cycle_success=True)
+            matrix.record_cycle(
+                [
+                    SkillOutcome(skill_name="x", goal_type="feature", success=True),
+                    SkillOutcome(skill_name="y", goal_type="feature", success=True),
+                    SkillOutcome(skill_name="z", goal_type="feature", success=True),
+                ],
+                cycle_success=True,
+            )
 
         clusters = matrix.discover_clusters(min_correlation=0.5, min_size=2)
         assert len(clusters) >= 1
@@ -185,18 +198,24 @@ class TestDiscoverClusters:
 
     def test_no_clusters_below_threshold(self, matrix):
         # Only failure cycles => negative correlation, no clusters
-        matrix.record_cycle([
-            SkillOutcome(skill_name="a", goal_type="feature", success=False),
-            SkillOutcome(skill_name="b", goal_type="feature", success=False),
-        ], cycle_success=False)
+        matrix.record_cycle(
+            [
+                SkillOutcome(skill_name="a", goal_type="feature", success=False),
+                SkillOutcome(skill_name="b", goal_type="feature", success=False),
+            ],
+            cycle_success=False,
+        )
 
         clusters = matrix.discover_clusters(min_correlation=0.5, min_size=2)
         assert clusters == []
 
     def test_min_size_filter(self, matrix):
-        matrix.record_cycle([
-            SkillOutcome(skill_name="solo", goal_type="feature", success=True),
-        ], cycle_success=True)
+        matrix.record_cycle(
+            [
+                SkillOutcome(skill_name="solo", goal_type="feature", success=True),
+            ],
+            cycle_success=True,
+        )
 
         clusters = matrix.discover_clusters(min_correlation=0.5, min_size=2)
         assert clusters == []
@@ -207,26 +226,41 @@ class TestDiscoverClusters:
 
 class TestSuccessRate:
     def test_rate_by_goal_type(self, matrix):
-        matrix.record_cycle([
-            SkillOutcome(skill_name="linter", goal_type="bug_fix", success=True),
-        ], cycle_success=True)
-        matrix.record_cycle([
-            SkillOutcome(skill_name="linter", goal_type="bug_fix", success=False),
-        ], cycle_success=False)
+        matrix.record_cycle(
+            [
+                SkillOutcome(skill_name="linter", goal_type="bug_fix", success=True),
+            ],
+            cycle_success=True,
+        )
+        matrix.record_cycle(
+            [
+                SkillOutcome(skill_name="linter", goal_type="bug_fix", success=False),
+            ],
+            cycle_success=False,
+        )
 
         rate = matrix.get_skill_success_rate("linter", goal_type="bug_fix")
         assert rate == 0.5
 
     def test_rate_aggregated(self, matrix):
-        matrix.record_cycle([
-            SkillOutcome(skill_name="linter", goal_type="bug_fix", success=True),
-        ], cycle_success=True)
-        matrix.record_cycle([
-            SkillOutcome(skill_name="linter", goal_type="feature", success=True),
-        ], cycle_success=True)
-        matrix.record_cycle([
-            SkillOutcome(skill_name="linter", goal_type="refactor", success=False),
-        ], cycle_success=False)
+        matrix.record_cycle(
+            [
+                SkillOutcome(skill_name="linter", goal_type="bug_fix", success=True),
+            ],
+            cycle_success=True,
+        )
+        matrix.record_cycle(
+            [
+                SkillOutcome(skill_name="linter", goal_type="feature", success=True),
+            ],
+            cycle_success=True,
+        )
+        matrix.record_cycle(
+            [
+                SkillOutcome(skill_name="linter", goal_type="refactor", success=False),
+            ],
+            cycle_success=False,
+        )
 
         rate = matrix.get_skill_success_rate("linter")
         # 2 successes out of 3 total
@@ -237,9 +271,12 @@ class TestSuccessRate:
         assert rate == 0.0
 
     def test_rate_unknown_goal_type(self, matrix):
-        matrix.record_cycle([
-            SkillOutcome(skill_name="linter", goal_type="bug_fix", success=True),
-        ], cycle_success=True)
+        matrix.record_cycle(
+            [
+                SkillOutcome(skill_name="linter", goal_type="bug_fix", success=True),
+            ],
+            cycle_success=True,
+        )
         # Ask for a goal_type that has no data — falls through to aggregated
         rate = matrix.get_skill_success_rate("linter", goal_type="unknown_type")
         # goal_type not in skill_rates, so aggregated path: 1/1 = 1.0
@@ -251,10 +288,13 @@ class TestSuccessRate:
 
 class TestSummary:
     def test_summary_structure(self, matrix):
-        matrix.record_cycle([
-            SkillOutcome(skill_name="a", goal_type="feature", success=True),
-            SkillOutcome(skill_name="b", goal_type="feature", success=True),
-        ], cycle_success=True)
+        matrix.record_cycle(
+            [
+                SkillOutcome(skill_name="a", goal_type="feature", success=True),
+                SkillOutcome(skill_name="b", goal_type="feature", success=True),
+            ],
+            cycle_success=True,
+        )
 
         summary = matrix.get_summary()
         assert "total_skills_tracked" in summary
@@ -294,10 +334,13 @@ class TestSummary:
 class TestPersistence:
     def test_save_and_reload(self, tmp_store):
         m1 = SkillCorrelationMatrix(store_path=tmp_store)
-        m1.record_cycle([
-            SkillOutcome(skill_name="a", goal_type="feature", success=True),
-            SkillOutcome(skill_name="b", goal_type="feature", success=True),
-        ], cycle_success=True)
+        m1.record_cycle(
+            [
+                SkillOutcome(skill_name="a", goal_type="feature", success=True),
+                SkillOutcome(skill_name="b", goal_type="feature", success=True),
+            ],
+            cycle_success=True,
+        )
 
         # Create a new instance that loads from the same file
         m2 = SkillCorrelationMatrix(store_path=tmp_store)
@@ -309,16 +352,22 @@ class TestPersistence:
     def test_save_creates_parent_dirs(self, tmp_path):
         deep_path = tmp_path / "nested" / "dir" / "correlations.json"
         m = SkillCorrelationMatrix(store_path=deep_path)
-        m.record_cycle([
-            SkillOutcome(skill_name="x", goal_type="feature", success=True),
-        ], cycle_success=True)
+        m.record_cycle(
+            [
+                SkillOutcome(skill_name="x", goal_type="feature", success=True),
+            ],
+            cycle_success=True,
+        )
         assert deep_path.exists()
 
     def test_reload_preserves_skill_rates(self, tmp_store):
         m1 = SkillCorrelationMatrix(store_path=tmp_store)
-        m1.record_cycle([
-            SkillOutcome(skill_name="linter", goal_type="bug_fix", success=True),
-        ], cycle_success=True)
+        m1.record_cycle(
+            [
+                SkillOutcome(skill_name="linter", goal_type="bug_fix", success=True),
+            ],
+            cycle_success=True,
+        )
 
         m2 = SkillCorrelationMatrix(store_path=tmp_store)
         assert m2.skill_rates["bug_fix"]["linter"]["success"] == 1
@@ -326,10 +375,13 @@ class TestPersistence:
     def test_reload_preserves_clusters(self, tmp_store):
         m1 = SkillCorrelationMatrix(store_path=tmp_store)
         for _ in range(3):
-            m1.record_cycle([
-                SkillOutcome(skill_name="a", goal_type="feature", success=True),
-                SkillOutcome(skill_name="b", goal_type="feature", success=True),
-            ], cycle_success=True)
+            m1.record_cycle(
+                [
+                    SkillOutcome(skill_name="a", goal_type="feature", success=True),
+                    SkillOutcome(skill_name="b", goal_type="feature", success=True),
+                ],
+                cycle_success=True,
+            )
         m1.discover_clusters(min_correlation=0.5, min_size=2)
         m1._save()
 
@@ -349,9 +401,12 @@ class TestPersistence:
 class TestEdgeCases:
     def test_record_single_skill_cycle(self, matrix):
         # Single skill => no pairs to record
-        matrix.record_cycle([
-            SkillOutcome(skill_name="solo", goal_type="feature", success=True),
-        ], cycle_success=True)
+        matrix.record_cycle(
+            [
+                SkillOutcome(skill_name="solo", goal_type="feature", success=True),
+            ],
+            cycle_success=True,
+        )
         assert matrix.skill_rates["feature"]["solo"]["success"] == 1
         # No pairwise entries
         assert len(matrix.matrix) == 0
@@ -370,8 +425,11 @@ class TestEdgeCases:
         assert clusters == []
 
     def test_correlation_is_symmetric(self, matrix):
-        matrix.record_cycle([
-            SkillOutcome(skill_name="a", goal_type="feature", success=True),
-            SkillOutcome(skill_name="b", goal_type="feature", success=True),
-        ], cycle_success=True)
+        matrix.record_cycle(
+            [
+                SkillOutcome(skill_name="a", goal_type="feature", success=True),
+                SkillOutcome(skill_name="b", goal_type="feature", success=True),
+            ],
+            cycle_success=True,
+        )
         assert matrix.get_correlation("a", "b") == matrix.get_correlation("b", "a")

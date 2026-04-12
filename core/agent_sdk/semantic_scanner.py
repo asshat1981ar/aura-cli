@@ -4,6 +4,7 @@ Layer 1 (AST):   Extract symbols, imports, call sites from Python files.
 Layer 2 (Graph): Build file-level import relationships, compute coupling scores.
 Layer 3 (LLM):   Generate module/function summaries via ModelAdapter (optional).
 """
+
 from __future__ import annotations
 
 import ast
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Internal AST helpers
 # ---------------------------------------------------------------------------
+
 
 def _decorator_name(node: ast.expr) -> str:
     """Return a string name for a decorator node."""
@@ -56,7 +58,7 @@ def _arg_annotation(arg: ast.arg) -> str:
         return ""
     try:
         return ast.unparse(arg.annotation)
-    except Exception:
+    except (ValueError, TypeError):
         return ""
 
 
@@ -80,7 +82,7 @@ def _build_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
         if di >= 0:
             try:
                 param += f" = {ast.unparse(args.defaults[di])}"
-            except Exception:
+            except (ValueError, TypeError):
                 param += " = ..."
         parts.append(param)
 
@@ -104,7 +106,7 @@ def _build_signature(node: ast.FunctionDef | ast.AsyncFunctionDef) -> str:
     if node.returns:
         try:
             sig += f" -> {ast.unparse(node.returns)}"
-        except Exception:
+        except (ValueError, TypeError):
             pass
     return sig
 
@@ -124,6 +126,7 @@ def _parse_tree(file_path: Path) -> Optional[ast.Module]:
 # ---------------------------------------------------------------------------
 # Layer 1 — AST extraction (module-level functions)
 # ---------------------------------------------------------------------------
+
 
 def extract_symbols(file_path: Path) -> List[Dict[str, Any]]:
     """Extract functions, classes, and methods from a Python file.
@@ -152,16 +155,18 @@ def extract_symbols(file_path: Path) -> List[Dict[str, Any]]:
         if isinstance(node, ast.ClassDef):
             docstring = ast.get_docstring(node) or None
             bases = [_base_name(b) for b in node.bases]
-            results.append({
-                "name": node.name,
-                "kind": "class",
-                "line_start": node.lineno,
-                "line_end": node.end_lineno or node.lineno,
-                "signature": node.name,
-                "docstring": docstring,
-                "decorators": [_decorator_name(d) for d in node.decorator_list],
-                "bases": bases,
-            })
+            results.append(
+                {
+                    "name": node.name,
+                    "kind": "class",
+                    "line_start": node.lineno,
+                    "line_end": node.end_lineno or node.lineno,
+                    "signature": node.name,
+                    "docstring": docstring,
+                    "decorators": [_decorator_name(d) for d in node.decorator_list],
+                    "bases": bases,
+                }
+            )
 
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             docstring = ast.get_docstring(node) or None
@@ -180,16 +185,18 @@ def extract_symbols(file_path: Path) -> List[Dict[str, Any]]:
             else:
                 kind = "function"
 
-            results.append({
-                "name": node.name,
-                "kind": kind,
-                "line_start": node.lineno,
-                "line_end": node.end_lineno or node.lineno,
-                "signature": _build_signature(node),
-                "docstring": docstring,
-                "decorators": decorators,
-                "bases": [],
-            })
+            results.append(
+                {
+                    "name": node.name,
+                    "kind": kind,
+                    "line_start": node.lineno,
+                    "line_end": node.end_lineno or node.lineno,
+                    "signature": _build_signature(node),
+                    "docstring": docstring,
+                    "decorators": decorators,
+                    "bases": [],
+                }
+            )
 
     return results
 
@@ -208,19 +215,23 @@ def extract_imports(file_path: Path) -> List[Dict[str, Any]]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                results.append({
-                    "imported_module": alias.name,
-                    "imported_name": alias.asname,
-                    "is_from_import": False,
-                })
+                results.append(
+                    {
+                        "imported_module": alias.name,
+                        "imported_name": alias.asname,
+                        "is_from_import": False,
+                    }
+                )
         elif isinstance(node, ast.ImportFrom):
             module = node.module or ""
             for alias in node.names:
-                results.append({
-                    "imported_module": module,
-                    "imported_name": alias.name,
-                    "is_from_import": True,
-                })
+                results.append(
+                    {
+                        "imported_module": module,
+                        "imported_name": alias.name,
+                        "is_from_import": True,
+                    }
+                )
     return results
 
 
@@ -253,6 +264,7 @@ def extract_call_sites(file_path: Path, symbol: Dict[str, Any]) -> List[Dict[str
 # ---------------------------------------------------------------------------
 # Layer 2 — Relationship analysis (module-level functions)
 # ---------------------------------------------------------------------------
+
 
 def build_relationships(db: SemanticDB) -> None:
     """Build file-level import relationships by resolving module names to file paths.
@@ -309,6 +321,7 @@ def compute_coupling_scores(db: SemanticDB) -> None:
 # Layer 3 — LLM enrichment (module-level functions)
 # ---------------------------------------------------------------------------
 
+
 def generate_module_summary(
     db: SemanticDB,
     file_id: int,
@@ -324,15 +337,12 @@ def generate_module_summary(
         # Truncate very large files to keep prompts manageable
         if len(source) > 8000:
             source = source[:8000] + "\n... (truncated)"
-        prompt = (
-            f"Summarise this Python module in 1-2 sentences. "
-            f"Focus on purpose and key abstractions.\n\n```python\n{source}\n```"
-        )
+        prompt = f"Summarise this Python module in 1-2 sentences. Focus on purpose and key abstractions.\n\n```python\n{source}\n```"
         summary = model_adapter.respond(prompt)
         if summary:
             db.update_file_summary(file_id, summary)
         return summary
-    except Exception as exc:
+    except (OSError, RuntimeError, ValueError, ConnectionError, TimeoutError) as exc:
         logger.debug("generate_module_summary failed: %s", exc)
         return None
 
@@ -358,7 +368,7 @@ def generate_function_intents(
         source_lines = []
 
     for batch_start in range(0, len(symbols), batch_size):
-        batch = symbols[batch_start: batch_start + batch_size]
+        batch = symbols[batch_start : batch_start + batch_size]
         # Build a prompt listing all functions in this batch
         entries: List[str] = []
         for sym in batch:
@@ -368,15 +378,9 @@ def generate_function_intents(
             start = sym.get("line_start", 1) - 1
             end = sym.get("line_end", start + 1)
             snippet = "\n".join(source_lines[start:end])[:500] if source_lines else ""
-            entries.append(
-                f"Function: {name}\nSignature: {sig}\nDocstring: {doc}\nBody snippet:\n{snippet}"
-            )
+            entries.append(f"Function: {name}\nSignature: {sig}\nDocstring: {doc}\nBody snippet:\n{snippet}")
 
-        prompt = (
-            "For each function below, write one sentence describing its intent. "
-            "Reply in the format 'FunctionName: intent.' on separate lines.\n\n"
-            + "\n---\n".join(entries)
-        )
+        prompt = "For each function below, write one sentence describing its intent. Reply in the format 'FunctionName: intent.' on separate lines.\n\n" + "\n---\n".join(entries)
         try:
             response = model_adapter.respond(prompt)
             # Parse "Name: intent." lines
@@ -394,7 +398,7 @@ def generate_function_intents(
                         # fallback: store the raw response for first symbol in batch
                         summary = response.strip()
                     results[db_id] = summary
-        except Exception as exc:
+        except (OSError, RuntimeError, ValueError, ConnectionError, TimeoutError) as exc:
             logger.debug("generate_function_intents batch failed: %s", exc)
             # Fill with empty strings so callers know the IDs were processed
             for sym in batch:
@@ -457,10 +461,7 @@ class SemanticScanner:
         found: List[Path] = []
         for dirpath, dirnames, filenames in os.walk(self.project_root):
             # Prune excluded directories in-place
-            dirnames[:] = [
-                d for d in dirnames
-                if not self._is_excluded(d)
-            ]
+            dirnames[:] = [d for d in dirnames if not self._is_excluded(d)]
             for fname in filenames:
                 if fname.endswith(".py"):
                     found.append(Path(dirpath) / fname)
@@ -468,6 +469,7 @@ class SemanticScanner:
 
     def _is_excluded(self, name: str) -> bool:
         import fnmatch
+
         for pat in self.exclude_patterns:
             if fnmatch.fnmatch(name, pat):
                 return True
@@ -547,7 +549,7 @@ class SemanticScanner:
             for call in calls:
                 try:
                     db.insert_call_site(sym_id, call["callee_name"], call["line"])
-                except Exception:
+                except (OSError, KeyError, TypeError):
                     pass
 
             sym_copy = dict(sym)
@@ -582,20 +584,15 @@ class SemanticScanner:
                 llm_calls += 1
 
             # Function intent summaries (only for larger functions)
-            eligible = [
-                s for s in info.get("symbols", [])
-                if s["kind"] in ("function", "method", "staticmethod", "classmethod")
-                and (s["line_end"] - s["line_start"]) >= self.min_function_lines - 1
-            ]
+            eligible = [s for s in info.get("symbols", []) if s["kind"] in ("function", "method", "staticmethod", "classmethod") and (s["line_end"] - s["line_start"]) >= self.min_function_lines - 1]
             if eligible:
-                intents = generate_function_intents(
-                    eligible, file_path, self.model_adapter, batch_size=self.batch_size
-                )
+                intents = generate_function_intents(eligible, file_path, self.model_adapter, batch_size=self.batch_size)
                 for sym_id, summary_text in intents.items():
                     if summary_text:
                         db.update_symbol_summary(sym_id, summary_text)
                 # Count batches as calls
                 import math
+
                 llm_calls += math.ceil(len(eligible) / self.batch_size)
 
         return llm_calls, llm_cost
@@ -654,9 +651,7 @@ class SemanticScanner:
         finally:
             db.close()
 
-    def scan_incremental(
-        self, changed_files: List[str], git_sha: str = "unknown"
-    ) -> Dict[str, Any]:
+    def scan_incremental(self, changed_files: List[str], git_sha: str = "unknown") -> Dict[str, Any]:
         """Re-scan only the listed files. Delete removed files. Rebuild relationships.
 
         changed_files: list of relative paths (e.g. ["core/foo.py"])
@@ -724,12 +719,16 @@ class SemanticScanner:
 
         # Resolve current git HEAD
         try:
-            current_sha = subprocess.check_output(
-                ["git", "rev-parse", "HEAD"],
-                cwd=str(self.project_root),
-                stderr=subprocess.DEVNULL,
-            ).decode().strip()
-        except Exception:
+            current_sha = (
+                subprocess.check_output(
+                    ["git", "rev-parse", "HEAD"],
+                    cwd=str(self.project_root),
+                    stderr=subprocess.DEVNULL,
+                )
+                .decode()
+                .strip()
+            )
+        except (OSError, subprocess.SubprocessError):
             # git unavailable — do a full scan
             return self.scan_full()
 
@@ -743,19 +742,20 @@ class SemanticScanner:
 
         # Find changed files between last_sha and HEAD
         try:
-            diff_output = subprocess.check_output(
-                ["git", "diff", "--name-only", last_sha, current_sha],
-                cwd=str(self.project_root),
-                stderr=subprocess.DEVNULL,
-            ).decode().strip()
-        except Exception:
+            diff_output = (
+                subprocess.check_output(
+                    ["git", "diff", "--name-only", last_sha, current_sha],
+                    cwd=str(self.project_root),
+                    stderr=subprocess.DEVNULL,
+                )
+                .decode()
+                .strip()
+            )
+        except (OSError, subprocess.SubprocessError):
             # SHA might be orphaned; do a full scan
             return self.scan_full(git_sha=current_sha)
 
-        changed = [
-            line for line in diff_output.splitlines()
-            if line.endswith(".py")
-        ]
+        changed = [line for line in diff_output.splitlines() if line.endswith(".py")]
         if not changed:
             # No Python files changed; record the new SHA without full re-scan
             return self.scan_incremental([], git_sha=current_sha)

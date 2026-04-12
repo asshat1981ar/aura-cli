@@ -16,6 +16,7 @@ PRD-001 R4 targets:
   tools/aura_control_mcp.py → _get_memories_cached() + count_memories()
   memory/brain.py        → added count_memories() method
 """
+
 from __future__ import annotations
 
 import inspect
@@ -38,6 +39,7 @@ if str(ROOT) not in sys.path:
 # Helper: build a mock Brain with fast methods
 # ---------------------------------------------------------------------------
 
+
 def _make_mock_brain(entries=None):
     b = MagicMock()
     _data = entries or ["memory 1", "memory 2", "memory 3"]
@@ -54,6 +56,7 @@ def _make_mock_brain(entries=None):
 # 1. Grep-level regression: no recall_all() in prompt-embedding contexts
 # ---------------------------------------------------------------------------
 
+
 class TestNoRecallAllInAgents(unittest.TestCase):
     """Verify that no agent embeds recall_all() directly in an f-string prompt."""
 
@@ -62,56 +65,47 @@ class TestNoRecallAllInAgents(unittest.TestCase):
 
     def test_coder_no_recall_all(self):
         src = self._source("agents/coder.py")
-        self.assertNotIn("recall_all()", src,
-                         "agents/coder.py still calls recall_all()")
+        self.assertNotIn("recall_all()", src, "agents/coder.py still calls recall_all()")
 
     def test_critic_no_recall_all(self):
         src = self._source("agents/critic.py")
-        self.assertNotIn("recall_all()", src,
-                         "agents/critic.py still calls recall_all()")
+        self.assertNotIn("recall_all()", src, "agents/critic.py still calls recall_all()")
 
     def test_scaffolder_no_recall_all(self):
         src = self._source("agents/scaffolder.py")
-        self.assertNotIn("recall_all()", src,
-                         "agents/scaffolder.py still calls recall_all()")
+        self.assertNotIn("recall_all()", src, "agents/scaffolder.py still calls recall_all()")
 
     def test_tester_no_recall_all(self):
         src = self._source("agents/tester.py")
-        self.assertNotIn("recall_all()", src,
-                         "agents/tester.py still calls recall_all()")
+        self.assertNotIn("recall_all()", src, "agents/tester.py still calls recall_all()")
 
     def test_ingest_no_recall_all(self):
         src = self._source("agents/ingest.py")
-        self.assertNotIn("recall_all()", src,
-                         "agents/ingest.py still calls recall_all()")
+        self.assertNotIn("recall_all()", src, "agents/ingest.py still calls recall_all()")
 
     def test_router_no_recall_all(self):
         src = self._source("agents/router.py")
-        self.assertNotIn("recall_all()", src,
-                         "agents/router.py still calls recall_all()")
+        self.assertNotIn("recall_all()", src, "agents/router.py still calls recall_all()")
 
     def test_evolution_loop_no_recall_all(self):
         src = self._source("core/evolution_loop.py")
-        self.assertNotIn("recall_all()", src,
-                         "core/evolution_loop.py still calls recall_all()")
+        self.assertNotIn("recall_all()", src, "core/evolution_loop.py still calls recall_all()")
 
     def test_closed_loop_no_recall_all(self):
         src = self._source("core/closed_loop.py")
-        self.assertNotIn("recall_all()", src,
-                         "core/closed_loop.py still calls recall_all()")
+        self.assertNotIn("recall_all()", src, "core/closed_loop.py still calls recall_all()")
 
     def test_mcp_control_no_recall_all(self):
         src = self._source("tools/aura_control_mcp.py")
-        self.assertNotIn("recall_all()", src,
-                         "tools/aura_control_mcp.py still calls recall_all()")
+        self.assertNotIn("recall_all()", src, "tools/aura_control_mcp.py still calls recall_all()")
 
 
 # ---------------------------------------------------------------------------
 # 2. Replacement method presence checks
 # ---------------------------------------------------------------------------
 
-class TestReplacementMethodsPresent(unittest.TestCase):
 
+class TestReplacementMethodsPresent(unittest.TestCase):
     def test_coder_uses_recall_with_budget(self):
         src = (ROOT / "agents/coder.py").read_text()
         self.assertIn("recall_with_budget", src)
@@ -151,15 +145,16 @@ class TestReplacementMethodsPresent(unittest.TestCase):
 # 3. Brain.count_memories() method
 # ---------------------------------------------------------------------------
 
-class TestBrainCountMemories(unittest.TestCase):
 
+class TestBrainCountMemories(unittest.TestCase):
     def test_count_memories_method_exists(self):
         from memory.brain import Brain
-        self.assertTrue(hasattr(Brain, "count_memories"),
-                        "Brain.count_memories() method not found")
+
+        self.assertTrue(hasattr(Brain, "count_memories"), "Brain.count_memories() method not found")
 
     def test_count_memories_returns_int(self):
         from memory.brain import Brain
+
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
         try:
@@ -172,6 +167,7 @@ class TestBrainCountMemories(unittest.TestCase):
 
     def test_count_memories_increments_on_remember(self):
         from memory.brain import Brain
+
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
         try:
@@ -186,6 +182,7 @@ class TestBrainCountMemories(unittest.TestCase):
     def test_count_memories_faster_than_recall_all(self):
         """count_memories() should be strictly faster than len(recall_all())."""
         from memory.brain import Brain
+
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
         try:
@@ -205,42 +202,43 @@ class TestBrainCountMemories(unittest.TestCase):
                 _ = b.count_memories()
             count_ms = (time.perf_counter() - t0) * 1000 / 20
 
-            self.assertLessEqual(count_ms, recall_all_ms,
-                                 f"count_memories ({count_ms:.2f}ms) slower than "
-                                 f"recall_all ({recall_all_ms:.2f}ms)")
+            self.assertLessEqual(count_ms, recall_all_ms, f"count_memories ({count_ms:.2f}ms) slower than recall_all ({recall_all_ms:.2f}ms)")
         finally:
             os.unlink(db_path)
 
     def test_count_memories_source_uses_count_star(self):
         from memory.brain import Brain
+
         src = inspect.getsource(Brain.count_memories)
-        self.assertIn("COUNT(*)", src.upper(),
-                      "count_memories should use COUNT(*) SQL")
+        self.assertIn("COUNT(*)", src.upper(), "count_memories should use COUNT(*) SQL")
 
 
 # ---------------------------------------------------------------------------
 # 4. MCP memory cache behaviour
 # ---------------------------------------------------------------------------
 
-class TestMCPMemoryCache(unittest.TestCase):
 
+class TestMCPMemoryCache(unittest.TestCase):
     def test_cache_dict_exists(self):
         import tools.aura_control_mcp as mod
+
         self.assertTrue(hasattr(mod, "_memory_cache"))
         self.assertIsInstance(mod._memory_cache, dict)
 
     def test_cache_ttl_constant_exists(self):
         import tools.aura_control_mcp as mod
+
         self.assertTrue(hasattr(mod, "_MEMORY_CACHE_TTL"))
         self.assertGreater(mod._MEMORY_CACHE_TTL, 0)
 
     def test_get_memories_cached_function_exists(self):
         import tools.aura_control_mcp as mod
-        self.assertTrue(hasattr(mod, "_get_memories_cached"),
-                        "_get_memories_cached not found in aura_control_mcp")
+
+        self.assertTrue(hasattr(mod, "_get_memories_cached"), "_get_memories_cached not found in aura_control_mcp")
 
     def test_get_memories_cached_returns_list(self):
         import tools.aura_control_mcp as mod
+
         mod._memory_cache.clear()
         mock_brain = _make_mock_brain(["entry A", "entry B"])
         result = mod._get_memories_cached(mock_brain)
@@ -249,6 +247,7 @@ class TestMCPMemoryCache(unittest.TestCase):
 
     def test_get_memories_cached_hits_cache_on_second_call(self):
         import tools.aura_control_mcp as mod
+
         mod._memory_cache.clear()
         mock_brain = _make_mock_brain(["cached entry"])
         mod._get_memories_cached(mock_brain)
@@ -258,6 +257,7 @@ class TestMCPMemoryCache(unittest.TestCase):
 
     def test_get_memories_cached_refreshes_after_ttl(self):
         import tools.aura_control_mcp as mod
+
         mod._memory_cache.clear()
         mock_brain = _make_mock_brain(["old entry"])
         mod._get_memories_cached(mock_brain)
@@ -272,8 +272,8 @@ class TestMCPMemoryCache(unittest.TestCase):
 # 5. Evolution loop prompt assembly benchmark
 # ---------------------------------------------------------------------------
 
-class TestEvolutionLoopMemoryAssembly(unittest.TestCase):
 
+class TestEvolutionLoopMemoryAssembly(unittest.TestCase):
     def test_evolution_loop_uses_budget_source(self):
         src = (ROOT / "core/evolution_loop.py").read_text()
         self.assertIn("recall_with_budget", src)
@@ -282,6 +282,7 @@ class TestEvolutionLoopMemoryAssembly(unittest.TestCase):
     def test_evolution_loop_memory_snapshot_is_str(self):
         """recall_with_budget returns List[str]; join produces a single str."""
         from memory.brain import Brain
+
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
         try:
@@ -298,6 +299,7 @@ class TestEvolutionLoopMemoryAssembly(unittest.TestCase):
     def test_evolution_loop_assembly_under_10ms(self):
         """Memory assembly with budget should complete in < 10ms on real DB."""
         from memory.brain import Brain
+
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
         try:
@@ -311,8 +313,7 @@ class TestEvolutionLoopMemoryAssembly(unittest.TestCase):
             elapsed_ms = (time.perf_counter() - t0) * 1000
 
             self.assertIsInstance(snapshot, str)
-            self.assertLessEqual(elapsed_ms, 500.0,
-                                 f"Memory assembly took {elapsed_ms:.2f}ms, expected < 500ms")
+            self.assertLessEqual(elapsed_ms, 500.0, f"Memory assembly took {elapsed_ms:.2f}ms, expected < 500ms")
         finally:
             os.unlink(db_path)
 
@@ -321,8 +322,8 @@ class TestEvolutionLoopMemoryAssembly(unittest.TestCase):
 # 6. Router stats lookup
 # ---------------------------------------------------------------------------
 
-class TestRouterStatLookup(unittest.TestCase):
 
+class TestRouterStatLookup(unittest.TestCase):
     def test_router_source_uses_brain_get(self):
         src = (ROOT / "agents/router.py").read_text()
         self.assertIn("brain.get", src)
@@ -330,7 +331,7 @@ class TestRouterStatLookup(unittest.TestCase):
     def test_router_load_stats_uses_kv_store(self):
         src = (ROOT / "agents/router.py").read_text()
         # Should use KV store for O(1) lookup, not scan
-        self.assertIn("brain.get(\"__router_stats__\")", src)
+        self.assertIn('brain.get("__router_stats__")', src)
         self.assertNotIn("recall_recent", src)
         self.assertNotIn("recall_all()", src)
 
@@ -339,8 +340,8 @@ class TestRouterStatLookup(unittest.TestCase):
 # 7. Ingest agent API fix
 # ---------------------------------------------------------------------------
 
-class TestIngestRecallRecent(unittest.TestCase):
 
+class TestIngestRecallRecent(unittest.TestCase):
     def test_ingest_source_uses_recall_recent(self):
         src = (ROOT / "agents/ingest.py").read_text()
         self.assertIn("recall_recent", src)
@@ -350,17 +351,17 @@ class TestIngestRecallRecent(unittest.TestCase):
         src = (ROOT / "agents/ingest.py").read_text()
         # Should limit to <= 100 entries
         import re
+
         limits = [int(m) for m in re.findall(r"recall_recent\(limit=(\d+)\)", src)]
-        self.assertTrue(any(1 <= lim <= 100 for lim in limits),
-                        f"recall_recent limit should be 1-100, got {limits}")
+        self.assertTrue(any(1 <= lim <= 100 for lim in limits), f"recall_recent limit should be 1-100, got {limits}")
 
 
 # ---------------------------------------------------------------------------
 # 8. Closed loop count_memories
 # ---------------------------------------------------------------------------
 
-class TestClosedLoopCountMemories(unittest.TestCase):
 
+class TestClosedLoopCountMemories(unittest.TestCase):
     def test_closed_loop_source_uses_count_memories(self):
         src = (ROOT / "core/closed_loop.py").read_text()
         self.assertIn("count_memories()", src)
@@ -369,6 +370,7 @@ class TestClosedLoopCountMemories(unittest.TestCase):
     def test_closed_loop_snapshot_calls_count_memories(self):
         """Closed loop snapshot() should call count_memories, not recall_all."""
         from core.closed_loop import ClosedDevelopmentLoop
+
         mock_model = MagicMock()
         mock_brain = _make_mock_brain()
         mock_git = MagicMock()
@@ -383,10 +385,11 @@ class TestClosedLoopCountMemories(unittest.TestCase):
 # 9. Full R1-R4 regression
 # ---------------------------------------------------------------------------
 
-class TestFullOptimizationRegression(unittest.TestCase):
 
+class TestFullOptimizationRegression(unittest.TestCase):
     def test_r1_wal_mode(self):
         from memory.brain import Brain
+
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
             db_path = f.name
         try:
@@ -398,6 +401,7 @@ class TestFullOptimizationRegression(unittest.TestCase):
 
     def test_r2_classify_goal_lru(self):
         from core.skill_dispatcher import classify_goal
+
         classify_goal.cache_clear()
         classify_goal("write a test")
         classify_goal("write a test")
@@ -409,23 +413,23 @@ class TestFullOptimizationRegression(unittest.TestCase):
         self.assertIn("ORDER BY id DESC LIMIT", src)
 
     def test_r4_no_recall_all_in_agents(self):
-        for fname in ["agents/coder.py", "agents/critic.py", "agents/scaffolder.py",
-                      "agents/tester.py", "agents/ingest.py", "agents/router.py"]:
+        for fname in ["agents/coder.py", "agents/critic.py", "agents/scaffolder.py", "agents/tester.py", "agents/ingest.py", "agents/router.py"]:
             src = (ROOT / fname).read_text()
             self.assertNotIn("recall_all()", src, f"{fname} still calls recall_all()")
 
     def test_r4_no_recall_all_in_core_tools(self):
-        for fname in ["core/evolution_loop.py", "core/closed_loop.py",
-                      "tools/aura_control_mcp.py"]:
+        for fname in ["core/evolution_loop.py", "core/closed_loop.py", "tools/aura_control_mcp.py"]:
             src = (ROOT / fname).read_text()
             self.assertNotIn("recall_all()", src, f"{fname} still calls recall_all()")
 
     def test_r4_brain_count_memories_method(self):
         from memory.brain import Brain
+
         self.assertTrue(hasattr(Brain, "count_memories"))
 
     def test_r4_mcp_cache_exists(self):
         import tools.aura_control_mcp as mod
+
         self.assertTrue(hasattr(mod, "_memory_cache"))
         self.assertTrue(hasattr(mod, "_get_memories_cached"))
 

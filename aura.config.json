@@ -22,24 +22,58 @@
       "base_url": "http://127.0.0.1:8082/v1",
       "embedding_model": "bge-small-en-v1.5-q8_0",
       "embedding_dims": 384
+    },
+    "linux_coder_7b": {
+      "provider": "ollama",
+      "model": "qwen2.5-coder:7b",
+      "base_url": "http://127.0.0.1:11434",
+      "temperature": 0.2,
+      "max_tokens": 4096,
+      "request_timeout_seconds": 120,
+      "cooldown_seconds": 60,
+      "fallback_profiles": [
+        "linux_fast_3b"
+      ]
+    },
+    "linux_fast_3b": {
+      "provider": "ollama",
+      "model": "phi4-mini",
+      "base_url": "http://127.0.0.1:11434",
+      "temperature": 0.3,
+      "max_tokens": 2048,
+      "request_timeout_seconds": 60,
+      "cooldown_seconds": 30
+    },
+    "linux_embed": {
+      "provider": "ollama",
+      "model": "nomic-embed-text",
+      "base_url": "http://127.0.0.1:11434",
+      "embedding_model": "nomic-embed-text",
+      "embedding_dims": 768
     }
   },
   "local_model_routing": {
-    "planning": "android_planner",
-    "analysis": "android_planner",
-    "critique": "android_planner",
-    "code_generation": "android_coder",
-    "embedding": "android_embeddings",
-    "quality": "android_planner",
-    "fast": "android_coder"
+    "code_generation": "linux_coder_7b",
+    "planning": "linux_fast_3b",
+    "analysis": "linux_fast_3b",
+    "critique": "linux_fast_3b",
+    "quality": "linux_coder_7b",
+    "fast": "linux_fast_3b",
+    "embedding": "linux_embed"
   },
   "model_routing": {
-    "code_generation": "google/gemini-2.0-flash-exp:free",
-    "planning": "google/gemini-2.0-flash-exp:free",
-    "analysis": "google/gemini-2.0-flash-exp:free",
-    "critique": "google/gemini-2.0-flash-exp:free",
-    "fast": "google/gemini-2.0-flash-exp:free",
-    "quality": "google/gemini-2.5-pro"
+    "code_generation": "anthropic/claude-3.5-sonnet",
+    "planning": "deepseek/deepseek-chat",
+    "analysis": "google/gemini-2.5-flash",
+    "critique": "deepseek/deepseek-r1-0528",
+    "embedding": "openai/text-embedding-3-small",
+    "fast": "google/gemini-2.0-flash-001",
+    "quality": "deepseek/deepseek-r1-0528",
+    "ingest": "google/gemini-2.0-flash-001",
+    "reflection": "deepseek/deepseek-chat",
+    "synthesis": "qwen/qwen3-235b-a22b",
+    "verification": "google/gemini-2.0-flash-001",
+    "fallback": "meta-llama/llama-3.3-70b-instruct:free"
   },
   "mcp_servers": {
     "dev_tools": 8001,
@@ -62,7 +96,7 @@
   },
   "semantic_memory": {
     "top_k": 9,
-    "embedding_model": "local_profile:android_embeddings"
+    "embedding_model": "local_profile:linux_embed"
   },
   "n_best_candidates": 1,
   "n_best_temperature_spread": [
@@ -73,6 +107,7 @@
   "tree_of_thought_candidates": 1,
   "code_rag_enabled": true,
   "skill_correlation_enabled": true,
+  "REACT_GRAPH_ENABLED": true,
   "hooks": {},
   "a2a": {
     "enabled": true,
@@ -82,22 +117,22 @@
     "gemini": {
       "cli_type": "gemini-cli",
       "port_range": [
-        8020,
-        8029
+        8060,
+        8069
       ]
     },
     "claude": {
       "cli_type": "claude-code",
       "port_range": [
-        8030,
-        8039
+        8070,
+        8079
       ]
     },
     "codex": {
       "cli_type": "codex-cli",
       "port_range": [
-        8040,
-        8049
+        8080,
+        8089
       ]
     }
   },
@@ -183,11 +218,18 @@
     "base_url": "http://localhost:5678",
     "enabled": true,
     "notification_webhook": "http://localhost:5678/webhook/aura-notify",
-    "quality_gate_enabled": false,
+    "quality_gate_enabled": true,
     "quality_gate_webhook": "http://localhost:5678/webhook/plan-review",
     "feedback_loop_webhook": "http://localhost:5678/webhook/aura-reflect",
+    "feedback_loop_enabled": true,
     "pipeline_coordinator_webhook": "http://localhost:5678/webhook/pipeline-coordinate",
     "circuit_breaker_enabled": true,
-    "observability_webhook": "http://localhost:5678/webhook/pipeline-trace"
+    "observability_webhook": "http://localhost:5678/webhook/pipeline-trace",
+    "trace_enabled": true,
+    "goal_route_webhook": "http://localhost:5678/webhook/goal-route",
+    "route_complex_through_p3": true,
+    "timeout_seconds": 10.0,
+    "session_manager_webhook": "http://localhost:5678/webhook/sadd-session",
+    "workstream_monitor_webhook": "http://localhost:5678/webhook/sadd-workstream"
   }
 }

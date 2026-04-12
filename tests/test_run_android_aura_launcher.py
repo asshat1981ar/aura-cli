@@ -29,10 +29,7 @@ def test_launcher_defaults_to_watch_and_enables_health_gate():
         log = tmp / "launcher.log"
 
         wrapper.write_text(
-            "#!/usr/bin/env bash\n"
-            "printf 'mode=%s\\n' \"$1\" > \"$AURA_LAUNCHER_LOG\"\n"
-            "printf 'gate=%s\\n' \"$AURA_REQUIRE_LOCAL_MODEL_HEALTH\" >> \"$AURA_LAUNCHER_LOG\"\n"
-            "printf 'rest=%s\\n' \"$*\" >> \"$AURA_LAUNCHER_LOG\"\n",
+            '#!/usr/bin/env bash\nprintf \'mode=%s\\n\' "$1" > "$AURA_LAUNCHER_LOG"\nprintf \'gate=%s\\n\' "$AURA_REQUIRE_LOCAL_MODEL_HEALTH" >> "$AURA_LAUNCHER_LOG"\nprintf \'rest=%s\\n\' "$*" >> "$AURA_LAUNCHER_LOG"\n',
             encoding="utf-8",
         )
         wrapper.chmod(0o700)
@@ -58,8 +55,7 @@ def test_launcher_forwards_studio_flags():
         log = tmp / "launcher.log"
 
         wrapper.write_text(
-            "#!/usr/bin/env bash\n"
-            "printf '%s\\n' \"$@\" > \"$AURA_LAUNCHER_LOG\"\n",
+            '#!/usr/bin/env bash\nprintf \'%s\\n\' "$@" > "$AURA_LAUNCHER_LOG"\n',
             encoding="utf-8",
         )
         wrapper.chmod(0o700)

@@ -5,6 +5,7 @@ Replaces rigid phase-sequenced orchestration with Claude-as-brain.
 Claude dynamically selects tools, skills, agents, and workflows
 based on goal context.
 """
+
 from __future__ import annotations
 
 import logging
@@ -23,6 +24,7 @@ def _check_sdk() -> bool:
     if _sdk_available is None:
         try:
             import claude_agent_sdk  # noqa: F401
+
             _sdk_available = True
         except ImportError:
             _sdk_available = False
@@ -65,15 +67,17 @@ class AuraController:
         self.feedback = feedback
         # Create semantic querier if index exists
         querier = None
-        if hasattr(config, 'semantic_index_path') and config.semantic_index_path.exists():
+        if hasattr(config, "semantic_index_path") and config.semantic_index_path.exists():
             try:
                 from core.agent_sdk.semantic_querier import SemanticQuerier
+
                 querier = SemanticQuerier(db_path=config.semantic_index_path)
-            except Exception:
+            except (ImportError, OSError, RuntimeError):
                 pass
         self._semantic_querier = querier
         self.context_builder = ContextBuilder(
-            project_root=project_root, brain=brain,
+            project_root=project_root,
+            brain=brain,
             semantic_querier=querier,
         )
 
@@ -95,10 +99,7 @@ class AuraController:
 
         if not _check_sdk():
             # Return raw defs — caller will need to wrap them
-            return {
-                name: defn
-                for name, defn in get_subagent_definitions().items()
-            }
+            return {name: defn for name, defn in get_subagent_definitions().items()}
 
         from claude_agent_sdk import AgentDefinition
 
@@ -133,16 +134,21 @@ class AuraController:
 
         sdk_tools = []
         for aura_tool in tools:
+
             @tool(aura_tool.name, aura_tool.description, aura_tool.input_schema.get("properties", {}))
             async def _handler(args, _t=aura_tool):
                 result = _t.handler(args)
                 import json
+
                 return {
-                    "content": [{
-                        "type": "text",
-                        "text": json.dumps(result, default=str),
-                    }]
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": json.dumps(result, default=str),
+                        }
+                    ]
                 }
+
             sdk_tools.append(_handler)
 
         return create_sdk_mcp_server("aura-tools", tools=sdk_tools)
@@ -169,6 +175,7 @@ class AuraController:
             # Return a mock-like namespace for testing
             class _MockOptions:
                 pass
+
             opts = _MockOptions()
             opts.model = effective_model
             opts.max_turns = self.config.max_turns
@@ -198,10 +205,7 @@ class AuraController:
     async def run(self, goal: str, resume_session_id: str = None) -> Dict[str, Any]:
         """Execute a goal with adaptive routing, workflow selection, and feedback."""
         if not _check_sdk():
-            raise RuntimeError(
-                "claude-agent-sdk not installed. "
-                "Install with: pip install claude-agent-sdk"
-            )
+            raise RuntimeError("claude-agent-sdk not installed. Install with: pip install claude-agent-sdk")
 
         from claude_agent_sdk import query, ResultMessage, SystemMessage, AssistantMessage
         from core.agent_sdk.hooks import get_session_metrics
@@ -231,7 +235,8 @@ class AuraController:
             else:
                 session_pk = self.session_store.create_session(
                     session_id="pending",
-                    goal=goal, goal_type=context["goal_type"],
+                    goal=goal,
+                    goal_type=context["goal_type"],
                     workflow=workflow.name if workflow else "freeform",
                     model_tier=model,
                 )
@@ -244,11 +249,7 @@ class AuraController:
         result_text = ""
         total_cost = 0.0
 
-        prompt = (
-            f"Execute this development goal:\n\n{goal}\n\n"
-            "Start by calling analyze_goal to understand the context, "
-            "then proceed with the appropriate workflow."
-        )
+        prompt = f"Execute this development goal:\n\n{goal}\n\nStart by calling analyze_goal to understand the context, then proceed with the appropriate workflow."
         if workflow:
             phase_names = " → ".join(p.tool_name for p in workflow.phases)
             prompt += f"\n\nRecommended workflow ({workflow.name}): {phase_names}"
@@ -261,11 +262,18 @@ class AuraController:
                 tokens_out = message.usage.get("output_tokens", 0)
                 if self.session_store and session_pk:
                     from core.agent_sdk.session_persistence import compute_cost
+
                     cost = compute_cost(model, tokens_in, tokens_out)
                     total_cost += cost
                     self.session_store.record_event(
-                        session_pk, "sdk_turn", "agent_sdk", model,
-                        tokens_in, tokens_out, True, None,
+                        session_pk,
+                        "sdk_turn",
+                        "agent_sdk",
+                        model,
+                        tokens_in,
+                        tokens_out,
+                        True,
+                        None,
                     )
             elif isinstance(message, ResultMessage):
                 result_text = message.result
@@ -276,8 +284,10 @@ class AuraController:
         success = bool(result_text and "error" not in result_text.lower()[:100])
         if self.feedback and session_pk:
             self.feedback.on_goal_complete(
-                session_pk=session_pk, goal=goal,
-                goal_type=context["goal_type"], model=model,
+                session_pk=session_pk,
+                goal=goal,
+                goal_type=context["goal_type"],
+                model=model,
                 skills_used=context.get("recommended_skills", []),
                 success=success,
                 verification_result={},
@@ -310,18 +320,17 @@ class AuraController:
             raise RuntimeError("claude-agent-sdk not installed.")
 
         from claude_agent_sdk import (
-            ClaudeSDKClient, AssistantMessage, TextBlock, ResultMessage,
+            ClaudeSDKClient,
+            AssistantMessage,
+            TextBlock,
+            ResultMessage,
         )
         from core.agent_sdk.hooks import get_session_metrics
 
         options = self._build_options(goal)
         result_text = ""
 
-        prompt = (
-            f"Execute this development goal:\n\n{goal}\n\n"
-            "Start by calling analyze_goal to understand the context, "
-            "then proceed with the appropriate workflow."
-        )
+        prompt = f"Execute this development goal:\n\n{goal}\n\nStart by calling analyze_goal to understand the context, then proceed with the appropriate workflow."
 
         async with ClaudeSDKClient(options=options) as client:
             await client.query(prompt)

@@ -49,14 +49,9 @@ def investigate_test_count_drop(
         recommended_actions.append("Re-plan around restoring the test surface before continuing feature work.")
 
     goal_prefix = f" for '{goal}'" if goal else ""
-    suggested_goal = (
-        f"Investigate test count drop{goal_prefix}: {previous_test_count} -> {current_test_count}"
-    )
+    suggested_goal = f"Investigate test count drop{goal_prefix}: {previous_test_count} -> {current_test_count}"
 
-    summary = (
-        f"Observed a test-count regression from {previous_test_count} to {current_test_count} "
-        f"({delta}). Severity: {severity}."
-    )
+    summary = f"Observed a test-count regression from {previous_test_count} to {current_test_count} ({delta}). Severity: {severity}."
 
     return {
         "summary": summary,

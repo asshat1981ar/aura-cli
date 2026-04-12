@@ -1,4 +1,5 @@
 """SQLite schema and helpers for the semantic codebase index."""
+
 from __future__ import annotations
 
 import logging
@@ -117,9 +118,7 @@ class SemanticDB:
         return [dict(row) for row in rows]
 
     def list_tables(self) -> List[str]:
-        rows = self.conn.execute(
-            "SELECT name FROM sqlite_master WHERE type IN ('table', 'virtual table') ORDER BY name"
-        ).fetchall()
+        rows = self.conn.execute("SELECT name FROM sqlite_master WHERE type IN ('table', 'virtual table') ORDER BY name").fetchall()
         return [row["name"] for row in rows]
 
     def checkpoint(self, mode: str = "TRUNCATE") -> None:

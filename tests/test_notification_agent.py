@@ -1,4 +1,5 @@
 """Unit tests for agents/notification_agent.py."""
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock, patch

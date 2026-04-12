@@ -6,6 +6,15 @@ from contextlib import redirect_stdout
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from agents.handlers import HANDLER_MAP, PHASE_MAP  # noqa: F401 — re-exported for callers
+from agents.handlers import (
+    run_planner_phase,  # noqa: F401 — re-exported for callers
+    run_coder_phase,  # noqa: F401 — re-exported for callers
+    run_critic_phase,  # noqa: F401 — re-exported for callers
+    run_debugger_phase,  # noqa: F401 — re-exported for callers
+    run_reflector_phase,  # noqa: F401 — re-exported for callers
+    run_applicator_phase,  # noqa: F401 — re-exported for callers
+)
 from agents.registry import default_agents
 from agents.scaffolder import ScaffolderAgent
 from aura_cli.cli_options import attach_cli_warnings, render_help, unknown_command_help_topic_payload
@@ -13,6 +22,9 @@ from aura_cli.commands import (
     _handle_doctor,
     _handle_readiness,
     _handle_status,
+    _handle_migrate_credentials,
+    _handle_secure_store,
+    _handle_secure_delete,
 )
 from aura_cli.mcp_client import cmd_diag, cmd_mcp_call, cmd_mcp_tools
 from aura_cli.options import action_runtime_required
@@ -21,7 +33,7 @@ from core.config_manager import DEFAULT_CONFIG, config
 from core.git_tools import GitTools
 from core.logging_utils import log_json
 from core.task_handler import _check_project_writability, run_goals_loop
-from core.vector_store import VectorStore
+from memory.vector_store_v2 import VectorStoreV2 as VectorStore
 from memory.brain import Brain
 
 
@@ -29,6 +41,7 @@ from memory.brain import Brain
 anyio_available = False
 try:
     import anyio
+
     anyio_available = True
 except ImportError:
     pass
@@ -36,36 +49,30 @@ except ImportError:
 
 def _run_async_safely(coro):
     """Run an async coroutine safely in any context.
-    
+
     P0 BUG FIX: asyncio.run() crashes when an event loop is already running
     (e.g., in TUI, Jupyter, or nested async contexts).
     """
     if anyio_available:
         return anyio.run(coro)
-    
+
     import asyncio
+
     try:
         return asyncio.run(coro)
     except RuntimeError as e:
         if "already running" in str(e):
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
             import concurrent.futures
+
             with concurrent.futures.ThreadPoolExecutor() as pool:
                 future = pool.submit(asyncio.run, coro)
                 return future.result()
         raise
 
 
-# Idempotency flag for _sync_cli_compat (P0 BUG FIX)
-_sync_cli_compat_done = False
-
-
 def _sync_cli_compat() -> None:
-    """Synchronize CLI compatibility layer (idempotent)."""
-    global _sync_cli_compat_done
-    if _sync_cli_compat_done:
-        return
-    
+    """Synchronize CLI compatibility bindings from aura_cli.cli_main."""
     cli_main = importlib.import_module("aura_cli.cli_main")
     for name in (
         "log_json",
@@ -94,13 +101,12 @@ def _sync_cli_compat() -> None:
         "unknown_command_help_topic_payload",
     ):
         setattr(sys.modules[__name__], name, getattr(cli_main, name))
-    
-    _sync_cli_compat_done = True
 
 
 @dataclass
 class RuntimeContext:
     """Typed runtime context for dispatch operations."""
+
     agent: str | None = None
     model: str | None = None
     verbose: bool = False
@@ -240,6 +246,29 @@ def _handle_show_config_dispatch(_ctx: DispatchContext) -> int:
     return 0
 
 
+def _handle_config_set_dispatch(ctx: DispatchContext) -> int:
+    """Persist a config key-value pair to aura.config.json.
+
+    Supports dotted model paths: ``model.<task>`` maps to
+    ``model_routing.<task>`` in the config file.
+    """
+    key: str = ctx.args.config_key
+    value: str = ctx.args.config_value
+
+    try:
+        if key.startswith("model."):
+            task_type = key[len("model.") :]
+            config.update_config({"model_routing": {task_type: value}})
+        else:
+            config.update_config({key: value})
+    except Exception as exc:
+        print(f"Error: failed to save config: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Set {key} = {value}")
+    return 0
+
+
 def _handle_contract_report_dispatch(ctx: DispatchContext) -> int:
     from aura_cli.contract_report import (
         build_cli_contract_report,
@@ -264,41 +293,39 @@ def _print_json_payload(payload: dict, *, parsed=None, **json_kwargs) -> None:
     print(json.dumps(attach_cli_warnings(payload, parsed), **json_kwargs))
 
 
-def _run_json_printing_callable_with_warnings(ctx: DispatchContext, func, *args, **kwargs) -> None:
+def _run_json_printing_callable_with_warnings(ctx: DispatchContext, func, *args, **kwargs) -> int:
     warning_records = getattr(ctx.parsed, "warning_records", None) or []
     if not warning_records:
-        func(*args, **kwargs)
-        return
+        result = func(*args, **kwargs)
+        return result if isinstance(result, int) else 0
 
     buf = io.StringIO()
     with redirect_stdout(buf):
-        func(*args, **kwargs)
+        result = func(*args, **kwargs)
     raw = buf.getvalue()
     if raw == "":
-        return
+        return result if isinstance(result, int) else 0
 
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
         print(raw, end="")
-        return
+        return result if isinstance(result, int) else 0
 
     _print_json_payload(payload, parsed=ctx.parsed, indent=2)
+    return result if isinstance(result, int) else 0
 
 
 def _handle_mcp_tools_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_tools)
-    return 0
+    return _run_json_printing_callable_with_warnings(ctx, cmd_mcp_tools)
 
 
 def _handle_mcp_call_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_mcp_call, ctx.args.mcp_call, ctx.args.mcp_args)
-    return 0
+    return _run_json_printing_callable_with_warnings(ctx, cmd_mcp_call, ctx.args.mcp_call, ctx.args.mcp_args)
 
 
 def _handle_diag_dispatch(ctx: DispatchContext) -> int:
-    _run_json_printing_callable_with_warnings(ctx, cmd_diag)
-    return 0
+    return _run_json_printing_callable_with_warnings(ctx, cmd_diag)
 
 
 def _handle_logs_dispatch(ctx: DispatchContext) -> int:
@@ -309,6 +336,17 @@ def _handle_logs_dispatch(ctx: DispatchContext) -> int:
         streamer.stream_file(Path(ctx.args.file), tail=getattr(ctx.args, "tail", None), follow=getattr(ctx.args, "follow", False))
     else:
         streamer.stream_stdin(tail=getattr(ctx.args, "tail", None))
+    return 0
+
+
+def _handle_history_dispatch(ctx: DispatchContext) -> int:
+    from aura_cli.commands import _handle_history
+
+    _handle_history(
+        ctx.runtime["goal_archive"],
+        limit=getattr(ctx.args, "limit", 10),
+        as_json=getattr(ctx.args, "json", False),
+    )
     return 0
 
 
@@ -529,6 +567,42 @@ def _handle_scaffold_dispatch(ctx: DispatchContext) -> int:
     return 0
 
 
+def _resolve_evolve_agents(brain, model, orchestrator):
+    """Resolve (planner, coder, critic) agent instances for EvolutionLoop.
+
+    Prefers agents already attached to the orchestrator; falls back to
+    ``default_agents()`` construction.  Uses :data:`agents.handlers.PHASE_MAP`
+    as the canonical agent registry so the handler layer is the single source
+    of truth for per-phase wiring.
+    """
+    _agents = getattr(orchestrator, "agents", None) or default_agents(brain, model)
+    handler_context = {"brain": brain, "model": model}
+
+    # Prefer pre-wired orchestrator agents; fall back to handler-constructed ones.
+    def _unwrap(adapter):
+        return getattr(adapter, "agent", adapter)
+
+    coder_agent = _unwrap(_agents.get("act")) if _agents.get("act") else None
+    critic_agent = _unwrap(_agents.get("critique")) if _agents.get("critique") else None
+    planner_agent = _unwrap(_agents.get("plan")) if _agents.get("plan") else None
+
+    # If any agent is missing, lazily construct via handler context resolution.
+    if coder_agent is None:
+        from agents.handlers import coder as _ch
+
+        coder_agent = _ch._resolve_agent(handler_context)
+    if critic_agent is None:
+        from agents.handlers import critic as _cth
+
+        critic_agent = _cth._resolve_agent(handler_context)
+    if planner_agent is None:
+        from agents.handlers import planner as _ph
+
+        planner_agent = _ph._resolve_agent(handler_context)
+
+    return planner_agent, coder_agent, critic_agent
+
+
 def _handle_evolve_dispatch(ctx: DispatchContext) -> int:
     from core.evolution_loop import EvolutionLoop
     from agents.mutator import MutatorAgent
@@ -539,13 +613,21 @@ def _handle_evolve_dispatch(ctx: DispatchContext) -> int:
     _brain = runtime.get("brain") or Brain()
     _model = runtime["model_adapter"]
     _orchestrator = runtime.get("orchestrator")
-    _agents = getattr(_orchestrator, "agents", None) or default_agents(_brain, _model)
-    _coder_adapter = _agents.get("act")
-    _critic_adapter = _agents.get("critique")
-    _planner_adapter = _agents.get("plan")
-    _coder = getattr(_coder_adapter, "agent", _coder_adapter)
-    _critic = getattr(_critic_adapter, "agent", _critic_adapter)
-    _planner = getattr(_planner_adapter, "agent", _planner_adapter)
+
+    # Agent resolution is now routed through agents.handlers so that dispatch.py
+    # no longer directly instantiates per-phase agents.
+    log_json("INFO", "evolve_agent_resolve_start", details={"project_root": str(ctx.project_root)})
+    _planner, _coder, _critic = _resolve_evolve_agents(_brain, _model, _orchestrator)
+    log_json(
+        "INFO",
+        "evolve_agent_resolve_done",
+        details={
+            "planner": type(_planner).__name__,
+            "coder": type(_coder).__name__,
+            "critic": type(_critic).__name__,
+        },
+    )
+
     _git = GitTools(repo_path=str(ctx.project_root))
     _mutator = MutatorAgent(ctx.project_root)
     _vec = VectorStore(_model, _brain)
@@ -628,78 +710,141 @@ def _maybe_add_goal(ctx: DispatchContext) -> None:
 
 
 def _handle_goal_once_dispatch(ctx: DispatchContext) -> int:
+    from aura_cli.exit_codes import (
+        EXIT_SUCCESS,
+        EXIT_FAILURE,
+        EXIT_SANDBOX_ERROR,
+        EXIT_APPLY_ERROR,
+        EXIT_CANCELLED,
+        EXIT_LLM_ERROR,
+    )
     from core.explain import format_decision_log
     from core.operator_runtime import build_beads_runtime_metadata
 
-    args = ctx.args
-    orchestrator = ctx.runtime["orchestrator"]
-    result = orchestrator.run_loop(
-        args.goal,
-        max_cycles=args.max_cycles or config.get("policy_max_cycles", config.get("max_cycles", 5)),
-        dry_run=args.dry_run,
-    )
-    history = result.get("history", [])
-    if args.explain:
-        print(format_decision_log(history))
-
-    if getattr(args, "json", False):
-        _print_json_payload(
-            {
-                "goal": args.goal,
-                "stop_reason": result.get("stop_reason"),
-                "cycles": len(history),
-                "dry_run": args.dry_run,
-                "beads_runtime": build_beads_runtime_metadata(orchestrator),
-            },
-            parsed=ctx.parsed,
-            indent=2,
+    try:
+        args = ctx.args
+        orchestrator = ctx.runtime["orchestrator"]
+        result = orchestrator.run_loop(
+            args.goal,
+            max_cycles=args.max_cycles or config.get("policy_max_cycles", config.get("max_cycles", 5)),
+            dry_run=args.dry_run,
         )
-    else:
-        print("\n--- Goal Result Summary ---")
-        print(f"Goal: {args.goal}")
-        print(f"Stop Reason: {result.get('stop_reason')}")
-        print(f"Cycles Completed: {len(history)}")
-        if args.dry_run:
-            print("Mode: Dry-run (read-only)")
-        print("---------------------------\n")
-    return 0
+        history = result.get("history", [])
+        if args.explain:
+            print(format_decision_log(history))
+
+        if getattr(args, "json", False):
+            _print_json_payload(
+                {
+                    "goal": args.goal,
+                    "stop_reason": result.get("stop_reason"),
+                    "cycles": len(history),
+                    "dry_run": args.dry_run,
+                    "beads_runtime": build_beads_runtime_metadata(orchestrator),
+                },
+                parsed=ctx.parsed,
+                indent=2,
+            )
+        else:
+            print("\n--- Goal Result Summary ---")
+            print(f"Goal: {args.goal}")
+            print(f"Stop Reason: {result.get('stop_reason')}")
+            print(f"Cycles Completed: {len(history)}")
+            if args.dry_run:
+                print("Mode: Dry-run (read-only)")
+            print("---------------------------\n")
+        return EXIT_SUCCESS
+
+    except KeyboardInterrupt:
+        print("\nCancelled by user.", file=sys.stderr)
+        return EXIT_CANCELLED
+    except Exception as exc:  # noqa: BLE001
+        from core.file_tools import OldCodeNotFoundError, MismatchOverwriteBlockedError
+
+        if isinstance(exc, (OldCodeNotFoundError, MismatchOverwriteBlockedError)):
+            log_json("ERROR", "goal_once_apply_error", details={"error": str(exc)})
+            print(f"Apply error: {exc}", file=sys.stderr)
+            return EXIT_APPLY_ERROR
+        exc_name = type(exc).__name__.lower()
+        if "sandbox" in exc_name:
+            log_json("ERROR", "goal_once_sandbox_error", details={"error": str(exc)})
+            print(f"Sandbox error: {exc}", file=sys.stderr)
+            return EXIT_SANDBOX_ERROR
+        if any(k in exc_name for k in ("ratelimit", "overload", "llm", "anthropic", "openai")):
+            log_json("ERROR", "goal_once_llm_error", details={"error": str(exc)})
+            print(f"LLM provider error: {exc}", file=sys.stderr)
+            return EXIT_LLM_ERROR
+        log_json("ERROR", "goal_once_failure", details={"error": str(exc)})
+        print(f"Error: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
 
 
 def _handle_goal_run_dispatch(ctx: DispatchContext) -> int:
+    from aura_cli.exit_codes import (
+        EXIT_SUCCESS,
+        EXIT_FAILURE,
+        EXIT_SANDBOX_ERROR,
+        EXIT_APPLY_ERROR,
+        EXIT_CANCELLED,
+        EXIT_LLM_ERROR,
+    )
     from core.in_flight_tracker import InFlightTracker
 
-    tracker = InFlightTracker()
-    if getattr(ctx.args, "resume", False) and tracker.exists():
-        record = tracker.read()
-        if record:
-            goal_text = record.get("goal", "")
-            print(f'↺  Resuming interrupted goal: "{goal_text}"')
-            runtime = ctx.runtime or ctx.runtime_factory(ctx.project_root)
-            runtime["goal_queue"].prepend_batch([goal_text])
-            tracker.clear()
-    elif tracker.exists():
-        record = tracker.read()
-        if record:
-            goal_text = record.get("goal", "?")
-            print(
-                f'⚠  Interrupted goal detected: "{goal_text}"'
-                " — run 'goal run --resume' to recover",
-                file=__import__("sys").stderr,
-            )
+    try:
+        tracker = InFlightTracker()
+        if getattr(ctx.args, "resume", False) and tracker.exists():
+            record = tracker.read()
+            if record:
+                goal_text = record.get("goal", "")
+                print(f'↺  Resuming interrupted goal: "{goal_text}"')
+                runtime = ctx.runtime or ctx.runtime_factory(ctx.project_root)
+                runtime["goal_queue"].prepend_batch([goal_text])
+                tracker.clear()
+        elif tracker.exists():
+            record = tracker.read()
+            if record:
+                goal_text = record.get("goal", "?")
+                print(
+                    f"⚠  Interrupted goal detected: \"{goal_text}\" — run 'goal run --resume' to recover",
+                    file=sys.stderr,
+                )
 
-    args = ctx.args
-    runtime = ctx.runtime
-    run_goals_loop(
-        args,
-        runtime["goal_queue"],
-        runtime["orchestrator"],
-        runtime["debugger"],
-        runtime["planner"],
-        runtime["goal_archive"],
-        ctx.project_root,
-        decompose=args.decompose,
-    )
-    return 0
+        args = ctx.args
+        runtime = ctx.runtime
+        run_goals_loop(
+            args,
+            runtime["goal_queue"],
+            runtime["orchestrator"],
+            runtime["debugger"],
+            runtime["planner"],
+            runtime["goal_archive"],
+            ctx.project_root,
+            decompose=args.decompose,
+        )
+        return EXIT_SUCCESS
+
+    except KeyboardInterrupt:
+        print("\nCancelled by user.", file=sys.stderr)
+        return EXIT_CANCELLED
+    except Exception as exc:  # noqa: BLE001
+        from core.file_tools import OldCodeNotFoundError, MismatchOverwriteBlockedError
+
+        if isinstance(exc, (OldCodeNotFoundError, MismatchOverwriteBlockedError)):
+            log_json("ERROR", "goal_run_apply_error", details={"error": str(exc)})
+            print(f"Apply error: {exc}", file=sys.stderr)
+            return EXIT_APPLY_ERROR
+        exc_name = type(exc).__name__.lower()
+        if "sandbox" in exc_name:
+            log_json("ERROR", "goal_run_sandbox_error", details={"error": str(exc)})
+            print(f"Sandbox error: {exc}", file=sys.stderr)
+            return EXIT_SANDBOX_ERROR
+        if any(k in exc_name for k in ("ratelimit", "overload", "llm", "anthropic", "openai")):
+            log_json("ERROR", "goal_run_llm_error", details={"error": str(exc)})
+            print(f"LLM provider error: {exc}", file=sys.stderr)
+            return EXIT_LLM_ERROR
+        log_json("ERROR", "goal_run_failure", details={"error": str(exc)})
+        print(f"Error: {exc}", file=sys.stderr)
+        return EXIT_FAILURE
 
 
 def _handle_goal_add_dispatch(ctx: DispatchContext) -> int:
@@ -714,6 +859,7 @@ def _handle_goal_add_run_dispatch(ctx: DispatchContext) -> int:
 
 def _handle_interactive_dispatch(ctx: DispatchContext) -> int:
     from aura_cli.cli_main import cli_interaction_loop as _cli_loop
+
     runtime = ctx.runtime
     _cli_loop(ctx.args, runtime)
     return 0
@@ -782,20 +928,32 @@ def _handle_sadd_run_dispatch(ctx: DispatchContext) -> int:
             _model = runtime.get("model_adapter")
 
             config = SessionConfig(
-                max_parallel=getattr(args, "max_parallel", 3),
-                max_cycles_per_workstream=getattr(args, "max_cycles", 5),
+                max_parallel=getattr(args, "max_parallel", None) or 3,
+                max_cycles_per_workstream=getattr(args, "max_cycles", None) or 5,
                 dry_run=False,
-                fail_fast=getattr(args, "fail_fast", False),
+                fail_fast=getattr(args, "fail_fast", False) or False,
             )
             factory = create_orchestrator_factory(
-                brain=_brain, project_root=ctx.project_root, model_adapter=_model,
+                brain=_brain,
+                project_root=ctx.project_root,
+                model_adapter=_model,
             )
             store = SessionStore()
             try:
                 from core.sadd.mcp_tool_bridge import MCPToolBridge
+
                 mcp_bridge = MCPToolBridge()
             except (ImportError, OSError):
                 mcp_bridge = None
+            try:
+                from core.sadd.n8n_pipeline_bridge import N8nPipelineBridge
+                import json as _json
+
+                _config_path = ctx.project_root / "aura.config.json"
+                _file_config = _json.loads(_config_path.read_text()) if _config_path.exists() else {}
+                n8n_bridge = N8nPipelineBridge(_file_config)
+            except (ImportError, OSError):
+                n8n_bridge = None
             coordinator = SessionCoordinator(
                 design_spec=design_spec,
                 orchestrator_factory=factory,
@@ -803,6 +961,7 @@ def _handle_sadd_run_dispatch(ctx: DispatchContext) -> int:
                 config=config,
                 session_store=store,
                 mcp_bridge=mcp_bridge,
+                n8n_bridge=n8n_bridge,
             )
             report = coordinator.run()
             if as_json:
@@ -935,9 +1094,19 @@ def _handle_sadd_resume_dispatch(ctx: DispatchContext) -> int:
 
     try:
         from core.sadd.mcp_tool_bridge import MCPToolBridge
+
         mcp_bridge = MCPToolBridge()
     except (ImportError, OSError):
         mcp_bridge = None
+    try:
+        from core.sadd.n8n_pipeline_bridge import N8nPipelineBridge
+        import json as _json
+
+        _config_path = ctx.project_root / "aura.config.json"
+        _file_config = _json.loads(_config_path.read_text()) if _config_path.exists() else {}
+        n8n_bridge = N8nPipelineBridge(_file_config)
+    except (ImportError, OSError):
+        n8n_bridge = None
     coordinator = SessionCoordinator(
         design_spec=spec,
         orchestrator_factory=factory,
@@ -945,6 +1114,7 @@ def _handle_sadd_resume_dispatch(ctx: DispatchContext) -> int:
         config=config,
         session_store=store,
         mcp_bridge=mcp_bridge,
+        n8n_bridge=n8n_bridge,
     )
     # Restore the original session_id so all persistence uses the right key.
     coordinator._session_id = session_id  # noqa: SLF001
@@ -969,7 +1139,7 @@ def _handle_goal_resume_dispatch(ctx: DispatchContext) -> int:
     cycle_limit = record.get("cycle_limit", 1)
     phase = record.get("phase", "unknown")
 
-    print(f"Found interrupted goal: \"{goal}\"")
+    print(f'Found interrupted goal: "{goal}"')
     print(f"  Started:    {started_at}")
     print(f"  Last phase: {phase}")
     print(f"  Cycle limit: {cycle_limit}")
@@ -994,6 +1164,7 @@ def _handle_goal_resume_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_start_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate start command."""
     from aura_cli.commands import _handle_innovate_start
+
     _handle_innovate_start(ctx.args, ctx.runtime)
     return 0
 
@@ -1001,6 +1172,7 @@ def _handle_innovate_start_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_list_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate list command."""
     from aura_cli.commands import _handle_innovate_list
+
     _handle_innovate_list(ctx.args, ctx.runtime)
     return 0
 
@@ -1008,6 +1180,7 @@ def _handle_innovate_list_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_show_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate show command."""
     from aura_cli.commands import _handle_innovate_show
+
     _handle_innovate_show(ctx.args, ctx.runtime)
     return 0
 
@@ -1015,6 +1188,7 @@ def _handle_innovate_show_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_resume_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate resume command."""
     from aura_cli.commands import _handle_innovate_resume
+
     _handle_innovate_resume(ctx.args, ctx.runtime)
     return 0
 
@@ -1022,6 +1196,7 @@ def _handle_innovate_resume_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_export_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate export command."""
     from aura_cli.commands import _handle_innovate_export
+
     _handle_innovate_export(ctx.args, ctx.runtime)
     return 0
 
@@ -1029,6 +1204,7 @@ def _handle_innovate_export_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_techniques_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate techniques command."""
     from aura_cli.commands import _handle_innovate_techniques
+
     _handle_innovate_techniques(ctx.args)
     return 0
 
@@ -1036,6 +1212,7 @@ def _handle_innovate_techniques_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_to_goals_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate to-goals command."""
     from aura_cli.commands import _handle_innovate_to_goals
+
     _handle_innovate_to_goals(ctx.args, ctx.runtime)
     return 0
 
@@ -1043,13 +1220,63 @@ def _handle_innovate_to_goals_dispatch(ctx: DispatchContext) -> int:
 def _handle_innovate_insights_dispatch(ctx: DispatchContext) -> int:
     """Handle innovate insights command."""
     from aura_cli.commands import _handle_innovate_insights
+
     _handle_innovate_insights(ctx.args, ctx.runtime)
+    return 0
+
+
+# ── Credential Management Dispatch Handlers ──────────────────────────────────
+# Security Issue #427: Secure credential storage dispatch handlers
+
+
+def _handle_credentials_migrate_dispatch(ctx: DispatchContext) -> int:
+    """Handle credentials migrate command."""
+    _handle_migrate_credentials(ctx.args, config)
+    return 0
+
+
+def _handle_credentials_store_dispatch(ctx: DispatchContext) -> int:
+    """Handle credentials store command."""
+    _handle_secure_store(ctx.args, config)
+    return 0
+
+
+def _handle_credentials_delete_dispatch(ctx: DispatchContext) -> int:
+    """Handle credentials delete command."""
+    _handle_secure_delete(ctx.args, config)
+    return 0
+
+
+def _handle_credentials_status_dispatch(ctx: DispatchContext) -> int:
+    """Handle credentials status command."""
+    store_info = config.get_credential_store_info()
+
+    if getattr(ctx.args, "json", False):
+        _print_json_payload(store_info, parsed=ctx.parsed, indent=2)
+        return 0
+
+    print("\n--- AURA Credential Storage Status ---")
+    print(f"Application Name: {store_info['app_name']}")
+    print(f"Keyring Available: {'✅ Yes' if store_info['keyring_available'] else '❌ No'}")
+    print(f"Fallback Available: {'✅ Yes' if store_info['fallback_available'] else '❌ No'}")
+    print(f"Fallback Path: {store_info['fallback_path']}")
+    print(f"Fallback Exists: {'Yes' if store_info['fallback_exists'] else 'No'}")
+    print(f"Stored Keys Count: {store_info['stored_keys_count']}")
+
+    # Show which API keys are configured
+    print("\nConfigured Credentials:")
+    secure_keys = ["api_key", "openai_api_key", "anthropic_api_key", "github_token"]
+    for key in secure_keys:
+        value = config.secure_retrieve_credential(key)
+        status = "✅ Configured" if value else "❌ Not set"
+        print(f"  {key}: {status}")
+
+    print()
     return 0
 
 
 def _handle_mcp_status_dispatch(ctx: DispatchContext) -> int:
     """Render a real-time Rich health dashboard for all registered MCP servers."""
-    import asyncio
 
     from core.mcp_health import check_all_mcp_health, get_health_summary
     from core.mcp_registry import list_registered_services
@@ -1096,9 +1323,7 @@ def _handle_mcp_status_dispatch(ctx: DispatchContext) -> int:
             table.add_row(name, url, status_cell, str(heartbeat), latency_cell, str(tool_count))
 
         console.print(table)
-        console.print(
-            f"\n[bold]Summary:[/bold] {summary['healthy_count']}/{summary['total_servers']} healthy"
-        )
+        console.print(f"\n[bold]Summary:[/bold] {summary['healthy_count']}/{summary['total_servers']} healthy")
     except ImportError:
         print("MCP Health Dashboard\n" + "=" * 40)
         for r in results:
@@ -1112,7 +1337,6 @@ def _handle_mcp_status_dispatch(ctx: DispatchContext) -> int:
 
 def _handle_mcp_restart_dispatch(ctx: DispatchContext) -> int:
     """Validate/restart a named MCP server by running a health check and logging the result."""
-    import asyncio
 
     from core.mcp_health import check_mcp_health
     from core.mcp_registry import get_registered_service
@@ -1161,6 +1385,7 @@ def _handle_beads_schemas_dispatch(ctx: DispatchContext) -> int:
     if config_path.exists():
         try:
             import yaml  # type: ignore[import-untyped]
+
             config_data = yaml.safe_load(config_path.read_text()) or {}
         except (ImportError, yaml.YAMLError, OSError, ValueError):
             # P1 FIX: Specific exceptions for YAML parsing failures
@@ -1220,7 +1445,106 @@ def _handle_agent_run_dispatch(ctx: DispatchContext) -> int:
     """Dispatch to Agent SDK meta-controller."""
     import anyio
     from core.agent_sdk.cli_integration import handle_agent_run
+
     return anyio.from_thread.run(handle_agent_run, ctx.args)
+
+
+def _handle_agent_list_dispatch(ctx: DispatchContext) -> int:
+    """List all registered AURA agents with their type and status.
+
+    Uses the static registry metadata so that no runtime initialisation is
+    required — the command is fast even without API keys or a running model.
+    """
+    from agents.registry import _AGENT_MODULE_MAP, FALLBACK_CAPABILITIES
+
+    try:
+        from rich.table import Table
+        from rich.console import Console
+
+        console = Console()
+        table = Table(title="Registered AURA Agents")
+        table.add_column("Name", style="cyan")
+        table.add_column("Class", style="green")
+        table.add_column("Module", style="dim")
+        table.add_column("Primary Capability", style="yellow")
+
+        for name, (module_path, class_name) in _AGENT_MODULE_MAP.items():
+            caps = FALLBACK_CAPABILITIES.get(name, [name])
+            primary_cap = caps[0] if caps else "-"
+            table.add_row(name, class_name, module_path, primary_cap)
+
+        console.print(table)
+        console.print(f"\n[dim]Total: {len(_AGENT_MODULE_MAP)} registered agents[/dim]")
+
+    except ImportError:
+        # Fallback plain-text output when rich is not installed.
+        print("Registered AURA Agents")
+        print(f"{'Name':<25} {'Class':<30} {'Primary Capability'}")
+        print("-" * 80)
+        for name, (module_path, class_name) in _AGENT_MODULE_MAP.items():
+            caps = FALLBACK_CAPABILITIES.get(name, [name])
+            primary_cap = caps[0] if caps else "-"
+            print(f"{name:<25} {class_name:<30} {primary_cap}")
+        print(f"\nTotal: {len(_AGENT_MODULE_MAP)} registered agents")
+
+    log_json("INFO", "agent_list_displayed", details={"count": len(_AGENT_MODULE_MAP)})
+    return 0
+
+
+# ── Run cancellation ──────────────────────────────────────────────────────────
+
+
+def _handle_cancel_dispatch(ctx: DispatchContext) -> int:
+    """Handle ``aura cancel <run-id>``.
+
+    Exit codes:
+        0 — run cancelled and filesystem restored.
+        1 — run_id not found in the active-run registry.
+        2 — cancellation signal sent but a problem occurred.
+    """
+    try:
+        from rich.console import Console
+
+        _rich_available = True
+    except ImportError:  # pragma: no cover
+        _rich_available = False
+
+    run_id = getattr(ctx.args, "run_id", None)
+    if not run_id:
+        print("Error: run_id is required", file=sys.stderr)
+        return 1
+
+    from core.running_runs import cancel_run, list_runs
+
+    # Check known runs (non-intrusive look-up before signalling).
+    known_ids = {r["run_id"] for r in list_runs()}
+    if run_id not in known_ids:
+        msg = f"Error: run '{run_id}' not found in the active-run registry."
+        print(msg, file=sys.stderr)
+        return 1
+
+    try:
+        ok = cancel_run(run_id)
+    except Exception as exc:  # pragma: no cover
+        log_json("ERROR", "cancel_run_error", details={"run_id": run_id, "error": str(exc)})
+        print(f"Error: cancellation failed — {exc}", file=sys.stderr)
+        return 2
+
+    if not ok:
+        # Race: run finished between list_runs() and cancel_run().
+        msg = f"Error: run '{run_id}' completed before cancellation could be sent."
+        print(msg, file=sys.stderr)
+        return 1
+
+    log_json("INFO", "run_cancelled", details={"run_id": run_id})
+
+    confirmation = f"\u2713 Run {run_id} cancelled. Filesystem restored."
+    if _rich_available:
+        Console().print(f"[bold green]{confirmation}[/bold green]")
+    else:
+        print(confirmation)
+
+    return 0
 
 
 def _dispatch_rule(action: str, handler) -> DispatchRule:
@@ -1234,6 +1558,7 @@ COMMAND_DISPATCH_REGISTRY = {
     "readiness": _dispatch_rule("readiness", _handle_readiness_dispatch),
     "bootstrap": _dispatch_rule("bootstrap", _handle_bootstrap_dispatch),
     "show_config": _dispatch_rule("show_config", _handle_show_config_dispatch),
+    "config_set": _dispatch_rule("config_set", _handle_config_set_dispatch),
     "contract_report": _dispatch_rule("contract_report", _handle_contract_report_dispatch),
     "mcp_tools": _dispatch_rule("mcp_tools", _handle_mcp_tools_dispatch),
     "mcp_call": _dispatch_rule("mcp_call", _handle_mcp_call_dispatch),
@@ -1242,6 +1567,7 @@ COMMAND_DISPATCH_REGISTRY = {
     "beads_schemas": _dispatch_rule("beads_schemas", _handle_beads_schemas_dispatch),
     "diag": _dispatch_rule("diag", _handle_diag_dispatch),
     "logs": _dispatch_rule("logs", _handle_logs_dispatch),
+    "history": _dispatch_rule("history", _handle_history_dispatch),
     "watch": _dispatch_rule("watch", _handle_watch_dispatch),
     "studio": _dispatch_rule("studio", _handle_watch_dispatch),
     "queue_list": _dispatch_rule("queue_list", _handle_queue_list_dispatch),
@@ -1271,7 +1597,15 @@ COMMAND_DISPATCH_REGISTRY = {
     "innovate_to_goals": _dispatch_rule("innovate_to_goals", _handle_innovate_to_goals_dispatch),
     "innovate_insights": _dispatch_rule("innovate_insights", _handle_innovate_insights_dispatch),
     "agent_run": _dispatch_rule("agent_run", _handle_agent_run_dispatch),
+    "agent_list": _dispatch_rule("agent_list", _handle_agent_list_dispatch),
     "interactive": _dispatch_rule("interactive", _handle_interactive_dispatch),
+    # Security Issue #427: Credential management dispatch rules
+    "credentials_migrate": _dispatch_rule("credentials_migrate", _handle_credentials_migrate_dispatch),
+    "credentials_store": _dispatch_rule("credentials_store", _handle_credentials_store_dispatch),
+    "credentials_delete": _dispatch_rule("credentials_delete", _handle_credentials_delete_dispatch),
+    "credentials_status": _dispatch_rule("credentials_status", _handle_credentials_status_dispatch),
+    # ── Run management ──────────────────────────────────────────────────────────
+    "cancel": _dispatch_rule("cancel", _handle_cancel_dispatch),
 }
 
 
@@ -1299,5 +1633,3 @@ def dispatch_command(parsed, *, project_root: Path, runtime_factory=create_runti
             return prep_rc
 
     return rule.handler(ctx)
-
-

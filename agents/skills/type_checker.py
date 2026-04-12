@@ -1,4 +1,5 @@
 """Skill: check type annotations using mypy or heuristic annotation coverage."""
+
 from __future__ import annotations
 import ast
 import re
@@ -27,10 +28,7 @@ def _annotation_coverage(source: str) -> float:
 
 def _run_mypy(target: str, cwd: Path) -> Optional[List[Dict]]:
     try:
-        result = subprocess.run(
-            ["python3", "-m", "mypy", "--ignore-missing-imports", "--no-error-summary", target],
-            cwd=str(cwd), capture_output=True, text=True, timeout=60
-        )
+        result = subprocess.run(["python3", "-m", "mypy", "--ignore-missing-imports", "--no-error-summary", target], cwd=str(cwd), capture_output=True, text=True, timeout=60)
         output = result.stdout + result.stderr
         errors = []
         for line in output.splitlines():

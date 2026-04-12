@@ -110,6 +110,13 @@ Known record codes:
   - [`aura innovate insights`](#aura-innovate-insights)
 - [`agent`](#agent)
   - [`aura agent run`](#aura-agent-run)
+  - [`aura agent list`](#aura-agent-list)
+- [`credentials`](#credentials)
+  - [`aura credentials migrate`](#aura-credentials-migrate)
+  - [`aura credentials store`](#aura-credentials-store)
+  - [`aura credentials delete`](#aura-credentials-delete)
+  - [`aura credentials status`](#aura-credentials-status)
+- [`cancel`](#cancel)
 
 ## `help`
 
@@ -155,7 +162,7 @@ Examples:
 
 ### `aura bootstrap`
 
-Create default config
+[EXPERIMENTAL] Create default config
 
 Bootstrap local configuration files for AURA.
 
@@ -184,9 +191,9 @@ Examples:
 
 ### `aura contract-report`
 
-Print CLI contract report
+[EXPERIMENTAL] Print CLI contract report
 
-Print aggregated parser/help/schema/dispatch contract checks as JSON.
+[EXPERIMENTAL] Print aggregated parser/help/schema/dispatch contract checks as JSON.
 
 `action`: `contract_report` `requires_runtime`: `false`
 
@@ -198,7 +205,7 @@ Examples:
 
 ### `aura diag`
 
-MCP diagnostics snapshot
+[EXPERIMENTAL] MCP diagnostics snapshot
 
 Fetch MCP health, metrics, limits, and recent logs via HTTP.
 
@@ -228,9 +235,9 @@ Examples:
 
 ### `aura watch`
 
-Launch TUI monitor
+[EXPERIMENTAL] Launch TUI monitor
 
-Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.
+[EXPERIMENTAL] Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.
 
 `action`: `watch` `requires_runtime`: `true`
 
@@ -242,9 +249,9 @@ Examples:
 
 ### `aura studio`
 
-Launch AURA Studio
+[EXPERIMENTAL] Launch AURA Studio
 
-Launch the rich real-time dashboard. Use --autonomous to start the goal loop.
+[EXPERIMENTAL] Launch the rich real-time dashboard. Use --autonomous to start the goal loop.
 
 `action`: `studio` `requires_runtime`: `true`
 
@@ -349,7 +356,7 @@ Examples:
 
 ### `aura workflow run`
 
-Run a workflow goal
+[EXPERIMENTAL] Run a workflow goal
 
 Run the orchestrator loop for a single workflow goal.
 
@@ -374,7 +381,7 @@ Examples:
 
 ### `aura mcp tools`
 
-List MCP tools
+[EXPERIMENTAL] List MCP tools
 
 List servers and tools exposed by the repo-local MCP config.
 
@@ -388,7 +395,7 @@ Examples:
 
 ### `aura mcp call`
 
-Call an MCP tool
+[EXPERIMENTAL] Call an MCP tool
 
 Invoke a repo-local MCP server/tool target with optional JSON args.
 
@@ -532,7 +539,7 @@ Examples:
 
 ### `aura memory search`
 
-Search semantic memory
+[EXPERIMENTAL] Search semantic memory
 
 Perform a semantic search over brain entries.
 
@@ -544,7 +551,7 @@ Examples:
 
 ### `aura memory reindex`
 
-Rebuild semantic memory embeddings
+[EXPERIMENTAL] Rebuild semantic memory embeddings
 
 Rebuild semantic memory embeddings for the active model and force a project sync.
 
@@ -572,7 +579,7 @@ Examples:
 
 ### `aura sadd`
 
-Sub-Agent Driven Development
+[EXPERIMENTAL] Sub-Agent Driven Development
 
 Decompose a design spec into parallel workstreams and execute via sub-agents.
 
@@ -742,3 +749,94 @@ Run goal via Agent SDK meta-controller
 Execute a development goal using Claude-as-brain orchestration with dynamic tool/skill/workflow selection.
 
 `action`: `agent_run` `requires_runtime`: `true`
+
+### `aura agent list`
+
+List registered agents
+
+Display all registered AURA agents, their type, and status.
+
+`action`: `agent_list` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py agent list`
+
+## `credentials`
+
+### `aura credentials`
+
+Secure credential management
+
+Manage API keys and credentials in secure storage (OS keyring or encrypted file).
+
+Examples:
+- `python3 main.py credentials migrate`
+- `python3 main.py credentials migrate --yes`
+- `python3 main.py credentials store --key api_key`
+- `python3 main.py credentials delete --key api_key --yes`
+
+### `aura credentials migrate`
+
+Migrate credentials to secure storage
+
+Migrate API keys from plaintext aura.config.json to secure credential store (OS keyring).
+
+`action`: `credentials_migrate` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py credentials migrate`
+- `python3 main.py credentials migrate --yes`
+
+### `aura credentials store`
+
+Store a credential securely
+
+Store an API key or credential in the secure credential store.
+
+`action`: `credentials_store` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py credentials store --key api_key`
+- `python3 main.py credentials store --key api_key --value sk-xxx`
+
+### `aura credentials delete`
+
+Delete a stored credential
+
+Remove a credential from the secure credential store.
+
+`action`: `credentials_delete` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py credentials delete --key api_key`
+- `python3 main.py credentials delete --key api_key --yes`
+
+### `aura credentials status`
+
+Show credential storage status
+
+Display information about the credential store configuration and stored credentials.
+
+`action`: `credentials_status` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py credentials status`
+- `python3 main.py credentials status --json`
+
+## `cancel`
+
+### `aura cancel`
+
+Cancel an active pipeline run
+
+Send a cancellation signal to a running AURA pipeline and verify that no partial filesystem changes remain on disk.
+
+Exit codes:
+  0 — run cancelled and filesystem restored
+  1 — run_id not found in the active-run registry
+  2 — cancellation signal sent but rollback verification failed
+
+`action`: `cancel` `requires_runtime`: `false`
+
+Examples:
+- `python3 main.py cancel <run-id>`

@@ -15,6 +15,7 @@ Start:
 Auth (optional):
   Set MCP_API_TOKEN env var — all requests must include Authorization: Bearer <token>
 """
+
 from __future__ import annotations
 
 import os
@@ -31,12 +32,14 @@ if str(_ROOT) not in sys.path:
 
 os.environ.setdefault("AURA_SKIP_CHDIR", "1")
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+
 from pydantic import BaseModel
 
 from core.logging_utils import log_json
 from core.mcp_contracts import build_discovery_payload, build_health_payload, build_tool_descriptor
 from core.mcp_registry import get_registered_service, list_registered_services
+from tools.mcp_server_support import auth_dependency, auth_mode_label, resolve_server_port
 
 # ---------------------------------------------------------------------------
 # Input/output schemas for each skill (used to build MCP tool descriptors)
@@ -289,6 +292,23 @@ _SKILL_METADATA_OVERRIDES: Dict[str, Dict[str, Any]] = {
             "project_root": {"type": "string", "description": "Path to project root to analyze", "default": "."},
         },
     },
+    "prompt_forge": {
+        "description": "Semantic-aware prompt generation: analyse code for patterns (async, recursion, loops, error handling, network, state) and assemble optimised prompts using 6 task templates.",
+        "input": {
+            "task": {"type": "string", "description": "Natural-language description of the coding task", "required": True},
+            "template": {"type": "string", "description": "Prompt template: function, bugfix, refactor, feature, architecture, or test", "default": "function"},
+            "language": {"type": "string", "description": "Target programming language"},
+            "code_context": {"type": "string", "description": "Existing code snippet for semantic analysis"},
+            "file_tree": {"type": "string", "description": "Project file-tree listing for context detection"},
+            "constraints": {"type": "string", "description": "Hard constraints the solution must satisfy"},
+            "test_cases": {"type": "string", "description": "Expected test cases or examples"},
+            "environment": {"type": "string", "description": "Runtime environment description"},
+            "chain_of_thought": {"type": "boolean", "description": "Enable step-by-step reasoning", "default": True},
+            "multi_candidate": {"type": "boolean", "description": "Request multiple solution candidates", "default": False},
+            "iterative_refine": {"type": "boolean", "description": "Enable self-review loop", "default": True},
+            "project_root": {"type": "string", "description": "Project root for auto file-tree detection", "default": "."},
+        },
+    },
 }
 
 
@@ -301,15 +321,17 @@ app = FastAPI(
     version="1.0.0",
 )
 
-_MCP_TOKEN = os.getenv("MCP_API_TOKEN")
 _skills: Dict[str, Any] = {}
 _load_error: Optional[str] = None
+_SERVER_START = time.time()
+_require_auth = auth_dependency("skills")
 
 
 def _load_skills() -> None:
     global _skills, _load_error
     try:
         from agents.skills.registry import all_skills
+
         _skills = all_skills()
         log_json("INFO", "mcp_skills_server_loaded", details={"count": len(_skills)})
     except Exception as exc:
@@ -347,13 +369,6 @@ def _list_skill_descriptors() -> List[Dict[str, Any]]:
     return [_build_skill_descriptor(name, skill) for name, skill in sorted(_skills.items())]
 
 
-def require_auth(authorization: Optional[str] = Header(default=None)) -> None:
-    if not _MCP_TOKEN:
-        return
-    if not authorization or authorization != f"Bearer {_MCP_TOKEN}":
-        raise HTTPException(status_code=401, detail="Invalid or missing Authorization header")
-
-
 # ---------------------------------------------------------------------------
 # Request/response models
 # ---------------------------------------------------------------------------
@@ -366,19 +381,23 @@ class CallRequest(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 @app.get("/health")
-async def health(_: None = Depends(require_auth)) -> Dict:
+async def health(_: str = Depends(_require_auth)) -> Dict:
+    from tools.mcp_auth import is_auth_enabled
+
     return build_health_payload(
         status="ok" if not _load_error else "degraded",
         server=get_registered_service("skills")["name"],
         version="1.0.0",
         tool_count=len(_skills),
         skills_loaded=len(_skills),
+        uptime_s=round(time.time() - _SERVER_START, 1),
+        auth_enabled=is_auth_enabled("skills"),
         load_error=_load_error,
     )
 
 
 @app.get("/discovery")
-async def discovery(_: None = Depends(require_auth)) -> Dict:
+async def discovery(_: str = Depends(_require_auth)) -> Dict:
     return build_discovery_payload(
         current_server=get_registered_service("skills"),
         servers=list_registered_services(),
@@ -387,14 +406,14 @@ async def discovery(_: None = Depends(require_auth)) -> Dict:
 
 
 @app.get("/tools")
-async def list_tools(_: None = Depends(require_auth)) -> Dict:
+async def list_tools(_: str = Depends(_require_auth)) -> Dict:
     """Return MCP-compatible tool list for all loaded skills."""
     tools = _list_skill_descriptors()
     return {"tools": tools, "count": len(tools)}
 
 
 @app.get("/skill/{name}")
-async def get_skill(name: str, _: None = Depends(require_auth)) -> Dict:
+async def get_skill(name: str, _: str = Depends(_require_auth)) -> Dict:
     """Return descriptor for a single skill."""
     if name not in _skills:
         raise HTTPException(status_code=404, detail=f"Skill '{name}' not found. Available: {sorted(_skills.keys())}")
@@ -404,7 +423,7 @@ async def get_skill(name: str, _: None = Depends(require_auth)) -> Dict:
 
 
 @app.post("/call")
-async def call_skill(req: CallRequest, _: None = Depends(require_auth)) -> Dict:
+async def call_skill(req: CallRequest, _: str = Depends(_require_auth)) -> Dict:
     """Invoke a skill by name with the given args dict."""
     if _load_error and not _skills:
         raise HTTPException(status_code=503, detail=f"Skills failed to load: {_load_error}")
@@ -444,8 +463,7 @@ async def root() -> Dict:
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     import uvicorn
-    from core.config_manager import config as _cfg
-    # R4: port from config registry; env var still overrides for backward-compat
-    port = int(os.getenv("MCP_SKILLS_PORT", _cfg.get_mcp_server_port("skills")))
-    log_json("INFO", "mcp_skills_server_starting", details={"port": port, "skills": len(_skills)})
+
+    port = resolve_server_port("skills")
+    log_json("INFO", "mcp_skills_server_starting", details={"port": port, "skills": len(_skills), "auth_mode": auth_mode_label("skills")})
     uvicorn.run("tools.aura_mcp_skills_server:app", host="0.0.0.0", port=port, reload=False)

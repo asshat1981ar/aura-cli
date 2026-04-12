@@ -3,6 +3,7 @@
 Uses the circuit breaker pattern from memory/momento_adapter.py for
 graceful degradation when Neo4j is unavailable.
 """
+
 from __future__ import annotations
 
 import time
@@ -71,15 +72,12 @@ class Neo4jBridge:
 
         try:
             import neo4j
-            self._driver = neo4j.GraphDatabase.driver(
-                self._uri, auth=(self._user, self._password)
-            )
+
+            self._driver = neo4j.GraphDatabase.driver(self._uri, auth=(self._user, self._password))
             self._breaker.record_success()
             return self._driver
         except ImportError:
-            raise RuntimeError(
-                "neo4j package not installed. Install with: pip install neo4j"
-            )
+            raise RuntimeError("neo4j package not installed. Install with: pip install neo4j")
         except Exception as exc:
             self._breaker.record_failure()
             raise RuntimeError(f"Failed to connect to Neo4j at {self._uri}: {exc}")
@@ -156,9 +154,7 @@ class Neo4jBridge:
             self._breaker.record_failure()
             return {"error": str(exc)}
 
-    def import_codebase_graph(
-        self, nodes: List[Dict], relationships: List[Dict]
-    ) -> Dict:
+    def import_codebase_graph(self, nodes: List[Dict], relationships: List[Dict]) -> Dict:
         """Import a codebase structure into the Neo4j graph.
 
         Args:
@@ -188,19 +184,13 @@ class Neo4jBridge:
 
                 # Import relationships
                 for rel in relationships:
-                    cypher = (
-                        f"MATCH (a:{rel['from_label']} {{{rel['from_key']}: $from_val}}) "
-                        f"MATCH (b:{rel['to_label']} {{{rel['to_key']}: $to_val}}) "
-                        f"MERGE (a)-[r:{rel['rel_type']}]->(b)"
-                    )
+                    cypher = f"MATCH (a:{rel['from_label']} {{{rel['from_key']}: $from_val}}) MATCH (b:{rel['to_label']} {{{rel['to_key']}: $to_val}}) MERGE (a)-[r:{rel['rel_type']}]->(b)"
                     params = {
                         "from_val": rel["from_value"],
                         "to_val": rel["to_value"],
                     }
                     if rel.get("properties"):
-                        props_set = ", ".join(
-                            f"r.{k} = ${k}" for k in rel["properties"]
-                        )
+                        props_set = ", ".join(f"r.{k} = ${k}" for k in rel["properties"])
                         cypher += f" SET {props_set}"
                         params.update(rel["properties"])
                     session.run(cypher, params)
@@ -248,9 +238,7 @@ class Neo4jBridge:
     def schema_info(self) -> Dict:
         """Return current graph schema information."""
         labels = self.query_knowledge("CALL db.labels() YIELD label RETURN label")
-        rel_types = self.query_knowledge(
-            "CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType"
-        )
+        rel_types = self.query_knowledge("CALL db.relationshipTypes() YIELD relationshipType RETURN relationshipType")
         constraints = self.query_knowledge("SHOW CONSTRAINTS")
 
         return {

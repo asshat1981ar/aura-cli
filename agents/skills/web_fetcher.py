@@ -1,4 +1,5 @@
 """Skill: fetch web pages or search DuckDuckGo Lite for documentation and references."""
+
 from __future__ import annotations
 
 import re

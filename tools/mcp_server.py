@@ -1,4 +1,4 @@
-"""Comprehensive MCP tool server for AURA CLI.
+"""Legacy compatibility MCP tool server for AURA CLI.
 
 Exposes a FastAPI application with a /call endpoint that dispatches to a
 rich set of developer tools: file I/O, linting, formatting, searching,
@@ -6,13 +6,15 @@ compression, git utilities, and more.
 
 Module-level flags (``ENABLE_WRITE``, ``ENABLE_RUN``, ``RUN_ALLOW``, etc.)
 can be overridden at runtime by tests via ``monkeypatch.setattr``.
+
+This module is a compatibility surface for older MCP utility workflows.
+The canonical dev-tools HTTP runtime is ``aura_cli.server``.
 """
 
 from __future__ import annotations
 
 import ast
 import base64
-import hmac
 import io
 import json
 import os
@@ -28,6 +30,10 @@ from typing import Any, Dict, List, Optional
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+
+# R8: Import centralized MCP auth
+from tools.mcp_auth import is_auth_enabled, require_dev_tools_auth
+from tools.mcp_server_support import auth_mode_label, resolve_server_port
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -66,14 +72,16 @@ RATE_LIMIT_PER_MIN: int = int(os.getenv("MCP_RATE_LIMIT_PER_MIN", "0"))
 
 #: Allowed environment variable names returned by ``env_snapshot`` when no
 #: explicit key list is provided.  Prevents disclosure of secrets/tokens.
-ENV_WHITELIST: frozenset = frozenset({
-    "PYTHONPATH",
-    "PATH",
-    "HOME",
-    "USER",
-    "AURA_SKIP_CHDIR",
-    "AURA_ENABLE_SWARM",
-})
+ENV_WHITELIST: frozenset = frozenset(
+    {
+        "PYTHONPATH",
+        "PATH",
+        "HOME",
+        "USER",
+        "AURA_SKIP_CHDIR",
+        "AURA_ENABLE_SWARM",
+    }
+)
 
 
 def _env_snapshot(args: dict) -> dict:
@@ -120,43 +128,38 @@ def _check_rate_limit(token: str) -> None:
 
 @asynccontextmanager
 async def _lifespan(application: FastAPI):
-    token = os.getenv("MCP_API_TOKEN", "").strip()
-    if not token:
-        raise RuntimeError("MCP_API_TOKEN must be set before starting the MCP server")
     yield
 
 
-app = FastAPI(title="AURA MCP Server", version="0.2.0", lifespan=_lifespan)
+app = FastAPI(title="AURA MCP Compatibility Server", version="0.2.0", lifespan=_lifespan)
 
 
 # ---------------------------------------------------------------------------
-# Auth
+# Auth (R8: Updated to use centralized MCP auth)
 # ---------------------------------------------------------------------------
 
 
 def _require_auth(
     request: Request,
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
     authorization: Optional[str] = Header(default=None),
 ) -> str:
-    """Validate bearer token; fail closed; rate-limit all auth attempts."""
+    """Validate API key using centralized auth; fail closed; rate-limit all auth attempts.
+
+    Supports:
+    - X-API-Key header (preferred)
+    - Authorization: Bearer <token> (legacy)
+    """
     client_id = request.client.host if request.client else "unknown"
     _check_rate_limit(f"auth:{client_id}")
 
-    token = os.getenv("MCP_API_TOKEN", "").strip()
-    if not token:
-        raise HTTPException(status_code=503, detail="Authentication not configured")
-
-    if not authorization:
-        raise HTTPException(status_code=401, detail="Missing Authorization header")
-
-    parts = authorization.split(" ", 1)
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(status_code=401, detail="Invalid Authorization scheme")
-
-    if not hmac.compare_digest(parts[1], token):
-        raise HTTPException(status_code=403, detail="Invalid token")
-
-    return parts[1]
+    # Use centralized auth validator
+    try:
+        return require_dev_tools_auth(x_api_key, authorization)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Auth error: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -257,10 +260,14 @@ TOOLS_MANIFEST: List[Dict[str, str]] = [
 
 
 @app.get("/health")
-async def health(auth: str = Depends(_require_auth)):
+async def health(auth: str = Depends(require_dev_tools_auth)):
     """Return server health, current limits, and runtime metrics."""
+    auth_status = "enabled" if is_auth_enabled("dev_tools") else "disabled"
     return {
         "status": "ok",
+        "role": "compatibility",
+        "canonical_server": "aura_cli.server",
+        "auth": auth_status,
         "limits": {
             "max_read_bytes": MAX_READ_BYTES,
             "rate_limit_per_min": RATE_LIMIT_PER_MIN,
@@ -274,13 +281,13 @@ async def health(auth: str = Depends(_require_auth)):
 
 
 @app.get("/tools")
-async def tools_list(auth: str = Depends(_require_auth)):
+async def tools_list(auth: str = Depends(require_dev_tools_auth)):
     """Return the full list of available tools."""
     return {"data": {"tools": TOOLS_MANIFEST}}
 
 
 @app.post("/call")
-async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # noqa: C901
+async def call_tool(req: CallRequest, auth: str = Depends(require_dev_tools_auth)):  # noqa: C901
     """Dispatch a tool call by name and return its result under ``data``."""
     name = req.tool_name
     args = req.args
@@ -748,8 +755,7 @@ async def call_tool(req: CallRequest, auth: str = Depends(_require_auth)):  # no
 
 if __name__ == "__main__":
     import uvicorn
-    from core.config_manager import config as _cfg
+    port = resolve_server_port("dev_tools")
+    print(f"[MCP dev_tools compatibility] Starting on port {port} (auth: {auth_mode_label('dev_tools')}); canonical server is aura_cli.server")
 
-    # R4: port from config registry; env var PORT still overrides for backward-compat
-    port = int(os.getenv("PORT", _cfg.get_mcp_server_port("dev_tools")))
     uvicorn.run(app, host="0.0.0.0", port=port)

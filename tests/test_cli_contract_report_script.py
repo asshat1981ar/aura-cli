@@ -13,6 +13,7 @@ from tests.cli_contract_report_test_utils import (
     run_script_subprocess,
 )
 from tests.cli_snapshot_utils import read_snapshot_text, snapshot_dir_for
+
 SNAPSHOT_DIR = snapshot_dir_for(__file__)
 
 

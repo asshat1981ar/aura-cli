@@ -1,4 +1,5 @@
 """Tests for the AST analyzer skill."""
+
 from __future__ import annotations
 
 import ast
@@ -101,9 +102,7 @@ class TestASTAnalyzerSkill(TestCase):
     # Test: Detect god_class smell
     # ------------------------------------------------------------------
     def test_detect_god_class(self):
-        methods = "\n".join(
-            f"    def method_{i}(self):\n        pass" for i in range(22)
-        )
+        methods = "\n".join(f"    def method_{i}(self):\n        pass" for i in range(22))
         source = f"class GodClass:\n{methods}\n"
         metrics = self._analyze_source(source)
         smell_types = [s["type"] for s in metrics.smells]
@@ -114,9 +113,7 @@ class TestASTAnalyzerSkill(TestCase):
         self.assertEqual(smell["severity"], "high")
 
     def test_no_god_class_for_20_methods(self):
-        methods = "\n".join(
-            f"    def method_{i}(self):\n        pass" for i in range(20)
-        )
+        methods = "\n".join(f"    def method_{i}(self):\n        pass" for i in range(20))
         source = f"class NormalClass:\n{methods}\n"
         metrics = self._analyze_source(source)
         smell_types = [s["type"] for s in metrics.smells]

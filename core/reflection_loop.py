@@ -13,6 +13,7 @@ Usage::
     loop.on_cycle_complete(cycle_entry)   # call after every run_cycle()
     report = loop.run()                   # or trigger manually
 """
+
 from __future__ import annotations
 
 import time
@@ -33,10 +34,10 @@ class DeepReflectionLoop:
     MIN_CYCLES: int = 3
 
     # Thresholds that classify a pattern as a weakness
-    PHASE_FAIL_RATE_WARN: float = 0.40   # 40%+ failure rate → MEDIUM
-    PHASE_FAIL_RATE_HIGH: float = 0.65   # 65%+ failure rate → HIGH
+    PHASE_FAIL_RATE_WARN: float = 0.40  # 40%+ failure rate → MEDIUM
+    PHASE_FAIL_RATE_HIGH: float = 0.65  # 65%+ failure rate → HIGH
     SKILL_LOW_SIGNAL_RATE: float = 0.25  # <25% actionable hits → LOW VALUE
-    SKILL_MIN_RUNS: int = 3              # require at least 3 runs before judging
+    SKILL_MIN_RUNS: int = 3  # require at least 3 runs before judging
 
     def __init__(self, memory_store, brain):
         self.memory = memory_store
@@ -64,12 +65,11 @@ class DeepReflectionLoop:
     def _run(self) -> Dict[str, Any]:
         history = self.memory.read_log(limit=100)
         if len(history) < self.MIN_CYCLES:
-            log_json("INFO", "reflection_loop_skipped_insufficient_history",
-                     details={"entries": len(history)})
+            log_json("INFO", "reflection_loop_skipped_insufficient_history", details={"entries": len(history)})
             return {"skipped": True, "reason": "insufficient_history"}
 
-        phase_stats: Dict[str, Dict] = {}   # phase → {total, failed}
-        skill_stats: Dict[str, Dict] = {}   # skill → {ran, actionable}
+        phase_stats: Dict[str, Dict] = {}  # phase → {total, failed}
+        skill_stats: Dict[str, Dict] = {}  # skill → {ran, actionable}
         goal_type_outcomes: Dict[str, Dict] = {}  # goal_type → {total, pass}
 
         for entry in history:
@@ -97,10 +97,7 @@ class DeepReflectionLoop:
                 ss = skill_stats.setdefault(skill_name, {"ran": 0, "actionable": 0})
                 ss["ran"] += 1
                 if isinstance(result, dict) and "error" not in result:
-                    has_content = any(
-                        v for k, v in result.items()
-                        if v not in (None, [], {}, "", 0)
-                    )
+                    has_content = any(v for k, v in result.items() if v not in (None, [], {}, "", 0))
                     if has_content:
                         ss["actionable"] += 1
 
@@ -117,8 +114,7 @@ class DeepReflectionLoop:
             "insights": insights,
         }
         self.memory.put("reflection_reports", report)
-        log_json("INFO", "reflection_loop_complete",
-                 details={"insights": len(insights), "cycles_analyzed": len(history)})
+        log_json("INFO", "reflection_loop_complete", details={"insights": len(insights), "cycles_analyzed": len(history)})
         return report
 
     def _extract_insights(
@@ -135,21 +131,25 @@ class DeepReflectionLoop:
                 continue
             rate = s["failed"] / s["total"]
             if rate >= self.PHASE_FAIL_RATE_HIGH:
-                insights.append({
-                    "type": "phase_failure",
-                    "phase": phase,
-                    "failure_rate": round(rate, 3),
-                    "severity": "HIGH",
-                    "message": f"Phase '{phase}' failing {rate:.0%} of the time",
-                })
+                insights.append(
+                    {
+                        "type": "phase_failure",
+                        "phase": phase,
+                        "failure_rate": round(rate, 3),
+                        "severity": "HIGH",
+                        "message": f"Phase '{phase}' failing {rate:.0%} of the time",
+                    }
+                )
             elif rate >= self.PHASE_FAIL_RATE_WARN:
-                insights.append({
-                    "type": "phase_failure",
-                    "phase": phase,
-                    "failure_rate": round(rate, 3),
-                    "severity": "MEDIUM",
-                    "message": f"Phase '{phase}' failing {rate:.0%} of the time",
-                })
+                insights.append(
+                    {
+                        "type": "phase_failure",
+                        "phase": phase,
+                        "failure_rate": round(rate, 3),
+                        "severity": "MEDIUM",
+                        "message": f"Phase '{phase}' failing {rate:.0%} of the time",
+                    }
+                )
 
         # Skill low-signal insights
         for skill, s in skill_stats.items():
@@ -157,14 +157,16 @@ class DeepReflectionLoop:
                 continue
             rate = s["actionable"] / s["ran"]
             if rate < self.SKILL_LOW_SIGNAL_RATE:
-                insights.append({
-                    "type": "low_value_skill",
-                    "skill": skill,
-                    "actionable_rate": round(rate, 3),
-                    "runs": s["ran"],
-                    "severity": "LOW",
-                    "message": f"Skill '{skill}' produces actionable output only {rate:.0%} of the time",
-                })
+                insights.append(
+                    {
+                        "type": "low_value_skill",
+                        "skill": skill,
+                        "actionable_rate": round(rate, 3),
+                        "runs": s["ran"],
+                        "severity": "LOW",
+                        "message": f"Skill '{skill}' produces actionable output only {rate:.0%} of the time",
+                    }
+                )
 
         # Goal-type low success rate
         for gt, s in goal_type_outcomes.items():
@@ -172,17 +174,20 @@ class DeepReflectionLoop:
                 continue
             success_rate = s["pass"] / s["total"]
             if success_rate < 0.40:
-                insights.append({
-                    "type": "goal_type_struggling",
-                    "goal_type": gt,
-                    "success_rate": round(success_rate, 3),
-                    "severity": "HIGH",
-                    "message": f"Goal type '{gt}' succeeds only {success_rate:.0%} of the time",
-                })
+                insights.append(
+                    {
+                        "type": "goal_type_struggling",
+                        "goal_type": gt,
+                        "success_rate": round(success_rate, 3),
+                        "severity": "HIGH",
+                        "message": f"Goal type '{gt}' succeeds only {success_rate:.0%} of the time",
+                    }
+                )
 
         return insights
 
     def _write_to_brain(self, insights: List[Dict]) -> None:
         import json
+
         for insight in insights:
             self.brain.add_weakness(json.dumps(insight))

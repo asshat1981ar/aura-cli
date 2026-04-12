@@ -1,6 +1,7 @@
 """
 Data types and interfaces for Advanced Semantic Context Manager (ASCM) v2.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -18,14 +19,10 @@ class _MissingPackage:
         # to the default correctly.  Python's getattr() only suppresses
         # AttributeError, not ImportError, making ImportError here break
         # unittest.mock.patch on Python 3.10.
-        raise AttributeError(
-            f"Optional dependency '{self._name}' is required for this operation."
-        )
+        raise AttributeError(f"Optional dependency '{self._name}' is required for this operation.")
 
     def __call__(self, *args: object, **kwargs: object) -> None:
-        raise ImportError(
-            f"Optional dependency '{self._name}' is required for this operation."
-        )
+        raise ImportError(f"Optional dependency '{self._name}' is required for this operation.")
 
 
 try:
@@ -33,13 +30,15 @@ try:
 except ImportError:  # pragma: no cover - exercised via optional-deps tests
     np = _MissingPackage("numpy")  # type: ignore
 
+
 @dataclass
 class MemoryRecord:
     """A unit of semantic memory."""
+
     id: str
     content: str
     source_type: str  # 'file', 'memory', 'goal', 'output'
-    source_ref: str   # e.g., 'core/orchestrator.py:45'
+    source_ref: str  # e.g., 'core/orchestrator.py:45'
     created_at: float
     updated_at: float
     goal_id: Optional[str] = None
@@ -51,10 +50,13 @@ class MemoryRecord:
     embedding_dims: int = 1536
     content_hash: str = ""
     embedding: Optional[bytes] = None  # Store binary blob of numpy array
+    namespace: Optional[str] = None  # e.g. "goals", "code", "agent:planner"
+
 
 @dataclass
 class RetrievalQuery:
     """Parameters for a semantic search."""
+
     query_text: str
     k: int = 5
     min_score: float = 0.7
@@ -62,38 +64,55 @@ class RetrievalQuery:
     recency_bias: float = 0.0  # 0.0 to 1.0
     dedupe_key: Optional[str] = "content_hash"
     budget_tokens: int = 4000
+    namespace: Optional[str] = None  # filter to this namespace if set
+
 
 @dataclass
 class SearchHit:
     """A single result from a semantic search."""
+
     record_id: str
     content: str
     score: float
     source_ref: str
     metadata: Dict[str, Any]
     explanation: str  # Why this was retrieved
+    embedding_model_version: str = ""  # provenance: which model produced this hit
+
 
 @dataclass
 class ContextBundle:
     """The assembled context for an agent."""
+
     goal: str
     goal_type: str
-    snippets: List[Dict[str, Any]] # Provenance-rich snippets
+    snippets: List[Dict[str, Any]]  # Provenance-rich snippets
     related_insights: List[str]
     memory: List[str]
     files: List[str]
     budget_report: Dict[str, int]
     trace: Dict[str, Any]
 
+
 class EmbeddingProvider(Protocol):
     """Interface for embedding generation."""
+
     def embed(self, texts: List[str]) -> List[np.ndarray]: ...
     def model_id(self) -> str: ...
     def dimensions(self) -> int: ...
     def healthcheck(self) -> bool: ...
+    # ASCM v2 extended interface
+    def embed_text(self, text: str) -> "Any": ...  # returns EmbeddingResult
+    def embed_batch(self, texts: List[str]) -> "List[Any]": ...  # returns List[EmbeddingResult]
+    @property
+    def model_version(self) -> str: ...
+    @property
+    def provider_type(self) -> str: ...
+
 
 class VectorStoreV2(Protocol):
     """Interface for the persistent vector store."""
+
     def upsert(self, records: List[MemoryRecord]) -> Dict[str, int]: ...
     def search(self, query: RetrievalQuery) -> List[SearchHit]: ...
     def delete(self, ids: List[str]) -> int: ...

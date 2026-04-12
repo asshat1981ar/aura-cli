@@ -1,4 +1,5 @@
 """Unit tests for core/duplicate_analyzer.py — DuplicateCodeAnalyzer."""
+
 import json
 import os
 import tempfile

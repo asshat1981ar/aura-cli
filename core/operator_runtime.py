@@ -270,16 +270,7 @@ def build_run_tool_audit_summary(memory_store: Any = None, *, limit: int = 10) -
     except (OSError, IOError, ValueError):
         return None
 
-    run_entries = [
-        entry
-        for entry in entries
-        if isinstance(entry, dict)
-        and entry.get("type") == "server_run_tool"
-        and (
-            entry.get("event") == "aura_server_run_tool_finished"
-            or any(key in entry for key in ("code", "timed_out", "truncated", "duration_s", "output_bytes"))
-        )
-    ]
+    run_entries = [entry for entry in entries if isinstance(entry, dict) and entry.get("type") == "server_run_tool" and (entry.get("event") == "aura_server_run_tool_finished" or any(key in entry for key in ("code", "timed_out", "truncated", "duration_s", "output_bytes")))]
     if not run_entries:
         return None
 

@@ -1,4 +1,5 @@
 """Unit tests for core/duplicate_reduction.py — DuplicateCodeReducer."""
+
 import os
 import tempfile
 from collections import defaultdict
@@ -57,7 +58,7 @@ class TestGenerateRefactorPlan:
 
     def test_refactor_plan_only_includes_multi_location_blocks(self):
         reducer = DuplicateCodeReducer(".")
-        reducer.duplicate_blocks[111] = ["file_a.py:foo"]          # single — not a duplicate
+        reducer.duplicate_blocks[111] = ["file_a.py:foo"]  # single — not a duplicate
         reducer.duplicate_blocks[222] = ["file_a.py:bar", "file_b.py:bar"]  # actual duplicate
         plan = reducer.generate_refactor_plan()
         assert 111 not in plan

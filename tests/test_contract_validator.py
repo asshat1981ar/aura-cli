@@ -1,4 +1,5 @@
 """Unit tests for agents/contract_validator.py."""
+
 from __future__ import annotations
 
 import json
@@ -45,11 +46,13 @@ class TestContractValidatorInit(unittest.TestCase):
 
     def test_raises_file_not_found_for_missing_spec(self):
         from agents.contract_validator import ContractValidator
+
         with self.assertRaises(FileNotFoundError):
             ContractValidator("/nonexistent/old.yaml", "/nonexistent/new.yaml")
 
     def test_loads_both_specs(self):
         from agents.contract_validator import ContractValidator
+
         with tempfile.TemporaryDirectory() as tmpdir:
             old_path = _write_openapi(tmpdir, "old.json", _MINIMAL_SPEC)
             new_path = _write_openapi(tmpdir, "new.json", _EXTENDED_SPEC)
@@ -70,6 +73,7 @@ class TestCompareSpecs(unittest.TestCase):
 
     def _make_validator(self, old_spec, new_spec):
         from agents.contract_validator import ContractValidator
+
         with tempfile.TemporaryDirectory() as tmpdir:
             old_path = _write_openapi(tmpdir, "old.json", old_spec)
             new_path = _write_openapi(tmpdir, "new.json", new_spec)
@@ -108,6 +112,7 @@ class TestValidateBackwardCompatibility(unittest.TestCase):
 
     def _make_validator(self, old_spec, new_spec):
         from agents.contract_validator import ContractValidator
+
         with tempfile.TemporaryDirectory() as tmpdir:
             old_path = _write_openapi(tmpdir, "old.json", old_spec)
             new_path = _write_openapi(tmpdir, "new.json", new_spec)
@@ -133,6 +138,7 @@ class TestValidatePayload(unittest.TestCase):
 
     def _make_validator_with_same_spec(self, spec):
         from agents.contract_validator import ContractValidator
+
         with tempfile.TemporaryDirectory() as tmpdir:
             old_path = _write_openapi(tmpdir, "old.json", spec)
             new_path = _write_openapi(tmpdir, "new.json", spec)
@@ -156,6 +162,7 @@ class TestValidateParameterCompatibility(unittest.TestCase):
 
     def _make_validator_with_same_spec(self):
         from agents.contract_validator import ContractValidator
+
         with tempfile.TemporaryDirectory() as tmpdir:
             old_path = _write_openapi(tmpdir, "old.json", _MINIMAL_SPEC)
             new_path = _write_openapi(tmpdir, "new.json", _MINIMAL_SPEC)

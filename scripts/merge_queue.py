@@ -333,10 +333,7 @@ class MergeQueueManager:
                     else:
                         print(f"[plan] PR #{pr.number} eligible to merge")
                 else:
-                    print(
-                        f"[skip] PR #{pr.number}: mergeability={pr.mergeability}, "
-                        f"checks_passed={pr.checks_passed}, approvals={pr.approvals}/{self.require_approvals}"
-                    )
+                    print(f"[skip] PR #{pr.number}: mergeability={pr.mergeability}, checks_passed={pr.checks_passed}, approvals={pr.approvals}/{self.require_approvals}")
 
             if not self.execute:
                 break

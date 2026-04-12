@@ -24,6 +24,7 @@ Usage::
     brain.remember({"key": "value"})   # writes to L1 + L2
     brain.recall_all()                 # reads from L1 (fast path)
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -35,15 +36,15 @@ from memory.momento_adapter import MomentoAdapter, WORKING_MEMORY_CACHE
 from core.logging_utils import log_json
 
 # L1 TTLs
-_MEMORY_TTL    = 12 * 3600   # 12 hours
-_WEAKNESS_TTL  = 12 * 3600   # 12 hours
-_RESPONSE_TTL  = 3600        # 1 hour (overridden by enable_cache ttl_seconds)
+_MEMORY_TTL = 12 * 3600  # 12 hours
+_WEAKNESS_TTL = 12 * 3600  # 12 hours
+_RESPONSE_TTL = 3600  # 1 hour (overridden by enable_cache ttl_seconds)
 
 # Max items to cache in L1 lists
-_MEMORY_LIST_MAX    = 50
-_WEAKNESS_LIST_MAX  = 20
+_MEMORY_LIST_MAX = 50
+_WEAKNESS_LIST_MAX = 20
 
-_MEMORY_KEY   = "memory:recent"
+_MEMORY_KEY = "memory:recent"
 _WEAKNESS_KEY = "weaknesses:recent"
 
 
@@ -69,21 +70,21 @@ class MomentoBrain(Brain):
         try:
             text = json.dumps(data) if isinstance(data, dict) else str(data)
             self._m.list_push(
-                WORKING_MEMORY_CACHE, _MEMORY_KEY, text,
+                WORKING_MEMORY_CACHE,
+                _MEMORY_KEY,
+                text,
                 ttl_seconds=_MEMORY_TTL,
                 max_size=_MEMORY_LIST_MAX,
             )
         except Exception as exc:
-            log_json("WARN", "momento_brain_remember_l1_failed",
-                     details={"error": str(exc)})
+            log_json("WARN", "momento_brain_remember_l1_failed", details={"error": str(exc)})
 
     def recall_all(self) -> List[str]:
         """Return all memories — from L1 if available, else L2."""
         if self._m.is_available():
             items = self._m.list_range(WORKING_MEMORY_CACHE, _MEMORY_KEY)
             if items:
-                log_json("DEBUG", "momento_brain_recall_l1_hit",
-                         details={"count": len(items)})
+                log_json("DEBUG", "momento_brain_recall_l1_hit", details={"count": len(items)})
                 return items
             # L1 miss — load from L2 and backfill
             all_items = super().recall_all()
@@ -110,13 +111,14 @@ class MomentoBrain(Brain):
             return
         try:
             self._m.list_push(
-                WORKING_MEMORY_CACHE, _WEAKNESS_KEY, weakness_description,
+                WORKING_MEMORY_CACHE,
+                _WEAKNESS_KEY,
+                weakness_description,
                 ttl_seconds=_WEAKNESS_TTL,
                 max_size=_WEAKNESS_LIST_MAX,
             )
         except Exception as exc:
-            log_json("WARN", "momento_brain_weakness_l1_failed",
-                     details={"error": str(exc)})
+            log_json("WARN", "momento_brain_weakness_l1_failed", details={"error": str(exc)})
 
     # ── Response cache (L1 + L2) ──────────────────────────────────────────────
 
@@ -124,8 +126,7 @@ class MomentoBrain(Brain):
         """Enable L2 response cache (SQLite) and configure L1 TTL."""
         super().enable_cache(db_conn, ttl_seconds=ttl_seconds)
         self._response_ttl = ttl_seconds
-        log_json("INFO", "momento_brain_cache_enabled",
-                 details={"ttl": ttl_seconds, "l1_active": self._m.is_available()})
+        log_json("INFO", "momento_brain_cache_enabled", details={"ttl": ttl_seconds, "l1_active": self._m.is_available()})
 
     def _get_cached_response(self, prompt: str):
         """Check L1 first; fall back to L2 SQLite."""
@@ -133,8 +134,7 @@ class MomentoBrain(Brain):
             key = self._response_key(prompt)
             val = self._m.cache_get(WORKING_MEMORY_CACHE, key)
             if val is not None:
-                log_json("INFO", "momento_brain_response_l1_hit",
-                         details={"key": key[:16]})
+                log_json("INFO", "momento_brain_response_l1_hit", details={"key": key[:16]})
                 return val
         return super()._get_cached_response(prompt)
 
@@ -148,8 +148,7 @@ class MomentoBrain(Brain):
             ttl = getattr(self, "_response_ttl", _RESPONSE_TTL)
             self._m.cache_set(WORKING_MEMORY_CACHE, key, response, ttl_seconds=ttl)
         except Exception as exc:
-            log_json("WARN", "momento_brain_response_l1_save_failed",
-                     details={"error": str(exc)})
+            log_json("WARN", "momento_brain_response_l1_save_failed", details={"error": str(exc)})
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -163,7 +162,9 @@ class MomentoBrain(Brain):
         try:
             for item in items[-_MEMORY_LIST_MAX:]:
                 self._m.list_push(
-                    WORKING_MEMORY_CACHE, _MEMORY_KEY, item,
+                    WORKING_MEMORY_CACHE,
+                    _MEMORY_KEY,
+                    item,
                     ttl_seconds=_MEMORY_TTL,
                     max_size=_MEMORY_LIST_MAX,
                 )
@@ -175,10 +176,11 @@ class MomentoBrain(Brain):
         try:
             for item in items[-_WEAKNESS_LIST_MAX:]:
                 self._m.list_push(
-                    WORKING_MEMORY_CACHE, _WEAKNESS_KEY, item,
+                    WORKING_MEMORY_CACHE,
+                    _WEAKNESS_KEY,
+                    item,
                     ttl_seconds=_WEAKNESS_TTL,
                     max_size=_WEAKNESS_LIST_MAX,
                 )
         except Exception as exc:
-            log_json("WARN", "momento_brain_weakness_backfill_failed",
-                     details={"error": str(exc)})
+            log_json("WARN", "momento_brain_weakness_backfill_failed", details={"error": str(exc)})

@@ -5,6 +5,137 @@ All notable changes to AURA CLI will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - feat/code-quality-dx-sprint
+
+### Added
+- Pre-commit CI job in `.github/workflows/ci.yml` (cached, non-blocking)
+- `docs/adr/ADR-006-multi-stage-docker-build.md` — architecture decision record for Docker multi-stage build
+- `docs/adr/ADR-007-openapi-first-contract.md` — architecture decision record for OpenAPI-first API design
+- `docs/RELEASE_CHECKLIST.md` — full pre-release quality gate checklist (ruff, bandit, pip-audit, tests, OpenAPI drift, Docker smoke test)
+- `.env.example`: `AURA_AUTH_DB_PATH` and `AURA_TEST_MODE` documented with safety warning
+- `tests/test_api_routers.py` — 41 tests for `aura_cli/api/routers/runs.py` + `ws.py` (7 test classes)
+- `tests/test_dispatch_commands.py` — 59 tests for `aura_cli/dispatch.py` + `aura_cli/commands.py`
+- `tests/test_orchestrator_phases.py` — 68 new tests for `core/orchestrator.py` + `core/orchestrator_phases.py` + `core/orchestrator_verify.py`
+
+### Fixed
+- `core/orchestrator.py`: re-export `analyze_capability_needs`, `dispatch_skills`, and related functions from `core.capability_manager` / `core.skill_dispatcher` — resolves `AttributeError` when `auto_add_capabilities=True`
+
+### Changed
+- Test suite: 456 → 628 tests (+172); 0 failures
+- Coverage: 12.93% → 14.55% (624 passing, 17 skipped legacy tests)
+- Coverage gate: `fail_under` 13 → 14 in `pyproject.toml`
+
+
+- Token bucket rate limiter with per-endpoint limits (5/10/100 req/min)
+- DB migrations wired to FastAPI lifespan (idempotent, SHA256-verified)
+- 6-component /ready readiness probe (brain_db, auth_db, redis, mcp_server, model_config, sandbox)
+- JWT security hardening: HS256-only, 256-bit key minimum, 24h TTL cap, SQLite JTI revocation
+- Observability MCP server on port 8030 (6 tools)
+- Enhanced CI pipeline with 5 jobs, dependency audit, release workflows
+- Pre-commit hooks: ruff, bandit, detect-secrets
+- Unit test sub-package with auto-applied markers; test isolation fixtures
+- docs/THREAT_MODEL.md — 7 attack vectors, security controls table
+- docs/MEMORY_ARCHITECTURE.md — memory tier architecture
+- docs/adr/INDEX.md + ADR-004 (Pydantic v2) + ADR-005 (rate limiting)
+- CONTRIBUTING.md — 209-line contribution guide
+- SandboxResult: @dataclass(kw_only=True), duration_ms, violations fields, __bool__
+- Auth DB path: AURA_AUTH_DB_PATH → XDG_DATA_HOME → ~/.local/share/aura/auth.db
+- Prometheus latency histograms; _PROMETHEUS_AVAILABLE flag removed
+
+### Changed
+- Test suite reorganized with pytest markers (slow, integration, e2e, unit, security)
+- Version bumped to 1.0.0, Production/Stable PyPI classifier
+- Coverage gate raised to 20%
+- Vector store v1 now emits DeprecationWarning; consumers migrated to v2
+
+### Fixed
+- SQLite WAL mode enabled on all connections
+- config_manager.py broken import of is_pydantic_available
+- .dict() → .model_dump() Pydantic v2 migration in agents/critic.py
+
+## [1.0.0] - 2026-04-10
+
+### Added
+
+#### Sprint 1: Server Decomposition
+- `aura_cli/api/` — Modular FastAPI application structure
+  - `app.py` — Thin composition root with lifespan management
+  - `middleware/auth.py` — JWT authentication middleware
+  - `routers/health.py` — Health, readiness, liveness endpoints
+  - `routers/runs.py` — Pipeline execution and webhook endpoints
+  - `routers/ws.py` — WebSocket endpoints for real-time updates
+
+#### Sprint 3: JWT Hardening + Auth Router
+- `aura_cli/api/routers/auth.py` — JWT auth endpoints: POST /api/v1/auth/login, /refresh, /logout
+  - Login issues HS256 access (≤24h) and refresh tokens
+  - Refresh exchanges refresh token for new access token
+  - Logout revokes token JTI in SQLite blocklist
+- `tests/test_jwt_hardening.py` — 22 integration tests (key length, HS256, expiry cap, JTI revocation)
+
+#### Sprint 3: Sandbox Security Hardening
+- Network blocking via proxy environment variables (`_SANDBOX_NETWORK_ENV`)
+- Resource limits: 30s CPU, 512 MiB memory (`RLIMIT_CPU`, `RLIMIT_AS`)
+- Filesystem restrictions via runtime `open()` wrapper
+- Security audit document (`docs/security/sandbox-audit-v1.0.md`)
+
+#### Sprint 4/5: Test Coverage
+- `tests/agents/test_applicator_handler.py` — Unit tests for applicator handler
+- `tests/agents/test_sandbox_unit.py` — Unit tests for sandbox module
+- `tests/integration/test_e2e_sandbox_retry.py` — E2E tests for sandbox retry
+
+#### Sprint 6: CLI Infrastructure
+- `aura history [--limit N] [--json]` — List completed goals from GoalArchive (FR-011)
+- `core/circuit_breaker.py` — Three-state circuit breaker for LLM resilience
+- `core/cost_tracker.py` — Cost tracking with `AURA_COST_CAP_USD` enforcement
+- `memory/redis_cache_adapter.py` — Optional Redis L0/L1 caching (activated via `REDIS_URL`)
+- Prometheus metrics resilience for test reimports
+
+#### Sprint 8: Infrastructure Hardening + Logging
+- Docker Compose security: `no-new-privileges`, user restrictions, tmpfs
+- Resource limits: mem_limit, cpus for all services
+- Logging rotation: max-size 10m, max-file 3
+- Pinned base images: nginx:1.25-alpine, redis:7.2-alpine
+
+- Migrated 28+ `print()` calls to `logging` in agents and core library code
+
+#### Sprint 9: Documentation + Coverage
+- Production deployment guide (`docs/deployment/production-guide.md`) — 546 lines
+- Kubernetes deployment manifests
+- Security hardening checklist
+- Backup & recovery procedures
+- Coverage gate: `fail_under=8` scoped to `aura_cli`, `core`, `agents`, `memory`
+- `tests/test_correlation.py` — 13 tests for CorrelationManager / TraceContext (98% coverage)
+- `tests/test_config_schema.py` — 13 tests for ConfigValidator / validate_config (95% coverage)
+- `tests/test_sanitizer.py` — Extended to 10 tests for sanitize_path / sanitize_command (95% coverage)
+
+### Changed
+
+- `agents/sandbox.py` — Wrapped code execution with filesystem restrictions
+- `agents/skills/base.py` — Added `SKIP_DIRS` and `iter_py_files()` helpers
+- `aura_cli/cli_options.py` — Improved CLI contract reporting
+- `docker-compose.prod.yml` — Hardened production configuration
+- `pyproject.toml` — Coverage scoped to 4 measured dirs; `fail_under=8`
+
+### Fixed
+
+- `tests/test_server_api.py` — TypeError in `test_metrics_has_skill_metrics` and `test_execute_run_persists_audit_entries` when `prometheus_client` is installed
+
+### Security
+
+- `pycryptodomex` upgraded 3.11.0 → 3.23.0 (fixes PYSEC-2024-3 Manger OAEP side-channel)
+- JWT: algorithm:none confusion prevented; 256-bit minimum key; JTI revocation in SQLite
+- Sandbox violations now logged to `aura_sandbox_violations_total` metric
+- API token required for all mutating endpoints
+- Cost cap prevents runaway LLM spending
+- All subprocesses run with restricted network and filesystem access
+
+### Compliance
+
+- OWASP ASVS L1: Input Validation (V5.2) ✅
+- OWASP ASVS L1: File Execution (V12.3) ✅
+- NIST 800-53: Process Isolation (SC-39) ✅
+- NIST 800-53: Identification and Authentication (IA-5) ✅ (JWT hardening)
+
 ## [Sprint S004] - 2026-03-27
 
 ### Added

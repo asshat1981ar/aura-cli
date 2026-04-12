@@ -1,9 +1,16 @@
 {
   "action_spec_actions": [
+    "agent_list",
     "agent_run",
     "beads_schemas",
     "bootstrap",
+    "cancel",
+    "config_set",
     "contract_report",
+    "credentials_delete",
+    "credentials_migrate",
+    "credentials_status",
+    "credentials_store",
     "diag",
     "doctor",
     "evolve",
@@ -57,7 +64,30 @@
       "bootstrap"
     ],
     [
+      "cancel"
+    ],
+    [
+      "config",
+      "set"
+    ],
+    [
       "contract-report"
+    ],
+    [
+      "credentials",
+      "delete"
+    ],
+    [
+      "credentials",
+      "migrate"
+    ],
+    [
+      "credentials",
+      "status"
+    ],
+    [
+      "credentials",
+      "store"
     ],
     [
       "diag"
@@ -186,10 +216,17 @@
   ],
   "customizers_on_non_leaf_paths": [],
   "dispatch_actions": [
+    "agent_list",
     "agent_run",
     "beads_schemas",
     "bootstrap",
+    "cancel",
+    "config_set",
     "contract_report",
+    "credentials_delete",
+    "credentials_migrate",
+    "credentials_status",
+    "credentials_store",
     "diag",
     "doctor",
     "evolve",
@@ -236,10 +273,17 @@
   "extra_required_parent_paths": [],
   "failure_keys": [],
   "help_actions": [
+    "agent_list",
     "agent_run",
     "beads_schemas",
     "bootstrap",
+    "cancel",
+    "config_set",
     "contract_report",
+    "credentials_delete",
+    "credentials_migrate",
+    "credentials_status",
+    "credentials_store",
     "diag",
     "doctor",
     "evolve",
@@ -284,6 +328,10 @@
     ],
     [
       "agent",
+      "list"
+    ],
+    [
+      "agent",
       "run"
     ],
     [
@@ -297,10 +345,36 @@
       "bootstrap"
     ],
     [
+      "cancel"
+    ],
+    [
       "config"
     ],
     [
+      "config",
+      "set"
+    ],
+    [
       "contract-report"
+    ],
+    [
+      "credentials"
+    ],
+    [
+      "credentials",
+      "delete"
+    ],
+    [
+      "credentials",
+      "migrate"
+    ],
+    [
+      "credentials",
+      "status"
+    ],
+    [
+      "credentials",
+      "store"
     ],
     [
       "diag"
@@ -457,6 +531,10 @@
   "leaf_paths": [
     [
       "agent",
+      "list"
+    ],
+    [
+      "agent",
       "run"
     ],
     [
@@ -467,10 +545,30 @@
       "bootstrap"
     ],
     [
-      "config"
+      "cancel"
+    ],
+    [
+      "config",
+      "set"
     ],
     [
       "contract-report"
+    ],
+    [
+      "credentials",
+      "delete"
+    ],
+    [
+      "credentials",
+      "migrate"
+    ],
+    [
+      "credentials",
+      "status"
+    ],
+    [
+      "credentials",
+      "store"
     ],
     [
       "diag"
@@ -617,6 +715,12 @@
       "beads"
     ],
     [
+      "config"
+    ],
+    [
+      "credentials"
+    ],
+    [
       "goal"
     ],
     [
@@ -644,6 +748,10 @@
     ],
     [
       "agent",
+      "list"
+    ],
+    [
+      "agent",
       "run"
     ],
     [
@@ -657,10 +765,36 @@
       "bootstrap"
     ],
     [
+      "cancel"
+    ],
+    [
       "config"
     ],
     [
+      "config",
+      "set"
+    ],
+    [
       "contract-report"
+    ],
+    [
+      "credentials"
+    ],
+    [
+      "credentials",
+      "delete"
+    ],
+    [
+      "credentials",
+      "migrate"
+    ],
+    [
+      "credentials",
+      "status"
+    ],
+    [
+      "credentials",
+      "store"
     ],
     [
       "diag"
@@ -822,6 +956,9 @@
       "beads"
     ],
     [
+      "credentials"
+    ],
+    [
       "goal"
     ],
     [
@@ -852,6 +989,10 @@
     ],
     [
       "agent",
+      "list"
+    ],
+    [
+      "agent",
       "run"
     ],
     [
@@ -865,10 +1006,36 @@
       "bootstrap"
     ],
     [
+      "cancel"
+    ],
+    [
       "config"
     ],
     [
+      "config",
+      "set"
+    ],
+    [
       "contract-report"
+    ],
+    [
+      "credentials"
+    ],
+    [
+      "credentials",
+      "delete"
+    ],
+    [
+      "credentials",
+      "migrate"
+    ],
+    [
+      "credentials",
+      "status"
+    ],
+    [
+      "credentials",
+      "store"
     ],
     [
       "diag"

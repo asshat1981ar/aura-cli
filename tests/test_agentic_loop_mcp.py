@@ -1,4 +1,5 @@
 """Tests for tools/agentic_loop_mcp.py."""
+
 from __future__ import annotations
 
 import os

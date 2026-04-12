@@ -19,12 +19,18 @@ from aura_cli.error_presenter import present_error
 
 
 def _initialize_container() -> None:
-    """Initialize the dependency injection container with core services."""
+    """Initialize the dependency injection container with core services.
+
+    Skipped in test mode (``AURA_TEST_MODE=1``) to avoid side-effects such as
+    config loading and credential-store initialization that emit logs to stderr.
+    """
+    if os.getenv("AURA_TEST_MODE") == "1":
+        return
     # Register configuration manager
     from core.config_manager import ConfigManager
     if "config_manager" not in Container._singletons:
         Container.register_singleton(ConfigManager, ConfigManager())
-    
+
     # Register model adapter
     from core.model_adapter import ModelAdapter
     if "model_adapter" not in Container._singletons:
@@ -105,7 +111,6 @@ def main(project_root_override=None, argv=None):
     except Exception as exc:
         # Use enhanced error presenter for runtime errors
         if json_output:
-            import json
             print(json.dumps({"error": str(exc), "type": type(exc).__name__}))
         else:
             present_error(

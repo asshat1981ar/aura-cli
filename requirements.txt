@@ -30,6 +30,7 @@ typer>=0.12.0
 pyautogen>=0.2.0,<0.11
 claude-agent-sdk>=0.1.0
 openapi_spec_validator>=0.7.0
+jsonschema>=4.0.0
 prometheus-client>=0.20.0
 bandit>=1.8
 pytest-timeout>=2.0
@@ -44,3 +45,7 @@ langgraph-checkpoint-redis>=1.0.0
 # onnxruntime-mobile>=1.17.0
 # huggingface_hub>=0.20.0
 # tokenizers>=0.15.0
+
+# Security: OS keyring credential storage
+keyring>=25.0.0
+cryptography>=42.0.0

@@ -29,6 +29,7 @@ from aura_cli.options import (
 _REQUIRED_SUBCOMMAND_PARENT_PATHS: set[tuple[str, ...]] = {
     ("agent",),
     ("beads",),
+    ("credential",),
     ("credentials",),
     ("goal",),
     ("innovate",),
@@ -471,6 +472,12 @@ def _customize_innovate_insights(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--output", dest="output", choices=["table", "json"], default="table", help="Output format.")
 
 
+def _customize_credential_migrate_keyring(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(credential_migrate_keyring=True)
+
+
+def _customize_credential_list(parser: argparse.ArgumentParser) -> None:
+    parser.set_defaults(credential_list=True)
 # Security Issue #427: Credential management command customizers
 
 
@@ -579,6 +586,8 @@ _PARSER_CUSTOMIZERS.update(
         ("innovate", "techniques"): _customize_innovate_techniques,
         ("innovate", "to-goals"): _customize_innovate_to_goals,
         ("innovate", "insights"): _customize_innovate_insights,
+        ("credential", "migrate-keyring"): _customize_credential_migrate_keyring,
+        ("credential", "list"): _customize_credential_list,
         # Security Issue #427: Credential management customizers
         ("credentials", "migrate"): _customize_credentials_migrate,
         ("credentials", "store"): _customize_credentials_store,

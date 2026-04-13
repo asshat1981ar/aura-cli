@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional, Tuple, Set
 from core.logging_utils import log_json
 from core.exceptions import ConfigurationError
 from core.config_schema import ConfigValidator
+from core.security import CredentialStore, get_credential_store
+from core.security.credential_helpers import SECRET_KEYS, get_credential, set_credential, is_secret_key
 
 
 def is_pydantic_available() -> bool:
@@ -18,7 +20,6 @@ def is_pydantic_available() -> bool:
         return False
 
 
-from core.credential_store import CredentialStore, get_credential_store
 
 # ---------------------------------------------------------------------------
 # Value validators — each returns (is_valid: bool, coerced_value, reason: str)
@@ -220,6 +221,14 @@ class ConfigManager:
 
         self.refresh()
 
+    @property
+    def credential_store(self):
+        """Lazily initialise the credential store on first access."""
+        if self._credential_store is None:
+            from core.security.store_factory import get_credential_store
+            self._credential_store = get_credential_store()
+        return self._credential_store
+
     def _load_from_file(self) -> Dict[str, Any]:
         if not self.config_file.exists():
             return {}
@@ -346,7 +355,7 @@ class ConfigManager:
         self.file_config = self._load_from_file()
         env_config = self._load_from_env()
 
-        # Merge hierarchy: Defaults < JSON < ENV < Overrides
+        # Merge hierarchy: Defaults < JSON < Credential Store < ENV < Overrides
         merged = copy.deepcopy(DEFAULT_CONFIG)
 
         # Deep merge for nested config groups to preserve defaults if partial override
@@ -369,6 +378,15 @@ class ConfigManager:
         for k, v in self.file_config.items():
             if k not in ["beads", "model_routing", "semantic_memory", "local_model_profiles", "local_model_routing", "mcp_servers", "mcp_server_api_keys"]:
                 merged[k] = v
+
+        # Layer: credential store (with env var override built in)
+        try:
+            for key in SECRET_KEYS:
+                secret = get_credential(self.credential_store, key)
+                if secret:
+                    merged[key] = secret
+        except Exception:
+            pass  # credential store unavailable; fall through to env/overrides
 
         # Merge ENV (env_config already has merged sub-dicts)
         if "beads" in env_config:
@@ -453,7 +471,7 @@ class ConfigManager:
                 return self._validate_value(key, env_value) if key in _KEY_VALIDATORS else env_value
 
             # Priority 3: Secure credential store
-            credential_value = self._credential_store.retrieve(key)
+            credential_value = get_credential(self.credential_store, key)
             if credential_value:
                 return self._validate_value(key, credential_value) if key in _KEY_VALIDATORS else credential_value
 
@@ -477,9 +495,20 @@ class ConfigManager:
     def update_config(self, updates: Dict[str, Any], persist: bool = True):
         """Update multiple configuration values, optionally persisting to disk.
 
-        Supports deep merging for nested config groups.
+        Secret keys are routed to the credential store; non-secret keys go to
+        the JSON config file.  Supports deep merging for nested config groups.
         """
+        secret_updates: Dict[str, str] = {}
+        non_secret_updates: Dict[str, Any] = {}
+
         for k, v in updates.items():
+            if is_secret_key(k) and isinstance(v, str):
+                secret_updates[k] = v
+            else:
+                non_secret_updates[k] = v
+
+        # Merge non-secret updates into file_config
+        for k, v in non_secret_updates.items():
             if k in ["beads", "model_routing", "semantic_memory", "local_model_profiles", "local_model_routing", "mcp_server_api_keys"] and isinstance(v, dict):
                 if k not in self.file_config:
                     self.file_config[k] = {}
@@ -488,27 +517,51 @@ class ConfigManager:
                 self.file_config[k] = v
 
         if persist:
+            # Persist non-secret config to JSON (strip any lingering secrets)
             try:
-                with open(self.config_file, "w") as f:
-                    json.dump(self.file_config, f, indent=4)
+                safe_config = {k: v for k, v in self.file_config.items() if not is_secret_key(k)}
+                with open(self.config_file, 'w') as f:
+                    json.dump(safe_config, f, indent=4)
                 log_json("INFO", "config_updated_and_persisted", details={"keys": list(updates.keys())})
             except Exception as e:
                 log_json("ERROR", "config_save_failed", details={"error": str(e)})
                 raise ConfigurationError(f"Failed to save config: {e}")
 
+            # Persist secrets to the credential store
+            for k, v in secret_updates.items():
+                try:
+                    set_credential(self.credential_store, k, v)
+                except Exception as e:
+                    log_json("ERROR", "credential_store_save_failed",
+                             details={"key": k, "error": str(e)})
+
         self.refresh()
 
     def persist_to_file(self, key: str, value: Any):
-        """Sets a configuration value and persists it to the aura.config.json file."""
-        self.file_config[key] = value
-        try:
-            with open(self.config_file, "w") as f:
-                json.dump(self.file_config, f, indent=4)
-            log_json("INFO", "config_persisted", details={"key": key})
-            self.refresh()
-        except Exception as e:
-            log_json("ERROR", "config_save_failed", details={"error": str(e)})
-            raise ConfigurationError(f"Failed to save config: {e}")
+        """Sets a configuration value and persists it.
+
+        Secret keys are persisted to the credential store; other keys go to the
+        JSON config file.
+        """
+        if is_secret_key(key) and isinstance(value, str):
+            try:
+                set_credential(self.credential_store, key, value)
+                log_json("INFO", "credential_persisted", details={"key": key})
+            except Exception as e:
+                log_json("ERROR", "credential_store_save_failed",
+                         details={"key": key, "error": str(e)})
+                raise ConfigurationError(f"Failed to save credential: {e}")
+        else:
+            self.file_config[key] = value
+            try:
+                safe_config = {k: v for k, v in self.file_config.items() if not is_secret_key(k)}
+                with open(self.config_file, 'w') as f:
+                    json.dump(safe_config, f, indent=4)
+                log_json("INFO", "config_persisted", details={"key": key})
+            except Exception as e:
+                log_json("ERROR", "config_save_failed", details={"error": str(e)})
+                raise ConfigurationError(f"Failed to save config: {e}")
+        self.refresh()
 
     def get_mcp_server_port(self, server_name: str) -> int:
         """R4: Return the configured port for a named MCP server.
@@ -710,8 +763,8 @@ class ConfigManager:
     def interactive_bootstrap(self):
         """Interactively guides the user through setting up AURA configuration."""
         print("\n--- AURA Interactive Bootstrap ---")
-        print("This will create or update your aura.config.json file.")
-        print("Note: API keys can be stored securely in your OS keyring.")
+        print("This will create or update your configuration.")
+        print("API keys are stored securely in the OS keyring (or encrypted file).")
 
         try:
             # Ask about secure storage preference
@@ -727,11 +780,7 @@ class ConfigManager:
 
             new_key = input(f"OpenRouter API Key{key_hint} (leave blank to keep): ").strip()
             if new_key:
-                if store_securely:
-                    self._credential_store.store("api_key", new_key)
-                    self.file_config["api_key"] = "***SECURE_STORAGE***"
-                else:
-                    self.file_config["api_key"] = new_key
+                set_credential(self.credential_store, "api_key", new_key)
 
             # 2. OpenAI API Key (optional)
             current_openai = self.get("openai_api_key")
@@ -742,11 +791,7 @@ class ConfigManager:
 
             new_openai = input(f"OpenAI API Key (optional){openai_hint} (leave blank to skip): ").strip()
             if new_openai:
-                if store_securely:
-                    self._credential_store.store("openai_api_key", new_openai)
-                    self.file_config["openai_api_key"] = "***SECURE_STORAGE***"
-                else:
-                    self.file_config["openai_api_key"] = new_openai
+                set_credential(self.credential_store, "openai_api_key", new_openai)
 
             # 2b. Anthropic API Key (optional)
             current_anthropic = self.get("anthropic_api_key")
@@ -757,11 +802,7 @@ class ConfigManager:
 
             new_anthropic = input(f"Anthropic API Key (optional){anthropic_hint} (leave blank to skip): ").strip()
             if new_anthropic:
-                if store_securely:
-                    self._credential_store.store("anthropic_api_key", new_anthropic)
-                    self.file_config["anthropic_api_key"] = "***SECURE_STORAGE***"
-                else:
-                    self.file_config["anthropic_api_key"] = new_anthropic
+                set_credential(self.credential_store, "anthropic_api_key", new_anthropic)
 
             # 3. Default Model
             current_model = self.get("model_name")
@@ -769,20 +810,19 @@ class ConfigManager:
             if new_model:
                 self.file_config["model_name"] = new_model
 
-            # Save
-            with open(self.config_file, "w") as f:
-                json.dump(self.file_config, f, indent=4)
+            # Save non-secret config to file (strip any lingering secrets)
+            safe_config = {k: v for k, v in self.file_config.items() if not is_secret_key(k)}
+            with open(self.config_file, 'w') as f:
+                json.dump(safe_config, f, indent=4)
 
             self.refresh()
-            print("\n✅ Configuration saved to aura.config.json")
-            if store_securely:
-                print("🔐 API keys stored securely in OS keyring.")
+            print("\n Configuration saved. Secrets stored in credential store.")
             log_json("INFO", "config_interactive_bootstrap_complete")
 
         except EOFError:
             print("\nBootstrap cancelled.")
         except Exception as e:
-            print(f"\n❌ Bootstrap failed: {e}")
+            print(f"\n Bootstrap failed: {e}")
             log_json("ERROR", "config_interactive_bootstrap_failed", details={"error": str(e)})
 
     def migrate_credentials(self, dry_run: bool = False) -> Dict[str, Any]:
@@ -842,14 +882,11 @@ class ConfigManager:
 
             # Store in credential store
             try:
-                if self._credential_store.store(key, value):
-                    # Replace with marker in file config
-                    self.file_config[key] = "***SECURE_STORAGE***"
-                    results["migrated"].append(key)
-                    log_json("INFO", "credential_migrated", details={"key": key})
-                else:
-                    results["errors"][key] = "Failed to store in credential store"
-                    log_json("ERROR", "credential_migration_failed", details={"key": key})
+                set_credential(self.credential_store, key, value)
+                # Replace with marker in file config
+                self.file_config[key] = "***SECURE_STORAGE***"
+                results["migrated"].append(key)
+                log_json("INFO", "credential_migrated", details={"key": key})
             except Exception as e:
                 results["errors"][key] = str(e)
                 log_json("ERROR", "credential_migration_exception", details={"key": key, "error": str(e)})
@@ -879,7 +916,8 @@ class ConfigManager:
 
     def get_credential_store_info(self) -> Dict[str, Any]:
         """Get information about the credential store configuration."""
-        return self._credential_store.get_storage_info()
+        store = self.credential_store
+        return {"backend": type(store).__name__, "keys": store.list_keys()}
 
     def secure_store_credential(self, key: str, value: str) -> bool:
         """
@@ -892,7 +930,11 @@ class ConfigManager:
         Returns:
             True if stored successfully
         """
-        return self._credential_store.store(key, value)
+        try:
+            set_credential(self.credential_store, key, value)
+            return True
+        except Exception:
+            return False
 
     def secure_retrieve_credential(self, key: str) -> Optional[str]:
         """
@@ -904,7 +946,7 @@ class ConfigManager:
         Returns:
             The credential value or None
         """
-        return self._credential_store.retrieve(key)
+        return get_credential(self.credential_store, key)
 
     def secure_delete_credential(self, key: str) -> bool:
         """
@@ -916,7 +958,11 @@ class ConfigManager:
         Returns:
             True if deleted successfully
         """
-        return self._credential_store.delete(key)
+        try:
+            self.credential_store.delete(key)
+            return True
+        except Exception:
+            return False
 
 
 # Global instance initialized with defaults

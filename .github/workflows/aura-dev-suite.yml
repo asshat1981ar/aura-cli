@@ -221,7 +221,7 @@ jobs:
           r=client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Code Reviewer for asshat1981ar/aura-cli. Review pull requests and code changes for quality, security, and adherence to project patterns. Check for: proper async/await usage, type annotations, pydantic model validation, error handling, test coverage. Verify MCP tool definitions match the OpenAI Agents SDK format. Output structured review comments with severity levels."},{"role":"user","content":f"Context:\n{p}\nTask:\n{t}\nProvide structured review."}])
           open("review-results.md","w").write("# Code Review\n\n"+r.choices[0].message.content)
           PYEOF
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: code-review-results
@@ -260,7 +260,7 @@ jobs:
           r=client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura DevOps Engineer for asshat1981ar/aura-cli. Manage CI/CD pipelines, Docker configurations, GitHub Actions workflows, and deployment infrastructure. The project uses GitHub Actions, Docker, webhook integration at aura-webhooks.codeevo.dev, and MCP server deployment on ports 8001-8007. Generate workflow YAML, Dockerfiles, and infrastructure-as-code."},{"role":"user","content":f"Context:\n{p}\nTask:\n{t}\nGenerate DevOps configs."}])
           open("devops-results.md","w").write("# DevOps Results\n\n"+r.choices[0].message.content)
           PYEOF
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: devops-results
@@ -297,7 +297,7 @@ jobs:
           r=client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Test Engineer for asshat1981ar/aura-cli. Write comprehensive pytest test suites. The project uses tests/ with pytest and ruff. Generate unit tests, integration tests, MCP endpoint tests. Mock external APIs, use fixtures, pytest-asyncio. Target 80%+ coverage for core/, agents/, tools/. Include edge cases and error paths."},{"role":"user","content":f"Context:\n{p}\nTask:\n{t}\nGenerate tests."}])
           open("test-results.md","w").write("# Test Results\n\n"+r.choices[0].message.content)
           PYEOF
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: test-results
@@ -336,7 +336,7 @@ jobs:
           r=client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Planner for asshat1981ar/aura-cli. Create project roadmaps, feature plans, architectural decision records, and sprint breakdowns. Decompose complex features into actionable tasks with dependencies. Output structured plans with priorities, effort estimates, and integration points across the agent system, core engine, and MCP servers."},{"role":"user","content":f"Context:\n{p}\nTask:\n{t}\nCreate structured plan."}])
           open("planning-results.md","w").write("# Planning Results\n\n"+r.choices[0].message.content)
           PYEOF
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: planning-results
@@ -373,7 +373,7 @@ jobs:
           r=client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Security Auditor for asshat1981ar/aura-cli. Perform security audits on code, configurations, and infrastructure. Check for auth vulnerabilities, injection attacks, insecure dependencies, misconfigurations. Review MCP server endpoints on ports 8001-8007 for input validation and access controls. Audit Docker, CI/CD pipelines, secrets management. Output findings with severity levels and remediation steps."},{"role":"user","content":f"Context:\n{p}\nTask:\n{t}\nPerform security audit."}])
           open("security-results.md","w").write("# Security Audit\n\n"+r.choices[0].message.content)
           PYEOF
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: security-audit-results
@@ -410,7 +410,7 @@ jobs:
           r=client.chat.completions.create(model=os.environ.get("AURA_MODEL","gpt-5.4"),messages=[{"role":"system","content":"You are Aura Code Architect for asshat1981ar/aura-cli. Design architecture, scaffold modules, generate Python code with async patterns, pydantic models, type hints. Integrate with core/orchestrator.py and agents/registry.py. Use MCP servers on ports 8001-8007. Output complete runnable modules with docstrings and tests."},{"role":"user","content":f"Plan:\n{p}\nTask:\n{t}\nGenerate complete implementation."}])
           open("architecture-results.md","w").write("# Architecture Results\n\n"+r.choices[0].message.content)
           PYEOF
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: architecture-results

@@ -69,7 +69,7 @@ webui = [
 ]
 onnx = [
     "onnxruntime-mobile>=1.17.0",
-    "huggingface_hub>=0.20.0",
+    "huggingface_hub>=1.10.2",
     "tokenizers>=0.15.0",
     "numpy>=1.24.0",
 ]

@@ -73,7 +73,7 @@ jobs:
 
       - name: 'Parse agent and command'
         id: 'parse'
-        uses: 'actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea' # ratchet:actions/github-script@v7
+        uses: 'actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3' # ratchet:actions/github-script@v7
         env:
           EVENT_TYPE: '${{ github.event_name }}.${{ github.event.action }}'
           REQUEST: '${{ github.event.comment.body || github.event.review.body || github.event.issue.body || github.event.pull_request.body }}'
@@ -300,7 +300,7 @@ jobs:
 
       - name: 'Notify user when Claude is unavailable'
         if: steps.claude-auth.outputs.available == 'false'
-        uses: 'actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea' # v7
+        uses: 'actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3' # v7
         with:
           script: |
             const issueNumber = context.payload.issue?.number || context.payload.pull_request?.number;

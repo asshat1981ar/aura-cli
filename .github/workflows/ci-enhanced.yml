@@ -66,7 +66,7 @@ jobs:
           print(f'SAST OK: 0 HIGH severity findings ({len(data.get(\"results\", []))} total)')
           "
       - name: Upload SAST results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: bandit-results
@@ -110,7 +110,7 @@ jobs:
           echo "✓ No forbidden JWT algorithm patterns found"
       - name: Upload security reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: security-reports
           path: |
@@ -167,13 +167,13 @@ jobs:
             --junitxml=test-results.xml
       - name: Upload coverage report
         if: matrix.python-version == '3.11'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage.xml
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.python-version }}
           path: test-results.xml
@@ -252,7 +252,7 @@ jobs:
           git diff --exit-code docs/api/openapi.json || \
             (echo "::warning::OpenAPI spec is stale — run: python3 scripts/export_openapi.py" && true)
       - name: Upload OpenAPI spec
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: openapi-spec
           path: docs/api/openapi.json

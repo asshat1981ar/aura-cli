@@ -39,7 +39,7 @@ from core.file_tools import (
     apply_change_with_explicit_overwrite_policy,
     mismatch_overwrite_block_log_details,
 )
-from core.skill_dispatcher import classify_goal
+from core.skill_dispatcher import classify_goal, dispatch_skills
 from core.human_gate import HumanGate
 from core.types import TaskRequest, TaskResult, ExecutionContext
 from core.mcp_agent_registry import agent_registry

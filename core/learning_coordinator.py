@@ -165,21 +165,13 @@ class LearningCoordinator:
         # so stored records accurately reflect which goals were enqueued.
         immediate_goals: List[str] = []
         for art in artifacts:
-            if art.is_actionable() and art.severity in self.ENQUEUE_SEVERITIES:
+            if art.is_actionable() and art.severity in self.ENQUEUE_SEVERITIES and art.suggested_goal:
                 if len(immediate_goals) < self.MAX_GOALS_PER_CYCLE:
-                    immediate_goals.append(art.suggested_goal)  # type: ignore[arg-type]
+                    immediate_goals.append(art.suggested_goal)
                     art.mark_acted_on()
                 else:
                     # Overflow: defer to backlog so Phase 10 can drain them later
-                    self._pending_goals.append(art.suggested_goal)  # type: ignore[arg-type]
-
-        # Add reflection goals up to the cap; overflow goes to backlog
-        remaining = self.MAX_GOALS_PER_CYCLE - len(immediate_goals)
-        for i, g in enumerate(reflection_goals):
-            if i < remaining:
-                immediate_goals.append(g)
-            else:
-                self._pending_goals.append(g)
+                    self._pending_goals.append(art.suggested_goal)
 
         # 5. Persist all artifacts (acted_on is now set correctly)
         for art in artifacts:

@@ -173,6 +173,19 @@ class LearningCoordinator:
                     # Overflow: defer to backlog so Phase 10 can drain them later
                     self._pending_goals.append(art.suggested_goal)
 
+        # 4b. Add reflection goals up to the cap, deduped against immediate_goals.
+        # Reflection artifacts are already marked acted_on in _sync_reflection_reports,
+        # so they are skipped by is_actionable() above; enqueue their goals here instead.
+        _seen: set = set(immediate_goals)
+        for g in reflection_goals:
+            if g in _seen:
+                continue
+            _seen.add(g)
+            if len(immediate_goals) < self.MAX_GOALS_PER_CYCLE:
+                immediate_goals.append(g)
+            else:
+                self._pending_goals.append(g)
+
         # 5. Persist all artifacts (acted_on is now set correctly)
         for art in artifacts:
             try:

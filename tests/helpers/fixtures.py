@@ -99,6 +99,7 @@ class TestFixture:
         Returns:
             Path to created pyproject.toml.
         """
+        overrides = overrides or {}
         content = f"""[project]
 name = "test-project"
 version = "0.1.0"

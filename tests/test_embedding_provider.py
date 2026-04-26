@@ -204,6 +204,13 @@ class TestOpenAIEmbeddingProvider:
         # Healthcheck fails if no API key
         assert provider.healthcheck() is False
 
+    def test_healthcheck_does_not_call_api(self):
+        provider = OpenAIEmbeddingProvider(api_key="k")
+
+        with patch("memory.embedding_provider._requests") as mock_requests:
+            assert provider.healthcheck() is True
+
+        mock_requests.post.assert_not_called()
     def test_provider_type(self):
         provider = OpenAIEmbeddingProvider(api_key="k")
         assert provider.provider_type == "openai"

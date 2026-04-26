@@ -164,14 +164,50 @@ class LearningCoordinator:
         # 4. Collect immediate high-severity goals and mark acted_on BEFORE persisting
         # so stored records accurately reflect which goals were enqueued.
         immediate_goals: List[str] = []
+        scheduled_goals = set()
+
+        # Reflection reports may already have marked their artifacts as acted_on
+        # upstream. Explicitly merge the returned reflection_goals here so they
+        # are not lost just because those artifacts are no longer actionable.
+        for reflection_goal in reflection_goals:
+            if not reflection_goal or reflection_goal in scheduled_goals:
+                continue
+
+            matching_reflection_artifacts = [
+                art
+                for art in reflection_artifacts
+                if art.suggested_goal == reflection_goal and art.severity in self.ENQUEUE_SEVERITIES
+            ]
+            if not matching_reflection_artifacts:
+                continue
+
+            if len(immediate_goals) < self.MAX_GOALS_PER_CYCLE:
+                immediate_goals.append(reflection_goal)
+                for art in matching_reflection_artifacts:
+                    art.acted_on = True
+            else:
+                # Overflow: defer to backlog so Phase 10 can drain them later.
+                # Ensure persisted artifacts reflect that they were deferred.
+                self._pending_goals.append(reflection_goal)
+                for art in matching_reflection_artifacts:
+                    art.acted_on = False
+
+            scheduled_goals.add(reflection_goal)
+
         for art in artifacts:
-            if art.is_actionable() and art.severity in self.ENQUEUE_SEVERITIES and art.suggested_goal:
+            if (
+                art.is_actionable()
+                and art.severity in self.ENQUEUE_SEVERITIES
+                and art.suggested_goal
+                and art.suggested_goal not in scheduled_goals
+            ):
                 if len(immediate_goals) < self.MAX_GOALS_PER_CYCLE:
                     immediate_goals.append(art.suggested_goal)
                     art.mark_acted_on()
                 else:
                     # Overflow: defer to backlog so Phase 10 can drain them later
                     self._pending_goals.append(art.suggested_goal)
+                scheduled_goals.add(art.suggested_goal)
 
         # 4b. Add reflection goals up to the cap, deduped against immediate_goals.
         # Reflection artifacts are already marked acted_on in _sync_reflection_reports,

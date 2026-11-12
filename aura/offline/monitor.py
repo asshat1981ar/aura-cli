@@ -1,7 +1,6 @@
 """Network connectivity monitoring."""
 
 import asyncio
-import socket
 from typing import Callable, Optional
 
 from .models import ConnectivityStatus

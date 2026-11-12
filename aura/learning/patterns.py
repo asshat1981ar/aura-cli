@@ -1,10 +1,8 @@
 """Pattern recognition for successful executions."""
 
-import json
-import re
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Set
 
 from .feedback import ExecutionOutcome, ExecutionStatus
 

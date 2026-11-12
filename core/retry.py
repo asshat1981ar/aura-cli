@@ -28,26 +28,20 @@ from typing import (
     List,
     Optional,
     Set,
-    Type,
     TypeVar,
-    Union,
 )
 
 from core.exceptions import (
-    AURAError,
     MCPConnectionError,
     MCPRetryExhaustedError,
     MCPTimeoutError,
     RateLimitError,
     CircuitBreakerOpenError,
-    NetworkError,
 )
 
 # Import from agent_sdk for circuit breaker integration
 try:
     from core.agent_sdk.resilience import (
-        CircuitBreaker,
-        CircuitBreakerConfig,
         RetryConfig as AgentSDKRetryConfig,
         retry_with_backoff as agent_sdk_retry,
     )

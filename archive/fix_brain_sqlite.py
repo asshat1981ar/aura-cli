@@ -55,7 +55,7 @@ def fix_momento_brain():
         return False
     
     with open(filepath, 'r') as f:
-        content = f.read()
+        f.read()
     
     # Check if it calls super().__init__() which triggers brain.py
     # No direct fix needed here, the error is in brain.py

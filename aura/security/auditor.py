@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 from typing import List, Optional
 
-from .models import AuditConfig, AuditReport, SecurityFinding
+from .models import AuditConfig, AuditReport, FindingCategory, SecurityFinding, Severity
 from .scanners import (
     ConfigurationScanner,
     DependencyScanner,

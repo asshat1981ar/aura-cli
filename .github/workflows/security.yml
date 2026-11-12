@@ -1,6 +1,6 @@
 name: Security & Dependencies
 
-on:
+"on":
   schedule:
     - cron: "0 9 * * 1"  # Weekly Monday 9am UTC
   workflow_dispatch:

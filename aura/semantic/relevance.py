@@ -1,7 +1,7 @@
 """Relevance scoring for semantic context retrieval."""
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set
+from typing import List, Optional, Set
 
 from .context_graph import CodeElement, ContextGraph, ElementType
 

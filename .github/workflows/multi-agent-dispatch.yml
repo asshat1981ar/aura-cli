@@ -4,7 +4,7 @@ name: '🤖 Multi-Agent Dispatch (Gemini · Claude · Kimi)'
 # Gemini CLI acts as the self-prompting orchestrator and can delegate
 # sub-tasks to Claude and Kimi agents.
 
-on:
+"on":
   issue_comment:
     types: [created]
   pull_request_review_comment:

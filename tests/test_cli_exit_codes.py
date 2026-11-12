@@ -3,6 +3,10 @@
 import subprocess
 import sys
 import os
+from pathlib import Path
+
+# Repository root is two levels up from this test file.
+_REPO_ROOT = str(Path(__file__).resolve().parent.parent)
 
 
 def run_main(*args, env_extra=None):
@@ -14,7 +18,7 @@ def run_main(*args, env_extra=None):
         capture_output=True,
         text=True,
         env=env,
-        cwd="/home/westonaaron675/aura-cli",
+        cwd=_REPO_ROOT,
     )
     return result
 

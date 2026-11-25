@@ -9,6 +9,9 @@ updates:
       - "asshat1981ar"
     labels:
       - "dependencies"
+    groups:
+      python:
+        patterns: ["*"]
 
   - package-ecosystem: "docker"
     directory: "/infra/docker"
@@ -17,6 +20,9 @@ updates:
     labels:
       - "dependencies"
       - "docker"
+    groups:
+      docker:
+        patterns: ["*"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -25,3 +31,6 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+    groups:
+      github-actions:
+        patterns: ["*"]

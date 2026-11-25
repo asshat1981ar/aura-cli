@@ -176,6 +176,27 @@
       "summary": "Stream AURA logs"
     },
     {
+      "action": "history",
+      "description": "List the last N completed goals with their scores and timestamps from the goal archive.",
+      "examples": [
+        "python3 main.py history",
+        "python3 main.py history --limit 20",
+        "python3 main.py history --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "history"
+      ],
+      "requires_runtime": true,
+      "summary": "Show completed goal history"
+    },
+    {
       "action": "watch",
       "description": "[EXPERIMENTAL] Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.",
       "examples": [
@@ -335,7 +356,7 @@
     },
     {
       "action": null,
-      "description": "Run orchestrated workflow goals with explicit cycle limits.",
+      "description": "Manage and run orchestrated workflow goals (create, run, visualize, validate).",
       "examples": [
         "python3 main.py workflow run \"Summarize repo\""
       ],
@@ -368,6 +389,69 @@
       ],
       "requires_runtime": true,
       "summary": "[EXPERIMENTAL] Run a workflow goal"
+    },
+    {
+      "action": "workflow_create",
+      "description": "Scaffold a new YAML workflow file from a built-in template.\n\nAvailable templates: code-review, research, data-analysis, custom.",
+      "examples": [
+        "python3 main.py workflow create --template code-review",
+        "python3 main.py workflow create --template research --name my-pipeline.yaml"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "workflow",
+        "create"
+      ],
+      "requires_runtime": false,
+      "summary": "Create a workflow from a template"
+    },
+    {
+      "action": "workflow_visualize",
+      "description": "Parse a YAML workflow file and output a Mermaid diagram representation.\n\nThe diagram is printed to stdout and can be embedded in Markdown or rendered at https://mermaid.live.",
+      "examples": [
+        "python3 main.py workflow visualize my-pipeline.yaml",
+        "python3 main.py workflow visualize my-pipeline.yaml --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "workflow",
+        "visualize"
+      ],
+      "requires_runtime": false,
+      "summary": "Visualize a workflow as a Mermaid diagram"
+    },
+    {
+      "action": "workflow_validate",
+      "description": "Parse and validate a YAML workflow file for structural correctness.\n\nChecks for valid node references, edge definitions, and required fields.",
+      "examples": [
+        "python3 main.py workflow validate my-pipeline.yaml",
+        "python3 main.py workflow validate my-pipeline.yaml --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "workflow",
+        "validate"
+      ],
+      "requires_runtime": false,
+      "summary": "Validate a workflow YAML file"
     },
     {
       "action": null,
@@ -996,6 +1080,91 @@
       ],
       "requires_runtime": false,
       "summary": "List registered agents"
+    },
+    {
+      "action": "agent_benchmark",
+      "description": "Profile a workflow or pipeline YAML against a standard task suite.\n\nBuilt-in suites: hotpotqa, alfworld, gsm8k, triviaqa.\nReports per-task latency, success rate, and total cost.",
+      "examples": [
+        "python3 main.py agent benchmark my-pipeline.yaml --suite hotpotqa",
+        "python3 main.py agent benchmark my-pipeline.yaml --suite gsm8k --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "agent",
+        "benchmark"
+      ],
+      "requires_runtime": false,
+      "summary": "Benchmark an agent pipeline"
+    },
+    {
+      "action": "agent_diff",
+      "description": "Compare two YAML/JSON config files and display a highlighted diff.\n\nShows added, removed, and changed keys with colour-coded output.",
+      "examples": [
+        "python3 main.py agent diff config-v1.yaml config-v2.yaml",
+        "python3 main.py agent diff config-v1.yaml config-v2.yaml --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "agent",
+        "diff"
+      ],
+      "requires_runtime": false,
+      "summary": "Diff two configurations"
+    },
+    {
+      "action": "agent_explain",
+      "description": "Introspect the last pipeline run and visualize the reasoning trace.\n\nDisplays per-phase outputs, plan steps, critique issues, and model calls with token counts.",
+      "examples": [
+        "python3 main.py agent explain",
+        "python3 main.py agent explain --trace last-run",
+        "python3 main.py agent explain --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "agent",
+        "explain"
+      ],
+      "requires_runtime": true,
+      "summary": "Explain the last execution trace"
+    },
+    {
+      "action": "completions",
+      "description": "Output shell completion scripts for bash, zsh, or fish.\n\nTo install:\n  bash:  python3 main.py completions bash >> ~/.bash_completion\n  zsh:   python3 main.py completions zsh > ~/.zsh/completions/_aura\n  fish:  python3 main.py completions fish > ~/.config/fish/completions/aura.fish",
+      "examples": [
+        "python3 main.py completions bash",
+        "python3 main.py completions zsh",
+        "python3 main.py completions fish"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "completions"
+      ],
+      "requires_runtime": false,
+      "summary": "Generate shell completion scripts"
     },
     {
       "action": null,

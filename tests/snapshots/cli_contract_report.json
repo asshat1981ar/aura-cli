@@ -1,10 +1,14 @@
 {
   "action_spec_actions": [
+    "agent_benchmark",
+    "agent_diff",
+    "agent_explain",
     "agent_list",
     "agent_run",
     "beads_schemas",
     "bootstrap",
     "cancel",
+    "completions",
     "config_set",
     "contract_report",
     "credentials_delete",
@@ -21,6 +25,7 @@
     "goal_run",
     "goal_status",
     "help",
+    "history",
     "innovate_export",
     "innovate_insights",
     "innovate_list",
@@ -49,13 +54,28 @@
     "show_config",
     "studio",
     "watch",
-    "workflow_run"
+    "workflow_create",
+    "workflow_run",
+    "workflow_validate",
+    "workflow_visualize"
   ],
   "actions_missing_command_specs": [],
   "actions_with_positional_smoke_args_missing_customizers": [],
   "actions_with_undocumented_legacy_flags": [],
   "command_specs_with_unknown_legacy_flags": [],
   "customizer_paths": [
+    [
+      "agent",
+      "benchmark"
+    ],
+    [
+      "agent",
+      "diff"
+    ],
+    [
+      "agent",
+      "explain"
+    ],
     [
       "beads",
       "schemas"
@@ -65,6 +85,9 @@
     ],
     [
       "cancel"
+    ],
+    [
+      "completions"
     ],
     [
       "config",
@@ -117,6 +140,9 @@
     ],
     [
       "help"
+    ],
+    [
+      "history"
     ],
     [
       "innovate",
@@ -211,16 +237,32 @@
     ],
     [
       "workflow",
+      "create"
+    ],
+    [
+      "workflow",
       "run"
+    ],
+    [
+      "workflow",
+      "validate"
+    ],
+    [
+      "workflow",
+      "visualize"
     ]
   ],
   "customizers_on_non_leaf_paths": [],
   "dispatch_actions": [
+    "agent_benchmark",
+    "agent_diff",
+    "agent_explain",
     "agent_list",
     "agent_run",
     "beads_schemas",
     "bootstrap",
     "cancel",
+    "completions",
     "config_set",
     "contract_report",
     "credentials_delete",
@@ -237,6 +279,7 @@
     "goal_run",
     "goal_status",
     "help",
+    "history",
     "innovate_export",
     "innovate_insights",
     "innovate_list",
@@ -265,7 +308,10 @@
     "show_config",
     "studio",
     "watch",
-    "workflow_run"
+    "workflow_create",
+    "workflow_run",
+    "workflow_validate",
+    "workflow_visualize"
   ],
   "duplicate_help_paths": [],
   "extra_in_dispatch": [],
@@ -273,11 +319,15 @@
   "extra_required_parent_paths": [],
   "failure_keys": [],
   "help_actions": [
+    "agent_benchmark",
+    "agent_diff",
+    "agent_explain",
     "agent_list",
     "agent_run",
     "beads_schemas",
     "bootstrap",
     "cancel",
+    "completions",
     "config_set",
     "contract_report",
     "credentials_delete",
@@ -293,6 +343,7 @@
     "goal_run",
     "goal_status",
     "help",
+    "history",
     "innovate_export",
     "innovate_insights",
     "innovate_list",
@@ -319,12 +370,27 @@
     "show_config",
     "studio",
     "watch",
-    "workflow_run"
+    "workflow_create",
+    "workflow_run",
+    "workflow_validate",
+    "workflow_visualize"
   ],
   "help_actions_with_runtime_mismatches": [],
   "help_paths": [
     [
       "agent"
+    ],
+    [
+      "agent",
+      "benchmark"
+    ],
+    [
+      "agent",
+      "diff"
+    ],
+    [
+      "agent",
+      "explain"
     ],
     [
       "agent",
@@ -346,6 +412,9 @@
     ],
     [
       "cancel"
+    ],
+    [
+      "completions"
     ],
     [
       "config"
@@ -410,6 +479,9 @@
     ],
     [
       "help"
+    ],
+    [
+      "history"
     ],
     [
       "innovate"
@@ -525,10 +597,34 @@
     ],
     [
       "workflow",
+      "create"
+    ],
+    [
+      "workflow",
       "run"
+    ],
+    [
+      "workflow",
+      "validate"
+    ],
+    [
+      "workflow",
+      "visualize"
     ]
   ],
   "leaf_paths": [
+    [
+      "agent",
+      "benchmark"
+    ],
+    [
+      "agent",
+      "diff"
+    ],
+    [
+      "agent",
+      "explain"
+    ],
     [
       "agent",
       "list"
@@ -546,6 +642,9 @@
     ],
     [
       "cancel"
+    ],
+    [
+      "completions"
     ],
     [
       "config",
@@ -601,6 +700,9 @@
     ],
     [
       "help"
+    ],
+    [
+      "history"
     ],
     [
       "innovate",
@@ -698,7 +800,19 @@
     ],
     [
       "workflow",
+      "create"
+    ],
+    [
+      "workflow",
       "run"
+    ],
+    [
+      "workflow",
+      "validate"
+    ],
+    [
+      "workflow",
+      "visualize"
     ]
   ],
   "missing_in_dispatch": [],
@@ -748,6 +862,18 @@
     ],
     [
       "agent",
+      "benchmark"
+    ],
+    [
+      "agent",
+      "diff"
+    ],
+    [
+      "agent",
+      "explain"
+    ],
+    [
+      "agent",
       "list"
     ],
     [
@@ -766,6 +892,9 @@
     ],
     [
       "cancel"
+    ],
+    [
+      "completions"
     ],
     [
       "config"
@@ -830,6 +959,9 @@
     ],
     [
       "help"
+    ],
+    [
+      "history"
     ],
     [
       "innovate"
@@ -945,7 +1077,19 @@
     ],
     [
       "workflow",
+      "create"
+    ],
+    [
+      "workflow",
       "run"
+    ],
+    [
+      "workflow",
+      "validate"
+    ],
+    [
+      "workflow",
+      "visualize"
     ]
   ],
   "required_parent_paths": [
@@ -989,6 +1133,18 @@
     ],
     [
       "agent",
+      "benchmark"
+    ],
+    [
+      "agent",
+      "diff"
+    ],
+    [
+      "agent",
+      "explain"
+    ],
+    [
+      "agent",
       "list"
     ],
     [
@@ -1007,6 +1163,9 @@
     ],
     [
       "cancel"
+    ],
+    [
+      "completions"
     ],
     [
       "config"
@@ -1071,6 +1230,9 @@
     ],
     [
       "help"
+    ],
+    [
+      "history"
     ],
     [
       "innovate"
@@ -1186,7 +1348,19 @@
     ],
     [
       "workflow",
+      "create"
+    ],
+    [
+      "workflow",
       "run"
+    ],
+    [
+      "workflow",
+      "validate"
+    ],
+    [
+      "workflow",
+      "visualize"
     ]
   ],
   "undocumented_actions": [],

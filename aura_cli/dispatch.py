@@ -1698,6 +1698,18 @@ def _handle_workflow_create_dispatch(ctx: DispatchContext) -> int:
     return 0
 
 
+def _stub_workflow_registry(data: dict) -> dict:
+    """Map every node function and conditional-edge condition to a no-op, so a
+    workflow can be built and compiled without a real runtime."""
+
+    def _stub_fn(state: dict) -> dict:
+        return state
+
+    names = {n.get("function", "") or n.get("name", "") for n in data.get("nodes", []) if isinstance(n, dict)}
+    names |= {e.get("condition", "") for e in data.get("conditional_edges", []) or [] if isinstance(e, dict)}
+    return {fn: _stub_fn for fn in names if fn}
+
+
 def _handle_workflow_visualize_dispatch(ctx: DispatchContext) -> int:
     """Visualize a YAML workflow file as a Mermaid diagram."""
     args = ctx.args
@@ -1716,13 +1728,7 @@ def _handle_workflow_visualize_dispatch(ctx: DispatchContext) -> int:
 
         from core.graph_engine import StateGraph
 
-        # Build a stub registry so every function name resolves without a real runtime.
-        # Use a factory to avoid lambda closure capture issues.
-        def _stub_fn(state: dict) -> dict:
-            return state
-
-        func_names = {n.get("function", "") or n.get("name", "") for n in data.get("nodes", [])}
-        stub_registry = {fn: _stub_fn for fn in func_names if fn}
+        stub_registry = _stub_workflow_registry(data)
 
         graph = StateGraph._from_dict(data, node_registry=stub_registry)
         compiled = graph.compile()
@@ -1760,6 +1766,11 @@ def _handle_workflow_validate_dispatch(ctx: DispatchContext) -> int:
         from core.graph_engine import _validate_workflow_schema
 
         _validate_workflow_schema(data)
+        # The schema check covers keys only; building and compiling also checks that
+        # entry_point and every edge target name a real node.
+        from core.graph_engine import StateGraph
+
+        StateGraph._from_dict(data, node_registry=_stub_workflow_registry(data)).compile()
     except Exception as exc:
         errors.append(str(exc))
 
@@ -1767,7 +1778,8 @@ def _handle_workflow_validate_dispatch(ctx: DispatchContext) -> int:
 
     if getattr(args, "json", False):
         _print_json_payload({"file": str(wf_path), "valid": not errors, "errors": errors}, parsed=ctx.parsed, indent=2)
-    elif errors:
+        return 1 if errors else 0
+    if errors:
         print(f"Validation FAILED for '{wf_path}':")
         for err in errors:
             print(f"  • {err}", file=sys.stderr)
@@ -1806,19 +1818,14 @@ def _handle_agent_benchmark_dispatch(ctx: DispatchContext) -> int:
 
     log_json("INFO", "benchmark_started", details={"file": str(pipeline_path), "suite": suite, "samples": samples})
 
-    # Synthetic benchmark: time graph compilation with stub registry.
-    benchmark_results: list[dict] = []
+    # Only graph compilation is measured. No task harness is wired yet, so no suite
+    # samples are executed and no latency or success rate is reported for them.
     try:
         data = _load_yaml_or_json(pipeline_path)
 
         from core.graph_engine import StateGraph
 
-        def _stub_fn(state: dict) -> dict:
-            return state
-
-        func_names = {n.get("function", "") or n.get("name", "") for n in data.get("nodes", [])}
-        stub_registry = {fn: _stub_fn for fn in func_names if fn}
-
+        stub_registry = _stub_workflow_registry(data)
         start = time.time()
         StateGraph._from_dict(data, node_registry=stub_registry).compile()
         compile_ms = round((time.time() - start) * 1000, 2)
@@ -1827,32 +1834,17 @@ def _handle_agent_benchmark_dispatch(ctx: DispatchContext) -> int:
         print(f"Error: failed to load pipeline — {exc}", file=sys.stderr)
         return 1
 
-    # Simulate sample runs.
-    # TODO: replace time.sleep stub with real graph execution once a task harness is wired.
-    for i in range(samples):
-        t0 = time.time()
-        time.sleep(0.001)
-        benchmark_results.append(
-            {
-                "sample": i + 1,
-                "suite": suite,
-                "latency_ms": round((time.time() - t0) * 1000, 2),
-                "success": True,
-            }
-        )
-
-    latencies = [r["latency_ms"] for r in benchmark_results]
-    avg_ms = round(sum(latencies) / len(latencies), 2) if latencies else 0
-    success_count = sum(1 for r in benchmark_results if r["success"])
-    success_rate = success_count / samples
     summary = {
         "pipeline": str(pipeline_path),
         "suite": suite,
-        "samples": samples,
+        "samples_requested": samples,
+        "samples_executed": 0,
         "compile_ms": compile_ms,
-        "avg_latency_ms": avg_ms,
-        "success_rate": success_rate,
-        "results": benchmark_results,
+        "avg_latency_ms": None,
+        "success_rate": None,
+        "status": "compile_only",
+        "note": "Suite execution is not implemented yet; only graph compilation was timed.",
+        "results": [],
     }
 
     log_json("INFO", "benchmark_complete", details={k: v for k, v in summary.items() if k != "results"})
@@ -1870,18 +1862,14 @@ def _handle_agent_benchmark_dispatch(ctx: DispatchContext) -> int:
             table.add_column("Value", style="green")
             table.add_row("Pipeline", str(pipeline_path))
             table.add_row("Suite", suite)
-            table.add_row("Samples", str(samples))
+            table.add_row("Samples executed", f"0 of {samples} (suite execution not implemented)")
             table.add_row("Compile time", f"{compile_ms} ms")
-            table.add_row("Avg latency", f"{avg_ms} ms")
-            table.add_row("Success rate", f"{success_rate:.0%}")
             console.print(table)
         except ImportError:
             print(f"Pipeline:      {pipeline_path}")
             print(f"Suite:         {suite}")
-            print(f"Samples:       {samples}")
+            print(f"Samples:       0 of {samples} executed (suite execution not implemented)")
             print(f"Compile time:  {compile_ms} ms")
-            print(f"Avg latency:   {avg_ms} ms")
-            print(f"Success rate:  {success_rate:.0%}")
     return 0
 
 
@@ -1906,7 +1894,7 @@ def _handle_agent_diff_dispatch(ctx: DispatchContext) -> int:
         out: dict[str, object] = {}
         for k, v in d.items():
             key = f"{prefix}.{k}" if prefix else k
-            if isinstance(v, dict):
+            if isinstance(v, dict) and v:
                 out.update(_flat(v, key))
             else:
                 out[key] = v
@@ -1998,6 +1986,27 @@ def _handle_agent_explain_dispatch(ctx: DispatchContext) -> int:
         except Exception:
             trace_data = {}
 
+    # The orchestrator persists cycles through MemoryStore.append_log, one JSON
+    # object per line in decision_log.jsonl; read that when no per-run file exists.
+    decision_log = memory_dir / "decision_log.jsonl"
+    if not trace_data and decision_log.exists():
+        entries: list[dict] = []
+        for line in decision_log.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = _json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(entry, dict):
+                entries.append(entry)
+        if trace_id != "last-run":
+            entries = [e for e in entries if str(e.get("cycle_id", "")) == trace_id]
+        if entries:
+            trace_data = entries[-1]
+            trace_file = decision_log
+
     log_json("INFO", "agent_explain_requested", details={"trace": trace_id, "found": bool(trace_data)})
 
     if getattr(args, "json", False):
@@ -2065,12 +2074,19 @@ _aura_complete() {{
     local commands="{commands}"
     local subcommands="{subcommands}"
 
-    if [[ ${{cword}} -eq 1 ]]; then
+    # Under `python3 main.py ...`, words[1] is the script, so the AURA command is words[2].
+    local base=1
+    if [[ "${{words[0]##*/}}" == python* ]]; then
+        base=2
+        if [[ ${{cword}} -lt 2 ]]; then return 0; fi
+    fi
+
+    if [[ ${{cword}} -eq ${{base}} ]]; then
         COMPREPLY=( $(compgen -W "${{commands}}" -- "${{cur}}") )
         return 0
     fi
 
-    case "${{words[1]}}" in
+    case "${{words[base]}}" in
         {cases}
     esac
 }}

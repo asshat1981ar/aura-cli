@@ -172,3 +172,10 @@ reports/
 # === Security scan reports ===
 bandit-report.json
 pip-audit-report.json
+
+# Runtime state and local secrets (R1, R9 in docs/repo-conventions.md)
+.env.n8n
+.rsi_pid
+.ralph-state/
+.worktrees/
+logs/

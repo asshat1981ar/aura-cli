@@ -227,7 +227,7 @@ class TestCriticIssue:
         with pytest.raises(ValidationError):
             CriticIssue(
                 severity="minor",
-                category="performance",
+                category="style",
                 description="desc",
                 recommendation="rec",
             )

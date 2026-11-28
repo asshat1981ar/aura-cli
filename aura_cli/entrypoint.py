@@ -72,9 +72,6 @@ def _save_history(project_root: Path) -> None:
 
 
 def main(project_root_override=None, argv=None):
-    # Initialize dependency injection container
-    _initialize_container()
-    
     project_root = _resolve_project_root(project_root_override)
     _ensure_project_on_path(project_root)
     _load_history(project_root)
@@ -95,10 +92,14 @@ def main(project_root_override=None, argv=None):
             present_error(
                 exc,
                 verbose=verbose,
-                json_output=json_output,
-                command="aura"
+                json_output=json_output
             )
         return exc.code
+
+    # Initialize the dependency injection container only once the arguments
+    # parse, so a bad invocation doesn't load config or probe model CLIs (and
+    # doesn't write their log lines to stderr in --json mode).
+    _initialize_container()
 
     try:
         return dispatch_command(parsed, project_root=project_root)
@@ -110,8 +111,7 @@ def main(project_root_override=None, argv=None):
             present_error(
                 exc,
                 verbose=verbose,
-                json_output=json_output,
-                command=getattr(parsed, 'command', 'aura')
+                json_output=json_output
             )
         return 1
     finally:

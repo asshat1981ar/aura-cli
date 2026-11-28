@@ -65,7 +65,7 @@ class TestSandboxRetryLoop:
             mock_run.side_effect = [fail_result, success_result]
 
             # Debugger returns fixed code
-            debugger.debug.return_value = {
+            debugger.diagnose.return_value = {
                 "fixed_code": "x = 1\nprint(x)",
                 "explanation": "Defined x before use",
             }
@@ -75,7 +75,7 @@ class TestSandboxRetryLoop:
             assert result.success is False
 
             # Simulate retry with fixed code
-            fixed_code = debugger.debug.return_value["fixed_code"]
+            fixed_code = debugger.diagnose.return_value["fixed_code"]
             result2 = sandbox.run_code(fixed_code)
 
             assert result2.success is True
@@ -160,20 +160,20 @@ class TestSandboxDebuggerIntegration:
 
         sandbox_error = "TypeError: unsupported operand type(s) for +: 'int' and 'str'"
 
-        debugger.debug.return_value = {
+        debugger.diagnose.return_value = {
             "fixed_code": "print(str(1) + 'hello')",
             "explanation": "Convert int to str before concatenation",
         }
 
         # Simulate calling debugger with error
-        result = debugger.debug(
-            code="print(1 + 'hello')",
-            error=sandbox_error,
+        result = debugger.diagnose(
+            context="print(1 + 'hello')",
+            error_message=sandbox_error,
         )
 
-        debugger.debug.assert_called_once_with(
-            code="print(1 + 'hello')",
-            error=sandbox_error,
+        debugger.diagnose.assert_called_once_with(
+            context="print(1 + 'hello')",
+            error_message=sandbox_error,
         )
         assert "fixed_code" in result
 
@@ -209,7 +209,7 @@ def divide(a, b):
 result = divide(10, 0)
 print(result)
 """
-        debugger.debug.return_value = {
+        debugger.diagnose.return_value = {
             "fixed_code": fixed_code,
             "explanation": "Added zero check",
         }
@@ -230,9 +230,9 @@ print(result)
             assert result1.success is False
 
             # Call debugger with error
-            debug_result = debugger.debug(
-                code=original_code,
-                error=result1.stderr,
+            debug_result = debugger.diagnose(
+                context=original_code,
+                error_message=result1.stderr,
             )
 
             # Attempt 2: Run fixed code

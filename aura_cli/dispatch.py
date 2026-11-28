@@ -54,7 +54,11 @@ def _run_async_safely(coro):
     (e.g., in TUI, Jupyter, or nested async contexts).
     """
     if anyio_available:
-        return anyio.run(coro)
+        # anyio.run() takes an async callable, not a coroutine object.
+        async def _await_coro():
+            return await coro
+
+        return anyio.run(_await_coro)
 
     import asyncio
 

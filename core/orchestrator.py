@@ -39,7 +39,16 @@ from core.file_tools import (
     apply_change_with_explicit_overwrite_policy,
     mismatch_overwrite_block_log_details,
 )
-from core.skill_dispatcher import classify_goal
+# The capability and phase mixins look these up on this module via
+# sys.modules['core.orchestrator'], and tests patch them here, so they are
+# re-exported on purpose.
+from core.skill_dispatcher import classify_goal, dispatch_skills  # noqa: F401
+from core.capability_manager import (  # noqa: F401
+    analyze_capability_needs,
+    queue_missing_capability_goals,
+    provision_capability_actions,
+    record_capability_status,
+)
 from core.human_gate import HumanGate
 from core.types import TaskRequest, TaskResult, ExecutionContext
 from core.mcp_agent_registry import agent_registry

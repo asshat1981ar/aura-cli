@@ -9,6 +9,31 @@
             "title": "Args",
             "type": "array"
           },
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "goal": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Goal"
+          },
+          "max_cycles": {
+            "default": 5,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Max Cycles",
+            "type": "integer"
+          },
           "tool_name": {
             "title": "Tool Name",
             "type": "string"
@@ -33,6 +58,50 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "LoginRequest": {
+        "properties": {
+          "password": {
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "type": "object"
+      },
+      "LogoutRequest": {
+        "properties": {
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "LogoutRequest",
+        "type": "object"
+      },
+      "RefreshRequest": {
+        "properties": {
+          "refresh_token": {
+            "title": "Refresh Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "refresh_token"
+        ],
+        "title": "RefreshRequest",
+        "type": "object"
+      },
       "RunRequest": {
         "description": "Request body for POST /run.",
         "properties": {
@@ -55,6 +124,29 @@
           "goal"
         ],
         "title": "RunRequest",
+        "type": "object"
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "refresh_token": {
+            "title": "Refresh Token",
+            "type": "string"
+          },
+          "token_type": {
+            "default": "bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "refresh_token"
+        ],
+        "title": "TokenResponse",
         "type": "object"
       },
       "ValidationError": {
@@ -97,7 +189,8 @@
         "title": "ValidationError",
         "type": "object"
       },
-      "WebhookGoalRequest": {
+      "aura_cli__api__routers__runs__WebhookGoalRequest": {
+        "description": "Request body for POST /webhook/goal.",
         "properties": {
           "dry_run": {
             "default": false,
@@ -126,7 +219,61 @@
         "title": "WebhookGoalRequest",
         "type": "object"
       },
-      "WebhookPlanReviewRequest": {
+      "aura_cli__api__routers__runs__WebhookPlanReviewRequest": {
+        "description": "Request body for POST /webhook/plan-review.",
+        "properties": {
+          "goal": {
+            "title": "Goal",
+            "type": "string"
+          },
+          "pipeline_run_id": {
+            "default": "",
+            "title": "Pipeline Run Id",
+            "type": "string"
+          },
+          "task_bundle": {
+            "additionalProperties": true,
+            "title": "Task Bundle",
+            "type": "object"
+          }
+        },
+        "required": [
+          "task_bundle",
+          "goal"
+        ],
+        "title": "WebhookPlanReviewRequest",
+        "type": "object"
+      },
+      "aura_cli__server__WebhookGoalRequest": {
+        "properties": {
+          "dry_run": {
+            "default": false,
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "goal": {
+            "title": "Goal",
+            "type": "string"
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Metadata",
+            "type": "object"
+          },
+          "priority": {
+            "default": 5,
+            "title": "Priority",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "goal"
+        ],
+        "title": "WebhookGoalRequest",
+        "type": "object"
+      },
+      "aura_cli__server__WebhookPlanReviewRequest": {
         "properties": {
           "goal": {
             "title": "Goal",
@@ -159,10 +306,436 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/health": {
+      "get": {
+        "description": "Liveness probe \u2014 returns 200 if the process is alive.",
+        "operationId": "liveness_api_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Liveness Api Health Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/ready": {
+      "get": {
+        "description": "Deep readiness check \u2014 verifies all critical dependencies.",
+        "operationId": "readiness_api_ready_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Readiness",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/run": {
+      "post": {
+        "description": "Trigger a goal-oriented pipeline run via LoopOrchestrator.\n\nRequires the ``AGENT_API_ENABLE_RUN=1`` environment variable to be set.\nReturns a ``run_id`` that can be used to track or cancel the run.\n\nArgs:\n    req: RunRequest with goal, max_cycles, and dry_run options.\n\nReturns:\n    Dict with run_id and status.\n\nRaises:\n    HTTPException: 403 if run endpoint is disabled.",
+        "operationId": "run_pipeline_api_run_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Run Pipeline Api Run Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Run Pipeline",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "description": "Authenticate with username + password; returns access and refresh JWTs.",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Authenticate and obtain tokens",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "description": "Revoke the supplied token.  Its jti is added to the SQLite blocklist.\n\nAccepts either an access token or a refresh token.  After this call the\ntoken will be rejected by ``verify_token`` even before it expires.",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogoutRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Revoke a token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "description": "Exchange a valid refresh token for a new access token.\n\nThe old refresh token remains valid until it expires naturally.",
+        "operationId": "refresh_api_v1_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh access token",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/webhook/goal": {
+      "post": {
+        "description": "Enqueue a goal submitted by n8n (P1 fast lane or direct trigger).\n\nArgs:\n    req: WebhookGoalRequest with goal, priority, and metadata.\n\nReturns:\n    Dict with goal_id and status.",
+        "operationId": "webhook_goal_api_webhook_goal_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/aura_cli__api__routers__runs__WebhookGoalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Webhook Goal Api Webhook Goal Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Webhook Goal",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/webhook/plan-review": {
+      "post": {
+        "description": "Format a task bundle as a plan text for Dev Suite Quality Gate (P2) review.\n\nCalled by P3 Pipeline Coordinator before triggering AURA act phase.\nReturns human-readable plan text that Dev Suite agents can critique.\n\nArgs:\n    req: WebhookPlanReviewRequest with task_bundle and goal.\n\nReturns:\n    Dict with review_payload containing formatted plan text.",
+        "operationId": "webhook_plan_review_api_webhook_plan_review_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/aura_cli__api__routers__runs__WebhookPlanReviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Webhook Plan Review Api Webhook Plan Review Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Webhook Plan Review",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
+    "/api/webhook/status/{goal_id}": {
+      "get": {
+        "description": "Poll the status of a webhook-submitted goal (used by n8n P1 fast lane).\n\nArgs:\n    goal_id: The goal ID returned by /webhook/goal.\n\nReturns:\n    Dict with goal status, result (if done), or error (if failed).\n\nRaises:\n    HTTPException: 404 if goal not found.",
+        "operationId": "webhook_goal_status_api_webhook_status__goal_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "goal_id",
+            "required": true,
+            "schema": {
+              "title": "Goal Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Webhook Goal Status Api Webhook Status  Goal Id  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Webhook Goal Status",
+        "tags": [
+          "runs"
+        ]
+      }
+    },
     "/architecture": {
       "get": {
         "operationId": "architecture_architecture_get",
         "parameters": [
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
           {
             "in": "header",
             "name": "authorization",
@@ -213,6 +786,22 @@
         "parameters": [
           {
             "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "header",
             "name": "authorization",
             "required": false,
             "schema": {
@@ -261,6 +850,22 @@
         "parameters": [
           {
             "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "header",
             "name": "authorization",
             "required": false,
             "schema": {
@@ -307,6 +912,22 @@
       "post": {
         "operationId": "execute_execute_post",
         "parameters": [
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
           {
             "in": "header",
             "name": "authorization",
@@ -379,17 +1000,13 @@
     },
     "/ready": {
       "get": {
-        "description": "Readiness probe: checks SQLite brain DB is readable; optionally pings Redis.",
+        "description": "Readiness probe: checks all critical and optional subsystems.",
         "operationId": "ready_ready_get",
         "responses": {
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Ready Ready Get",
-                  "type": "object"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -403,6 +1020,22 @@
         "description": "Trigger a goal-oriented pipeline run via LoopOrchestrator.\n\nRequires the ``AGENT_API_ENABLE_RUN=1`` environment variable to be set.\nReturns a ``run_id`` that can be used to track or cancel the run.",
         "operationId": "run_pipeline_run_post",
         "parameters": [
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
           {
             "in": "header",
             "name": "authorization",
@@ -463,6 +1096,22 @@
         "parameters": [
           {
             "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "header",
             "name": "authorization",
             "required": false,
             "schema": {
@@ -512,6 +1161,22 @@
         "parameters": [
           {
             "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "header",
             "name": "authorization",
             "required": false,
             "schema": {
@@ -531,7 +1196,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/WebhookGoalRequest"
+                "$ref": "#/components/schemas/aura_cli__server__WebhookGoalRequest"
               }
             }
           },
@@ -571,6 +1236,22 @@
         "parameters": [
           {
             "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "header",
             "name": "authorization",
             "required": false,
             "schema": {
@@ -590,7 +1271,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/WebhookPlanReviewRequest"
+                "$ref": "#/components/schemas/aura_cli__server__WebhookPlanReviewRequest"
               }
             }
           },
@@ -635,6 +1316,22 @@
             "schema": {
               "title": "Goal Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
             }
           },
           {

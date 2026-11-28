@@ -21,6 +21,7 @@
     "goal_run",
     "goal_status",
     "help",
+    "history",
     "innovate_export",
     "innovate_insights",
     "innovate_list",
@@ -117,6 +118,9 @@
     ],
     [
       "help"
+    ],
+    [
+      "history"
     ],
     [
       "innovate",
@@ -237,6 +241,7 @@
     "goal_run",
     "goal_status",
     "help",
+    "history",
     "innovate_export",
     "innovate_insights",
     "innovate_list",
@@ -293,6 +298,7 @@
     "goal_run",
     "goal_status",
     "help",
+    "history",
     "innovate_export",
     "innovate_insights",
     "innovate_list",
@@ -410,6 +416,9 @@
     ],
     [
       "help"
+    ],
+    [
+      "history"
     ],
     [
       "innovate"
@@ -601,6 +610,9 @@
     ],
     [
       "help"
+    ],
+    [
+      "history"
     ],
     [
       "innovate",
@@ -830,6 +842,9 @@
     ],
     [
       "help"
+    ],
+    [
+      "history"
     ],
     [
       "innovate"
@@ -1071,6 +1086,9 @@
     ],
     [
       "help"
+    ],
+    [
+      "history"
     ],
     [
       "innovate"

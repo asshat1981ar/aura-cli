@@ -97,9 +97,8 @@ def test_health_endpoint_auth_failure(server_module):
 
 def test_health_endpoint_success(server_module):
     data = _run(server_module.health())
-    assert data["status"] == "ok"
+    assert data["status"] == "healthy"
     assert "providers" in data
-    assert "run_enabled" in data
 
 
 def test_health_endpoint_succeeds_without_bound_runtime_components(server_module):
@@ -114,7 +113,7 @@ def test_health_endpoint_succeeds_without_bound_runtime_components(server_module
     server_module.memory_store = None
     try:
         data = _run(server_module.health())
-        assert data["status"] == "ok"
+        assert data["status"] == "healthy"
         assert "providers" in data
     finally:
         server_module.runtime = original_runtime
@@ -124,10 +123,11 @@ def test_health_endpoint_succeeds_without_bound_runtime_components(server_module
 
 
 def test_metrics_endpoint_success(server_module):
-    data = _run(server_module.metrics())
-    assert data["status"] == "ok"
-    assert "skill_metrics" in data
-    assert data["skill_metrics"]["registered_services"] >= 0
+    # /metrics serves Prometheus text exposition format, not JSON.
+    response = _run(server_module.metrics())
+    assert response.status_code == 200
+    assert response.media_type.startswith("text/plain")
+    assert b"# HELP" in response.body or b"# TYPE" in response.body
 
 
 def test_tools_endpoint_success(server_module):

@@ -1,6 +1,6 @@
 name: AURA Agentic Loop
 
-on:
+"on":
   schedule:
     # Run daily at 02:00 UTC
     - cron: "0 2 * * *"

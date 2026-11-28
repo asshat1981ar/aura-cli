@@ -1,6 +1,6 @@
 name: '🔀 Gemini Triage'
 
-on:
+"on":
   workflow_call:
     inputs:
       additional_context:

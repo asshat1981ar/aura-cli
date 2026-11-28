@@ -1,6 +1,6 @@
 name: GitHub Copilot Autofix
 
-on:
+"on":
   pull_request:
     types: [opened, synchronize]
   push:

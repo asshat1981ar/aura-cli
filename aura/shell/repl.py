@@ -73,7 +73,7 @@ class REPL:
         """Read user input with completion support."""
         try:
             # Try to use readline for better experience
-            import readline
+            __import__("readline")
             return input(self.prompt)
         except (ImportError, EOFError):
             return input(self.prompt)

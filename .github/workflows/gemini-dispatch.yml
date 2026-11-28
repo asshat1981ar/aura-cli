@@ -1,6 +1,6 @@
 name: '🔀 Gemini Dispatch'
 
-on:
+"on":
   pull_request_review_comment:
     types:
       - 'created'

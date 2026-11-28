@@ -38,7 +38,7 @@ def _make_loop(**overrides):
 # ---------------------------------------------------------------------------
 
 
-class TestInnovationProposal:
+class TestInnovationProposalAdditional:
     def test_as_dict(self):
         p = InnovationProposal(
             proposal_id="test:1",

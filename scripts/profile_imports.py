@@ -145,7 +145,7 @@ def print_analysis(analysis: dict[str, Any], json_output: bool = False) -> None:
 
     total_self_ms = analysis.get("total_self_us", 0) / 1000.0
     total_cum_ms = analysis.get("total_cumulative_us", 0) / 1000.0
-
+    
     print("\n📊 Summary:")
     print(f"   Total imports: {analysis.get('total_imports', 0)}")
     print(f"   Total self time: {total_self_ms:.2f} ms")

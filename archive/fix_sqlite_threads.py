@@ -49,7 +49,7 @@ def fix_sqlite_connections():
                     print(f"✓ Patched: {filepath} ({', '.join(changes) if changes else 'sqlite3 fixes'})")
                     patched += 1
                     
-            except Exception as e:
+            except Exception:
                 continue
     
     return patched

@@ -1,8 +1,8 @@
 """Recording session manager."""
 
-from typing import Dict, List, Optional
+from typing import List, Optional
 
-from .models import Recording, RecordingStep, ReplayResult
+from .models import Recording, RecordingStep
 from .storage import RecordingStorage
 
 

@@ -246,7 +246,7 @@ class TestAddEdge:
             # Check nodes exist
             src_node = graph.get_node("file:src.py")
             dst_node = graph.get_node("file:dst.py")
-
+            
             assert src_node is not None
             assert dst_node is not None
             assert src_node["type"] == "file"
@@ -260,7 +260,9 @@ class TestAddEdge:
             graph.add_edge("a.py", "b.py", "uses")
 
             # Verify edge was created (no error)
-            edges = graph.get_edges_batch(src_ids=["file:a.py"])
+            edges = graph.get_edges_batch(
+                src_ids=["file:a.py"]
+            )
             assert len(edges) > 0
 
     def test_add_edge_with_custom_weight(self):
@@ -269,7 +271,7 @@ class TestAddEdge:
             graph = ContextGraph(db_path=Path(td) / "test.db")
 
             graph.add_edge("a.py", "b.py", "uses", weight=2.5)
-
+            
             edges = graph.get_edges_batch(src_ids=["file:a.py"])
             assert len(edges) > 0
 
@@ -301,7 +303,7 @@ class TestNodeOperations:
 
             # Retrieve in batch
             nodes = graph.get_nodes_batch(["file:a.py", "file:b.py"])
-
+            
             assert len(nodes) >= 0
 
     def test_get_nodes_batch_empty_list(self):
@@ -354,9 +356,9 @@ class TestEdgeOperations:
 
             graph.add_edge("src.py", "dst1.py", "uses")
             graph.add_edge("src.py", "dst2.py", "uses")
-
+            
             edges = graph.get_edges_batch(src_ids=["file:src.py"])
-
+            
             assert len(edges) >= 2
 
     def test_get_edges_batch_by_dst(self):
@@ -366,9 +368,9 @@ class TestEdgeOperations:
 
             graph.add_edge("src1.py", "dst.py", "uses")
             graph.add_edge("src2.py", "dst.py", "uses")
-
+            
             edges = graph.get_edges_batch(dst_ids=["file:dst.py"])
-
+            
             assert len(edges) >= 2
 
     def test_get_edges_batch_by_relation(self):
@@ -390,9 +392,9 @@ class TestEdgeOperations:
 
             graph.add_edge("src.py", "dst1.py", "uses")
             graph.add_edge("src.py", "dst2.py", "related_to")
-
+            
             edges = graph.get_edges_batch(src_ids=["file:src.py"], relations=["uses"])
-
+            
             # Should only have 'uses' edges from src
             for edge in edges:
                 if edge["src_id"] == "file:src.py":
@@ -414,9 +416,9 @@ class TestNeighborhoodOperations:
 
             graph.add_edge("src.py", "dst1.py", "uses")
             graph.add_edge("src.py", "dst2.py", "uses")
-
+            
             neighbors = graph.get_neighbors_batch(["file:src.py"], direction="outgoing")
-
+            
             assert "file:src.py" in neighbors
 
     def test_get_neighbors_batch_incoming(self):
@@ -426,9 +428,9 @@ class TestNeighborhoodOperations:
 
             graph.add_edge("src1.py", "dst.py", "uses")
             graph.add_edge("src2.py", "dst.py", "uses")
-
+            
             neighbors = graph.get_neighbors_batch(["file:dst.py"], direction="incoming")
-
+            
             assert "file:dst.py" in neighbors
 
     def test_get_neighbors_batch_both(self):
@@ -439,9 +441,9 @@ class TestNeighborhoodOperations:
             graph.add_edge("dep1.py", "node.py", "uses")
             graph.add_edge("dep2.py", "node.py", "uses")
             graph.add_edge("node.py", "user.py", "uses")
-
+            
             neighbors = graph.get_neighbors_batch(["file:node.py"], direction="both")
-
+            
             assert "file:node.py" in neighbors
 
     def test_get_neighbors_batch_filtered_by_relation(self):
@@ -451,9 +453,13 @@ class TestNeighborhoodOperations:
 
             graph.add_edge("src.py", "uses_dst.py", "uses")
             graph.add_edge("src.py", "related_dst.py", "related_to")
-
-            neighbors = graph.get_neighbors_batch(["file:src.py"], relation="uses", direction="outgoing")
-
+            
+            neighbors = graph.get_neighbors_batch(
+                ["file:src.py"],
+                relation="uses",
+                direction="outgoing"
+            )
+            
             assert "file:src.py" in neighbors
 
 
@@ -471,9 +477,9 @@ class TestEagerLoading:
             graph = ContextGraph(db_path=Path(td) / "test.db")
 
             graph.add_edge("a.py", "b.py", "uses")
-
+            
             nodes, edges = graph.get_nodes_with_edges(["file:a.py", "file:b.py"])
-
+            
             assert len(nodes) >= 0
             assert isinstance(edges, list)
 
@@ -483,9 +489,12 @@ class TestEagerLoading:
             graph = ContextGraph(db_path=Path(td) / "test.db")
 
             graph.add_edge("a.py", "b.py", "uses")
-
-            nodes, edges = graph.get_nodes_with_edges(["file:a.py", "file:b.py"], include_incoming=False)
-
+            
+            nodes, edges = graph.get_nodes_with_edges(
+                ["file:a.py", "file:b.py"],
+                include_incoming=False
+            )
+            
             assert isinstance(edges, list)
 
     def test_get_nodes_with_edges_excludes_outgoing(self):
@@ -494,9 +503,12 @@ class TestEagerLoading:
             graph = ContextGraph(db_path=Path(td) / "test.db")
 
             graph.add_edge("a.py", "b.py", "uses")
-
-            nodes, edges = graph.get_nodes_with_edges(["file:a.py", "file:b.py"], include_outgoing=False)
-
+            
+            nodes, edges = graph.get_nodes_with_edges(
+                ["file:a.py", "file:b.py"],
+                include_outgoing=False
+            )
+            
             assert isinstance(edges, list)
 
 
@@ -687,7 +699,7 @@ class TestEdgeCases:
             graph = ContextGraph(db_path=Path(td) / "test.db")
 
             graph.add_edge("a.py", "b.py", "uses", weight=-1.0)
-
+            
             edges = graph.get_edges_batch(src_ids=["file:a.py"])
             assert len(edges) > 0
 
@@ -697,7 +709,7 @@ class TestEdgeCases:
             graph = ContextGraph(db_path=Path(td) / "test.db")
 
             graph.add_edge("a.py", "b.py", "uses", weight=0.0)
-
+            
             edges = graph.get_edges_batch(src_ids=["file:a.py"])
             assert len(edges) > 0
 
@@ -745,6 +757,10 @@ class TestBatchTraversal:
             graph.add_edge("b.py", "c.py", "uses")
 
             # Traverse from a node (uses start_node_ids parameter)
-            results = graph.traverse_batched(start_node_ids=["file:a.py"], max_depth=2, direction="outgoing")
-
+            results = graph.traverse_batched(
+                start_node_ids=["file:a.py"],
+                max_depth=2,
+                direction="outgoing"
+            )
+            
             assert isinstance(results, dict)

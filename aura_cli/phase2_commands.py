@@ -12,10 +12,7 @@ This module provides CLI access to:
 """
 
 import asyncio
-import json
-import sys
 from pathlib import Path
-from typing import Optional
 
 from core.logging_utils import log_json
 
@@ -46,7 +43,7 @@ def cmd_error_resolve(args) -> int:
             if result.requires_confirmation:
                 print("\n⚠️  This fix requires manual confirmation.")
         else:
-            print(f"\n❌ No solution found.")
+            print("\n❌ No solution found.")
             print(f"Explanation: {result.explanation}")
         
         return 0 if result.fix else 1

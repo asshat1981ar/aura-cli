@@ -2,7 +2,6 @@
 
 import asyncio
 import re
-import time
 from typing import Any, Callable, Dict, Optional
 
 from .models import Recording, RecordingStep, ReplayResult, StepStatus

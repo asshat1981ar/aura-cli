@@ -1,6 +1,6 @@
 name: Gemini Code Assist
 
-on:
+"on":
   pull_request:
     types: [opened, synchronize]
   workflow_dispatch:

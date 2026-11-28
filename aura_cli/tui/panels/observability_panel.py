@@ -7,9 +7,7 @@ from typing import Any, Dict, List, Optional
 try:
     from rich.panel import Panel
     from rich.table import Table
-    from rich.text import Text
     from rich import box
-    from rich.columns import Columns
     from rich.tree import Tree
 
     _RICH_AVAILABLE = True

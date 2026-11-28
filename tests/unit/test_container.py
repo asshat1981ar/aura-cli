@@ -253,6 +253,7 @@ class TestContainerEdgeCases:
 
     def test_factory_raises_exception(self):
         """Test handling of factory that raises exception."""
+
         def failing_factory():
             raise RuntimeError("Factory failed")
 

@@ -98,6 +98,7 @@ class TestRetryWithBackoff:
     @pytest.mark.asyncio
     async def test_non_retryable_exception_not_retried(self):
         """Test non-retryable exceptions are not retried."""
+
         class CustomError(Exception):
             pass
 
@@ -132,6 +133,7 @@ class TestRetryWithBackoff:
     @pytest.mark.asyncio
     async def test_sync_function_wrapping(self):
         """Test that sync functions are wrapped correctly."""
+
         def sync_fn():
             return "sync result"
 
@@ -252,7 +254,7 @@ class TestCircuitBreakerStateTransitions:
                 failure_threshold=1,
                 success_threshold=1,
                 recovery_timeout=0.01,
-            )
+            ),
         )
 
         # Open the circuit

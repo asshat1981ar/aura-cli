@@ -5,7 +5,7 @@ to enable precise error handling and reduce bare 'except Exception' usage.
 
 Error Code Taxonomy:
 - AURA-0xx: System errors
-- AURA-1xx: Configuration errors  
+- AURA-1xx: Configuration errors
 - AURA-2xx: Authentication/Authorization errors
 - AURA-3xx: Network/MCP errors
 - AURA-4xx: Filesystem errors
@@ -40,7 +40,7 @@ ERROR_REGISTRY: Dict[str, Dict[str, Any]] = {
         "category": "system",
     },
     "AURA-002": {
-        "severity": "error", 
+        "severity": "error",
         "user_message": "Operation timed out at system level",
         "suggestion": "The operation took too long. Try with a simpler task or increase timeout.",
         "category": "system",
@@ -51,7 +51,6 @@ ERROR_REGISTRY: Dict[str, Dict[str, Any]] = {
         "suggestion": "Operation was cancelled. You can retry when ready.",
         "category": "system",
     },
-    
     # AURA-1xx: Configuration errors
     "AURA-100": {
         "severity": "error",
@@ -89,7 +88,6 @@ ERROR_REGISTRY: Dict[str, Dict[str, Any]] = {
         "suggestion": "Check your .env file for conflicting or invalid values.",
         "category": "configuration",
     },
-    
     # AURA-2xx: Authentication/Authorization errors
     "AURA-200": {
         "severity": "error",
@@ -115,7 +113,6 @@ ERROR_REGISTRY: Dict[str, Dict[str, Any]] = {
         "suggestion": "Re-authenticate using 'aura auth login'.",
         "category": "authentication",
     },
-    
     # AURA-3xx: Network/MCP errors
     "AURA-300": {
         "severity": "error",
@@ -183,7 +180,6 @@ ERROR_REGISTRY: Dict[str, Dict[str, Any]] = {
         "suggestion": "A network error occurred. Check your connection and try again.",
         "category": "network",
     },
-    
     # AURA-4xx: Filesystem errors
     "AURA-400": {
         "severity": "error",
@@ -233,7 +229,6 @@ ERROR_REGISTRY: Dict[str, Dict[str, Any]] = {
         "suggestion": "The file exceeds the maximum allowed size. Use a smaller file or increase limits.",
         "category": "filesystem",
     },
-    
     # AURA-5xx: Agent errors
     "AURA-500": {
         "severity": "error",
@@ -265,7 +260,6 @@ ERROR_REGISTRY: Dict[str, Dict[str, Any]] = {
         "suggestion": "The agent output didn't match expected schema but may still be usable.",
         "category": "agent",
     },
-    
     # AURA-6xx: Orchestration errors
     "AURA-600": {
         "severity": "error",
@@ -297,7 +291,6 @@ ERROR_REGISTRY: Dict[str, Dict[str, Any]] = {
         "suggestion": "There was an error processing the goal queue. Check queue state.",
         "category": "orchestration",
     },
-    
     # AURA-7xx: SADD errors
     "AURA-700": {
         "severity": "error",
@@ -323,7 +316,6 @@ ERROR_REGISTRY: Dict[str, Dict[str, Any]] = {
         "suggestion": "Sub-agents could not coordinate. Check network and agent availability.",
         "category": "sadd",
     },
-    
     # AURA-8xx: Memory errors
     "AURA-800": {
         "severity": "error",
@@ -343,7 +335,6 @@ ERROR_REGISTRY: Dict[str, Dict[str, Any]] = {
         "suggestion": "Memory data may be corrupted. Consider clearing and rebuilding memory.",
         "category": "memory",
     },
-    
     # AURA-9xx: Security/Validation errors
     "AURA-900": {
         "severity": "critical",
@@ -381,7 +372,6 @@ ERROR_REGISTRY: Dict[str, Dict[str, Any]] = {
         "suggestion": "Check your input parameters and try again.",
         "category": "validation",
     },
-    
     # AURA-10xx: Git errors
     "AURA-1000": {
         "severity": "error",
@@ -412,34 +402,34 @@ ERROR_REGISTRY: Dict[str, Dict[str, Any]] = {
 
 def get_error_info(code: str) -> Dict[str, Any]:
     """Get error information from registry.
-    
+
     Args:
         code: Error code (e.g., "AURA-100")
-        
+
     Returns:
         Error information dict or default unknown error
     """
-    return ERROR_REGISTRY.get(code, {
-        "severity": "error",
-        "user_message": f"Unknown error ({code})",
-        "suggestion": "Please check the logs for more information.",
-        "category": "unknown",
-    })
+    return ERROR_REGISTRY.get(
+        code,
+        {
+            "severity": "error",
+            "user_message": f"Unknown error ({code})",
+            "suggestion": "Please check the logs for more information.",
+            "category": "unknown",
+        },
+    )
 
 
 def get_error_by_category(category: str) -> Dict[str, Dict[str, Any]]:
     """Get all errors in a category.
-    
+
     Args:
         category: Error category (e.g., "network", "filesystem")
-        
+
     Returns:
         Dict of error codes to error info
     """
-    return {
-        code: info for code, info in ERROR_REGISTRY.items()
-        if info.get("category") == category
-    }
+    return {code: info for code, info in ERROR_REGISTRY.items() if info.get("category") == category}
 
 
 # =============================================================================
@@ -449,17 +439,17 @@ def get_error_by_category(category: str) -> Dict[str, Dict[str, Any]]:
 
 class AuraCLIError(Exception):
     """Base exception for all AURA CLI errors with error codes.
-    
+
     This is the new error base class that provides rich error information
     including error codes, context, and user-friendly messages.
-    
+
     Args:
         code: Error code from ERROR_REGISTRY (e.g., "AURA-100")
         message: Override message (defaults to registry user_message)
         context: Additional context for the error
         cause: Original exception that caused this error
     """
-    
+
     def __init__(
         self,
         code: str = "AURA-000",
@@ -475,7 +465,7 @@ class AuraCLIError(Exception):
         self.severity = self.error_info.get("severity", "error")
         self.category = self.error_info.get("category", "unknown")
         self.suggestion = self.error_info.get("suggestion", "")
-        
+
         # Build full message
         full_message = f"[{code}] {self.message}"
         if context:
@@ -483,9 +473,9 @@ class AuraCLIError(Exception):
             full_message += f" | Context: {context_str}"
         if cause:
             full_message += f" | Caused by: {type(cause).__name__}: {cause}"
-            
+
         super().__init__(full_message)
-    
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert error to dictionary for serialization."""
         return {
@@ -498,13 +488,14 @@ class AuraCLIError(Exception):
             "cause_type": type(self.cause).__name__ if self.cause else None,
             "cause_message": str(self.cause) if self.cause else None,
         }
-    
+
     def __str__(self) -> str:
         return self.message
 
 
 class AURAError(Exception):
     """Base exception for all AURA errors (legacy, kept for backward compatibility)."""
+
     pass
 
 
@@ -517,14 +508,16 @@ AuraCLIError = AuraCLIError  # Re-export for clarity
 # File/IO Exceptions (AURA-4xx)
 # =============================================================================
 
+
 class FileToolsError(AURAError):
     """Base exception for file tool operations."""
+
     pass
 
 
 class PathTraversalError(FileToolsError):
     """Attempted path traversal attack detected."""
-    
+
     def __init__(self, message: str = "", path: str = ""):
         self.path = path
         super().__init__(message or f"Path traversal detected: {path}")
@@ -532,7 +525,7 @@ class PathTraversalError(FileToolsError):
 
 class PathOutsideRootError(FileToolsError):
     """Path is outside the allowed project root."""
-    
+
     def __init__(self, message: str = "", path: str = "", root: str = ""):
         self.path = path
         self.root = root
@@ -541,7 +534,7 @@ class PathOutsideRootError(FileToolsError):
 
 class NullByteInjectionError(FileToolsError):
     """Null byte detected in path (injection attempt)."""
-    
+
     def __init__(self, message: str = "", path: str = ""):
         self.path = path
         super().__init__(message or f"Null byte detected in path: {path}")
@@ -549,7 +542,7 @@ class NullByteInjectionError(FileToolsError):
 
 class FileNotFoundErrorExtended(FileToolsError):
     """File not found with additional context."""
-    
+
     def __init__(self, message: str = "", path: str = ""):
         self.path = path
         super().__init__(message or f"File not found: {path}")
@@ -557,7 +550,7 @@ class FileNotFoundErrorExtended(FileToolsError):
 
 class FilePermissionError(FileToolsError):
     """Permission denied when accessing file."""
-    
+
     def __init__(self, message: str = "", path: str = ""):
         self.path = path
         super().__init__(message or f"Permission denied: {path}")
@@ -565,12 +558,13 @@ class FilePermissionError(FileToolsError):
 
 class DiskFullError(FileToolsError):
     """Disk is full."""
+
     pass
 
 
 class FileLockedError(FileToolsError):
     """File is locked or in use."""
-    
+
     def __init__(self, message: str = "", path: str = ""):
         self.path = path
         super().__init__(message or f"File is locked: {path}")
@@ -578,28 +572,28 @@ class FileLockedError(FileToolsError):
 
 class FileTooLargeError(FileToolsError):
     """File exceeds maximum size."""
-    
+
     def __init__(self, message: str = "", path: str = "", size: int = 0, max_size: int = 0):
         self.path = path
         self.size = size
         self.max_size = max_size
-        super().__init__(
-            message or f"File {path} ({size} bytes) exceeds max size ({max_size} bytes)"
-        )
+        super().__init__(message or f"File {path} ({size} bytes) exceeds max size ({max_size} bytes)")
 
 
 # =============================================================================
 # MCP/Network Exceptions (AURA-3xx)
 # =============================================================================
 
+
 class MCPError(AURAError):
     """Base exception for MCP-related errors."""
+
     pass
 
 
 class MCPConnectionError(MCPError):
     """Failed to connect to MCP server."""
-    
+
     def __init__(self, message: str = "", server: str = "", url: str = ""):
         self.server = server
         self.url = url
@@ -608,7 +602,7 @@ class MCPConnectionError(MCPError):
 
 class MCPTimeoutError(MCPError):
     """MCP operation timed out."""
-    
+
     def __init__(self, message: str = "", timeout: float = 0):
         self.timeout = timeout
         super().__init__(message or f"MCP operation timed out after {timeout}s")
@@ -616,12 +610,13 @@ class MCPTimeoutError(MCPError):
 
 class MCPProtocolError(MCPError):
     """MCP protocol error."""
+
     pass
 
 
 class MCPServerUnavailableError(MCPError):
     """MCP server unavailable."""
-    
+
     def __init__(self, message: str = "", server: str = ""):
         self.server = server
         super().__init__(message or f"MCP server {server} is unavailable")
@@ -629,7 +624,7 @@ class MCPServerUnavailableError(MCPError):
 
 class MCPInvalidResponseError(MCPError):
     """MCP invalid response."""
-    
+
     def __init__(self, message: str = "", response: str = ""):
         self.response = response
         super().__init__(message or f"MCP invalid response: {response[:200]}")
@@ -637,7 +632,7 @@ class MCPInvalidResponseError(MCPError):
 
 class MCPRetryExhaustedError(MCPError):
     """MCP retry exhausted."""
-    
+
     def __init__(self, message: str = "", attempts: int = 0):
         self.attempts = attempts
         super().__init__(message or f"All {attempts} MCP retry attempts failed")
@@ -645,7 +640,7 @@ class MCPRetryExhaustedError(MCPError):
 
 class CircuitBreakerOpenError(MCPError):
     """Circuit breaker is open."""
-    
+
     def __init__(self, message: str = "", circuit_name: str = ""):
         self.circuit_name = circuit_name
         super().__init__(message or f"Circuit breaker {circuit_name} is OPEN")
@@ -653,7 +648,7 @@ class CircuitBreakerOpenError(MCPError):
 
 class RateLimitError(MCPError):
     """Rate limit exceeded."""
-    
+
     def __init__(self, message: str = "", retry_after: float = 0):
         self.retry_after = retry_after
         super().__init__(message or f"Rate limit exceeded. Retry after {retry_after}s")
@@ -661,7 +656,7 @@ class RateLimitError(MCPError):
 
 class DNSResolutionError(MCPError):
     """DNS resolution failed."""
-    
+
     def __init__(self, message: str = "", hostname: str = ""):
         self.hostname = hostname
         super().__init__(message or f"DNS resolution failed for {hostname}")
@@ -669,6 +664,7 @@ class DNSResolutionError(MCPError):
 
 class NetworkError(MCPError):
     """General network error."""
+
     pass
 
 
@@ -676,14 +672,16 @@ class NetworkError(MCPError):
 # Agent Exceptions (AURA-5xx)
 # =============================================================================
 
+
 class AgentError(AURAError):
     """Base exception for agent errors."""
+
     pass
 
 
 class AgentInitializationError(AgentError):
     """Failed to initialize agent."""
-    
+
     def __init__(self, message: str = "", agent_name: str = ""):
         self.agent_name = agent_name
         super().__init__(message or f"Failed to initialize agent: {agent_name}")
@@ -691,7 +689,7 @@ class AgentInitializationError(AgentError):
 
 class AgentExecutionError(AgentError):
     """Agent execution failed."""
-    
+
     def __init__(self, message: str = "", agent_name: str = "", phase: str = ""):
         self.agent_name = agent_name
         self.phase = phase
@@ -700,7 +698,7 @@ class AgentExecutionError(AgentError):
 
 class AgentTimeoutError(AgentError):
     """Agent execution timed out."""
-    
+
     def __init__(self, message: str = "", agent_name: str = "", timeout: float = 0):
         self.agent_name = agent_name
         self.timeout = timeout
@@ -709,7 +707,7 @@ class AgentTimeoutError(AgentError):
 
 class AgentNotFoundError(AgentError):
     """Agent not found in registry."""
-    
+
     def __init__(self, message: str = "", agent_name: str = ""):
         self.agent_name = agent_name
         super().__init__(message or f"Agent not found: {agent_name}")
@@ -717,7 +715,7 @@ class AgentNotFoundError(AgentError):
 
 class AgentOutputValidationError(AgentError):
     """Agent output validation warning/error."""
-    
+
     def __init__(self, message: str = "", agent_name: str = "", output: str = ""):
         self.agent_name = agent_name
         self.output = output
@@ -728,14 +726,16 @@ class AgentOutputValidationError(AgentError):
 # Orchestration Exceptions (AURA-6xx)
 # =============================================================================
 
+
 class OrchestrationError(AURAError):
     """Base exception for orchestration errors."""
+
     pass
 
 
 class PhaseExecutionError(OrchestrationError):
     """Phase execution failed."""
-    
+
     def __init__(self, message: str = "", phase: str = ""):
         self.phase = phase
         super().__init__(message or f"Phase {phase} execution failed")
@@ -743,7 +743,7 @@ class PhaseExecutionError(OrchestrationError):
 
 class CycleExceededError(OrchestrationError):
     """Maximum cycles exceeded."""
-    
+
     def __init__(self, message: str = "", max_cycles: int = 0):
         self.max_cycles = max_cycles
         super().__init__(message or f"Maximum cycles ({max_cycles}) exceeded")
@@ -751,7 +751,7 @@ class CycleExceededError(OrchestrationError):
 
 class VerificationFailedError(OrchestrationError):
     """Verification phase failed."""
-    
+
     def __init__(self, message: str = "", verification_type: str = ""):
         self.verification_type = verification_type
         super().__init__(message or f"Verification failed: {verification_type}")
@@ -759,11 +759,13 @@ class VerificationFailedError(OrchestrationError):
 
 class PipelineDependencyError(OrchestrationError):
     """Pipeline dependency error."""
+
     pass
 
 
 class GoalQueueError(OrchestrationError):
     """Goal queue error."""
+
     pass
 
 
@@ -771,14 +773,16 @@ class GoalQueueError(OrchestrationError):
 # SADD Exceptions (AURA-7xx)
 # =============================================================================
 
+
 class SADDError(AURAError):
     """Base exception for SADD-related errors."""
+
     pass
 
 
 class WorkstreamError(SADDError):
     """Workstream execution error."""
-    
+
     def __init__(self, message: str = "", workstream_id: str = ""):
         self.workstream_id = workstream_id
         super().__init__(message or f"Workstream {workstream_id} execution failed")
@@ -786,7 +790,7 @@ class WorkstreamError(SADDError):
 
 class DependencyCycleError(SADDError):
     """Circular dependency detected in workstreams."""
-    
+
     def __init__(self, message: str = "", cycle: str = ""):
         self.cycle = cycle
         super().__init__(message or f"Circular dependency detected: {cycle}")
@@ -794,11 +798,13 @@ class DependencyCycleError(SADDError):
 
 class SessionError(SADDError):
     """SADD session error."""
+
     pass
 
 
 class SubAgentCoordinationError(SADDError):
     """Sub-agent coordination failed."""
+
     pass
 
 
@@ -806,14 +812,16 @@ class SubAgentCoordinationError(SADDError):
 # Memory Exceptions (AURA-8xx)
 # =============================================================================
 
+
 class MemoryError(AURAError):
     """Base exception for memory-related errors."""
+
     pass
 
 
 class RecallError(MemoryError):
     """Failed to recall from memory."""
-    
+
     def __init__(self, message: str = "", key: str = ""):
         self.key = key
         super().__init__(message or f"Failed to recall key: {key}")
@@ -821,7 +829,7 @@ class RecallError(MemoryError):
 
 class StorageError(MemoryError):
     """Failed to store to memory."""
-    
+
     def __init__(self, message: str = "", key: str = ""):
         self.key = key
         super().__init__(message or f"Failed to store key: {key}")
@@ -829,6 +837,7 @@ class StorageError(MemoryError):
 
 class MemoryCorruptionError(MemoryError):
     """Memory corruption detected."""
+
     pass
 
 
@@ -836,14 +845,16 @@ class MemoryCorruptionError(MemoryError):
 # Configuration Exceptions (AURA-1xx)
 # =============================================================================
 
+
 class ConfigError(AURAError):
     """Base exception for configuration errors."""
+
     pass
 
 
 class ConfigNotFoundError(ConfigError):
     """Configuration file not found."""
-    
+
     def __init__(self, message: str = "", config_path: str = ""):
         self.config_path = config_path
         super().__init__(message or f"Configuration file not found: {config_path}")
@@ -851,7 +862,7 @@ class ConfigNotFoundError(ConfigError):
 
 class ConfigValidationError(ConfigError):
     """Configuration validation failed."""
-    
+
     def __init__(self, message: str = "", errors: list = None):
         self.errors = errors or []
         super().__init__(message or f"Configuration validation failed: {errors}")
@@ -859,7 +870,7 @@ class ConfigValidationError(ConfigError):
 
 class ConfigKeyMissingError(ConfigError):
     """Missing required configuration key."""
-    
+
     def __init__(self, message: str = "", key: str = ""):
         self.key = key
         super().__init__(message or f"Missing required configuration key: {key}")
@@ -867,12 +878,13 @@ class ConfigKeyMissingError(ConfigError):
 
 class ConfigDeprecationWarning(ConfigError):
     """Configuration deprecation warning."""
+
     pass
 
 
 class EnvironmentVariableError(ConfigError):
     """Environment variable not set or invalid."""
-    
+
     def __init__(self, message: str = "", var_name: str = ""):
         self.var_name = var_name
         super().__init__(message or f"Environment variable not set: {var_name}")
@@ -880,6 +892,7 @@ class EnvironmentVariableError(ConfigError):
 
 class EnvironmentConfigError(ConfigError):
     """Invalid environment configuration."""
+
     pass
 
 
@@ -891,14 +904,16 @@ ConfigurationError = ConfigError
 # Authentication/Authorization Exceptions (AURA-2xx)
 # =============================================================================
 
+
 class AuthenticationError(AURAError):
     """Base exception for authentication errors."""
+
     pass
 
 
 class APIKeyInvalidError(AuthenticationError):
     """API key is invalid or expired."""
-    
+
     def __init__(self, message: str = "", provider: str = ""):
         self.provider = provider
         super().__init__(message or f"API key for {provider} is invalid or expired")
@@ -906,11 +921,13 @@ class APIKeyInvalidError(AuthenticationError):
 
 class PermissionDeniedError(AuthenticationError):
     """Insufficient permissions."""
+
     pass
 
 
 class TokenRefreshError(AuthenticationError):
     """Token refresh failed."""
+
     pass
 
 
@@ -918,14 +935,16 @@ class TokenRefreshError(AuthenticationError):
 # Validation Exceptions (AURA-9xx)
 # =============================================================================
 
+
 class ValidationError(AURAError):
     """Base exception for validation errors."""
+
     pass
 
 
 class SchemaValidationError(ValidationError):
     """Schema validation failed."""
-    
+
     def __init__(self, message: str = "", schema_errors: list = None):
         self.schema_errors = schema_errors or []
         super().__init__(message or f"Schema validation failed: {schema_errors}")
@@ -933,11 +952,13 @@ class SchemaValidationError(ValidationError):
 
 class OutputValidationError(ValidationError):
     """Output validation failed."""
+
     pass
 
 
 class InputValidationError(ValidationError):
     """Input validation failed."""
+
     pass
 
 
@@ -945,14 +966,16 @@ class InputValidationError(ValidationError):
 # Security Exceptions (AURA-9xx)
 # =============================================================================
 
+
 class SecurityError(AURAError):
     """Base exception for security-related errors."""
+
     pass
 
 
 class SecretDetectedError(SecurityError):
     """Hardcoded secret detected."""
-    
+
     def __init__(self, message: str = "", secret_type: str = ""):
         self.secret_type = secret_type
         super().__init__(message or f"Hardcoded {secret_type} detected")
@@ -960,7 +983,7 @@ class SecretDetectedError(SecurityError):
 
 class InjectionDetectedError(SecurityError):
     """Injection attack detected."""
-    
+
     def __init__(self, message: str = "", injection_type: str = ""):
         self.injection_type = injection_type
         super().__init__(message or f"{injection_type} injection detected")
@@ -970,23 +993,28 @@ class InjectionDetectedError(SecurityError):
 # System Exceptions (AURA-0xx)
 # =============================================================================
 
+
 class SystemError(AURAError):
     """Base exception for system errors."""
+
     pass
 
 
 class ResourceExhaustedError(SystemError):
     """System resources exhausted."""
+
     pass
 
 
 class SystemTimeoutError(SystemError):
     """Operation timed out at system level."""
+
     pass
 
 
 class SystemInterruptError(SystemError):
     """System interrupt received (e.g., KeyboardInterrupt)."""
+
     pass
 
 
@@ -994,43 +1022,52 @@ class SystemInterruptError(SystemError):
 # Git Exceptions (AURA-10xx)
 # =============================================================================
 
+
 class GitToolsError(AURAError):
     """Base exception for git tool operations."""
+
     pass
 
 
 class GitRepoError(GitToolsError):
     """Git repository error."""
+
     pass
 
 
 class GitCommitError(GitToolsError):
     """Git commit error."""
+
     pass
 
 
 class GitRollbackError(GitToolsError):
     """Git rollback error."""
+
     pass
 
 
 class GitDiffError(GitToolsError):
     """Git diff error."""
+
     pass
 
 
 class GitBranchError(GitToolsError):
     """Git branch error."""
+
     pass
 
 
 class GitStashError(GitToolsError):
     """Git stash error."""
+
     pass
 
 
 class GitStashPopError(GitStashError):
     """Git stash pop error."""
+
     pass
 
 
@@ -1044,7 +1081,6 @@ ERROR_CODE_MAP = {
     ResourceExhaustedError: "AURA-001",
     SystemTimeoutError: "AURA-002",
     SystemInterruptError: "AURA-003",
-    
     # Configuration errors
     ConfigNotFoundError: "AURA-100",
     ConfigValidationError: "AURA-101",
@@ -1052,13 +1088,11 @@ ERROR_CODE_MAP = {
     ConfigDeprecationWarning: "AURA-103",
     EnvironmentVariableError: "AURA-104",
     EnvironmentConfigError: "AURA-105",
-    
     # Authentication errors
     AuthenticationError: "AURA-200",
     APIKeyInvalidError: "AURA-201",
     PermissionDeniedError: "AURA-202",
     TokenRefreshError: "AURA-203",
-    
     # Network/MCP errors
     MCPConnectionError: "AURA-301",
     MCPTimeoutError: "AURA-302",
@@ -1070,7 +1104,6 @@ ERROR_CODE_MAP = {
     RateLimitError: "AURA-308",
     DNSResolutionError: "AURA-309",
     NetworkError: "AURA-310",
-    
     # Filesystem errors
     FileNotFoundErrorExtended: "AURA-400",
     FilePermissionError: "AURA-401",
@@ -1080,41 +1113,34 @@ ERROR_CODE_MAP = {
     DiskFullError: "AURA-405",
     FileLockedError: "AURA-406",
     FileTooLargeError: "AURA-407",
-    
     # Agent errors
     AgentInitializationError: "AURA-500",
     AgentExecutionError: "AURA-501",
     AgentTimeoutError: "AURA-502",
     AgentNotFoundError: "AURA-503",
     AgentOutputValidationError: "AURA-504",
-    
     # Orchestration errors
     PhaseExecutionError: "AURA-600",
     CycleExceededError: "AURA-601",
     VerificationFailedError: "AURA-602",
     PipelineDependencyError: "AURA-603",
     GoalQueueError: "AURA-604",
-    
     # SADD errors
     WorkstreamError: "AURA-700",
     DependencyCycleError: "AURA-701",
     SessionError: "AURA-702",
     SubAgentCoordinationError: "AURA-703",
-    
     # Memory errors
     RecallError: "AURA-800",
     StorageError: "AURA-801",
     MemoryCorruptionError: "AURA-802",
-    
     # Validation errors
     SchemaValidationError: "AURA-903",
     OutputValidationError: "AURA-904",
     InputValidationError: "AURA-905",
-    
     # Security errors
     SecretDetectedError: "AURA-901",
     InjectionDetectedError: "AURA-902",
-    
     # Git errors
     GitRepoError: "AURA-1000",
     GitCommitError: "AURA-1001",
@@ -1125,45 +1151,45 @@ ERROR_CODE_MAP = {
 
 def get_error_code_for_exception(exc: Exception) -> str:
     """Get error code for an exception instance.
-    
+
     Args:
         exc: Exception instance
-        
+
     Returns:
         Error code string
     """
     exc_type = type(exc)
-    
+
     # Check for direct match
     if exc_type in ERROR_CODE_MAP:
         return ERROR_CODE_MAP[exc_type]
-    
+
     # Check for AuraCLIError
     if isinstance(exc, AuraCLIError):
         return exc.code
-    
+
     # Check parent classes
     for exc_class, code in ERROR_CODE_MAP.items():
         if isinstance(exc, exc_class):
             return code
-    
+
     # Default unknown error
     return "AURA-000"
 
 
 def exception_to_aura_cli_error(exc: Exception, context: Dict[str, Any] = None) -> AuraCLIError:
     """Convert any exception to AuraCLIError.
-    
+
     Args:
         exc: Original exception
         context: Additional context
-        
+
     Returns:
         AuraCLIError instance
     """
     if isinstance(exc, AuraCLIError):
         return exc
-    
+
     code = get_error_code_for_exception(exc)
     return AuraCLIError(
         code=code,

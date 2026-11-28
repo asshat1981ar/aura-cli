@@ -43,8 +43,7 @@ def mock_config():
 @pytest.fixture
 def adapter(mock_config):
     """Create a ModelAdapter instance for testing."""
-    with patch("core.model_adapter.LocalEmbeddingProvider"), \
-         patch("core.model_adapter.ModelAdapter._validate_cli_paths"):
+    with patch("core.model_adapter.LocalEmbeddingProvider"), patch("core.model_adapter.ModelAdapter._validate_cli_paths"):
         adapter = ModelAdapter()
         adapter.router = None
         adapter._log_telemetry = MagicMock()
@@ -89,10 +88,10 @@ class TestModelAdapterInitialization:
             "llm_timeout": 60,
             "semantic_memory": {},
         }.get(key, default)
-        
+
         with patch.object(ModelAdapter, "_validate_cli_paths"):
             adapter = ModelAdapter()
-        
+
         assert adapter.gemini_cli_path == "/usr/bin/gemini"
         assert adapter.codex_cli_path == "/usr/bin/codex"
         assert adapter.copilot_cli_path == "/usr/bin/copilot"
@@ -105,10 +104,10 @@ class TestModelAdapterInitialization:
             "llm_timeout": 3600,
             "semantic_memory": {},
         }.get(key, default)
-        
+
         with patch.object(ModelAdapter, "_validate_cli_paths"):
             adapter = ModelAdapter()
-        
+
         assert adapter.cache_ttl == 3600
 
     @patch("core.model_adapter.config")
@@ -118,10 +117,10 @@ class TestModelAdapterInitialization:
         mock_cfg.get.side_effect = lambda key, default=None: {
             "semantic_memory": {},
         }.get(key, default)
-        
+
         with patch.object(ModelAdapter, "_validate_cli_paths"):
             adapter = ModelAdapter()
-        
+
         assert "search" in adapter.ALLOWED_TOOLS
         assert "read_file" in adapter.ALLOWED_TOOLS
         assert "create_issue" in adapter.ALLOWED_TOOLS
@@ -144,11 +143,11 @@ class TestValidateCLIPaths:
             "gemini_cli_path": "/nonexistent/gemini",
             "semantic_memory": {},
         }.get(key, default)
-        
+
         # Test that _validate_cli_paths is called during init
         with patch("pathlib.Path.is_file", return_value=False):
             adapter = ModelAdapter()
-        
+
         # Path should be set to None or log_json should be called
         assert adapter.gemini_cli_path is None or mock_log.called
 
@@ -185,10 +184,10 @@ class TestEstimateContextBudget:
         """Test extra budget from goal length."""
         short_goal = "test"
         long_goal = "test " * 500
-        
+
         short_budget = adapter.estimate_context_budget(short_goal, "default")
         long_budget = adapter.estimate_context_budget(long_goal, "default")
-        
+
         assert long_budget > short_budget
 
 
@@ -204,27 +203,27 @@ class TestCompressContext:
         """Test short text is not truncated."""
         text = "short text"
         max_tokens = 100
-        
+
         result = adapter.compress_context(text, max_tokens)
-        
+
         assert result == text
 
     def test_long_text_truncated(self, adapter):
         """Test long text is truncated."""
         text = "a" * 1000
         max_tokens = 100
-        
+
         result = adapter.compress_context(text, max_tokens)
-        
+
         assert len(result) < len(text)
 
     def test_compression_respects_token_limit(self, adapter):
         """Test compression respects token limit."""
         text = "a" * 2000
         max_tokens = 100
-        
+
         result = adapter.compress_context(text, max_tokens)
-        
+
         # Rough estimate: 4 chars per token
         assert len(result) <= max_tokens * 4 + 10
 
@@ -240,19 +239,19 @@ class TestSetRouter:
     def test_set_router(self, adapter):
         """Test setting a router."""
         mock_router = MagicMock()
-        
+
         with patch("core.model_adapter.log_json"):
             adapter.set_router(mock_router)
-        
+
         assert adapter.router == mock_router
 
     def test_set_router_logging(self, adapter):
         """Test router attachment is logged."""
         mock_router = MagicMock()
-        
+
         with patch("core.model_adapter.log_json") as mock_log:
             adapter.set_router(mock_router)
-        
+
         mock_log.assert_called()
 
 
@@ -267,19 +266,19 @@ class TestSetTelemetryAgent:
     def test_set_telemetry_agent(self, adapter):
         """Test setting a telemetry agent."""
         mock_agent = MagicMock()
-        
+
         with patch("core.model_adapter.log_json"):
             adapter.set_telemetry_agent(mock_agent)
-        
+
         assert adapter.telemetry_agent == mock_agent
 
     def test_set_telemetry_agent_logging(self, adapter):
         """Test telemetry agent attachment is logged."""
         mock_agent = MagicMock()
-        
+
         with patch("core.model_adapter.log_json") as mock_log:
             adapter.set_telemetry_agent(mock_agent)
-        
+
         mock_log.assert_called()
 
 
@@ -294,7 +293,7 @@ class TestLogTelemetry:
     def test_no_telemetry_agent(self, adapter):
         """Test no error when telemetry agent not set."""
         adapter.telemetry_agent = None
-        
+
         # Should not raise
         adapter._log_telemetry("model", 1.5, "response")
 
@@ -303,14 +302,15 @@ class TestLogTelemetry:
         # Create a simple adapter without full initialization
         adapter = MagicMock()
         adapter.telemetry_agent = MagicMock()
-        
+
         # Import the real _log_telemetry method and bind it
         from core.model_adapter import ModelAdapter
+
         _log_telemetry = ModelAdapter._log_telemetry
-        
+
         # Call the real method
         _log_telemetry(adapter, "test_model", 2.5, "response text")
-        
+
         # Check the agent was called
         adapter.telemetry_agent.log.assert_called_once()
 
@@ -319,7 +319,7 @@ class TestLogTelemetry:
         mock_agent = MagicMock()
         mock_agent.log.side_effect = Exception("Telemetry error")
         adapter.telemetry_agent = mock_agent
-        
+
         with patch("core.model_adapter.log_json"):
             # Should not raise
             adapter._log_telemetry("model", 1.0, "response")
@@ -340,20 +340,23 @@ class TestLLMTimeout:
 
     def test_call_with_timeout_success(self, adapter):
         """Test successful call within timeout."""
+
         def slow_func(arg):
             return f"result_{arg}"
-        
+
         result = adapter._call_with_timeout(slow_func, "test", timeout=5)
-        
+
         assert result == "result_test"
 
     def test_call_with_timeout_exceeds(self, adapter):
         """Test call that exceeds timeout."""
+
         def very_slow_func(arg):
             import time
+
             time.sleep(10)
             return "result"
-        
+
         with pytest.raises(TimeoutError):
             adapter._call_with_timeout(very_slow_func, "test", timeout=0.1)
 
@@ -372,18 +375,18 @@ class TestRespondForRole:
         adapter.call_local_profile = MagicMock(return_value="profile response")
         adapter._get_cached_response = MagicMock(return_value=None)
         adapter._save_to_cache = MagicMock()
-        
+
         result = adapter.respond_for_role("embedding", "test prompt")
-        
+
         assert result == "profile response"
         adapter.call_local_profile.assert_called_once()
 
     def test_respond_for_role_cache_hit(self, adapter):
         """Test cached response is returned."""
         adapter._get_cached_response = MagicMock(return_value="cached response")
-        
+
         result = adapter.respond_for_role("embedding", "test prompt")
-        
+
         assert result == "cached response"
 
     def test_respond_for_role_fallback_to_openrouter(self, adapter, mock_response, mock_requests):
@@ -392,15 +395,15 @@ class TestRespondForRole:
         adapter.call_openrouter = MagicMock(return_value="router response")
         adapter._get_cached_response = MagicMock(return_value=None)
         adapter._save_to_cache = MagicMock()
-        
+
         with patch("core.model_adapter.config") as cfg:
             cfg.get.side_effect = lambda key, default=None: {
                 "model_routing": {},
                 "primary_provider": "openrouter",
             }.get(key, default)
-            
+
             result = adapter.respond_for_role("embedding", "test")
-        
+
         assert result == "router response"
 
 
@@ -415,9 +418,9 @@ class TestRespond:
     def test_respond_uses_cache(self, adapter):
         """Test respond returns cached response."""
         adapter._get_cached_response = MagicMock(return_value="cached")
-        
+
         result = adapter.respond("test prompt")
-        
+
         assert result == "cached"
 
     def test_respond_with_router(self, adapter):
@@ -427,9 +430,9 @@ class TestRespond:
         adapter.router = mock_router
         adapter._get_cached_response = MagicMock(return_value=None)
         adapter._save_to_cache = MagicMock()
-        
+
         result = adapter.respond("test prompt")
-        
+
         assert result == "router response"
         mock_router.route.assert_called_once()
 
@@ -439,14 +442,14 @@ class TestRespond:
         adapter.router = None
         adapter.call_openrouter = MagicMock(return_value="openrouter response")
         adapter._save_to_cache = MagicMock()
-        
+
         with patch("core.model_adapter.config") as cfg:
             cfg.get.side_effect = lambda key, default=None: {
                 "primary_provider": "openrouter",
             }.get(key, default)
-            
+
             result = adapter.respond("test")
-        
+
         assert result == "openrouter response"
 
     def test_respond_openai_fallback(self, adapter):
@@ -456,15 +459,15 @@ class TestRespond:
         adapter.call_openrouter = MagicMock(side_effect=Exception("OpenRouter error"))
         adapter.call_openai = MagicMock(return_value="openai response")
         adapter._save_to_cache = MagicMock()
-        
+
         with patch("core.model_adapter.config") as cfg:
             cfg.get.side_effect = lambda key, default=None: {
                 "primary_provider": "openrouter",
             }.get(key, default)
-            
+
             with patch("core.model_adapter.log_json"):
                 result = adapter.respond("test")
-        
+
         assert result == "openai response"
 
     def test_respond_anthropic_fallback(self, adapter):
@@ -475,15 +478,15 @@ class TestRespond:
         adapter.call_openai = MagicMock(side_effect=Exception("Error"))
         adapter.call_anthropic = MagicMock(return_value="anthropic response")
         adapter._save_to_cache = MagicMock()
-        
+
         with patch("core.model_adapter.config") as cfg:
             cfg.get.side_effect = lambda key, default=None: {
                 "primary_provider": "openrouter",
             }.get(key, default)
-            
+
             with patch("core.model_adapter.log_json"):
                 result = adapter.respond("test")
-        
+
         assert result == "anthropic response"
 
     def test_respond_local_fallback(self, adapter):
@@ -495,15 +498,15 @@ class TestRespond:
         adapter.call_anthropic = MagicMock(side_effect=Exception("Error"))
         adapter.call_local = MagicMock(return_value="local response")
         adapter._save_to_cache = MagicMock()
-        
+
         with patch("core.model_adapter.config") as cfg:
             cfg.get.side_effect = lambda key, default=None: {
                 "primary_provider": "openrouter",
             }.get(key, default)
-            
+
             with patch("core.model_adapter.log_json"):
                 result = adapter.respond("test")
-        
+
         assert result == "local response"
 
     def test_respond_no_model_success(self, adapter):
@@ -512,15 +515,15 @@ class TestRespond:
         adapter.router = None
         adapter.call_openrouter = MagicMock(return_value="fallback_response")
         adapter._save_to_cache = MagicMock()
-        
+
         with patch("core.model_adapter.config") as cfg:
             cfg.get.side_effect = lambda key, default=None: {
                 "primary_provider": "openrouter",
             }.get(key, default)
-            
+
             with patch("core.model_adapter.log_json"):
                 result = adapter.respond("test")
-        
+
         # Should return a valid result from a provider
         assert result == "fallback_response"
 
@@ -538,9 +541,9 @@ class TestToolExecution:
         mock_response = MagicMock()
         mock_response.json.return_value = {"result": "tool output"}
         mock_requests.post.return_value = mock_response
-        
+
         result = adapter._execute_tool("create_issue", {"title": "Test"})
-        
+
         assert "tool output" in result
 
     def test_execute_tool_npx_command(self, adapter, mock_requests):
@@ -549,18 +552,18 @@ class TestToolExecution:
             result = MagicMock()
             result.stdout = "npx output"
             mock_run.return_value = result
-            
+
             output = adapter._execute_tool("search", {"query": "test"})
-        
+
         assert "npx output" in output
 
     def test_execute_tool_mcp_server_error(self, adapter, mock_requests):
         """Test MCP server tool error handling."""
         mock_requests.post.side_effect = Exception("Server error")
-        
+
         with patch("core.model_adapter.log_json"):
             result = adapter._execute_tool("create_issue", {"title": "Test"})
-        
+
         assert "failed" in result.lower()
 
     def test_execute_tool_npx_error(self, adapter):
@@ -568,7 +571,7 @@ class TestToolExecution:
         error = subprocess.CalledProcessError(1, "npx", stderr="Command failed")
         with patch("subprocess.run", side_effect=error):
             result = adapter._execute_tool("search", {"query": "test"})
-        
+
         assert "failed" in result.lower()
 
 
@@ -583,21 +586,21 @@ class TestEmbedding:
     def test_model_id(self, adapter):
         """Test model_id returns configured embedding model."""
         adapter._embedding_model = "text-embedding-3-small"
-        
+
         assert adapter.model_id() == "text-embedding-3-small"
 
     def test_dimensions(self, adapter):
         """Test dimensions returns embedding dimensions."""
         adapter._embedding_dims = 1536
-        
+
         assert adapter.dimensions() == 1536
 
     def test_healthcheck_success(self, adapter, mock_response, mock_requests):
         """Test healthcheck returns True on success."""
         adapter.embed = MagicMock(return_value=[MagicMock()])
-        
+
         result = adapter.healthcheck()
-        
+
         assert result is True
 
     def test_healthcheck_failure(self, adapter):
@@ -609,7 +612,7 @@ class TestEmbedding:
             adapter2 = MagicMock()
             adapter2.embed = MagicMock(side_effect=ConnectionError())
             result = adapter.healthcheck()  # Using original adapter
-        
+
         # When no mocking, it should call embed and that might fail
         # Since this is hard to test without deep mocking, we'll verify the basic behavior
         assert isinstance(result, bool)
@@ -617,7 +620,7 @@ class TestEmbedding:
     def test_embed_empty_list(self, adapter):
         """Test embed returns empty list for empty input."""
         result = adapter.embed([])
-        
+
         assert result == []
 
     def test_embed_local_builtin(self, adapter):
@@ -625,46 +628,40 @@ class TestEmbedding:
         adapter._embedding_mode = "local_builtin"
         adapter._local_embedding_provider = MagicMock()
         adapter._local_embedding_provider.embed.return_value = [[0.1, 0.2]]
-        
+
         with patch("core.model_adapter.np") as mock_np:
             mock_np.array.return_value = [0.1, 0.2]
             result = adapter.embed(["test"])
-        
+
         assert result is not None
 
     def test_embed_no_api_key_fallback(self, adapter):
         """Test embed returns zero vectors when no API key."""
         adapter._embedding_mode = "openai"
-        with patch("core.model_adapter.resolve_openai_api_key", return_value=None), \
-             patch.dict(os.environ, {}, clear=True):
+        with patch("core.model_adapter.resolve_openai_api_key", return_value=None), patch.dict(os.environ, {}, clear=True):
             with patch("core.model_adapter.np") as mock_np:
                 mock_np.zeros.return_value = [0.0] * 1536
                 result = adapter.embed(["test"])
-        
+
         assert result is not None
 
     def test_embed_openai_success(self, adapter, mock_response, mock_requests):
         """Test successful OpenAI embedding."""
         adapter._embedding_mode = "openai"
-        mock_response.json.return_value = {
-            "data": [
-                {"index": 0, "embedding": [0.1, 0.2, 0.3]}
-            ]
-        }
-        
-        with patch("core.model_adapter.resolve_openai_api_key", return_value="key"), \
-             patch("core.model_adapter.np") as mock_np:
+        mock_response.json.return_value = {"data": [{"index": 0, "embedding": [0.1, 0.2, 0.3]}]}
+
+        with patch("core.model_adapter.resolve_openai_api_key", return_value="key"), patch("core.model_adapter.np") as mock_np:
             mock_np.array.return_value = [0.1, 0.2, 0.3]
             result = adapter.embed(["test"])
-        
+
         assert result is not None
 
     def test_get_embedding(self, adapter):
         """Test get_embedding wrapper."""
         adapter.embed = MagicMock(return_value=[[0.1, 0.2]])
-        
+
         result = adapter.get_embedding("test")
-        
+
         adapter.embed.assert_called_once_with(["test"])
 
 
@@ -678,70 +675,62 @@ class TestRespondToolCalls:
 
     def test_respond_tool_call_success(self, adapter):
         """Test respond processes valid tool calls."""
-        tool_response = json.dumps({
-            "tool_code": {
-                "name": "search",
-                "args": {"query": "test"}
-            }
-        })
+        tool_response = json.dumps({"tool_code": {"name": "search", "args": {"query": "test"}}})
         adapter._get_cached_response = MagicMock(return_value=None)
         adapter.call_openrouter = MagicMock(return_value=tool_response)
         adapter._execute_tool = MagicMock(return_value="tool result")
         adapter._save_to_cache = MagicMock()
-        
+
         with patch("core.model_adapter.config") as cfg:
             cfg.get.side_effect = lambda key, default=None: {
                 "primary_provider": "openrouter",
             }.get(key, default)
-            
+
             with patch("core.model_adapter.log_json"):
                 result = adapter.respond("test")
-        
+
         assert "Tool Output" in result
 
     def test_respond_disallowed_tool(self, adapter):
         """Test respond rejects disallowed tools."""
-        tool_response = json.dumps({
-            "tool_code": {
-                "name": "dangerous_tool",
-                "args": {}
-            }
-        })
+        tool_response = json.dumps({"tool_code": {"name": "dangerous_tool", "args": {}}})
         adapter._get_cached_response = MagicMock(return_value=None)
         adapter.call_openrouter = MagicMock(return_value=tool_response)
         adapter._save_to_cache = MagicMock()
-        
+
         with patch("core.model_adapter.config") as cfg:
             cfg.get.side_effect = lambda key, default=None: {
                 "primary_provider": "openrouter",
             }.get(key, default)
-            
+
             with patch("core.model_adapter.log_json"):
                 result = adapter.respond("test")
-        
+
         assert "not allowed" in result.lower()
 
     def test_respond_invalid_tool_structure(self, adapter):
         """Test respond handles invalid tool structure."""
-        tool_response = json.dumps({
-            "tool_code": {
-                "name": "search",
-                "args": {}  # Valid structure
+        tool_response = json.dumps(
+            {
+                "tool_code": {
+                    "name": "search",
+                    "args": {},  # Valid structure
+                }
             }
-        })
+        )
         adapter._get_cached_response = MagicMock(return_value=None)
         adapter.call_openrouter = MagicMock(return_value=tool_response)
         adapter._save_to_cache = MagicMock()
         adapter._execute_tool = MagicMock(return_value="tool_result")
-        
+
         with patch("core.model_adapter.config") as cfg:
             cfg.get.side_effect = lambda key, default=None: {
                 "primary_provider": "openrouter",
             }.get(key, default)
-            
+
             with patch("core.model_adapter.log_json"):
                 result = adapter.respond("test")
-        
+
         # When tool structure is valid, should execute tool
         assert "Tool Output" in result
 
@@ -750,15 +739,15 @@ class TestRespondToolCalls:
         adapter._get_cached_response = MagicMock(return_value=None)
         adapter.call_openrouter = MagicMock(return_value="Plain text response")
         adapter._save_to_cache = MagicMock()
-        
+
         with patch("core.model_adapter.config") as cfg:
             cfg.get.side_effect = lambda key, default=None: {
                 "primary_provider": "openrouter",
             }.get(key, default)
-            
+
             with patch("core.model_adapter.log_json"):
                 result = adapter.respond("test")
-        
+
         assert result == "Plain text response"
 
 
@@ -775,18 +764,16 @@ class TestEmbeddingConfiguration:
     def test_configure_embedding_backend_local_builtin(self, mock_emb, mock_cfg):
         """Test configuration for local builtin embedding."""
         mock_cfg.get.side_effect = lambda key, default=None: {
-            "semantic_memory": {
-                "embedding_model": "local-tfidf-svd-50d"
-            },
+            "semantic_memory": {"embedding_model": "local-tfidf-svd-50d"},
             "local_model_routing": {},
         }.get(key, default)
         mock_emb_instance = MagicMock()
         mock_emb_instance.dimensions.return_value = 50
         mock_emb.return_value = mock_emb_instance
-        
+
         with patch.object(ModelAdapter, "_validate_cli_paths"):
             adapter = ModelAdapter()
-        
+
         assert adapter._embedding_mode == "local_builtin"
 
     @patch("core.model_adapter.config")
@@ -799,10 +786,10 @@ class TestEmbeddingConfiguration:
         }.get(key, default)
         mock_emb_instance = MagicMock()
         mock_emb.return_value = mock_emb_instance
-        
+
         with patch.object(ModelAdapter, "_validate_cli_paths"):
             adapter = ModelAdapter()
-        
+
         assert adapter._embedding_mode == "openai"
 
 
@@ -822,25 +809,22 @@ class TestEmbeddingFallback:
         adapter._local_embedding_provider = MagicMock()
         adapter._local_embedding_provider.embed.return_value = [[0.1]]
         adapter._local_embedding_provider.dimensions.return_value = 50
-        
-        with patch("core.model_adapter.log_json"), \
-             patch("core.model_adapter.np") as mock_np:
+
+        with patch("core.model_adapter.log_json"), patch("core.model_adapter.np") as mock_np:
             mock_np.array.return_value = [0.1]
             result = adapter.embed(["test"])
-        
+
         assert adapter._embedding_mode == "local_builtin"
 
     def test_embed_provider_disabled_on_error(self, adapter):
         """Test embedding provider is disabled after error."""
         adapter._embedding_mode = "openai"
-        with patch("core.model_adapter.resolve_openai_api_key", return_value="key"), \
-             patch("core.model_adapter.requests") as mock_req:
+        with patch("core.model_adapter.resolve_openai_api_key", return_value="key"), patch("core.model_adapter.requests") as mock_req:
             mock_req.request.side_effect = Exception("API error")
             mock_req.exceptions.RequestException = Exception
-            
-            with patch("core.model_adapter.log_json"), \
-                 patch("core.model_adapter.np") as mock_np:
+
+            with patch("core.model_adapter.log_json"), patch("core.model_adapter.np") as mock_np:
                 mock_np.zeros.return_value = [0.0] * 1536
                 result = adapter.embed(["test"])
-        
+
         assert adapter._embedding_disabled is True

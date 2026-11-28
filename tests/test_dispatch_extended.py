@@ -1878,9 +1878,7 @@ class TestDispatchCommand:
         from aura_cli.dispatch import dispatch_command, COMMAND_DISPATCH_REGISTRY
 
         # Use a runtime-required action
-        action = next(
-            a for a, rule in COMMAND_DISPATCH_REGISTRY.items() if rule.requires_runtime
-        )
+        action = next(a for a, rule in COMMAND_DISPATCH_REGISTRY.items() if rule.requires_runtime)
         parsed = self._make_parsed(action)
         rc = dispatch_command(parsed, project_root=Path("/proj"))
         assert rc == 1
@@ -2219,10 +2217,12 @@ class TestContractReportDispatchExtra:
         args = _make_args(no_dispatch=False, compact=False, check=True)
         ctx = _make_ctx(args=args)
 
-        with patch("aura_cli.contract_report.build_cli_contract_report") as mock_build, \
-             patch("aura_cli.contract_report.render_cli_contract_report", return_value="report\n"), \
-             patch("aura_cli.contract_report.cli_contract_report_exit_code", return_value=1), \
-             patch("aura_cli.contract_report.cli_contract_report_failure_message", return_value="FAILED"):
+        with (
+            patch("aura_cli.contract_report.build_cli_contract_report") as mock_build,
+            patch("aura_cli.contract_report.render_cli_contract_report", return_value="report\n"),
+            patch("aura_cli.contract_report.cli_contract_report_exit_code", return_value=1),
+            patch("aura_cli.contract_report.cli_contract_report_failure_message", return_value="FAILED"),
+        ):
             mock_report = MagicMock()
             mock_build.return_value = mock_report
             rc = _handle_contract_report_dispatch(ctx)
@@ -2237,10 +2237,12 @@ class TestContractReportDispatchExtra:
         args = _make_args(no_dispatch=True, compact=True, check=False)
         ctx = _make_ctx(args=args)
 
-        with patch("aura_cli.contract_report.build_cli_contract_report") as mock_build, \
-             patch("aura_cli.contract_report.render_cli_contract_report", return_value="ok\n"), \
-             patch("aura_cli.contract_report.cli_contract_report_exit_code", return_value=0), \
-             patch("aura_cli.contract_report.cli_contract_report_failure_message", return_value=""):
+        with (
+            patch("aura_cli.contract_report.build_cli_contract_report") as mock_build,
+            patch("aura_cli.contract_report.render_cli_contract_report", return_value="ok\n"),
+            patch("aura_cli.contract_report.cli_contract_report_exit_code", return_value=0),
+            patch("aura_cli.contract_report.cli_contract_report_failure_message", return_value=""),
+        ):
             mock_report = MagicMock()
             mock_build.return_value = mock_report
             rc = _handle_contract_report_dispatch(ctx)

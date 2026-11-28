@@ -124,9 +124,17 @@ class TestLearningArtifactSerialization:
         art = LearningArtifact()
         d = dataclasses.asdict(art)
         expected_keys = {
-            "artifact_id", "cycle_id", "goal", "goal_type",
-            "artifact_type", "insight", "evidence", "suggested_goal",
-            "severity", "created_at", "acted_on",
+            "artifact_id",
+            "cycle_id",
+            "goal",
+            "goal_type",
+            "artifact_type",
+            "insight",
+            "evidence",
+            "suggested_goal",
+            "severity",
+            "created_at",
+            "acted_on",
         }
         assert expected_keys == set(d.keys())
 

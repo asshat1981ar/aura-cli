@@ -10,10 +10,10 @@ T = TypeVar("T")
 
 class MockContainer:
     """Mock dependency injection container for testing.
-    
+
     Provides a clean way to mock dependencies in unit tests without
     modifying the global Container state.
-    
+
     Example:
         >>> container = MockContainer()
         >>> mock_db = container.mock(DatabaseInterface)
@@ -28,11 +28,11 @@ class MockContainer:
 
     def mock(self, interface: Type[T], **kwargs: Any) -> Mock:
         """Get or create a mock for an interface.
-        
+
         Args:
             interface: The type/interface to mock.
             **kwargs: Additional attributes to set on the mock.
-            
+
         Returns:
             Mock object configured for the interface.
         """
@@ -49,10 +49,10 @@ class MockContainer:
 
     def resolve(self, interface: Type[T]) -> Mock:
         """Resolve interface to mock (DI container compatibility).
-        
+
         Args:
             interface: The type/interface to resolve.
-            
+
         Returns:
             Mock object for the interface.
         """
@@ -60,7 +60,7 @@ class MockContainer:
 
     def register_mock(self, interface: Type[T], mock: Mock) -> None:
         """Register a pre-configured mock.
-        
+
         Args:
             interface: The type/interface being mocked.
             mock: Pre-configured mock object.
@@ -69,11 +69,11 @@ class MockContainer:
 
     def create_magic_mock(self, interface: Type[T], **kwargs: Any) -> MagicMock:
         """Create a MagicMock for an interface.
-        
+
         Args:
             interface: The type/interface to mock.
             **kwargs: Additional attributes to set.
-            
+
         Returns:
             MagicMock object.
         """
@@ -83,11 +83,11 @@ class MockContainer:
 
     def patch(self, target: str, **kwargs: Any) -> Mock:
         """Create a patch and track it for cleanup.
-        
+
         Args:
             target: Module path to patch.
             **kwargs: Attributes to set on the mock.
-            
+
         Returns:
             Mock object from the patch.
         """
@@ -148,13 +148,13 @@ def create_mock_llm_response(
     completion_tokens: int = 50,
 ) -> Dict[str, Any]:
     """Create a mock LLM response dictionary.
-    
+
     Args:
         content: Response content.
         model: Model name.
         prompt_tokens: Number of prompt tokens.
         completion_tokens: Number of completion tokens.
-        
+
     Returns:
         Mock LLM response dictionary.
     """
@@ -175,12 +175,12 @@ def create_mock_agent_response(
     execution_time: float = 0.1,
 ) -> Dict[str, Any]:
     """Create a mock agent execution response.
-    
+
     Args:
         agent_name: Name of the agent.
         output: Agent output data.
         execution_time: Simulated execution time.
-        
+
     Returns:
         Mock agent response dictionary.
     """
@@ -231,11 +231,13 @@ class MockModelAdapter:
         temperature: float = 0.7,
     ) -> Dict[str, Any]:
         """Generate mock response."""
-        self._calls.append({
-            "prompt": prompt,
-            "model": model,
-            "temperature": temperature,
-        })
+        self._calls.append(
+            {
+                "prompt": prompt,
+                "model": model,
+                "temperature": temperature,
+            }
+        )
         response = self.responses[self._call_count % len(self.responses)]
         self._call_count += 1
         return create_mock_llm_response(response)
@@ -246,11 +248,11 @@ class MockModelAdapter:
 
     def assert_called_with_model(self, model: str) -> None:
         """Assert that a specific model was used."""
-        assert any(c["model"] == model for c in self._calls), \
-            f"Model {model} was not used in any call"
+        assert any(c["model"] == model for c in self._calls), f"Model {model} was not used in any call"
 
 
 # Pre-built common mocks
+
 
 def mock_orchestrator() -> Mock:
     """Create a pre-configured mock orchestrator."""

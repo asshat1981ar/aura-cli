@@ -58,7 +58,7 @@ class TestBrainInit:
         with brain._db_lock():
             brain.db.execute("INSERT INTO memory(content) VALUES (?)", ("test",))
             brain.db.commit()
-        
+
         entries = brain.recall_all()
         assert len(entries) > 0
 
@@ -183,7 +183,7 @@ class TestRecallCache:
         with patch("memory.brain.log_json"):
             brain.remember("cached")
         brain.recall_all()
-        
+
         # Second call should return same data from cache
         result = brain.recall_all()
         assert "cached" in result
@@ -192,7 +192,7 @@ class TestRecallCache:
         with patch("memory.brain.log_json"):
             brain.remember("cached")
         brain.recall_recent(limit=10)
-        
+
         # Second call should use cache
         result = brain.recall_recent(limit=10)
         assert "cached" in result
@@ -201,14 +201,14 @@ class TestRecallCache:
         with patch("memory.brain.log_json"):
             brain.remember("initial")
         brain.recall_all()
-        
+
         # Manually expire cache
         brain._cache_ttl = 0
         time.sleep(0.01)
-        
+
         with patch("memory.brain.log_json"):
             brain.remember("after_expire")
-        
+
         result = brain.recall_all()
         assert "after_expire" in result
 
@@ -234,7 +234,7 @@ class TestTaggedMemory:
             brain.remember_tagged("msg1", tag="debug")
             brain.remember_tagged("msg2", tag="debug")
             brain.remember_tagged("msg3", tag="other")
-        
+
         debug_msgs = brain.recall_tagged("debug")
         assert len(debug_msgs) == 2
         assert all(m in ["msg1", "msg2"] for m in debug_msgs)
@@ -254,9 +254,9 @@ class TestTaggedMemory:
         with patch("memory.brain.log_json"):
             brain.remember_tagged("keep", tag="keep-tag")
             brain.remember_tagged("remove", tag="remove-tag")
-        
+
         brain.forget_tagged("remove-tag")
-        
+
         assert brain.recall_tagged("keep-tag") != []
         assert brain.recall_tagged("remove-tag") == []
 
@@ -264,7 +264,7 @@ class TestTaggedMemory:
         with patch("memory.brain.log_json"):
             for i in range(100):
                 brain.remember_tagged(f"msg-{i}", tag="many")
-        
+
         result = brain.recall_tagged("many", limit=10)
         assert len(result) == 10
 
@@ -539,21 +539,21 @@ class TestInnovationSessions:
             brain.save_innovation_session(data)
         result1 = brain.get_innovation_session("ts-1")
         updated_at1 = result1["updated_at"]
-        
+
         time.sleep(0.01)
-        
+
         with patch("memory.brain.log_json"):
             brain.save_innovation_session(data)
         result2 = brain.get_innovation_session("ts-1")
         updated_at2 = result2["updated_at"]
-        
+
         assert updated_at2 >= updated_at1
 
     def test_list_sessions_with_limit(self, brain):
         with patch("memory.brain.log_json"):
             for i in range(20):
                 brain.save_innovation_session(self._session_data(f"s-{i}"))
-        
+
         sessions = brain.list_innovation_sessions(limit=5)
         assert len(sessions) == 5
 
@@ -567,7 +567,7 @@ class TestInnovationSessions:
                 ]
             }
             brain.save_innovation_session(data)
-        
+
         result = brain.get_innovation_session("complex")
         assert result["output_data"] is not None
         assert len(result["output_data"]["ideas"]) == 2
@@ -584,7 +584,7 @@ class TestDatabaseLocking:
         with brain._db_lock():
             brain.db.execute("INSERT INTO memory(content) VALUES (?)", ("locked",))
             brain.db.commit()
-        
+
         entries = brain.recall_all()
         assert "locked" in entries
 
@@ -614,12 +614,12 @@ class TestSchemaMigration:
         legacy_db.execute("INSERT INTO memory(content) VALUES (?)", ("legacy_content",))
         legacy_db.commit()
         legacy_db.close()
-        
+
         # Create new brain in same directory
         with patch("memory.brain.log_json"):
             main_db_path = tmp_path / "brain.db"
             brain = Brain(db_path=str(main_db_path))
-        
+
         # Check that legacy content was absorbed
         entries = brain.recall_all()
         # Legacy content should be there (if migration ran)
@@ -673,25 +673,25 @@ class TestEdgeCases:
     def test_concurrent_lock_prevents_race(self, brain):
         """Test that lock prevents concurrent access issues."""
         results = []
-        
+
         def insert_and_count():
             with brain._db_lock():
                 brain.db.execute("INSERT INTO memory(content) VALUES (?)", ("item",))
                 brain.db.commit()
                 row = brain.db.execute("SELECT COUNT(*) FROM memory").fetchone()
                 results.append(row[0])
-        
+
         import threading
+
         threads = [threading.Thread(target=insert_and_count) for _ in range(5)]
         for t in threads:
             t.start()
         for t in threads:
             t.join()
-        
+
         # All inserts should have succeeded
         assert len(results) == 5
 
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
-

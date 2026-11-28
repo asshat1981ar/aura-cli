@@ -681,10 +681,17 @@ async def _execute_goal(req: ExecuteRequest):
 
 
 def require_auth(
-    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
     authorization: Optional[str] = Header(default=None),
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
 ) -> None:
-    require_dev_tools_auth(x_api_key, authorization)
+    # Called directly (not through FastAPI), an omitted argument is still the
+    # Header() default object rather than None, so treat non-strings as absent.
+    # ``authorization`` comes first so require_auth("Bearer <token>") reads the
+    # value as an Authorization header, not as a raw API key.
+    require_dev_tools_auth(
+        x_api_key if isinstance(x_api_key, str) else None,
+        authorization if isinstance(authorization, str) else None,
+    )
 
 
 @app.get("/health")

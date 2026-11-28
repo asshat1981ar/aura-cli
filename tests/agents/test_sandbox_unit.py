@@ -144,21 +144,40 @@ class TestWrapCodeWithFsRestrictions:
 
 
 class TestSetResourceLimits:
-    """Tests for resource limit setting."""
+    """Tests for resource limit setting.
 
-    def test_sets_cpu_limit(self):
-        """Should set CPU time limit to 30 seconds."""
-        # This test can only run on Unix systems with resource module
-        pytest.importorskip("resource", reason="resource module only on Unix")
+    _set_resource_limits() is meant to run as preexec_fn in the sandboxed
+    child. Calling it here would cap the whole pytest process at 30 s of CPU
+    and 512 MiB of address space (hard limits that cannot be raised again),
+    which later gets the test run killed. So setrlimit is replaced with a
+    recorder and only the requested limits are checked.
+    """
 
-        # Just verify the function doesn't crash
+    def test_sets_cpu_and_memory_limits(self, monkeypatch):
+        resource = pytest.importorskip("resource", reason="resource module only on Unix")
+        calls = []
+        monkeypatch.setattr(resource, "setrlimit", lambda which, limits: calls.append((which, limits)))
+
         _set_resource_limits()
 
-    def test_handles_import_error_gracefully(self):
-        """Should handle missing resource module on Windows."""
-        # On Windows, this should just return without error
+        assert calls == [
+            (resource.RLIMIT_CPU, (30, 30)),
+            (resource.RLIMIT_AS, (512 * 1024 * 1024, 512 * 1024 * 1024)),
+        ]
+
+    def test_handles_import_error_gracefully(self, monkeypatch):
+        """Should return quietly when the resource module is unavailable."""
+        import builtins
+
+        real_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "resource":
+                raise ImportError("no resource module")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", fake_import)
         _set_resource_limits()
-        # No assertion needed - just checking it doesn't raise
 
 
 class TestViolationPatterns:

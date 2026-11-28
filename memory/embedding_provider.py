@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Iterable, List, Optional
+from typing import Iterable, List
 
 
 class _MissingPackage:

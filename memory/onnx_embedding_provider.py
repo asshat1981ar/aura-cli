@@ -10,7 +10,7 @@ import os
 import sys
 import logging
 from pathlib import Path
-from typing import Iterable, List, Dict, Any, Optional, Mapping
+from typing import Iterable, List, Any, Optional
 
 import numpy as np
 from .embedding_provider import EmbeddingProvider, EmbeddingResult, _MissingPackage
@@ -29,9 +29,9 @@ except ImportError:
     hf_hub_download = _MissingPackage("huggingface_hub")
 
 try:
-    from tokenizers import Tokenizer
+    from tokenizers import Tokenizer  # noqa: F401  (availability probe)
 except ImportError:
-    tokenizer = _MissingPackage("tokenizers")
+    Tokenizer = _MissingPackage("tokenizers")
 
 
 class ONNXEmbeddingProvider(EmbeddingProvider):

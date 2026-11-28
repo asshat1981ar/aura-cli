@@ -14,6 +14,10 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from pathlib import Path
 
+# Repository root (aura_cli/ is one level down); replaces paths that only
+# existed on one developer machine.
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
 from fastapi import FastAPI, HTTPException, Depends, WebSocket, WebSocketDisconnect, Request, Header, Body, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -1010,7 +1014,7 @@ async def get_coverage(user: dict = Depends(get_current_user)):
     try:
         import subprocess
 
-        result = subprocess.run(["python3", "-m", "coverage", "json", "-o", "-"], capture_output=True, text=True, cwd="/home/westonaaron675/aura-cli", timeout=30)
+        result = subprocess.run(["python3", "-m", "coverage", "json", "-o", "-"], capture_output=True, text=True, cwd=str(_REPO_ROOT), timeout=30)
         if result.returncode == 0 and result.stdout:
             coverage_data = json.loads(result.stdout)
             return {"overall": coverage_data.get("totals", {}).get("percent_covered", 0), "files": coverage_data.get("files", {}), "timestamp": datetime.utcnow().isoformat()}
@@ -1049,7 +1053,7 @@ async def get_tests(user: dict = Depends(get_current_user)):
     try:
         import subprocess
 
-        result = subprocess.run(["python3", "-m", "pytest", "--collect-only", "-q"], capture_output=True, text=True, cwd="/home/westonaaron675/aura-cli", timeout=30)
+        result = subprocess.run(["python3", "-m", "pytest", "--collect-only", "-q"], capture_output=True, text=True, cwd=str(_REPO_ROOT), timeout=30)
         test_count = len([l for l in result.stdout.split("\n") if "::" in l])
         return {"total": test_count, "passed": test_count - 5, "failed": 2, "skipped": 3, "duration": 45.2}
     except Exception:
@@ -1150,7 +1154,7 @@ async def get_file_tree(path: str = "", user: dict = Depends(get_current_user)):
     try:
         from pathlib import Path as PathLib
 
-        base_path = PathLib("/home/westonaaron675/aura-cli")
+        base_path = PathLib(_REPO_ROOT)
         target_path = base_path / path if path else base_path
 
         if not str(target_path).startswith(str(base_path)):
@@ -1193,7 +1197,7 @@ async def get_file_content(path: str, user: dict = Depends(get_current_user)):
     try:
         from pathlib import Path as PathLib
 
-        base_path = PathLib("/home/westonaaron675/aura-cli")
+        base_path = PathLib(_REPO_ROOT)
         file_path = base_path / path
 
         if not str(file_path.resolve()).startswith(str(base_path.resolve())):
@@ -1222,7 +1226,7 @@ async def save_file(request: dict, user: dict = Depends(get_current_user)):
     try:
         from pathlib import Path as PathLib
 
-        base_path = PathLib("/home/westonaaron675/aura-cli")
+        base_path = PathLib(_REPO_ROOT)
         path = request.get("path", "")
         content = request.get("content", "")
 
@@ -1349,7 +1353,7 @@ async def delete_sadd_session(session_id: str, user: dict = Depends(get_current_
 @app.get("/api/workflows")
 async def get_workflows(user: dict = Depends(get_current_user)):
     """Get all n8n workflows."""
-    workflows_dir = Path("/home/westonaaron675/aura-cli/n8n-workflows")
+    workflows_dir = _REPO_ROOT / "n8n-workflows"
     workflows = []
 
     if not workflows_dir.exists():
@@ -1379,7 +1383,7 @@ async def get_workflows(user: dict = Depends(get_current_user)):
 @app.get("/api/workflows/{workflow_id}")
 async def get_workflow(workflow_id: str, user: dict = Depends(get_current_user)):
     """Get a specific n8n workflow."""
-    workflows_dir = Path("/home/westonaaron675/aura-cli/n8n-workflows")
+    workflows_dir = _REPO_ROOT / "n8n-workflows"
     wf_file = workflows_dir / f"{workflow_id}.json"
 
     if not wf_file.exists():
@@ -1428,7 +1432,7 @@ async def deactivate_workflow(workflow_id: str, user: dict = Depends(get_current
 # MCP Server Endpoints
 # ============================================================================
 
-MCP_CONFIG_PATH = Path("/home/westonaaron675/aura-cli/.mcp.json")
+MCP_CONFIG_PATH = _REPO_ROOT / ".mcp.json"
 
 # In-memory MCP tool cache (would be populated by actual MCP server discovery)
 mcp_tools_cache: Dict[str, List[Dict]] = {}

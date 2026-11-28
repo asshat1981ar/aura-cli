@@ -1,6 +1,7 @@
 """Tests for structured CLI exit codes."""
 
 import subprocess
+from pathlib import Path
 import sys
 import os
 
@@ -14,7 +15,7 @@ def run_main(*args, env_extra=None):
         capture_output=True,
         text=True,
         env=env,
-        cwd="/home/westonaaron675/aura-cli",
+        cwd=str(Path(__file__).resolve().parents[1]),
     )
     return result
 

@@ -6,8 +6,10 @@ Tests cover:
 - Error handling at CLI level
 """
 
+import contextlib
 import json
 import os
+import tempfile
 import sys
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -29,6 +31,22 @@ pytestmark = [
 ]
 
 runner = CliRunner()
+
+
+@contextlib.contextmanager
+def _isolated_filesystem():
+    """Run inside a fresh temporary directory.
+
+    typer's CliRunner no longer subclasses click's, so it has no
+    ``isolated_filesystem()``.
+    """
+    original_cwd = os.getcwd()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        os.chdir(tmpdir)
+        try:
+            yield tmpdir
+        finally:
+            os.chdir(original_cwd)
 
 
 class TestCLIHelp:
@@ -74,7 +92,7 @@ class TestCLIGoalCommands:
 
     def test_goal_add_dry_run(self):
         """Test goal add with dry-run flag."""
-        with runner.isolated_filesystem():
+        with _isolated_filesystem():
             result = runner.invoke(main, [
                 "--dry-run",
                 "goal", "add",
@@ -134,7 +152,7 @@ class TestCLIEnvironment:
         """Test AURA_SKIP_CHDIR environment variable."""
         original_cwd = os.getcwd()
 
-        with runner.isolated_filesystem():
+        with _isolated_filesystem():
             test_dir = os.getcwd()
             os.environ["AURA_SKIP_CHDIR"] = "1"
 

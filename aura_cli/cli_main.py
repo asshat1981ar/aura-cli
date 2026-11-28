@@ -231,9 +231,16 @@ def _sync_entrypoint_compat() -> None:
         setattr(_entrypoint_mod, name, globals()[name])
 
 
-def main(project_root_override=None, argv=None):
+def _legacy_main(project_root_override=None, argv=None):
     _sync_entrypoint_compat()
     return _entrypoint_main_impl(project_root_override=project_root_override, argv=argv)
+
+
+# ``main`` keeps the legacy call signature and also works as a Typer app (for
+# ``typer.testing.CliRunner`` and, with AURA_USE_TYPER=1, the console script).
+from aura_cli.typer_app import build_main as _build_typer_main  # noqa: E402
+
+main = _build_typer_main(_legacy_main)
 
 
 if __name__ == "__main__":

@@ -38,7 +38,7 @@ pytest-timeout>=2.0
 langgraph>=0.0.30
 langchain-core>=0.1.40
 redis>=5.0.0
-langgraph-checkpoint-redis>=1.0.0
+langgraph-checkpoint-redis>=0.6.0
 
 # ONNX Local Embeddings (Optional)
 # onnxruntime-mobile>=1.17.0

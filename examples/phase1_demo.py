@@ -170,7 +170,7 @@ def demo_graph_workflow():
 
     # Mermaid diagram
     mermaid = graph.compile().to_mermaid()
-    print(f"\n  Mermaid diagram:\n")
+    print("\n  Mermaid diagram:\n")
     for line in mermaid.split("\n"):
         print(f"    {line}")
 

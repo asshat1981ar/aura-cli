@@ -18,7 +18,7 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 

@@ -10,13 +10,12 @@ import asyncio
 import logging
 import copy
 from typing import Dict, Any, Optional, Mapping
-from dataclasses import dataclass, asdict, fields
+from dataclasses import dataclass, fields
 from datetime import datetime
 
 from core.orchestrator import LoopOrchestrator  # legacy AURA 10-phase orchestrator
 from core.graph.react_graph import ReActGraphEngine
 from core.persistence.redis_semantic_checkpoint_engine import RedisSemanticCheckpointEngine
-from core.persistence.advanced_checkpoint_patterns import CheckpointPattern
 
 logger = logging.getLogger(__name__)
 

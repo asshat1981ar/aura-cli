@@ -7,7 +7,7 @@ persistent threads and tool integration.
 from __future__ import annotations
 
 import logging
-from typing import Annotated, Dict, List, Optional, Mapping, TypedDict, Union, Any
+from typing import Annotated, Dict, List, Optional, Mapping, TypedDict, Any
 
 logger = logging.getLogger(__name__)
 

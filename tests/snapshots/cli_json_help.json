@@ -176,6 +176,27 @@
       "summary": "Stream AURA logs"
     },
     {
+      "action": "history",
+      "description": "List the last N completed goals with their scores and timestamps from the goal archive.",
+      "examples": [
+        "python3 main.py history",
+        "python3 main.py history --limit 20",
+        "python3 main.py history --json"
+      ],
+      "flags": [
+        {
+          "name": "--json",
+          "summary": "Output JSON instead of text"
+        }
+      ],
+      "legacy_flags": [],
+      "path": [
+        "history"
+      ],
+      "requires_runtime": true,
+      "summary": "Show completed goal history"
+    },
+    {
       "action": "watch",
       "description": "[EXPERIMENTAL] Launch the AuraStudio terminal UI. Use --autonomous to start the goal loop.",
       "examples": [

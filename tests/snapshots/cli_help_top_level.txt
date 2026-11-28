@@ -9,6 +9,7 @@ Commands:
   contract-report [EXPERIMENTAL] Print CLI contract report
   diag         [EXPERIMENTAL] MCP diagnostics snapshot
   logs         Stream AURA logs
+  history      Show completed goal history
   watch        [EXPERIMENTAL] Launch TUI monitor
   studio       [EXPERIMENTAL] Launch AURA Studio
   goal         Goal queue operations

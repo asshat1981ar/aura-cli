@@ -231,10 +231,12 @@ class TestMain:
         error = CLIParseError("Invalid arguments", code=2, usage="usage: ...")
         mock_parse.side_effect = error
 
-        result = main()
+        with patch("aura_cli.entrypoint.present_error") as mock_present:
+            result = main()
 
         assert result == 2
-        mock_print.assert_any_call("Error: Invalid arguments", file=sys.stderr)
+        mock_present.assert_called_once()
+        assert mock_present.call_args.args[0] is error
 
     @patch("aura_cli.entrypoint._resolve_project_root")
     @patch("aura_cli.entrypoint._ensure_project_on_path")
@@ -286,8 +288,9 @@ class TestMain:
         mock_parse.return_value = SimpleNamespace(action="test")
         mock_dispatch.side_effect = Exception("Dispatch error")
 
-        with pytest.raises(Exception):
-            main()
+        # main() reports the dispatch error and returns 1 instead of raising.
+        with patch("aura_cli.entrypoint.present_error"):
+            assert main() == 1
 
         # _save_history should still be called
         mock_save.assert_called_once()

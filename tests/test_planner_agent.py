@@ -173,7 +173,7 @@ class TestPlannerRun:
         agent = self._make_agent()
         captured: dict = {}
 
-        def _capture(goal, mem, sim, weak, backfill_context=None):
+        def _capture(goal, mem, sim, weak, backfill_context=None, hints=None):
             captured.update({"goal": goal, "mem": mem, "sim": sim, "weak": weak})
             return []
 
@@ -188,7 +188,7 @@ class TestPlannerRun:
         agent = self._make_agent()
         captured: dict = {}
 
-        def _capture(goal, mem, sim, weak, backfill_context=None):
+        def _capture(goal, mem, sim, weak, backfill_context=None, hints=None):
             captured.update(
                 {
                     "goal": goal,

@@ -58,10 +58,26 @@ class TestMCPDiscoveryAgent(unittest.TestCase):
         self.assertEqual(result["discovered"][0]["name"], "my-server")
         self.assertEqual(result["discovered"][0]["status"], "configured")
 
-    def test_server_without_command_is_skipped(self):
+    def test_server_with_url_is_discovered_as_http(self):
+        config = {"mcpServers": {"web-server": {"url": "http://localhost:9000"}}}
+        with tempfile.TemporaryDirectory() as tmpdir:
+            self._write_config(tmpdir, config)
+            agent = self._make_agent()
+            with patch("agents.mcp_discovery_agent.log_json"), patch.object(agent, "_register_mcp_agents_for_discovered"):
+                result = agent.run({"project_root": tmpdir})
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(
+            result["discovered"],
+            [{"name": "web-server", "url": "http://localhost:9000", "transport": "http", "status": "configured"}],
+        )
+
+    def test_server_without_command_or_url_is_skipped(self):
+        # A "url" entry is a valid HTTP-transport server, so only an entry with
+        # neither "command" nor "url" counts as malformed.
         config = {
             "mcpServers": {
-                "bad-server": {"url": "http://localhost:9000"},
+                "bad-server": {"env": {"PORT": "9000"}},
             }
         }
         with tempfile.TemporaryDirectory() as tmpdir:

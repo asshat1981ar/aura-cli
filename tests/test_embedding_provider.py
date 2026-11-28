@@ -93,9 +93,10 @@ class TestLocalEmbeddingProvider:
         assert provider.healthcheck() is True
 
     def test_class_attributes(self):
-        assert LocalEmbeddingProvider.model_name == "local-sha256"
-        assert LocalEmbeddingProvider.model_version == "1.0"
-        assert LocalEmbeddingProvider.provider_type == "local"
+        provider = LocalEmbeddingProvider()
+        assert provider.model_name == "local-sha256"
+        assert provider.model_version == "1.0"
+        assert provider.provider_type == "local"
 
 
 class TestOpenAIEmbeddingProvider:

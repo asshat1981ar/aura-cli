@@ -277,6 +277,12 @@ class TestAgentRegistryIntegration(unittest.TestCase):
             "autogen_group_chat",
             "meta_conductor",
             "innovation_swarm",
+            "code_refactor",
+            "debugger",
+            "prompt_forge",
+            "scaffolder",
+            "technical_debt",
+            "tester",
         }
         self.assertEqual(set(agents.keys()), expected)
 

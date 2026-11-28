@@ -3,7 +3,8 @@
 import json
 import hashlib
 import hmac
-from unittest.mock import Mock, patch, MagicMock
+import time
+from unittest.mock import AsyncMock, Mock, patch, MagicMock
 
 import pytest
 
@@ -77,9 +78,18 @@ class TestHandleWebhook:
             "repository": {"full_name": "owner/repo"},
         }
 
-        result = app.handle_webhook("pull_request", payload)
+        with patch.object(app, "_perform_review", new=AsyncMock(return_value={})) as review:
+            result = app.handle_webhook("pull_request", payload)
+            for _ in range(50):
+                if review.await_count:
+                    break
+                time.sleep(0.01)
 
-        assert result["status"] == "processed"
+        # The review runs in the background, so the PR is reported as
+        # "processing" rather than "processed".
+        assert result["status"] == "processing"
+        assert result["action"] == "analyze_pr"
+        review.assert_awaited_once_with(123, "owner/repo")
 
     def test_handle_unsupported_event(self):
         """Test handling unsupported event."""

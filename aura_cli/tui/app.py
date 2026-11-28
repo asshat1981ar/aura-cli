@@ -201,6 +201,7 @@ class AuraStudio:
         )
         layout["right"].split_column(
             Layout(name="queue", ratio=2),
+            Layout(name="metrics", ratio=1),
             Layout(name="observability", ratio=2),
             Layout(name="health", ratio=1),
         )

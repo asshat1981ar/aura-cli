@@ -22,6 +22,8 @@ def test_mcp_example_is_valid_and_secret_free() -> None:
         "aura-control",
         "aura-agentic-loop",
         "aura-copilot",
+        "aura-sadd",
+        "playwright",
         "n8n-mcp",
     }
     serialized = json.dumps(payload)
@@ -75,7 +77,7 @@ def test_configure_copilot_mcp_writes_expected_config() -> None:
         assert payload["mcpServers"]["aura-control"]["url"] == "http://127.0.0.1:8003"
         assert payload["mcpServers"]["aura-agentic-loop"]["url"] == "http://127.0.0.1:8006"
         assert payload["mcpServers"]["aura-copilot"]["url"] == "http://127.0.0.1:8007"
-        assert payload["mcpServers"]["aura-dev-tools"]["headers"]["Authorization"] == "Bearer ${env:MCP_API_TOKEN}"
+        assert payload["mcpServers"]["aura-dev-tools"]["headers"]["Authorization"] == "Bearer ${env:AGENT_API_TOKEN}"
         assert payload["mcpServers"]["aura-skills"]["headers"]["Authorization"] == "Bearer ${env:MCP_API_TOKEN}"
         assert payload["mcpServers"]["aura-control"]["headers"]["Authorization"] == "Bearer ${env:MCP_CONTROL_TOKEN}"
         assert payload["mcpServers"]["aura-agentic-loop"]["headers"]["Authorization"] == "Bearer ${env:AGENTIC_LOOP_TOKEN}"

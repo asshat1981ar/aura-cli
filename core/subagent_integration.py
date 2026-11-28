@@ -161,11 +161,14 @@ class SubAgentRegistry:
         Returns:
             Replay result
         """
-        if not _KAPPA_AVAILABLE:
+        if not _KAPPA_AVAILABLE or not self.kappa:
             return {"replayed": False, "reason": "KAPPA not available"}
-        
+
         try:
-            from aura.recording import WorkflowReplayer
+            try:
+                from aura.recording import WorkflowReplayer
+            except ImportError:
+                return {"replayed": False, "reason": "Workflow replay not available"}
             replayer = WorkflowReplayer()
             result = replayer.replay(workflow_id=workflow_id, variables=variables or {})
             log_json("INFO", "kappa_workflow_replayed", details={
